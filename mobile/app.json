@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Apartment Bill Tracker",
+    "slug": "apartment-bill-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "aptbilltracker",
+    "cli": {
+  "appVersionSource": "dynamic"
+},
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.apartmentbilltracker.ios",
+      "scheme": "aptbilltracker"
+    },
+    "android": {
+      "bundleIdentifier": "com.apartmentbilltracker.android",
+      "package": "com.apartmentbilltracker",
+      "scheme": "aptbilltracker"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a55376b3-7def-494f-ac83-bcbaeb4bb8fd"
+      }
+    },
+    "owner": "demoacct"
+  }
+}

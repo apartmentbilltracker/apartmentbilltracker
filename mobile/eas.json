@@ -1,0 +1,36 @@
+{
+  "cli": {
+    "version": ">= 5.9.1"
+  },
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote",
+        "releaseChannel": "preview"
+      }
+    },
+    "preview2": {
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote"
+      }
+    },
+    "preview3": {
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote",
+        "releaseChannel": "production"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
