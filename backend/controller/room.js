@@ -30,7 +30,10 @@ router.post("/", isAuthenticated, async (req, res, next) => {
 router.get("/", async (req, res, next) => {
   try {
     // include billing and members so clients can determine membership and billing info
-    const rooms = await Room.find().populate("members.user", "name email");
+    const rooms = await Room.find().populate(
+      "members.user",
+      "name email avatar",
+    );
     res.status(200).json({ success: true, rooms });
   } catch (error) {
     next(new ErrorHandler(error.message, 500));
@@ -42,7 +45,7 @@ router.get("/:id", async (req, res, next) => {
   try {
     const room = await Room.findById(req.params.id).populate(
       "members.user",
-      "name email",
+      "name email avatar",
     );
     if (!room) return next(new ErrorHandler("Room not found", 404));
     res.status(200).json({ success: true, room });
@@ -66,7 +69,7 @@ router.post("/:id/join", isAuthenticated, async (req, res, next) => {
         .select(
           "name description code createdAt billing billingHistory members",
         )
-        .populate("members.user", "name email");
+        .populate("members.user", "name email avatar");
       return res.status(200).json({
         success: true,
         message: "Already joined",
@@ -85,7 +88,7 @@ router.post("/:id/join", isAuthenticated, async (req, res, next) => {
     // Populate before returning with billing
     const populatedRoom = await Room.findById(req.params.id)
       .select("name description code createdAt billing billingHistory members")
-      .populate("members.user", "name email");
+      .populate("members.user", "name email avatar");
 
     res.status(200).json({ success: true, room: populatedRoom });
   } catch (error) {
@@ -134,7 +137,7 @@ router.put("/:id", isAuthenticated, async (req, res, next) => {
       .select(
         "name description code createdAt billing billingHistory members maxOccupancy",
       )
-      .populate("members.user", "name email");
+      .populate("members.user", "name email avatar");
 
     res.status(200).json({ success: true, room: populatedRoom });
   } catch (error) {
@@ -245,7 +248,7 @@ router.put("/:id/billing", isAuthenticated, async (req, res, next) => {
     // Return room with populated data
     const populatedRoom = await Room.findById(req.params.id)
       .select("name description code createdAt billing billingHistory members")
-      .populate("members.user", "name email");
+      .populate("members.user", "name email avatar");
 
     res.status(200).json({ success: true, room: populatedRoom });
   } catch (error) {
@@ -258,7 +261,7 @@ router.get("/:id/billing-history", isAuthenticated, async (req, res, next) => {
   try {
     const room = await Room.findById(req.params.id)
       .select("name description code billing billingHistory members")
-      .populate("members.user", "name email");
+      .populate("members.user", "name email avatar");
 
     if (!room) return next(new ErrorHandler("Room not found", 404));
 
@@ -312,7 +315,7 @@ router.post("/:id/presence", isAuthenticated, async (req, res, next) => {
     // Return populated room
     const populatedRoom = await Room.findById(req.params.id)
       .select("name description code createdAt billing billingHistory members")
-      .populate("members.user", "name email");
+      .populate("members.user", "name email avatar");
 
     res.status(200).json({
       success: true,
@@ -349,7 +352,7 @@ router.put("/:id/clear-presence", isAuthenticated, async (req, res, next) => {
     // Return populated room
     const populatedRoom = await Room.findById(req.params.id)
       .select("name description code createdAt billing billingHistory members")
-      .populate("members.user", "name email");
+      .populate("members.user", "name email avatar");
 
     res.status(200).json({
       success: true,
@@ -375,7 +378,7 @@ router.get("/:id/export", isAuthenticated, async (req, res, next) => {
   try {
     const room = await Room.findById(req.params.id)
       .select("name billing members code")
-      .populate("members.user", "name email");
+      .populate("members.user", "name email avatar");
 
     if (!room) return next(new ErrorHandler("Room not found", 404));
 

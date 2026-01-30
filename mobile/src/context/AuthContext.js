@@ -57,6 +57,11 @@ const reducer = (state, action) => {
         ...state,
         currentView: action.payload,
       };
+    case "UPDATE_USER":
+      return {
+        ...state,
+        user: action.payload,
+      };
     default:
       return state;
   }
@@ -224,6 +229,54 @@ export const AuthProvider = ({ children }) => {
     switchView: useCallback((view) => {
       console.log("Switching view to:", view);
       dispatch({ type: "SWITCH_VIEW", payload: view });
+    }, []),
+
+    updateUserProfile: useCallback(async (name, avatarBase64) => {
+      try {
+        const updateData = {};
+        if (name) updateData.name = name.trim();
+        if (avatarBase64) updateData.avatar = avatarBase64;
+
+        console.log("Updating profile with:", Object.keys(updateData));
+        const response = await authService.updateProfile(updateData);
+        console.log(
+          "Profile update response:",
+          JSON.stringify(response, null, 2),
+        );
+
+        const data = response.data || response;
+        const updatedUser = data.user || data;
+
+        dispatch({
+          type: "UPDATE_USER",
+          payload: updatedUser,
+        });
+
+        // Refresh full user data from server to ensure consistency
+        // This will update any related data on server side
+        try {
+          const freshResponse = await authService.getProfile();
+          const freshData = freshResponse.data || freshResponse;
+          const freshUser = freshData.user || freshData;
+          dispatch({
+            type: "UPDATE_USER",
+            payload: freshUser,
+          });
+          console.log("User profile refreshed successfully");
+        } catch (refreshError) {
+          console.warn("Could not refresh user profile:", refreshError.message);
+          // Still return success as the update was saved
+        }
+
+        return { success: true, user: updatedUser };
+      } catch (error) {
+        console.error("Error updating profile:", error);
+        const message =
+          error.response?.data?.message ||
+          error.message ||
+          "Profile update failed";
+        return { success: false, error: message };
+      }
     }, []),
   };
 

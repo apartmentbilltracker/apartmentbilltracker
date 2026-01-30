@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
+import { useIsFocused } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -8,6 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Image,
 } from "react-native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
@@ -28,6 +30,7 @@ const WATER_BILL_PER_DAY = 5; // ₱5 per day
 const BillingScreen = ({ route }) => {
   const { roomId } = route.params;
   const { state } = useContext(AuthContext);
+  const isFocused = useIsFocused();
   const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,21 +39,34 @@ const BillingScreen = ({ route }) => {
     fetchBilling();
   }, [roomId]);
 
+  // Refetch whenever user profile changes (name or avatar)
+  useEffect(() => {
+    console.log("User profile changed, refetching billing");
+    fetchBilling();
+  }, [state.user?.name, state.user?.avatar?.url]);
+
   const fetchBilling = async () => {
     try {
       setLoading(true);
+      console.log("Fetching billing for room:", roomId);
       // Get room data which includes billing
       const response = await roomService.getRoomById(roomId);
-      console.log("Room response:", response);
+      console.log("BillingScreen - Room response:", response);
       const data = response.data || response;
       const room = data.room || data;
+      console.log("BillingScreen - room members:", room?.members);
 
       setBilling({
         billing: room.billing,
         members: room.members,
       });
+      console.log("BillingScreen - billing set to:", {
+        billing: room.billing,
+        members: room.members,
+      });
     } catch (error) {
-      console.error("Error fetching billing:", error);
+      console.error("Error fetching billing:", error.message);
+      console.error("Error details:", error);
       Alert.alert("Error", "Failed to load billing information");
     } finally {
       setLoading(false);
@@ -256,11 +272,18 @@ const BillingScreen = ({ route }) => {
               <View key={index}>
                 <View style={styles.memberItem}>
                   <View style={styles.memberInfo}>
-                    <Ionicons
-                      name="person-circle"
-                      size={32}
-                      color={colors.primary}
-                    />
+                    {member.user?.avatar?.url ? (
+                      <Image
+                        source={{ uri: member.user.avatar.url }}
+                        style={styles.memberAvatar}
+                      />
+                    ) : (
+                      <View style={styles.memberAvatarPlaceholder}>
+                        <Text style={styles.memberAvatarText}>
+                          {(member.user?.name || "U").charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
                     <View style={{ marginLeft: 12 }}>
                       <Text style={styles.memberName}>
                         {member.user?.name || "Unknown"}
@@ -393,6 +416,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
+  },
+  memberAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+  },
+  memberAvatarPlaceholder: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  memberAvatarText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
   },
   memberName: {
     fontSize: 14,

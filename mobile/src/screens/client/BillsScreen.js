@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
+import { useIsFocused } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -9,6 +10,7 @@ import {
   RefreshControl,
   Alert,
   Modal,
+  Image,
 } from "react-native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import {
@@ -22,6 +24,7 @@ const WATER_BILL_PER_DAY = 5; // 5 pesos per day
 
 const BillsScreen = ({ navigation }) => {
   const { state } = useContext(AuthContext);
+  const isFocused = useIsFocused();
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +39,12 @@ const BillsScreen = ({ navigation }) => {
   useEffect(() => {
     fetchRooms();
   }, []);
+
+  // Refetch whenever user profile changes (name or avatar)
+  useEffect(() => {
+    console.log("User profile changed, refetching rooms");
+    fetchRooms();
+  }, [state.user?.name, state.user?.avatar?.url]);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -72,12 +81,17 @@ const BillsScreen = ({ navigation }) => {
   const fetchRooms = async () => {
     try {
       setLoading(true);
+      console.log("Fetching rooms...");
       const response = await roomService.getRooms();
       console.log("Bills Screen - getRooms response:", response);
       // Handle response structure from fetch API: response = { data, status }
       const data = response.data || response;
       const fetchedRooms = data.rooms || data || [];
       console.log("Bills Screen - fetched rooms:", fetchedRooms);
+      console.log(
+        "Bills Screen - first room members:",
+        fetchedRooms[0]?.members,
+      );
 
       // Filter to show only rooms user is part of
       const userRooms = fetchedRooms.filter((room) =>
@@ -86,12 +100,25 @@ const BillsScreen = ({ navigation }) => {
         ),
       );
 
+      console.log("Bills Screen - user rooms:", userRooms);
       setRooms(userRooms);
-      if (userRooms.length > 0 && !selectedRoom) {
+
+      // Update selectedRoom with fresh data or set to first room
+      if (selectedRoom && userRooms.length > 0) {
+        // Find the updated version of the currently selected room
+        const updatedSelectedRoom = userRooms.find(
+          (room) => room._id === selectedRoom._id,
+        );
+        if (updatedSelectedRoom) {
+          setSelectedRoom(updatedSelectedRoom);
+          console.log("Updated selectedRoom with fresh data");
+        }
+      } else if (userRooms.length > 0) {
         setSelectedRoom(userRooms[0]);
       }
     } catch (error) {
-      console.error("Error fetching rooms:", error);
+      console.error("Error fetching rooms:", error.message);
+      console.error("Error details:", error);
       Alert.alert("Error", "Failed to load rooms");
     } finally {
       setLoading(false);
@@ -753,11 +780,20 @@ const BillsScreen = ({ navigation }) => {
                     </Text>
                     {selectedRoom.members.map((member, idx) => (
                       <View key={idx} style={styles.memberCard}>
-                        <View style={styles.memberIcon}>
-                          <Text style={styles.memberIconText}>
-                            {(member.user?.name || "M").charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
+                        {member.user?.avatar?.url ? (
+                          <Image
+                            source={{ uri: member.user.avatar.url }}
+                            style={styles.memberIconImage}
+                          />
+                        ) : (
+                          <View style={styles.memberIcon}>
+                            <Text style={styles.memberIconText}>
+                              {(member.user?.name || "M")
+                                .charAt(0)
+                                .toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
                         <View style={styles.memberInfo}>
                           <Text style={styles.memberName}>
                             {member.user?.name || "Unknown"}
@@ -1309,6 +1345,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+  },
+  memberIconImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: "#bdb246",
   },
   memberIconText: {
     color: "#fff",

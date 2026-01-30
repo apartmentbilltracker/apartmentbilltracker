@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
+import { useIsFocused } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -9,6 +10,7 @@ import {
   ActivityIndicator,
   Share,
   RefreshControl,
+  Image,
 } from "react-native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
@@ -28,6 +30,7 @@ const WATER_BILL_PER_DAY = 5; // ₱5 per day
 const RoomDetailsScreen = ({ route, navigation }) => {
   const { roomId } = route.params;
   const { state } = useContext(AuthContext);
+  const isFocused = useIsFocused();
   const [room, setRoom] = useState(null);
   const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,15 +40,23 @@ const RoomDetailsScreen = ({ route, navigation }) => {
     fetchRoomDetails();
   }, [roomId]);
 
+  // Refetch whenever user profile changes (name or avatar)
+  useEffect(() => {
+    console.log("User profile changed, refetching room details");
+    fetchRoomDetails();
+  }, [state.user?.name, state.user?.avatar?.url]);
+
   const fetchRoomDetails = async () => {
     try {
       setLoading(true);
+      console.log("Fetching room details for:", roomId);
       const roomResponse = await roomService.getRoomById(roomId);
       const roomData = roomResponse.data || roomResponse;
-      console.log("Room data:", roomData);
+      console.log("RoomDetailsScreen - Room data:", roomData);
 
       // Extract the room object (it might be wrapped)
       const room = roomData.room || roomData;
+      console.log("RoomDetailsScreen - room members:", room?.members);
       setRoom(room);
 
       // Billing is included in room data
@@ -53,8 +64,13 @@ const RoomDetailsScreen = ({ route, navigation }) => {
         billing: room.billing,
         members: room.members,
       });
+      console.log("RoomDetailsScreen - billing set to:", {
+        billing: room.billing,
+        members: room.members,
+      });
     } catch (error) {
-      console.error("Error fetching room details:", error);
+      console.error("Error fetching room details:", error.message);
+      console.error("Error details:", error);
       Alert.alert("Error", "Failed to load room details");
     } finally {
       setLoading(false);
@@ -232,13 +248,18 @@ const RoomDetailsScreen = ({ route, navigation }) => {
               <View key={index}>
                 <View style={styles.memberItem}>
                   <View style={styles.memberInfo}>
-                    <View style={styles.avatar}>
-                      <Ionicons
-                        name="person"
-                        size={18}
-                        color={colors.primary}
+                    {member.user?.avatar?.url ? (
+                      <Image
+                        source={{ uri: member.user.avatar.url }}
+                        style={styles.memberAvatarImage}
                       />
-                    </View>
+                    ) : (
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>
+                          {(member.user?.name || "U").charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
                     <View style={{ marginLeft: 12, flex: 1 }}>
                       <Text style={styles.memberName}>
                         {member.user?.name || "Unknown"}
@@ -425,6 +446,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.lightGray,
     justifyContent: "center",
     alignItems: "center",
+  },
+  avatarText: {
+    color: colors.primary,
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  memberAvatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.lightGray,
   },
   memberName: {
     fontSize: 14,

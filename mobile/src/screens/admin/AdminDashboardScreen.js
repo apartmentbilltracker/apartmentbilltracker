@@ -95,17 +95,9 @@ const AdminDashboardScreen = ({ navigation }) => {
           <Text style={styles.greeting}>Welcome</Text>
           <Text style={styles.userName}>{state.user?.name || "Admin"}</Text>
         </View>
-        <View style={styles.buttonGroup}>
-          <TouchableOpacity
-            style={styles.switchButton}
-            onPress={() => switchView("client")}
-          >
-            <Text style={styles.switchButtonText}>Client View</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.statsContainer}>

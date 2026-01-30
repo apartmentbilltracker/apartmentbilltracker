@@ -453,6 +453,84 @@ router.put(
   }),
 );
 
+// Update user profile (name + avatar combined)
+router.put(
+  "/update-profile",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { name, avatar } = req.body;
+      const user = await User.findById(req.user._id);
+
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      // Update name if provided
+      if (name && name.trim()) {
+        user.name = name.trim();
+      }
+
+      // Update avatar if provided
+      if (avatar) {
+        // Delete previous avatar if it's not the default one
+        if (user.avatar && user.avatar.public_id !== "default_avatar") {
+          try {
+            await cloudinary.v2.uploader.destroy(user.avatar.public_id);
+          } catch (err) {
+            console.log("Error deleting old avatar:", err);
+          }
+        }
+
+        // Upload new avatar
+        try {
+          // Avatar comes as base64 string from mobile client
+          // Mobile sends only the base64 part (no data: prefix)
+          console.log("Avatar data received, length:", avatar.length);
+
+          // Ensure proper data URI format for Cloudinary
+          const base64String = avatar.startsWith("data:")
+            ? avatar
+            : `data:image/jpeg;base64,${avatar}`;
+
+          console.log("Uploading to Cloudinary with base64 string...");
+          const myCloud = await cloudinary.v2.uploader.upload(base64String, {
+            folder: "avatars",
+            width: 150,
+            crop: "fill",
+            resource_type: "auto",
+          });
+
+          console.log("Cloudinary upload successful:", myCloud.public_id);
+          user.avatar = {
+            public_id: myCloud.public_id,
+            url: myCloud.secure_url,
+          };
+        } catch (cloudinaryError) {
+          console.error("Cloudinary upload error:", cloudinaryError);
+          console.error("Error message:", cloudinaryError.message);
+          return next(
+            new ErrorHandler(
+              "Failed to upload avatar: " + cloudinaryError.message,
+              500,
+            ),
+          );
+        }
+      }
+
+      await user.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Profile updated successfully",
+        user,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
 // Update user addresses
 router.put(
   "/update-user-addresses",
