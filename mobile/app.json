@@ -7,15 +7,13 @@
     "userInterfaceStyle": "light",
     "scheme": "aptbilltracker",
     "cli": {
-  "appVersionSource": "dynamic"
-},
+      "appVersionSource": "dynamic"
+    },
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTabletMode": true,
       "bundleIdentifier": "com.apartmentbilltracker.ios",
@@ -28,9 +26,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "a55376b3-7def-494f-ac83-bcbaeb4bb8fd"
+        "projectId": "2c14cabc-44e4-4116-8a15-99bfe4feee8a"
       }
     },
-    "owner": "demoacct"
+    "owner": "mjbelia"
   }
 }
