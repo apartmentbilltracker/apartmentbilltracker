@@ -94,10 +94,10 @@ const BillingScreen = ({ route }) => {
     return totalDays * WATER_BILL_PER_DAY;
   };
 
-  const getPayerCount = () => {
+  const getPayorCount = () => {
     if (!billing?.members) return 1;
-    const payerCount = billing.members.filter((m) => m.isPayer).length;
-    return payerCount > 0 ? payerCount : 1;
+    const payorCount = billing.members.filter((m) => m.isPayer).length;
+    return payorCount > 0 ? payorCount : 1;
   };
 
   const calculateShare = (amount, totalMembers) => {
@@ -201,46 +201,46 @@ const BillingScreen = ({ route }) => {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <MaterialIcons name="people" size={24} color={colors.primary} />
-          <Text style={styles.cardTitle}>Per Payer Breakdown</Text>
+          <Text style={styles.cardTitle}>Per Payor Breakdown</Text>
         </View>
 
         <View style={styles.memberBreakdown}>
           <View style={styles.breakdownItem}>
-            <Text style={styles.label}>Payers</Text>
-            <Text style={styles.value}>{getPayerCount()}</Text>
+            <Text style={styles.label}>Payors</Text>
+            <Text style={styles.value}>{getPayorCount()}</Text>
           </View>
           <View style={styles.breakdownItem}>
-            <Text style={styles.label}>Rent per Payer</Text>
+            <Text style={styles.label}>Rent per Payor</Text>
             <Text style={styles.value}>
               ₱
-              {calculateShare(billing?.billing?.rent, getPayerCount()).toFixed(
+              {calculateShare(billing?.billing?.rent, getPayorCount()).toFixed(
                 2,
               )}
             </Text>
           </View>
           <View style={styles.breakdownItem}>
-            <Text style={styles.label}>Electricity per Payer</Text>
+            <Text style={styles.label}>Electricity per Payor</Text>
             <Text style={styles.value}>
               ₱
               {calculateShare(
                 billing?.billing?.electricity,
-                getPayerCount(),
+                getPayorCount(),
               ).toFixed(2)}
             </Text>
           </View>
           <View style={styles.breakdownItem}>
-            <Text style={styles.label}>Water per Payer</Text>
+            <Text style={styles.label}>Water per Payor</Text>
             <Text style={[styles.value, { color: "#2196F3" }]}>
               ₱
               {calculateShare(
                 calculateTotalWaterBill(),
-                getPayerCount(),
+                getPayorCount(),
               ).toFixed(2)}
             </Text>
           </View>
           <View style={[styles.breakdownItem, { borderBottomWidth: 0 }]}>
             <Text style={[styles.label, { fontWeight: "700" }]}>
-              Total per Payer
+              Total per Payor
             </Text>
             <Text
               style={[
@@ -250,9 +250,9 @@ const BillingScreen = ({ route }) => {
             >
               ₱
               {(
-                calculateShare(billing?.billing?.rent, getPayerCount()) +
-                calculateShare(billing?.billing?.electricity, getPayerCount()) +
-                calculateShare(calculateTotalWaterBill(), getPayerCount())
+                calculateShare(billing?.billing?.rent, getPayorCount()) +
+                calculateShare(billing?.billing?.electricity, getPayorCount()) +
+                calculateShare(calculateTotalWaterBill(), getPayorCount())
               ).toFixed(2)}
             </Text>
           </View>
@@ -294,13 +294,13 @@ const BillingScreen = ({ route }) => {
                     </View>
                   </View>
                   {member.isPayer && (
-                    <View style={styles.payerBadge}>
-                      <Text style={styles.payerBadgeText}>Payer</Text>
+                    <View style={styles.payorBadge}>
+                      <Text style={styles.payorBadgeText}>Payor</Text>
                     </View>
                   )}
                   {!member.isPayer && (
-                    <View style={styles.nonPayerBadge}>
-                      <Text style={styles.nonPayerBadgeText}>Non-Payer</Text>
+                    <View style={styles.nonPayorBadge}>
+                      <Text style={styles.nonPayorBadgeText}>Non-Payor</Text>
                     </View>
                   )}
                 </View>
@@ -446,24 +446,24 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 2,
   },
-  payerBadge: {
+  payorBadge: {
     backgroundColor: colors.success,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  payerBadgeText: {
+  payorBadgeText: {
     fontSize: 11,
     fontWeight: "600",
     color: "white",
   },
-  nonPayerBadge: {
+  nonPayorBadge: {
     backgroundColor: "#e0e0e0",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  nonPayerBadgeText: {
+  nonPayorBadgeText: {
     fontSize: 11,
     fontWeight: "600",
     color: "#666",

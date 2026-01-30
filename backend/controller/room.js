@@ -542,21 +542,21 @@ router.get("/:id/export", isAuthenticated, async (req, res, next) => {
       });
       doc.moveDown(0.8);
 
-      // Payer breakdown
-      const payers = room.members ? room.members.filter((m) => m.isPayer) : [];
-      if (payers.length > 0) {
-        const perPayerElec = Math.round(totalElecBill / payers.length);
+      // Payor breakdown
+      const payors = room.members ? room.members.filter((m) => m.isPayer) : [];
+      if (payors.length > 0) {
+        const perPayorElec = Math.round(totalElecBill / payors.length);
         doc
           .fontSize(8)
           .font("Helvetica-Bold")
           .fillColor("#333333")
-          .text(`Per Payer Share (÷${payers.length}):`);
+          .text(`Per Payor Share (÷${payors.length}):`);
         doc.fontSize(8).font("Helvetica").fillColor("#555555");
-        payers.forEach((payer) => {
-          const payerName = payer.name || payer.user?.name || "Unknown";
+        payors.forEach((payor) => {
+          const payorName = payor.name || payor.user?.name || "Unknown";
           const isCurrentUser =
-            String(payer.user?._id || payer.user) === String(req.user._id);
-          const displayName = isCurrentUser ? `${payerName} (You)` : payerName;
+            String(payor.user?._id || payor.user) === String(req.user._id);
+          const displayName = isCurrentUser ? `${payorName} (You)` : payorName;
           const amountStr = `₱${perPayerElec}`;
           const dotsNeeded = Math.max(
             0,
@@ -600,21 +600,21 @@ router.get("/:id/export", isAuthenticated, async (req, res, next) => {
       doc.moveDown(0.8);
 
       // Payer breakdown
-      const payers = room.members ? room.members.filter((m) => m.isPayer) : [];
-      if (payers.length > 0) {
-        const perPayerRent = Math.round(room.billing.rent / payers.length);
+      const payors = room.members ? room.members.filter((m) => m.isPayer) : [];
+      if (payors.length > 0) {
+        const perPayorRent = Math.round(room.billing.rent / payors.length);
         doc
           .fontSize(8)
           .font("Helvetica-Bold")
           .fillColor("#333333")
-          .text(`Per Payer Share (÷${payers.length}):`);
+          .text(`Per Payor Share (÷${payors.length}):`);
         doc.fontSize(8).font("Helvetica").fillColor("#555555");
-        payers.forEach((payer) => {
-          const payerName = payer.name || payer.user?.name || "Unknown";
+        payors.forEach((payor) => {
+          const payorName = payor.name || payor.user?.name || "Unknown";
           const isCurrentUser =
-            String(payer.user?._id || payer.user) === String(req.user._id);
-          const displayName = isCurrentUser ? `${payerName} (You)` : payerName;
-          const amountStr = `₱${perPayerRent}`;
+            String(payor.user?._id || payor.user) === String(req.user._id);
+          const displayName = isCurrentUser ? `${payorName} (You)` : payorName;
+          const amountStr = `₱${perPayorRent}`;
           const dotsNeeded = Math.max(
             0,
             50 - displayName.length - amountStr.length,

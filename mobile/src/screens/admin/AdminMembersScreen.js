@@ -157,8 +157,8 @@ const AdminMembersScreen = ({ navigation, route }) => {
       });
       await fetchRooms();
     } catch (error) {
-      console.error("Error toggling payer:", error);
-      Alert.alert("Error", "Failed to update payer status");
+      console.error("Error toggling payor:", error);
+      Alert.alert("Error", "Failed to update payor status");
       // revert by re-fetching
       await fetchRooms();
     }
@@ -338,21 +338,21 @@ const AdminMembersScreen = ({ navigation, route }) => {
                           <View style={styles.memberMetaRow}>
                             <View
                               style={[
-                                styles.payerBadge,
+                                styles.payorBadge,
                                 item.isPayer
-                                  ? styles.payerBadgeActive
-                                  : styles.payerBadgeInactive,
+                                  ? styles.payorBadgeActive
+                                  : styles.payorBadgeInactive,
                               ]}
                             >
                               <Text
                                 style={[
-                                  styles.payerBadgeText,
+                                  styles.payorBadgeText,
                                   item.isPayer
-                                    ? styles.payerBadgeTextActive
-                                    : styles.payerBadgeTextInactive,
+                                    ? styles.payorBadgeTextActive
+                                    : styles.payorBadgeTextInactive,
                                 ]}
                               >
-                                {item.isPayer ? "Payer" : "Non-payer"}
+                                {item.isPayer ? "Payor" : "Non-payor"}
                               </Text>
                             </View>
                             {presenceDays > 0 && (
@@ -612,28 +612,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  payerBadge: {
+  payorBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
     borderWidth: 1,
   },
-  payerBadgeActive: {
+  payorBadgeActive: {
     backgroundColor: "#e8f5e9",
     borderColor: "#28a745",
   },
-  payerBadgeInactive: {
+  payorBadgeInactive: {
     backgroundColor: "#f5f5f5",
     borderColor: "#ddd",
   },
-  payerBadgeText: {
+  payorBadgeText: {
     fontSize: 11,
     fontWeight: "600",
   },
-  payerBadgeTextActive: {
+  payorBadgeTextActive: {
     color: "#28a745",
   },
-  payerBadgeTextInactive: {
+  payorBadgeTextInactive: {
     color: "#666",
   },
   presenceTag: {

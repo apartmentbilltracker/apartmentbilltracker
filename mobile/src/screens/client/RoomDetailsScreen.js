@@ -270,13 +270,13 @@ const RoomDetailsScreen = ({ route, navigation }) => {
                     </View>
                   </View>
                   {member.isPayer && (
-                    <View style={styles.payerBadge}>
-                      <Text style={styles.payerBadgeText}>Payer</Text>
+                    <View style={styles.payorBadge}>
+                      <Text style={styles.payorBadgeText}>Payor</Text>
                     </View>
                   )}
                   {!member.isPayer && (
-                    <View style={styles.nonPayerBadge}>
-                      <Text style={styles.nonPayerBadgeText}>Non-Payer</Text>
+                    <View style={styles.nonPayorBadge}>
+                      <Text style={styles.nonPayorBadgeText}>Non-Payor</Text>
                     </View>
                   )}
                 </View>
@@ -468,24 +468,24 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 2,
   },
-  payerBadge: {
+  payorBadge: {
     backgroundColor: colors.success,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  payerBadgeText: {
+  payorBadgeText: {
     fontSize: 11,
     fontWeight: "600",
     color: "white",
   },
-  nonPayerBadge: {
+  nonPayorBadge: {
     backgroundColor: "#e0e0e0",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  nonPayerBadgeText: {
+  nonPayorBadgeText: {
     fontSize: 11,
     fontWeight: "600",
     color: "#666",

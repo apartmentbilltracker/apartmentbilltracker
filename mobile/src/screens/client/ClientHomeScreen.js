@@ -97,8 +97,8 @@ const ClientHomeScreen = ({ navigation }) => {
     try {
       setJoiningRoomId(roomId);
       await memberService.addMember(roomId, { userId, isPayer });
-      const payerStatus = isPayer ? "payer" : "non-payer";
-      Alert.alert("Success", `You've joined the room as a ${payerStatus}!`);
+      const payorStatus = isPayer ? "payor" : "non-payor";
+      Alert.alert("Success", `You've joined the room as a ${payorStatus}!`);
       await fetchRooms();
     } catch (error) {
       console.error("Error joining room:", error);

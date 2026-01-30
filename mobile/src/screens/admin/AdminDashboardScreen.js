@@ -78,7 +78,7 @@ const AdminDashboardScreen = ({ navigation }) => {
     (best, b) => (b.total > (best.total || 0) ? b : best),
     {},
   );
-  const totalPayerMembers = rooms.reduce(
+  const totalPayorMembers = rooms.reduce(
     (sum, room) => sum + (room.members?.filter((m) => m.isPayer).length || 0),
     0,
   );
@@ -137,9 +137,9 @@ const AdminDashboardScreen = ({ navigation }) => {
                 color="#6c7a89"
                 style={{ marginRight: 8 }}
               />
-              <Text style={styles.statLabel}>Payer Members</Text>
+              <Text style={styles.statLabel}>Payor Members</Text>
             </View>
-            <Text style={styles.statValue}>{totalPayerMembers}</Text>
+            <Text style={styles.statValue}>{totalPayorMembers}</Text>
           </View>
           <View style={styles.statCard}>
             <View style={styles.statRow}>
