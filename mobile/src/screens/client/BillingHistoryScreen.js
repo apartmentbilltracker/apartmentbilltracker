@@ -300,7 +300,7 @@ const BillingHistoryScreen = ({ route }) => {
                                       size={14}
                                       color="#4CAF50"
                                     />
-                                    <Text style={styles.payerText}>Payer</Text>
+                                    <Text style={styles.payerText}>Payor</Text>
                                   </View>
                                 )}
                               </View>

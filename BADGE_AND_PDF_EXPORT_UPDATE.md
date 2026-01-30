@@ -2,23 +2,23 @@
 
 ## Changes Summary
 
-### 1. Non-Payer Badge Added to All Screens
+### 1. Non-Payor Badge Added to All Screens
 
 #### RoomDetailsScreen.js
 
-- Added non-payer badge (gray styling) to member list
-- Badge displays "Non-Payer" for non-payer members alongside "Payer" badge for payers
+- Added non-payor badge (gray styling) to member list
+- Badge displays "Non-Payor" for non-payor members alongside "Payor" badge for payors
 - Added matching styles:
-  - `nonPayerBadge`: Gray background (#e0e0e0), padding 8px horizontal/4px vertical
-  - `nonPayerBadgeText`: Font size 11, color #666, font weight 600
+  - `nonPayorBadge`: Gray background (#e0e0e0), padding 8px horizontal/4px vertical
+  - `nonPayorBadgeText`: Font size 11, color #666, font weight 600
 
 #### BillsScreen.js
 
-- Updated member badge logic to show "Non-Payer" instead of generic "Member"
-- Added `nonPayerBadge` style to match RoomDetailsScreen
+- Updated member badge logic to show "Non-Payor" instead of generic "Member"
+- Added `nonPayorBadge` style to match RoomDetailsScreen
 - Badge styling consistency across app:
-  - Payer: Green (#d4edda background, #28a745 text)
-  - Non-Payer: Gray (#e0e0e0 background, #666 text)
+  - Payor: Green (#d4edda background, #28a745 text)
+  - Non-Payor: Gray (#e0e0e0 background, #666 text)
 
 ### 2. PDF Export Functionality
 
@@ -40,13 +40,13 @@
     - Member name
     - Presence days
     - Individual water bill calculation
-    - Payer/Non-Payer status badge
-  - User's share details (if user is payer):
+    - Payor/Non-Payor status badge
+  - User's share details (if user is payor):
     - Rent share
     - Electricity share
     - Water share
     - Total amount due
-    - Number of payers for reference
+    - Number of payors for reference
   - Generation timestamp
 
 **UI Changes:**
@@ -80,15 +80,15 @@ BillsScreen.js
 │   ├── HTML template generation
 │   ├── Billing data compilation
 │   ├── Member presence calculations
-│   ├── Per-payer share calculations
+│   ├── Per-payor share calculations
 │   └── PDF export via Print.printToFileAsync
 ├── Header with export button
-├── Member list with non-payer badges
+├── Member list with non-payor badges
 └── Styles for exportButton
 
 RoomDetailsScreen.js
-├── Non-payer badges in member list
-└── Styles for nonPayerBadge and nonPayerBadgeText
+├── Non-payor badges in member list
+└── Styles for nonPayorBadge and nonPayorBadgeText
 
 package.json
 └── Dependencies: expo-print, expo-sharing added
@@ -106,8 +106,8 @@ package.json
 
 ✅ Complete billing breakdown
 ✅ Individual member water bills
-✅ Payer status indicators
-✅ Personal share calculations (for payers)
+✅ Payor status indicators
+✅ Personal share calculations (for payors)
 ✅ Presence day counts
 ✅ Billing period information
 ✅ Professional formatting
@@ -125,12 +125,12 @@ package.json
 
 - Uses same calculations as on-screen display
 - Includes all water bill computations
-- Respects payer/non-payer billing divisions
+- Respects payor/non-payor billing divisions
 - Two-decimal rounding for all currency values
 
 ## Testing Recommendations
 
-1. Export PDF with multiple payers and non-payers
+1. Export PDF with multiple payors and non-payors
 2. Verify badge styling matches throughout app
 3. Test PDF generation with various data scenarios
 4. Confirm PDF opens/shares correctly on device

@@ -24,6 +24,8 @@ const PresenceScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [marking, setMarking] = useState(false);
   const pendingUpdatesRef = useRef(new Set());
+  const updateTimeoutRef = useRef(null);
+  const isUpdatingRef = useRef(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   // Whether an admin-configured billing period or an active billing cycle exists for this room
@@ -127,11 +129,8 @@ const PresenceScreen = () => {
 
     const dateStr = formatToYMD(date);
 
-    // Avoid duplicate pending updates for the same date
-    if (pendingUpdatesRef.current.has(dateStr)) {
-      console.log("Presence update pending for", dateStr);
-      return;
-    }
+    // Add to pending updates
+    pendingUpdatesRef.current.add(dateStr);
 
     // Capture current state for potential revert
     const prevMarked = [...markedDates];
@@ -155,33 +154,67 @@ const PresenceScreen = () => {
       setSelectedRoom({ ...selectedRoom, members: updatedMembers });
     }
 
-    // Mark as pending to prevent repeated taps
-    pendingUpdatesRef.current.add(dateStr);
-
-    // Send update in background
-    try {
-      await presenceService.markPresence(selectedRoom._id, {
-        presenceDates: updatedDates,
-      });
-      // Success: remove pending flag
-      pendingUpdatesRef.current.delete(dateStr);
-      console.log("Presence update succeeded for", dateStr);
-    } catch (error) {
-      // Revert optimistic update
-      pendingUpdatesRef.current.delete(dateStr);
-      console.error("Error marking presence:", error);
-      setMarkedDates(prevMarked);
-      if (selectedRoom && selectedRoom.members) {
-        const revertedMembers = selectedRoom.members.map((m) => {
-          if (String(m.user?._id || m.user) === String(userId)) {
-            return { ...m, presence: prevMarked };
-          }
-          return m;
-        });
-        setSelectedRoom({ ...selectedRoom, members: revertedMembers });
-      }
-      Alert.alert("Error", error.message || "Failed to update presence");
+    // Clear previous debounce timer
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
     }
+
+    // Debounce the API call - wait 500ms before sending
+    updateTimeoutRef.current = setTimeout(async () => {
+      // Only send if not already updating
+      if (isUpdatingRef.current) {
+        // Schedule another retry
+        updateTimeoutRef.current = setTimeout(async () => {
+          try {
+            await presenceService.markPresence(selectedRoom._id, {
+              presenceDates: updatedDates,
+            });
+            pendingUpdatesRef.current.clear();
+            console.log("Presence update succeeded for", dateStr);
+          } catch (error) {
+            console.error("Error marking presence (retry):", error);
+            setMarkedDates(prevMarked);
+            if (selectedRoom && selectedRoom.members) {
+              const revertedMembers = selectedRoom.members.map((m) => {
+                if (String(m.user?._id || m.user) === String(userId)) {
+                  return { ...m, presence: prevMarked };
+                }
+                return m;
+              });
+              setSelectedRoom({ ...selectedRoom, members: revertedMembers });
+            }
+            Alert.alert("Error", error.message || "Failed to update presence");
+          }
+        }, 500);
+        return;
+      }
+
+      isUpdatingRef.current = true;
+      try {
+        await presenceService.markPresence(selectedRoom._id, {
+          presenceDates: updatedDates,
+        });
+        pendingUpdatesRef.current.clear();
+        console.log("Presence update succeeded for", dateStr);
+      } catch (error) {
+        // Revert optimistic update
+        pendingUpdatesRef.current.clear();
+        console.error("Error marking presence:", error);
+        setMarkedDates(prevMarked);
+        if (selectedRoom && selectedRoom.members) {
+          const revertedMembers = selectedRoom.members.map((m) => {
+            if (String(m.user?._id || m.user) === String(userId)) {
+              return { ...m, presence: prevMarked };
+            }
+            return m;
+          });
+          setSelectedRoom({ ...selectedRoom, members: revertedMembers });
+        }
+        Alert.alert("Error", error.message || "Failed to update presence");
+      } finally {
+        isUpdatingRef.current = false;
+      }
+    }, 500); // Debounce delay
   };
 
   const markTodayPresence = async () => {

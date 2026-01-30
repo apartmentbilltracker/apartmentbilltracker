@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
+import { useIsFocused } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -9,19 +10,26 @@ import {
   RefreshControl,
   Alert,
   Modal,
+  Image,
 } from "react-native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
-import {
-  roomService,
-  billingService,
-  presenceService,
-} from "../../services/apiService";
+import { roomService } from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
+
+const colors = {
+  primary: "#bdb246",
+  dark: "#1a1a1a",
+  lightGray: "#f5f5f5",
+  border: "#e0e0e0",
+  success: "#27ae60",
+  danger: "#e74c3c",
+};
 
 const WATER_BILL_PER_DAY = 5; // 5 pesos per day
 
 const BillsScreen = ({ navigation }) => {
   const { state } = useContext(AuthContext);
+  const isFocused = useIsFocused();
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -30,12 +38,21 @@ const BillsScreen = ({ navigation }) => {
   const [receiptHTML, setReceiptHTML] = useState(null); // HTML for receipt modal
   const [receiptData, setReceiptData] = useState(null); // Structured receipt data
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [selectedMemberPresence, setSelectedMemberPresence] = useState(null); // For presence modal
+  const [showPresenceModal, setShowPresenceModal] = useState(false);
+  const [presenceMonth, setPresenceMonth] = useState(new Date()); // For calendar navigation
 
   const userId = state?.user?._id;
 
   useEffect(() => {
     fetchRooms();
   }, []);
+
+  // Refetch whenever user profile changes (name or avatar)
+  useEffect(() => {
+    console.log("User profile changed, refetching rooms");
+    fetchRooms();
+  }, [state.user?.name, state.user?.avatar?.url]);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -72,12 +89,17 @@ const BillsScreen = ({ navigation }) => {
   const fetchRooms = async () => {
     try {
       setLoading(true);
+      console.log("Fetching rooms...");
       const response = await roomService.getRooms();
       console.log("Bills Screen - getRooms response:", response);
       // Handle response structure from fetch API: response = { data, status }
       const data = response.data || response;
       const fetchedRooms = data.rooms || data || [];
       console.log("Bills Screen - fetched rooms:", fetchedRooms);
+      console.log(
+        "Bills Screen - first room members:",
+        fetchedRooms[0]?.members,
+      );
 
       // Filter to show only rooms user is part of
       const userRooms = fetchedRooms.filter((room) =>
@@ -86,12 +108,25 @@ const BillsScreen = ({ navigation }) => {
         ),
       );
 
+      console.log("Bills Screen - user rooms:", userRooms);
       setRooms(userRooms);
-      if (userRooms.length > 0 && !selectedRoom) {
+
+      // Update selectedRoom with fresh data or set to first room
+      if (selectedRoom && userRooms.length > 0) {
+        // Find the updated version of the currently selected room
+        const updatedSelectedRoom = userRooms.find(
+          (room) => room._id === selectedRoom._id,
+        );
+        if (updatedSelectedRoom) {
+          setSelectedRoom(updatedSelectedRoom);
+          console.log("Updated selectedRoom with fresh data");
+        }
+      } else if (userRooms.length > 0) {
         setSelectedRoom(userRooms[0]);
       }
     } catch (error) {
-      console.error("Error fetching rooms:", error);
+      console.error("Error fetching rooms:", error.message);
+      console.error("Error details:", error);
       Alert.alert("Error", "Failed to load rooms");
     } finally {
       setLoading(false);
@@ -112,23 +147,23 @@ const BillsScreen = ({ navigation }) => {
 
     const billing = selectedRoom.billing;
     const members = selectedRoom.members || [];
-    const payerCount = Math.max(
+    const payorCount = Math.max(
       1,
       members.filter((m) => m.isPayer).length || 1,
     );
 
-    const rentPerPayer = billing.rent ? billing.rent / payerCount : 0;
-    const electricityPerPayer = billing.electricity
-      ? billing.electricity / payerCount
+    const rentPerPayor = billing.rent ? billing.rent / payorCount : 0;
+    const electricityPerPayor = billing.electricity
+      ? billing.electricity / payorCount
       : 0;
-    const waterPerPayer = calculateTotalWaterBill() / payerCount;
+    const waterPerPayor = calculateTotalWaterBill() / payorCount;
 
     return {
-      rent: rentPerPayer,
-      electricity: electricityPerPayer,
-      water: waterPerPayer,
-      total: rentPerPayer + electricityPerPayer + waterPerPayer,
-      payerCount,
+      rent: rentPerPayor,
+      electricity: electricityPerPayor,
+      water: waterPerPayor,
+      total: rentPerPayor + electricityPerPayor + waterPerPayor,
+      payorCount,
     };
   };
 
@@ -145,6 +180,50 @@ const BillsScreen = ({ navigation }) => {
   const calculateMemberWaterBill = (memberId) => {
     const presence = memberPresence[memberId] || [];
     return presence.length * WATER_BILL_PER_DAY;
+  };
+
+  // Calendar helper functions for presence modal
+  const getDaysInMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const formatToYMD = (date) => {
+    if (!date) return null;
+    const d = new Date(date);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const generateCalendarDays = () => {
+    const year = presenceMonth.getFullYear();
+    const month = presenceMonth.getMonth();
+    const daysInMonth = getDaysInMonth(presenceMonth);
+    const firstDay = getFirstDayOfMonth(presenceMonth);
+    const days = [];
+
+    // Add empty cells for days before month starts
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+
+    // Add days of month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(new Date(year, month, day));
+    }
+
+    return days;
+  };
+
+  const isDateMarked = (date) => {
+    if (!date || !selectedMemberPresence) return false;
+    const dateStr = formatToYMD(date);
+    return selectedMemberPresence.dates.some((d) => formatToYMD(d) === dateStr);
   };
 
   const exportBillingData = async () => {
@@ -340,7 +419,7 @@ const BillsScreen = ({ navigation }) => {
                     <span class="member-name">${member.user?.name || "Unknown"}</span>
                     <span class="member-days">${(memberPresence[member._id] || []).length}d</span>
                     <span class="member-water">₱${calculateMemberWaterBill(member._id).toFixed(2)}</span>
-                    <span class="member-status">${member.isPayer ? "Payer" : "Non-Payer"}</span>
+                    <span class="member-status">${member.isPayer ? "Payor" : "Non-Payor"}</span>
                   </div>
                 `,
                   )
@@ -349,11 +428,11 @@ const BillsScreen = ({ navigation }) => {
             </div>
 
             ${
-              isUserPayer && billShare
+              isUserPayor && billShare
                 ? `
             <!-- Your Share -->
             <div class="your-share">
-              <div class="your-share-title">YOUR SHARE (PAYER)</div>
+              <div class="your-share-title">YOUR SHARE (PAYOR)</div>
               <div class="row">
                 <span class="label">Rent Share:</span>
                 <span class="value">₱${billShare.rent.toFixed(2)}</span>
@@ -372,7 +451,7 @@ const BillsScreen = ({ navigation }) => {
                 <span class="total-value">₱${billShare.total.toFixed(2)}</span>
               </div>
               <div class="row" style="font-size: 10px; color: #666; margin-top: 5px;">
-                <span class="label">Split among ${billShare.payerCount} payer(s)</span>
+                <span class="label">Split among ${billShare.payorCount} payor(s)</span>
               </div>
             </div>
             `
@@ -425,7 +504,7 @@ const BillsScreen = ({ navigation }) => {
               : null,
         })),
         userShare:
-          isUserPayer && billShare
+          isUserPayor && billShare
             ? {
                 rent: billShare.rent.toFixed(2),
                 electricity: billShare.electricity.toFixed(2),
@@ -464,7 +543,7 @@ const BillsScreen = ({ navigation }) => {
 
   const billShare = calculateBillShare();
   const billing = selectedRoom?.billing || {};
-  const isUserPayer = currentUserMember?.isPayer || false;
+  const isUserPayor = currentUserMember?.isPayer || false;
 
   if (loading) {
     return (
@@ -679,7 +758,7 @@ const BillsScreen = ({ navigation }) => {
                 ) : null}
 
                 {/* Your Share */}
-                {billShare && isUserPayer && (
+                {billShare && isUserPayor && (
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Your Share</Text>
                     <View style={styles.yourShareCard}>
@@ -690,7 +769,7 @@ const BillsScreen = ({ navigation }) => {
                             ₱{billShare.rent.toFixed(2)}
                           </Text>
                           <Text style={styles.shareNote}>
-                            Split among {billShare.payerCount} payer(s)
+                            Split among {billShare.payorCount} payor(s)
                           </Text>
                         </View>
                       </View>
@@ -704,7 +783,7 @@ const BillsScreen = ({ navigation }) => {
                             ₱{billShare.electricity.toFixed(2)}
                           </Text>
                           <Text style={styles.shareNote}>
-                            Split among {billShare.payerCount} payer(s)
+                            Split among {billShare.payorCount} payor(s)
                           </Text>
                         </View>
                       </View>
@@ -716,7 +795,7 @@ const BillsScreen = ({ navigation }) => {
                             ₱{billShare.water.toFixed(2)}
                           </Text>
                           <Text style={styles.shareNote}>
-                            Split among {billShare.payerCount} payer(s)
+                            Split among {billShare.payorCount} payor(s)
                           </Text>
                         </View>
                       </View>
@@ -731,15 +810,15 @@ const BillsScreen = ({ navigation }) => {
                   </View>
                 )}
 
-                {!isUserPayer && (
+                {!isUserPayor && (
                   <View style={styles.section}>
-                    <View style={styles.nonPayerCard}>
+                    <View style={styles.nonPayorCard}>
                       <MaterialIcons name="info" size={24} color="#17a2b8" />
-                      <Text style={styles.nonPayerText}>
-                        You are not a payer for this room
+                      <Text style={styles.nonPayorText}>
+                        You are not a payor for this room
                       </Text>
-                      <Text style={styles.nonPayerSubtext}>
-                        Only payers see billing shares
+                      <Text style={styles.nonPayorSubtext}>
+                        Only payors see billing shares
                       </Text>
                     </View>
                   </View>
@@ -752,12 +831,32 @@ const BillsScreen = ({ navigation }) => {
                       Room Members & Water Bill
                     </Text>
                     {selectedRoom.members.map((member, idx) => (
-                      <View key={idx} style={styles.memberCard}>
-                        <View style={styles.memberIcon}>
-                          <Text style={styles.memberIconText}>
-                            {(member.user?.name || "M").charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
+                      <TouchableOpacity
+                        key={idx}
+                        style={styles.memberCard}
+                        onPress={() => {
+                          setSelectedMemberPresence({
+                            name: member.user?.name || "Unknown",
+                            dates: memberPresence[member._id] || [],
+                          });
+                          setShowPresenceModal(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        {member.user?.avatar?.url ? (
+                          <Image
+                            source={{ uri: member.user.avatar.url }}
+                            style={styles.memberIconImage}
+                          />
+                        ) : (
+                          <View style={styles.memberIcon}>
+                            <Text style={styles.memberIconText}>
+                              {(member.user?.name || "M")
+                                .charAt(0)
+                                .toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
                         <View style={styles.memberInfo}>
                           <Text style={styles.memberName}>
                             {member.user?.name || "Unknown"}
@@ -777,23 +876,18 @@ const BillsScreen = ({ navigation }) => {
                           </Text>
                         </View>
                         <View
-                          style={
+                          style={[
+                            styles.memberBadgeContainer,
                             member.isPayer
-                              ? styles.payerBadge
-                              : styles.nonPayerBadge
-                          }
+                              ? styles.payorBadge
+                              : styles.nonPayorBadge,
+                          ]}
                         >
-                          <Text
-                            style={
-                              member.isPayer
-                                ? styles.payerBadgeText
-                                : styles.nonPayerBadgeText
-                            }
-                          >
-                            {member.isPayer ? "Payer" : "Non-Payer"}
+                          <Text style={[styles.payorBadgeText]}>
+                            {member.isPayer ? "Payor" : "Non-Payor"}
                           </Text>
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 )}
@@ -975,7 +1069,7 @@ const BillsScreen = ({ navigation }) => {
               ))}
             </View>
 
-            {/* Bill Per Member (for payers) */}
+            {/* Bill Per Member (for payors) */}
             {receiptData.members.some((m) => m.isPayer) && (
               <View style={styles.receiptSection}>
                 <Text style={styles.receiptSectionTitle}>Bill Per Member</Text>
@@ -989,7 +1083,7 @@ const BillsScreen = ({ navigation }) => {
                             {member.name}
                           </Text>
                           <Text style={styles.receiptBillPerMemberSubtext}>
-                            Payer
+                            Payor
                           </Text>
                         </View>
                         <View style={{ alignItems: "flex-end" }}>
@@ -1018,7 +1112,7 @@ const BillsScreen = ({ navigation }) => {
             {receiptData.userShare && (
               <View style={styles.receiptYourShare}>
                 <Text style={styles.receiptSectionTitle}>
-                  YOUR SHARE (PAYER)
+                  YOUR SHARE (PAYOR)
                 </Text>
                 <View style={styles.receiptRow}>
                   <Text style={styles.receiptLabel}>Rent Share:</Text>
@@ -1044,8 +1138,8 @@ const BillsScreen = ({ navigation }) => {
                     ₱{receiptData.userShare.total}
                   </Text>
                 </View>
-                <Text style={styles.receiptPayerNote}>
-                  Split among {receiptData.userShare.payerCount} payer(s)
+                <Text style={styles.receiptPayorNote}>
+                  Split among {receiptData.userShare.payorCount} payor(s)
                 </Text>
               </View>
             )}
@@ -1065,6 +1159,127 @@ const BillsScreen = ({ navigation }) => {
             </View>
           </ScrollView>
         )}
+      </Modal>
+
+      {/* Presence Modal */}
+      <Modal
+        visible={showPresenceModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPresenceModal(false)}
+      >
+        <View style={styles.presenceModalOverlay}>
+          <View style={styles.presenceModalContainer}>
+            {/* Header */}
+            <View style={styles.presenceModalHeader}>
+              <Text style={styles.presenceModalTitle}>
+                {selectedMemberPresence?.name}
+              </Text>
+              <TouchableOpacity
+                style={styles.presenceModalCloseBtn}
+                onPress={() => setShowPresenceModal(false)}
+              >
+                <Ionicons name="close" size={28} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Content */}
+            <ScrollView style={styles.presenceModalContent}>
+              {/* Calendar Navigation */}
+              <View style={styles.presenceCalendarHeader}>
+                <TouchableOpacity
+                  onPress={() =>
+                    setPresenceMonth(
+                      new Date(
+                        presenceMonth.getFullYear(),
+                        presenceMonth.getMonth() - 1,
+                      ),
+                    )
+                  }
+                >
+                  <Ionicons name="chevron-back" size={28} color="#bdb246" />
+                </TouchableOpacity>
+
+                <Text style={styles.presenceMonthYear}>
+                  {presenceMonth.toLocaleDateString("en-US", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </Text>
+
+                <TouchableOpacity
+                  onPress={() =>
+                    setPresenceMonth(
+                      new Date(
+                        presenceMonth.getFullYear(),
+                        presenceMonth.getMonth() + 1,
+                      ),
+                    )
+                  }
+                >
+                  <Ionicons name="chevron-forward" size={28} color="#bdb246" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Week Days Header */}
+              <View style={styles.presenceWeekDaysContainer}>
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                  (day) => (
+                    <View key={day} style={styles.presenceWeekDayHeader}>
+                      <Text style={styles.presenceWeekDayText}>{day}</Text>
+                    </View>
+                  ),
+                )}
+              </View>
+
+              {/* Calendar Days Grid */}
+              <View style={styles.presenceCalendarDaysContainer}>
+                {generateCalendarDays().map((date, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.presenceDayCell,
+                      !date && styles.presenceEmptyCell,
+                      date && isDateMarked(date) && styles.presenceMarkedCell,
+                    ]}
+                  >
+                    {date ? (
+                      <>
+                        <Text
+                          style={[
+                            styles.presenceDayText,
+                            isDateMarked(date) && styles.presenceMarkedDayText,
+                          ]}
+                        >
+                          {date.getDate()}
+                        </Text>
+                        {isDateMarked(date) && (
+                          <View style={styles.presenceCheckmarkContainer}>
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={14}
+                              color="#fff"
+                            />
+                          </View>
+                        )}
+                      </>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+
+              {/* Summary */}
+              <View style={styles.presenceSummary}>
+                <View style={styles.presenceSummaryItem}>
+                  <View style={styles.presenceSummaryIcon} />
+                  <Text style={styles.presenceSummaryText}>
+                    Marked: {selectedMemberPresence?.dates?.length || 0} days
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -1274,7 +1489,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#bdb246",
   },
-  nonPayerCard: {
+  nonPayorCard: {
     backgroundColor: "#d1ecf1",
     borderRadius: 10,
     padding: 14,
@@ -1282,13 +1497,13 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: "#17a2b8",
   },
-  nonPayerText: {
+  nonPayorText: {
     fontSize: 14,
     fontWeight: "600",
     color: "#0c5460",
     marginTop: 8,
   },
-  nonPayerSubtext: {
+  nonPayorSubtext: {
     fontSize: 12,
     color: "#0c5460",
     marginTop: 4,
@@ -1309,6 +1524,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+  },
+  memberIconImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: "#bdb246",
   },
   memberIconText: {
     color: "#fff",
@@ -1349,27 +1571,35 @@ const styles = StyleSheet.create({
     color: "#2196F3",
     marginTop: 2,
   },
-  payerBadge: {
-    backgroundColor: "#d4edda",
-    borderRadius: 12,
-    paddingHorizontal: 10,
+  payorBadge: {
+    backgroundColor: colors.success,
+    paddingHorizontal: 8,
     paddingVertical: 4,
+    borderRadius: 6,
   },
-  payerBadgeText: {
-    color: "#28a745",
-    fontWeight: "600",
+  payorBadgeText: {
     fontSize: 11,
+    fontWeight: "600",
+    color: "white",
   },
-  nonPayerBadge: {
-    backgroundColor: "#e0e0e0",
-    borderRadius: 12,
-    paddingHorizontal: 10,
+  nonPayorBadge: {
+    backgroundColor: "#b8b8b8",
+    paddingHorizontal: 8,
     paddingVertical: 4,
+    borderRadius: 6,
   },
-  nonPayerBadgeText: {
+  nonPayorBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
     color: "#666",
-    fontWeight: "600",
-    fontSize: 11,
+  },
+  memberBadgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   memberBadge: {
     backgroundColor: "#e7e7e7",
@@ -1605,7 +1835,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 6,
   },
-  receiptPayerNote: {
+  receiptPayorNote: {
     fontSize: 11,
     color: "#f57f17",
     marginTop: 8,
@@ -1645,6 +1875,194 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "700",
     fontSize: 16,
+  },
+
+  // Presence Modal Styles
+  presenceModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  presenceModalContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    maxHeight: "80%",
+    width: "100%",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  presenceModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: "#f8f9fa",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  presenceModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#333",
+    flex: 1,
+  },
+  presenceModalCloseBtn: {
+    padding: 4,
+  },
+  presenceModalContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  presenceCount: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#666",
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  presenceDatesList: {
+    gap: 10,
+  },
+  presenceDateItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#f0f8f5",
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: "#28a745",
+  },
+  presenceDateIcon: {
+    marginRight: 12,
+  },
+  presenceDateText: {
+    fontSize: 15,
+    color: "#333",
+    fontWeight: "500",
+  },
+  presenceEmptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  presenceEmptyText: {
+    fontSize: 16,
+    color: "#999",
+    marginTop: 12,
+  },
+
+  // New Calendar Styles for Presence Modal
+  presenceCalendarHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 12,
+  },
+  presenceMonthYear: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#333",
+  },
+  presenceWeekDaysContainer: {
+    flexDirection: "row",
+    marginBottom: 8,
+    paddingHorizontal: 8,
+  },
+  presenceWeekDayHeader: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  presenceWeekDayText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#666",
+  },
+  presenceCalendarDaysContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 4,
+    marginBottom: 16,
+  },
+  presenceDayCell: {
+    width: "14.28%",
+    aspectRatio: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 4,
+    marginHorizontal: 2,
+    borderRadius: 8,
+    backgroundColor: "#f5f5f5",
+    position: "relative",
+  },
+  presenceEmptyCell: {
+    backgroundColor: "transparent",
+  },
+  presenceMarkedCell: {
+    backgroundColor: "#28a745",
+  },
+  presenceDayText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#333",
+  },
+  presenceMarkedDayText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  presenceCheckmark: {
+    position: "relative",
+  },
+  presenceCheckmarkContainer: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    backgroundColor: "#27ae60",
+    borderRadius: 9,
+    width: 18,
+    height: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  presenceSummary: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  presenceSummaryItem: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  presenceSummaryIcon: {
+    width: 12,
+    height: 12,
+    borderRadius: 2,
+    backgroundColor: "#28a745",
+    marginRight: 10,
+  },
+  presenceSummaryText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
   },
 });
 

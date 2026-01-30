@@ -55,7 +55,7 @@ const [memberPresence, setMemberPresence] = useState({}); // { memberId: presenc
 
 #### Updated calculateBillShare():
 
-Now includes water bill per payer:
+Now includes water bill per payor:
 
 ```javascript
 return {
@@ -122,7 +122,7 @@ const fetchedRooms = data.rooms || data || [];
 
 - **Per Member:** `marked_days × ₱5`
 - **Total:** Sum of all members' water bills
-- **Per Payer:** `total_water_bill ÷ number_of_payers`
+- **Per Payor:** `total_water_bill ÷ number_of_payors`
 
 ### Validation Rules for Presence:
 

@@ -21,7 +21,7 @@ export const authService = {
 
   getProfile: () => api.get("/api/v2/user/getuser").then(extractData),
   updateProfile: (data) =>
-    api.put("/api/v2/user/profile", data).then(extractData),
+    api.put("/api/v2/user/update-profile", data).then(extractData),
   logout: () => api.get("/api/v2/user/logout").then(extractData),
 };
 

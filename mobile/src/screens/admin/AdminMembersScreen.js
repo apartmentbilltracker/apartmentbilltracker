@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useIsFocused } from "@react-navigation/native";
 import {
   View,
@@ -11,11 +11,14 @@ import {
   TextInput,
   Alert,
   RefreshControl,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { roomService, memberService } from "../../services/apiService";
+import { AuthContext } from "../../context/AuthContext";
 
 const AdminMembersScreen = ({ navigation, route }) => {
+  const { state } = useContext(AuthContext);
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [members, setMembers] = useState([]);
@@ -35,10 +38,16 @@ const AdminMembersScreen = ({ navigation, route }) => {
     fetchRooms();
   }, []);
 
-  // Re-fetch when screen gains focus so newly created rooms appear immediately
+  // Re-fetch when screen gains focus or user profile changes
   useEffect(() => {
     if (isFocused) fetchRooms();
   }, [isFocused]);
+
+  // Refetch whenever user profile changes (name or avatar)
+  useEffect(() => {
+    console.log("Admin profile changed, refetching members");
+    fetchRooms();
+  }, [state.user?.name, state.user?.avatar?.url]);
 
   useEffect(() => {
     if (selectedRoom) {
@@ -55,8 +64,20 @@ const AdminMembersScreen = ({ navigation, route }) => {
       const allRooms = response.rooms || response.data?.rooms || [];
       setRooms(allRooms);
 
-      // If no room is selected or previously selected room was removed, pick the first
-      if (!selectedRoom || !allRooms.some((r) => r._id === selectedRoom._id)) {
+      // Update selectedRoom with fresh data if it exists
+      if (selectedRoom && allRooms.length > 0) {
+        const updatedSelectedRoom = allRooms.find(
+          (r) => r._id === selectedRoom._id,
+        );
+        if (updatedSelectedRoom) {
+          setSelectedRoom(updatedSelectedRoom);
+          console.log("Updated selectedRoom with fresh data");
+        }
+      } else if (
+        !selectedRoom ||
+        !allRooms.some((r) => r._id === selectedRoom?._id)
+      ) {
+        // If no room is selected or previously selected room was removed, pick the first
         if (allRooms.length > 0) setSelectedRoom(allRooms[0]);
         else setSelectedRoom(null);
       }
@@ -136,15 +157,15 @@ const AdminMembersScreen = ({ navigation, route }) => {
       });
       await fetchRooms();
     } catch (error) {
-      console.error("Error toggling payer:", error);
-      Alert.alert("Error", "Failed to update payer status");
+      console.error("Error toggling payor:", error);
+      Alert.alert("Error", "Failed to update payor status");
       // revert by re-fetching
       await fetchRooms();
     }
   };
 
   const filteredMembers = members.filter((member) =>
-    (member.name || member.email || "")
+    (member.user?.name || member.name || member.email || "")
       .toLowerCase()
       .includes(searchTerm.toLowerCase()),
   );
@@ -168,45 +189,47 @@ const AdminMembersScreen = ({ navigation, route }) => {
       }
     >
       {/* Room Selector */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Select Room</Text>
-        <FlatList
-          data={rooms}
-          keyExtractor={(item) => item._id}
-          scrollEnabled={false}
-          renderItem={({ item }) => (
+      <View style={styles.roomSelectorContainer}>
+        <Text style={styles.roomSelectorTitle}>Select a Room</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.roomSelectorScroll}
+        >
+          {rooms.map((item) => (
             <TouchableOpacity
+              key={item._id}
               style={[
-                styles.roomOption,
-                selectedRoom?._id === item._id && styles.roomOptionActive,
+                styles.roomTab,
+                selectedRoom?._id === item._id && styles.roomTabActive,
               ]}
               onPress={() => setSelectedRoom(item)}
             >
               <Text
                 style={[
-                  styles.roomOptionText,
-                  selectedRoom?._id === item._id && styles.roomOptionTextActive,
+                  styles.roomTabText,
+                  selectedRoom?._id === item._id && styles.roomTabTextActive,
                 ]}
               >
                 {item.name}
               </Text>
             </TouchableOpacity>
-          )}
-        />
+          ))}
+        </ScrollView>
       </View>
 
       {selectedRoom && (
         <>
-          {/* Header with title and add button */}
-          <View style={styles.header}>
+          {/* Header Section */}
+          <View style={styles.headerSection}>
             <View>
-              <Text style={styles.title}>Members</Text>
-              <Text style={styles.subtitle}>
-                {selectedRoom.name} • {members.length} members
+              <Text style={styles.memberCountTitle}>
+                {members.length} Members
               </Text>
+              <Text style={styles.roomNameSubtitle}>{selectedRoom.name}</Text>
             </View>
             <TouchableOpacity
-              style={styles.addButton}
+              style={styles.addMemberQuickButton}
               onPress={() => {
                 setShowAddForm(!showAddForm);
                 if (!showAddForm) {
@@ -215,15 +238,16 @@ const AdminMembersScreen = ({ navigation, route }) => {
                 }
               }}
             >
-              <Text style={styles.addButtonText}>+ Add</Text>
+              <Ionicons name="add" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
 
           {/* Search Bar */}
           {members.length > 0 && (
-            <View style={styles.searchSection}>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={18} color="#999" />
               <TextInput
-                style={styles.searchInput}
+                style={styles.searchInputField}
                 placeholder="Search members..."
                 value={searchTerm}
                 onChangeText={setSearchTerm}
@@ -231,63 +255,58 @@ const AdminMembersScreen = ({ navigation, route }) => {
             </View>
           )}
 
-          {/* Add Member Form */}
+          {/* Add Member Form Modal-like */}
           {showAddForm && (
-            <View style={styles.formContainer}>
-              <Text style={styles.formTitle}>Add New Member</Text>
+            <View style={styles.addFormCard}>
+              <View style={styles.formHeader}>
+                <Text style={styles.formTitle}>Add New Member</Text>
+                <TouchableOpacity onPress={() => setShowAddForm(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
               <TextInput
-                style={styles.input}
-                placeholder="Member Email"
+                style={styles.formInput}
+                placeholder="Enter member email"
                 value={memberEmail}
                 onChangeText={setMemberEmail}
                 keyboardType="email-address"
                 editable={!adding}
               />
-              <View style={styles.formButtons}>
-                <TouchableOpacity
-                  style={[styles.button, styles.cancelButton]}
-                  onPress={() => {
-                    setShowAddForm(false);
-                    setMemberEmail("");
-                    setMemberName("");
-                  }}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.button,
-                    styles.addMemberButton,
-                    adding && styles.buttonDisabled,
-                  ]}
-                  onPress={handleAddMember}
-                  disabled={adding}
-                >
-                  {adding ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.addMemberButtonText}>Add Member</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[
+                  styles.formSubmitButton,
+                  adding && styles.buttonDisabled,
+                ]}
+                onPress={handleAddMember}
+                disabled={adding}
+              >
+                {adding ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.formSubmitText}>Add Member</Text>
+                )}
+              </TouchableOpacity>
             </View>
           )}
 
           {/* Members List */}
-          <View style={styles.membersSection}>
-            {members.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No members yet</Text>
-                <TouchableOpacity
-                  style={styles.emptyButton}
-                  onPress={() => setShowAddForm(true)}
-                >
-                  <Text style={styles.emptyButtonText}>Add First Member</Text>
-                </TouchableOpacity>
-              </View>
-            ) : filteredMembers.length === 0 ? (
+          {members.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="people-outline" size={48} color="#bdb246" />
+              <Text style={styles.emptyText}>No members yet</Text>
+              <TouchableOpacity
+                style={styles.emptyActionButton}
+                onPress={() => setShowAddForm(true)}
+              >
+                <Text style={styles.emptyActionText}>Add First Member</Text>
+              </TouchableOpacity>
+            </View>
+          ) : filteredMembers.length === 0 ? (
+            <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No members matching search</Text>
-            ) : (
+            </View>
+          ) : (
+            <View style={styles.membersListContainer}>
               <FlatList
                 data={filteredMembers}
                 keyExtractor={(item) => item._id}
@@ -296,87 +315,93 @@ const AdminMembersScreen = ({ navigation, route }) => {
                   const presenceDays = item.presence ? item.presence.length : 0;
                   return (
                     <View style={styles.memberCard}>
-                      <View style={styles.memberContent}>
-                        <View style={styles.memberInfo}>
+                      <View style={styles.memberLeft}>
+                        {item.user?.avatar?.url ? (
+                          <Image
+                            source={{ uri: item.user.avatar.url }}
+                            style={styles.memberAvatar}
+                          />
+                        ) : (
+                          <View style={styles.memberAvatarPlaceholder}>
+                            <Text style={styles.memberAvatarText}>
+                              {(item.user?.name || "U").charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.memberDetails}>
                           <Text style={styles.memberName}>
-                            {item.name || item.email || "—"}
+                            {item.user?.name || item.name || "Unknown"}
                           </Text>
-                          <Text style={styles.memberEmail}>{item.email}</Text>
-
-                          {/* Payer indicator and joined date */}
+                          <Text style={styles.memberEmail}>
+                            {item.user?.email || item.email}
+                          </Text>
                           <View style={styles.memberMetaRow}>
                             <View
                               style={[
-                                styles.payerBadge,
+                                styles.payorBadge,
                                 item.isPayer
-                                  ? styles.payerBadgeActive
-                                  : styles.payerBadgeInactive,
+                                  ? styles.payorBadgeActive
+                                  : styles.payorBadgeInactive,
                               ]}
                             >
                               <Text
                                 style={[
-                                  styles.payerBadgeText,
+                                  styles.payorBadgeText,
                                   item.isPayer
-                                    ? styles.payerBadgeTextActive
-                                    : styles.payerBadgeTextInactive,
+                                    ? styles.payorBadgeTextActive
+                                    : styles.payorBadgeTextInactive,
                                 ]}
                               >
-                                {item.isPayer ? "Payer" : "Non-payer"}
+                                {item.isPayer ? "Payor" : "Non-payor"}
                               </Text>
                             </View>
-
-                            <View style={styles.joinedRow}>
-                              <Ionicons
-                                name="calendar-outline"
-                                size={14}
-                                color="#999"
-                                style={{ marginRight: 6 }}
-                              />
-                              <Text style={styles.joinedTextSmall}>
-                                {item.joinedAt
-                                  ? new Date(item.joinedAt).toLocaleDateString()
-                                  : "—"}
+                            {presenceDays > 0 && (
+                              <Text style={styles.presenceTag}>
+                                📅 {presenceDays} days
                               </Text>
-                            </View>
+                            )}
                           </View>
-
-                          {presenceDays > 0 && (
-                            <Text style={styles.memberPresence}>
-                              📅 {presenceDays} days presence
-                            </Text>
-                          )}
                         </View>
                       </View>
                       <View style={styles.memberActions}>
                         <TouchableOpacity
                           style={[
-                            styles.payerToggleButton,
+                            styles.actionButton,
                             item.isPayer
-                              ? styles.payerToggleActive
-                              : styles.payerToggleInactive,
+                              ? styles.actionButtonActive
+                              : styles.actionButtonInactive,
                           ]}
                           onPress={() =>
                             handleTogglePayer(item._id, item.isPayer)
                           }
                         >
-                          <Text style={styles.payerToggleText}>
-                            {item.isPayer ? "Unset Payer" : "Set Payer"}
-                          </Text>
+                          <Ionicons
+                            name={
+                              item.isPayer
+                                ? "checkmark-circle"
+                                : "ellipse-outline"
+                            }
+                            size={20}
+                            color={item.isPayer ? "#fff" : "#28a745"}
+                          />
                         </TouchableOpacity>
-
                         <TouchableOpacity
-                          style={styles.deleteActionButton}
+                          style={styles.deleteButton}
                           onPress={() => handleDeleteMember(item._id)}
                         >
-                          <Text style={styles.deleteActionText}>Remove</Text>
+                          <Ionicons
+                            name="trash-outline"
+                            size={20}
+                            color="#c62828"
+                          />
                         </TouchableOpacity>
                       </View>
                     </View>
                   );
                 }}
               />
-            )}
-          </View>
+            </View>
+          )}
         </>
       )}
     </ScrollView>
@@ -386,215 +411,195 @@ const AdminMembersScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f8f8f8",
   },
-  section: {
-    padding: 16,
+
+  // Room Selector
+  roomSelectorContainer: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: "#fff",
-    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
   },
-  sectionTitle: {
-    fontSize: 16,
+  roomSelectorTitle: {
+    fontSize: 14,
     fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
-  },
-  roomOption: {
-    padding: 12,
-    borderRadius: 6,
+    color: "#666",
     marginBottom: 8,
-    borderWidth: 2,
+  },
+  roomSelectorScroll: {
+    flexGrow: 0,
+  },
+  roomTab: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 20,
+    backgroundColor: "#f0f0f0",
+    borderWidth: 1,
     borderColor: "#e0e0e0",
   },
-  roomOptionActive: {
+  roomTabActive: {
+    backgroundColor: "#bdb246",
     borderColor: "#bdb246",
-    backgroundColor: "#fffbf0",
   },
-  roomOptionText: {
-    fontSize: 14,
+  roomTabText: {
+    fontSize: 13,
+    fontWeight: "500",
     color: "#666",
   },
-  roomOptionTextActive: {
-    color: "#bdb246",
+  roomTabTextActive: {
+    color: "#fff",
     fontWeight: "600",
   },
-  header: {
+
+  // Header Section
+  headerSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: "#fff",
-    padding: 16,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+    borderBottomColor: "#f0f0f0",
   },
-  title: {
+  memberCountTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#333",
+    color: "#1a1a1a",
     marginBottom: 2,
   },
-  subtitle: {
+  roomNameSubtitle: {
     fontSize: 12,
     color: "#999",
   },
-  addButton: {
+  addMemberQuickButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: "#bdb246",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  addButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  searchSection: {
-    padding: 12,
-    backgroundColor: "#fff",
-    marginBottom: 8,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 6,
-    padding: 10,
-    fontSize: 14,
-    backgroundColor: "#f9f9f9",
-  },
-  formContainer: {
-    backgroundColor: "#fff",
-    margin: 12,
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-  },
-  formTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-    color: "#333",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 12,
-    fontSize: 14,
-    backgroundColor: "#f9f9f9",
-  },
-  formButtons: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  button: {
-    flex: 1,
-    borderRadius: 6,
-    padding: 12,
+    justifyContent: "center",
     alignItems: "center",
   },
-  cancelButton: {
-    backgroundColor: "#e0e0e0",
+
+  // Search
+  searchContainer: {
+    marginHorizontal: 16,
+    marginVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
-  cancelButtonText: {
-    color: "#333",
+  searchInputField: {
+    flex: 1,
+    padding: 10,
+    fontSize: 14,
+    marginLeft: 8,
+  },
+
+  // Add Form
+  addFormCard: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 14,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#bdb246",
+  },
+  formHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  formTitle: {
+    fontSize: 15,
     fontWeight: "600",
+    color: "#333",
   },
-  addMemberButton: {
+  formInput: {
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 12,
+    fontSize: 14,
+    backgroundColor: "#f9f9f9",
+  },
+  formSubmitButton: {
     backgroundColor: "#bdb246",
+    paddingVertical: 11,
+    borderRadius: 6,
+    alignItems: "center",
   },
-  addMemberButtonText: {
+  formSubmitText: {
     color: "#fff",
     fontWeight: "600",
+    fontSize: 14,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
-  membersSection: {
-    padding: 12,
+
+  // Members List
+  membersListContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   memberCard: {
     backgroundColor: "#fff",
     borderRadius: 10,
-    marginBottom: 12,
-    // subtle shadow / elevation
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-    overflow: "hidden",
-  },
-  memberContent: {
-    padding: 14,
-  },
-  memberInfo: {
-    marginBottom: 8,
-  },
-  memberMetaRow: {
+    marginBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginTop: 6,
-  },
-  payerBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  payerBadgeActive: {
-    backgroundColor: "#e8f5e9",
-    borderColor: "#28a745",
-  },
-  payerBadgeInactive: {
-    backgroundColor: "#f5f5f5",
-    borderColor: "#ddd",
-  },
-  payerBadgeText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  payerBadgeTextActive: {
-    color: "#28a745",
-  },
-  payerBadgeTextInactive: {
-    color: "#666",
-  },
-  joinedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  joinedTextSmall: {
-    fontSize: 12,
-    color: "#666",
-  },
-  payerToggleButton: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 8,
-    marginRight: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  memberLeft: {
     flex: 1,
+    flexDirection: "row",
     alignItems: "center",
   },
-  payerToggleActive: {
-    backgroundColor: "#28a745",
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: "#bdb246",
   },
-  payerToggleInactive: {
-    backgroundColor: "#e8f5e9",
-    borderWidth: 1,
-    borderColor: "#28a745",
+  memberAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#bdb246",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
   },
-  payerToggleText: {
+  memberAvatarText: {
     color: "#fff",
-    fontWeight: "600",
-    fontSize: 12,
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  memberDetails: {
+    flex: 1,
   },
   memberName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
-    color: "#333",
+    color: "#1a1a1a",
     marginBottom: 2,
   },
   memberEmail: {
@@ -602,32 +607,77 @@ const styles = StyleSheet.create({
     color: "#999",
     marginBottom: 4,
   },
-  memberPresence: {
-    fontSize: 12,
+  memberMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  payorBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  payorBadgeActive: {
+    backgroundColor: "#e8f5e9",
+    borderColor: "#28a745",
+  },
+  payorBadgeInactive: {
+    backgroundColor: "#f5f5f5",
+    borderColor: "#ddd",
+  },
+  payorBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  payorBadgeTextActive: {
+    color: "#28a745",
+  },
+  payorBadgeTextInactive: {
+    color: "#666",
+  },
+  presenceTag: {
+    fontSize: 11,
     color: "#0066cc",
     fontWeight: "500",
+    backgroundColor: "#e3f2fd",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   memberActions: {
     flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
+    gap: 8,
   },
-  deleteActionButton: {
-    flex: 1,
-    backgroundColor: "#ffebee",
-    paddingVertical: 10,
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: "center",
     alignItems: "center",
-    borderLeftWidth: 1,
-    borderLeftColor: "#f0f0f0",
   },
-  deleteActionText: {
-    color: "#c62828",
-    fontWeight: "600",
-    fontSize: 12,
+  actionButtonActive: {
+    backgroundColor: "#28a745",
   },
+  actionButtonInactive: {
+    backgroundColor: "#f0f0f0",
+    borderWidth: 1,
+    borderColor: "#28a745",
+  },
+  deleteButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#ffebee",
+  },
+
+  // Empty State
   emptyContainer: {
     alignItems: "center",
-    paddingVertical: 40,
+    justifyContent: "center",
+    paddingVertical: 50,
   },
   emptyText: {
     fontSize: 14,
@@ -635,15 +685,16 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 16,
   },
-  emptyButton: {
+  emptyActionButton: {
     backgroundColor: "#bdb246",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 6,
   },
-  emptyButtonText: {
+  emptyActionText: {
     color: "#fff",
     fontWeight: "600",
+    fontSize: 13,
   },
 });
 

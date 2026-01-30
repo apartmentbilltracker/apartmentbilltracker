@@ -115,30 +115,30 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
       m._presenceDays = presenceDays;
     });
 
-    // Compute payer count for rent/electricity splits
-    const payerCount = members.filter((m) => m.isPayer !== false).length || 1;
+    // Compute payor count for rent/electricity splits
+    const payorCount = members.filter((m) => m.isPayer !== false).length || 1;
 
-    // Compute total presence days ONLY for payer members (for water split)
-    let totalPayerPresenceDays = 0;
+    // Compute total presence days ONLY for payor members (for water split)
+    let totalPayorPresenceDays = 0;
     members.forEach((m) => {
       if (m.isPayer !== false) {
-        totalPayerPresenceDays += m._presenceDays || 0;
+        totalPayorPresenceDays += m._presenceDays || 0;
       }
     });
 
     members.forEach((m) => {
       const presenceDays = m._presenceDays || 0;
 
-      // Water share: only for payers, split by their presence days
+      // Water share: only for payors, split by their presence days
       const waterShare =
-        m.isPayer !== false && totalPayerPresenceDays > 0
-          ? (presenceDays / totalPayerPresenceDays) * waterAmount
+        m.isPayer !== false && totalPayorPresenceDays > 0
+          ? (presenceDays / totalPayorPresenceDays) * waterAmount
           : 0;
 
       const rentShare =
-        payerCount > 0 && m.isPayer ? rentAmount / payerCount : 0;
+        payorCount > 0 && m.isPayer ? rentAmount / payorCount : 0;
       const electricityShare =
-        payerCount > 0 && m.isPayer ? electricityAmount / payerCount : 0;
+        payorCount > 0 && m.isPayer ? electricityAmount / payorCount : 0;
       const totalDue = rentShare + electricityShare + waterShare;
 
       memberCharges.push({
@@ -296,24 +296,24 @@ const recomputeCycleSnapshot = async (cycle) => {
     totalPresenceDays += presenceDays;
   });
 
-  // Payer count
-  const payerCount = members.filter((m) => m.isPayer !== false).length || 1;
+  // Payor count
+  const payorCount = members.filter((m) => m.isPayer !== false).length || 1;
 
-  // Compute total presence days ONLY for payer members (for water split)
-  let totalPayerPresenceDays = 0;
+  // Compute total presence days ONLY for payor members (for water split)
+  let totalPayorPresenceDays = 0;
   members.forEach((m) => {
     if (m.isPayer !== false) {
-      totalPayerPresenceDays += m._presenceDays || 0;
+      totalPayorPresenceDays += m._presenceDays || 0;
     }
   });
 
   const memberCharges = members.map((m) => {
     const presenceDays = m._presenceDays || 0;
 
-    // Water share: only for payers, split by their presence days
+    // Water share: only for payors, split by their presence days
     const waterShare =
-      m.isPayer !== false && totalPayerPresenceDays > 0
-        ? (presenceDays / totalPayerPresenceDays) * waterAmount
+      m.isPayer !== false && totalPayorPresenceDays > 0
+        ? (presenceDays / totalPayorPresenceDays) * waterAmount
         : 0;
 
     const rentShare = payerCount > 0 && m.isPayer ? rentAmount / payerCount : 0;

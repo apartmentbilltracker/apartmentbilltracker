@@ -25,7 +25,7 @@ I've added comprehensive billing, presence tracking, and room details features t
 - 👥 Members list with:
   - Member names and emails
   - Avatar placeholders
-  - "Payer" badge for bill payers
+  - "Payor" badge for bill payors
 - ⚡ Quick action buttons:
   - Mark Presence button
   - View Billing button
@@ -64,7 +64,7 @@ I've added comprehensive billing, presence tracking, and room details features t
 - 🏘️ **Members List**
   - Full member details
   - Member avatars
-  - "Payer" badge indicators
+  - "Payor" badge indicators
   - Email addresses
 
 **Design:**
