@@ -23,6 +23,31 @@ const roomSchema = new mongoose.Schema({
     currentReading: { type: Number },
     updatedAt: { type: Date, default: Date.now },
   },
+  // Payment tracking for current billing cycle
+  memberPayments: [
+    {
+      member: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      memberName: { type: String },
+      rentStatus: {
+        type: String,
+        enum: ["pending", "paid", "overdue"],
+        default: "pending",
+      },
+      rentPaidDate: { type: Date },
+      electricityStatus: {
+        type: String,
+        enum: ["pending", "paid", "overdue"],
+        default: "pending",
+      },
+      electricityPaidDate: { type: Date },
+      waterStatus: {
+        type: String,
+        enum: ["pending", "paid", "overdue"],
+        default: "pending",
+      },
+      waterPaidDate: { type: Date },
+    },
+  ],
   billingHistory: [
     {
       start: { type: Date },

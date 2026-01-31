@@ -120,7 +120,7 @@ const ClientHomeScreen = ({ navigation }) => {
     <View style={styles.roomCard}>
       <View style={styles.cardHeader}>
         <View style={styles.iconContainer}>
-          <MaterialIcons name="home" size={28} color="#bdb246" />
+          <MaterialIcons name="home" size={28} color="#b38604" />
         </View>
         <View style={styles.roomInfo}>
           <Text style={styles.roomName}>{room.name}</Text>
@@ -151,10 +151,10 @@ const ClientHomeScreen = ({ navigation }) => {
           disabled={joiningRoomId === room._id}
         >
           {joiningRoomId === room._id ? (
-            <ActivityIndicator color="#bdb246" size={16} />
+            <ActivityIndicator color="#b38604" size={16} />
           ) : (
             <>
-              <Ionicons name="add-circle-outline" size={14} color="#bdb246" />
+              <Ionicons name="add-circle-outline" size={14} color="#b38604" />
               <Text style={styles.joinButtonText}>Join Room</Text>
             </>
           )}
@@ -180,7 +180,7 @@ const ClientHomeScreen = ({ navigation }) => {
 
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#bdb246" />
+          <ActivityIndicator size="large" color="#b38604" />
         </View>
       ) : (
         <>
@@ -193,7 +193,7 @@ const ClientHomeScreen = ({ navigation }) => {
               {/* Quick Stats */}
               <View style={styles.statsContainer}>
                 <View style={styles.statCard}>
-                  <MaterialIcons name="people" size={22} color="#bdb246" />
+                  <MaterialIcons name="people" size={22} color="#b38604" />
                   <Text style={styles.statValue}>
                     {userJoinedRoom.members?.length || 0}
                   </Text>
@@ -205,7 +205,7 @@ const ClientHomeScreen = ({ navigation }) => {
                     <MaterialIcons
                       name="calendar-today"
                       size={22}
-                      color="#bdb246"
+                      color="#b38604"
                     />
                     <Text style={styles.statValue}>
                       {new Date(
@@ -248,7 +248,7 @@ const ClientHomeScreen = ({ navigation }) => {
           {unjoinedRooms.length === 0 && userJoinedRoom && (
             <View style={styles.section}>
               <View style={styles.emptyState}>
-                <MaterialIcons name="check-circle" size={48} color="#bdb246" />
+                <MaterialIcons name="check-circle" size={48} color="#b38604" />
                 <Text style={styles.emptyText}>All Rooms Joined</Text>
                 <Text style={styles.emptySubtext}>
                   You've joined all available rooms
@@ -360,12 +360,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
   },
   secondaryButton: {
     backgroundColor: "#f5f5f5",
     borderWidth: 1,
-    borderColor: "#bdb246",
+    borderColor: "#b38604",
   },
   buttonText: {
     color: "#fff",
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   joinButtonText: {
-    color: "#bdb246",
+    color: "#b38604",
     fontWeight: "600",
     fontSize: 14,
     marginLeft: 6,

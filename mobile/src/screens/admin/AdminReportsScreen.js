@@ -131,7 +131,7 @@ const AdminReportsScreen = () => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#bdb246" />
+        <ActivityIndicator size="large" color="#b38604" />
       </View>
     );
   }
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     borderColor: "#e0e0e0",
   },
   roomOptionActive: {
-    borderColor: "#bdb246",
+    borderColor: "#b38604",
     backgroundColor: "#fffbf0",
   },
   roomOptionText: {
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   roomOptionTextActive: {
-    color: "#bdb246",
+    color: "#b38604",
     fontWeight: "600",
   },
   statsContainer: {
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
     borderLeftWidth: 4,
-    borderLeftColor: "#bdb246",
+    borderLeftColor: "#b38604",
   },
   memberHeader: {
     flexDirection: "row",

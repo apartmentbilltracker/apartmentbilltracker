@@ -6,9 +6,18 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, AuthContext } from "./src/context/AuthContext";
 import LoginScreen from "./src/screens/auth/LoginScreen";
 import RegisterScreen from "./src/screens/auth/RegisterScreen";
+import ForgotPasswordScreen from "./src/screens/auth/ForgotPasswordScreen";
+import VerifyResetCodeScreen from "./src/screens/auth/VerifyResetCodeScreen";
+import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
 import ClientNavigator from "./src/navigation/ClientNavigator";
 import AdminNavigator from "./src/navigation/AdminNavigator";
 import SplashScreen from "./src/screens/SplashScreen";
+import PaymentHistoryScreen from "./src/screens/client/PaymentHistoryScreen";
+import SettlementScreen from "./src/screens/client/SettlementScreen";
+import PaymentMethodScreen from "./src/screens/client/PaymentMethodScreen";
+import GCashPaymentScreen from "./src/screens/client/GCashPaymentScreen";
+import BankTransferPaymentScreen from "./src/screens/client/BankTransferPaymentScreen";
+import CashPaymentScreen from "./src/screens/client/CashPaymentScreen";
 import notificationService from "./src/services/notificationService";
 import updateService from "./src/services/updateService";
 
@@ -54,15 +63,44 @@ function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {isSignedIn ? (
-        isAdmin && currentView === "admin" ? (
-          <Stack.Screen name="Admin" component={AdminNavigator} />
-        ) : (
-          <Stack.Screen name="Client" component={ClientNavigator} />
-        )
+        <>
+          {isAdmin && currentView === "admin" ? (
+            <Stack.Screen name="Admin" component={AdminNavigator} />
+          ) : (
+            <Stack.Screen name="Client" component={ClientNavigator} />
+          )}
+          {/* Modal Stack for Payment and Settlement Screens */}
+          <Stack.Group screenOptions={{ presentation: "modal" }}>
+            <Stack.Screen
+              name="PaymentHistory"
+              component={PaymentHistoryScreen}
+            />
+            <Stack.Screen name="Settlement" component={SettlementScreen} />
+            <Stack.Screen
+              name="PaymentMethod"
+              component={PaymentMethodScreen}
+            />
+            <Stack.Screen name="GCashPayment" component={GCashPaymentScreen} />
+            <Stack.Screen
+              name="BankTransferPayment"
+              component={BankTransferPaymentScreen}
+            />
+            <Stack.Screen name="CashPayment" component={CashPaymentScreen} />
+          </Stack.Group>
+        </>
       ) : (
         <>
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+          />
+          <Stack.Screen
+            name="VerifyResetCode"
+            component={VerifyResetCodeScreen}
+          />
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         </>
       )}
     </Stack.Navigator>

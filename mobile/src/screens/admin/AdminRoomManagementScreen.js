@@ -233,7 +233,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
       {/* Rooms List */}
       <View style={styles.roomsSection}>
         {loading ? (
-          <ActivityIndicator size="large" color="#bdb246" />
+          <ActivityIndicator size="large" color="#b38604" />
         ) : filteredRooms.length === 0 ? (
           <Text style={styles.emptyText}>
             {rooms.length === 0
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   addButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   createButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
   },
   createButtonText: {
     color: "#fff",
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     overflow: "hidden",
     borderLeftWidth: 4,
-    borderLeftColor: "#bdb246",
+    borderLeftColor: "#b38604",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,

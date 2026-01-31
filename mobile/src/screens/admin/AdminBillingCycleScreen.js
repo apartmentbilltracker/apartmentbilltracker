@@ -216,7 +216,7 @@ const AdminBillingCycleScreen = ({ route }) => {
   if (loading && cycles.length === 0) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#bdb246" />
+        <ActivityIndicator size="large" color="#b38604" />
       </View>
     );
   }
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
   },
   header: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     paddingVertical: 20,
     paddingHorizontal: 16,
   },
@@ -551,7 +551,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderLeftWidth: 4,
-    borderLeftColor: "#bdb246",
+    borderLeftColor: "#b38604",
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   submitButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
   },
   submitButtonText: {
     color: "#fff",

@@ -128,7 +128,7 @@ Contact the admin or modify the backend to set `role: "admin"` in the database:
 
 ### Color Scheme:
 
-- **Primary**: Gold (#bdb246) - Buttons, highlights
+- **Primary**: Rusty-Gold (#b38604) - Buttons, highlights
 - **Background**: White (#fff) - Main surfaces
 - **Text**: Dark Gray (#333) - Primary text
 - **Accents**: Multiple colors for different features

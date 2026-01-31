@@ -131,6 +131,8 @@ if (process.env.NODE_ENV !== "PRODUCTION") {
 const user = require("./controller/user");
 const room = require("./controller/room");
 const billingCycleRoutes = require("./routes/billingCycle");
+const paymentRoutes = require("./controller/payment");
+const paymentProcessingRoutes = require("./controller/paymentProcessing");
 
 // 5. Debug Endpoints (Add before routes)
 app.post("/api/v2/debug/upload", (req, res) => {
@@ -234,6 +236,8 @@ app.get("/api/app-version", (req, res) => {
 app.use("/api/v2/user", user);
 app.use("/api/v2/rooms", room);
 app.use("/api/v2/billing-cycles", billingCycleRoutes);
+app.use("/api/v2/payments", paymentRoutes);
+app.use("/api/v2/payment-processing", paymentProcessingRoutes);
 
 // Logout route - ensures the token cookie is properly removed
 app.get("/api/v2/user/logout", async (req, res, next) => {

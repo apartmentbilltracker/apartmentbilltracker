@@ -269,7 +269,7 @@ const AdminBillingScreen = ({ navigation }) => {
   if (loading && !refreshing) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#bdb246" />
+        <ActivityIndicator size="large" color="#b38604" />
       </View>
     );
   }
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     borderColor: "#e0e0e0",
   },
   roomOptionActive: {
-    borderColor: "#bdb246",
+    borderColor: "#b38604",
     backgroundColor: "#fffbf0",
   },
   roomOptionText: {
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   roomOptionTextActive: {
-    color: "#bdb246",
+    color: "#b38604",
     fontWeight: "600",
   },
   inputLabel: {
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   saveButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     borderRadius: 6,
     padding: 14,
     alignItems: "center",
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     borderTopWidth: 2,
-    borderTopColor: "#bdb246",
+    borderTopColor: "#b38604",
     backgroundColor: "#fffbf0",
     paddingHorizontal: 8,
     borderRadius: 4,
@@ -763,7 +763,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   createRoomButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 8,
@@ -778,7 +778,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",

@@ -121,7 +121,7 @@ const userSchema = new mongoose.Schema({
   activationCode: { type: String },
   activationExpires: { type: Date },
   resetPasswordToken: String,
-  resetPasswordTime: Date,
+  resetPasswordExpire: Date,
 
   resetCode: { type: String },
   resetExpires: { type: Date },

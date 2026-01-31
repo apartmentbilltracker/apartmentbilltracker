@@ -515,7 +515,7 @@ const PresenceScreen = () => {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#bdb246" />
+        <ActivityIndicator size="large" color="#b38604" />
       </View>
     );
   }
@@ -687,7 +687,7 @@ const PresenceScreen = () => {
                   )
                 }
               >
-                <Ionicons name="chevron-back" size={24} color="#bdb246" />
+                <Ionicons name="chevron-back" size={24} color="#b38604" />
               </TouchableOpacity>
 
               <Text style={styles.monthYear}>{monthName}</Text>
@@ -702,7 +702,7 @@ const PresenceScreen = () => {
                   )
                 }
               >
-                <Ionicons name="chevron-forward" size={24} color="#bdb246" />
+                <Ionicons name="chevron-forward" size={24} color="#b38604" />
               </TouchableOpacity>
             </View>
 
@@ -918,8 +918,8 @@ const styles = StyleSheet.create({
     borderColor: "#e0e0e0",
   },
   roomSelectorActive: {
-    backgroundColor: "#bdb246",
-    borderColor: "#bdb246",
+    backgroundColor: "#b38604",
+    borderColor: "#b38604",
   },
   roomSelectorText: {
     color: "#333",
@@ -930,7 +930,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   markButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     borderRadius: 10,
     paddingVertical: 14,
     flexDirection: "row",

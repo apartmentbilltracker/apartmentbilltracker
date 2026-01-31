@@ -173,7 +173,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
   if (loading && !refreshing) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#bdb246" />
+        <ActivityIndicator size="large" color="#b38604" />
       </View>
     );
   }
@@ -292,7 +292,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
           {/* Members List */}
           {members.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={48} color="#bdb246" />
+              <Ionicons name="people-outline" size={48} color="#b38604" />
               <Text style={styles.emptyText}>No members yet</Text>
               <TouchableOpacity
                 style={styles.emptyActionButton}
@@ -441,8 +441,8 @@ const styles = StyleSheet.create({
     borderColor: "#e0e0e0",
   },
   roomTabActive: {
-    backgroundColor: "#bdb246",
-    borderColor: "#bdb246",
+    backgroundColor: "#b38604",
+    borderColor: "#b38604",
   },
   roomTabText: {
     fontSize: 13,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#bdb246",
+    borderColor: "#b38604",
   },
   formHeader: {
     flexDirection: "row",
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9f9f9",
   },
   formSubmitButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     paddingVertical: 11,
     borderRadius: 6,
     alignItems: "center",
@@ -577,13 +577,13 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     marginRight: 12,
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
   },
   memberAvatarPlaceholder: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyActionButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 6,

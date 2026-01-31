@@ -17,7 +17,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { roomService } from "../../services/apiService";
 
 const colors = {
-  primary: "#bdb246",
+  primary: "#b38604",
   dark: "#1a1a1a",
   lightGray: "#f5f5f5",
   border: "#e0e0e0",

@@ -100,7 +100,7 @@ const BillingHistoryScreen = ({ route }) => {
   if (loading && cycles.length === 0) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#bdb246" />
+        <ActivityIndicator size="large" color="#b38604" />
       </View>
     );
   }
@@ -180,7 +180,7 @@ const BillingHistoryScreen = ({ route }) => {
                           (cycle.waterBillAmount || 0),
                   )}
                 </Text>
-                <Ionicons name="chevron-forward" size={20} color="#bdb246" />
+                <Ionicons name="chevron-forward" size={20} color="#b38604" />
               </View>
             </TouchableOpacity>
           )}
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
   },
   header: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     paddingVertical: 20,
     paddingHorizontal: 16,
   },
@@ -583,7 +583,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "#bdb246",
+    borderColor: "#b38604",
     borderRadius: 6,
     backgroundColor: "#fffbf0",
     fontWeight: "500",

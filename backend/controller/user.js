@@ -10,6 +10,7 @@ const sendToken = require("../utils/jwtToken");
 const { isAuthenticated } = require("../middleware/auth");
 const ActivationContent = require("../utils/ActivationContent");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const ResetPasswordEmail = require("../utils/ResetPasswordEmail");
 
 const pendingUsers = new Map();
@@ -291,6 +292,79 @@ router.post(
         role: user.role,
       });
     } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+// Request password reset - send reset link to email
+router.post(
+  "/password-reset",
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return next(new ErrorHandler("Please provide email address", 400));
+      }
+
+      const user = await User.findOne({ email });
+
+      if (!user) {
+        // For security, don't reveal if email exists
+        return res.status(200).json({
+          success: true,
+          message:
+            "If this email is registered, you will receive a password reset link.",
+        });
+      }
+
+      // Generate reset token (valid for 24 hours)
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const hashedToken = crypto
+        .createHash("sha256")
+        .update(resetToken)
+        .digest("hex");
+
+      // Store hashed token and expiry in user document
+      user.resetPasswordToken = hashedToken;
+      user.resetPasswordExpire = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      await user.save();
+
+      // Send email with reset link
+      const resetUrl = `aptbilltracker://reset-password?token=${resetToken}&email=${email}`;
+
+      try {
+        await sendMail({
+          email: user.email,
+          subject: "Password Reset Request - Apartment Bill Tracker",
+          html: ResetPasswordEmail({
+            name: user.name,
+            resetUrl,
+          }),
+        });
+
+        res.status(200).json({
+          success: true,
+          message:
+            "Password reset link has been sent to your email. Check your inbox.",
+        });
+      } catch (mailError) {
+        // Clear tokens if email fails
+        user.resetPasswordToken = null;
+        user.resetPasswordExpire = null;
+        await user.save();
+
+        return next(
+          new ErrorHandler(
+            "Failed to send reset email. Please try again later.",
+            500,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("Password reset error:", error);
       return next(new ErrorHandler(error.message, 500));
     }
   }),

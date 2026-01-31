@@ -139,7 +139,7 @@ const ClientNavigator = () => {
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: "#bdb246",
+        tabBarActiveTintColor: "#b38604",
         tabBarInactiveTintColor: "gray",
       })}
     >

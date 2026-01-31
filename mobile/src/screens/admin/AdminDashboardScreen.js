@@ -229,7 +229,7 @@ const AdminDashboardScreen = ({ navigation }) => {
         {loading ? (
           <ActivityIndicator
             size="large"
-            color="#bdb246"
+            color="#b38604"
             style={{ marginTop: 20 }}
           />
         ) : rooms.length === 0 ? (

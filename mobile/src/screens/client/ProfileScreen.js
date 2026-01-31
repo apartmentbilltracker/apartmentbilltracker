@@ -99,6 +99,17 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+    } catch (error) {
+      console.error("Logout error:", error);
+      Alert.alert("Error", "Failed to logout");
+      setIsLoggingOut(false);
+    }
+  };
+
   const getAvatarSource = () => {
     if (user.avatar?.url) {
       return { uri: user.avatar.url };
@@ -179,8 +190,16 @@ const ProfileScreen = ({ navigation }) => {
       )}
 
       <View style={styles.section}>
-        <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
+        <TouchableOpacity
+          style={[styles.logoutButton, isLoggingOut && styles.buttonDisabled]}
+          onPress={handleLogout}
+          disabled={isLoggingOut}
+        >
+          {isLoggingOut ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -289,7 +308,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -435,7 +454,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
@@ -501,6 +520,9 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });
 

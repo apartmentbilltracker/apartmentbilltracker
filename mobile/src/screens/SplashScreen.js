@@ -5,7 +5,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Animated,
+  Image,
+  ImageBackground,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { AuthContext } from "../context/AuthContext";
 
@@ -48,66 +51,86 @@ const SplashScreen = () => {
   }, []);
 
   return (
-    <View style={styles.container}>
-      {/* Building Icon with Pulse Animation */}
-      <Animated.View
-        style={[styles.iconContainer, { transform: [{ scale: scaleAnim }] }]}
-      >
-        <Text style={{ fontSize: 60, color: "#bdb246" }}>🏢</Text>
-      </Animated.View>
+    <ImageBackground
+      source={require("../assets/icon.png")}
+      style={styles.backgroundImage}
+      blurRadius={90}
+    >
+      <BlurView intensity={70} style={styles.blurContainer}>
+        <View style={styles.container}>
+          {/* Building Icon with Pulse Animation */}
+          <Animated.View
+            style={[
+              styles.iconContainer,
+              { transform: [{ scale: scaleAnim }] },
+            ]}
+          >
+            <Image source={require("../assets/icon.png")} style={styles.icon} />
+          </Animated.View>
 
-      {/* Title */}
-      <Text style={styles.title}>Apartment Bill Tracker</Text>
+          {/* Title */}
+          <Text style={styles.title}>Apartment Bill Tracker</Text>
 
-      {/* Subtitle */}
-      <Text style={styles.subtitle}>Smart Billing for Shared Living</Text>
+          {/* Subtitle */}
+          <Text style={styles.subtitle}>Smart Billing for Shared Living</Text>
 
-      {/* Loading Indicator */}
-      <View style={styles.loaderSection}>
-        <ActivityIndicator size="large" color="#bdb246" />
-        <Text style={styles.status}>
-          {showSplash ? "Loading App..." : "Initializing..."}
-        </Text>
-      </View>
+          {/* Loading Indicator */}
+          <View style={styles.loaderSection}>
+            <ActivityIndicator size="large" color="#b38604" />
+            <Text style={styles.status}>
+              {showSplash ? "Loading App..." : "Initializing..."}
+            </Text>
+          </View>
 
-      {/* Error Message if exists - only show if not loading */}
-      {authContext?.state?.error && authContext?.isLoading === false && (
-        <Text style={styles.error}>{authContext.state.error}</Text>
-      )}
+          {/* Error Message if exists - only show if not loading */}
+          {authContext?.state?.error && authContext?.isLoading === false && (
+            <Text style={styles.error}>{authContext.state.error}</Text>
+          )}
 
-      {/* Decorative dots */}
-      <View style={styles.decorativeSection}>
-        <View style={styles.dot} />
-        <View style={styles.dot} />
-        <View style={styles.dot} />
-      </View>
-    </View>
+          {/* Decorative dots */}
+          <View style={styles.decorativeSection}>
+            <View style={styles.dot} />
+            <View style={styles.dot} />
+            <View style={styles.dot} />
+          </View>
+        </View>
+      </BlurView>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
+  blurContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   container: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
     paddingHorizontal: 20,
   },
   iconContainer: {
     marginBottom: 24,
     justifyContent: "center",
     alignItems: "center",
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "#fff",
-    borderWidth: 3,
-    borderColor: "#bdb246",
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderWidth: 4,
+    borderColor: "#b38604",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 15,
     overflow: "hidden",
   },
   title: {
@@ -157,8 +180,13 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     opacity: 0.6,
+  },
+  icon: {
+    width: 140,
+    height: 140,
+    resizeMode: "contain",
   },
 });
 

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Image,
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
@@ -117,7 +118,11 @@ const LoginScreen = ({ navigation }) => {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.content}>
         <View style={styles.header}>
-          <MaterialIcons name="apartment" size={48} color="#bdb246" />
+          {/* <MaterialIcons name="apartment" size={48} color="#b38604" /> */}
+          <Image
+            source={require("../../assets/icon.png")}
+            style={styles.icon}
+          />
           <Text style={styles.title}>Apartment Bill Tracker</Text>
           <Text style={styles.subtitle}>Sign In</Text>
         </View>
@@ -161,6 +166,15 @@ const LoginScreen = ({ navigation }) => {
               />
             </TouchableOpacity>
           </View>
+
+          {/* Forgot Password Link */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate("ForgotPassword")}
+            disabled={loading}
+            style={styles.forgotPasswordContainer}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[
@@ -298,7 +312,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   primaryButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     marginTop: 6,
   },
   buttonDisabled: {
@@ -368,7 +382,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontSize: 14,
-    color: "#bdb246",
+    color: "#b38604",
     fontWeight: "600",
   },
   developerFooter: {
@@ -382,6 +396,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#999",
     fontStyle: "italic",
+  },
+  forgotPasswordContainer: {
+    alignItems: "flex-end",
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  forgotPasswordText: {
+    color: "#b38604",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  icon: {
+    width: 90,
+    height: 90,
+    marginTop: 10,
+    resizeMode: "contain",
   },
 });
 

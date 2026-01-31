@@ -12,12 +12,12 @@ import {
   Modal,
   Image,
 } from "react-native";
-import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { MaterialIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
 import { roomService } from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
 
 const colors = {
-  primary: "#bdb246",
+  primary: "#b38604",
   dark: "#1a1a1a",
   lightGray: "#f5f5f5",
   border: "#e0e0e0",
@@ -592,7 +592,7 @@ const BillsScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#bdb246" />
+        <ActivityIndicator size="large" color="#b38604" />
       </View>
     );
   }
@@ -666,7 +666,7 @@ const BillsScreen = ({ navigation }) => {
                       <Ionicons
                         name="calendar-outline"
                         size={20}
-                        color="#bdb246"
+                        color="#b38604"
                       />
                       <View style={styles.periodInfo}>
                         <Text style={styles.periodLabel}>Start Date</Text>
@@ -689,7 +689,7 @@ const BillsScreen = ({ navigation }) => {
                       <Ionicons
                         name="calendar-outline"
                         size={20}
-                        color="#bdb246"
+                        color="#b38604"
                       />
                       <View style={styles.periodInfo}>
                         <Text style={styles.periodLabel}>End Date</Text>
@@ -725,7 +725,7 @@ const BillsScreen = ({ navigation }) => {
                               <MaterialIcons
                                 name="house"
                                 size={24}
-                                color="#bdb246"
+                                color="#b38604"
                               />
                             </View>
                             <Text style={styles.totalBillLabel}>Rent</Text>
@@ -851,6 +851,29 @@ const BillsScreen = ({ navigation }) => {
                         </Text>
                       </View>
                     </View>
+
+                    {/* Pay Now Button */}
+                    <TouchableOpacity
+                      style={styles.payNowButton}
+                      onPress={() => {
+                        if (selectedRoom && billShare) {
+                          navigation.navigate("PaymentMethod", {
+                            roomId: selectedRoom._id,
+                            roomName: selectedRoom.name,
+                            amount: billShare.total,
+                            billType: "total",
+                          });
+                        }
+                      }}
+                    >
+                      <MaterialIcons
+                        name="payment"
+                        size={20}
+                        color="#fff"
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={styles.payNowButtonText}>Pay Now</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
 
@@ -977,7 +1000,7 @@ const BillsScreen = ({ navigation }) => {
                   <MaterialIcons
                     name="hourglass-empty"
                     size={48}
-                    color="#bdb246"
+                    color="#b38604"
                   />
                   <Text style={styles.emptyText}>No Active Billing Cycle</Text>
                   <Text style={styles.emptySubtext}>
@@ -1014,6 +1037,37 @@ const BillsScreen = ({ navigation }) => {
               📜 View Billing History
             </Text>
           </TouchableOpacity>
+        )}
+
+        {/* Payment & Settlement Actions */}
+        {selectedRoom && (
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() =>
+                navigation.navigate("PaymentHistory", {
+                  roomId: selectedRoom._id,
+                  roomName: selectedRoom.name,
+                })
+              }
+            >
+              <MaterialIcons name="payment" size={20} color="#b38604" />
+              <Text style={styles.actionButtonText}>Payment History</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() =>
+                navigation.navigate("Settlement", {
+                  roomId: selectedRoom._id,
+                  roomName: selectedRoom.name,
+                })
+              }
+            >
+              <FontAwesome name="handshake-o" size={20} color="#27ae60" />
+              <Text style={styles.actionButtonText}>Settlements</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <View style={{ height: 20 }} />
@@ -1245,7 +1299,7 @@ const BillsScreen = ({ navigation }) => {
                   <Ionicons
                     name="chevron-back"
                     size={28}
-                    color={canGoToPreviousMonth() ? "#bdb246" : "#ccc"}
+                    color={canGoToPreviousMonth() ? "#b38604" : "#ccc"}
                   />
                 </TouchableOpacity>
 
@@ -1270,7 +1324,7 @@ const BillsScreen = ({ navigation }) => {
                   <Ionicons
                     name="chevron-forward"
                     size={28}
-                    color={canGoToNextMonth() ? "#bdb246" : "#ccc"}
+                    color={canGoToNextMonth() ? "#b38604" : "#ccc"}
                   />
                 </TouchableOpacity>
               </View>
@@ -1375,7 +1429,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   exportButton: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
@@ -1402,8 +1456,8 @@ const styles = StyleSheet.create({
     borderColor: "#e0e0e0",
   },
   roomSelectorActive: {
-    backgroundColor: "#bdb246",
-    borderColor: "#bdb246",
+    backgroundColor: "#b38604",
+    borderColor: "#b38604",
   },
   roomSelectorText: {
     color: "#333",
@@ -1494,7 +1548,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f0f8ff",
     borderRadius: 10,
     borderLeftWidth: 4,
-    borderLeftColor: "#bdb246",
+    borderLeftColor: "#b38604",
     overflow: "hidden",
   },
   shareRow: {
@@ -1541,7 +1595,27 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#bdb246",
+    color: "#b38604",
+  },
+  payNowButton: {
+    flexDirection: "row",
+    backgroundColor: "#b38604",
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  payNowButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
   },
   nonPayorCard: {
     backgroundColor: "#d1ecf1",
@@ -1574,7 +1648,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -1584,7 +1658,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     marginRight: 12,
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
   },
   memberIconText: {
     color: "#fff",
@@ -1714,7 +1788,7 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   modalHeader: {
-    backgroundColor: "#bdb246",
+    backgroundColor: "#b38604",
     paddingHorizontal: 16,
     paddingVertical: 16,
     paddingTop: 24,
@@ -1739,7 +1813,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 15,
     borderBottomWidth: 2,
-    borderBottomColor: "#bdb246",
+    borderBottomColor: "#b38604",
   },
   receiptTitle: {
     fontSize: 18,
@@ -1820,7 +1894,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 4,
     borderLeftWidth: 3,
-    borderLeftColor: "#bdb246",
+    borderLeftColor: "#b38604",
   },
   receiptMemberName: {
     fontSize: 12,
@@ -2116,6 +2190,35 @@ const styles = StyleSheet.create({
   },
   presenceSummaryText: {
     fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+  },
+  actionButtonsContainer: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  actionButtonText: {
+    fontSize: 13,
     fontWeight: "600",
     color: "#333",
   },
