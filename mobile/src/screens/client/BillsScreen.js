@@ -188,7 +188,14 @@ const BillsScreen = ({ navigation }) => {
   };
 
   const getFirstDayOfMonth = (date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+    // Use UTC to avoid timezone issues
+    const firstDay = new Date(
+      Date.UTC(date.getFullYear(), date.getMonth(), 1),
+    ).getUTCDay();
+    console.log(
+      `Calendar Debug: ${date.getMonth() + 1}/${date.getFullYear()} starts on day ${firstDay} (0=Sun, 4=Thu)`,
+    );
+    return firstDay;
   };
 
   const formatToYMD = (date) => {
@@ -207,7 +214,11 @@ const BillsScreen = ({ navigation }) => {
     const firstDay = getFirstDayOfMonth(presenceMonth);
     const days = [];
 
-    // Add empty cells for days before month starts
+    console.log(
+      `Generating calendar: ${year}-${month + 1}, ${daysInMonth} days, starting on day ${firstDay}`,
+    );
+
+    // Add empty cells for days before month starts (Sunday = 0)
     for (let i = 0; i < firstDay; i++) {
       days.push(null);
     }
@@ -217,7 +228,40 @@ const BillsScreen = ({ navigation }) => {
       days.push(new Date(year, month, day));
     }
 
+    // Pad remaining cells to complete 6 weeks (42 days)
+    while (days.length < 42) {
+      days.push(null);
+    }
+
+    console.log(`Calendar grid size: ${days.length} cells`);
     return days;
+  };
+
+  const canGoToPreviousMonth = () => {
+    if (!billing?.start) return false;
+    const billingStart = new Date(billing.start);
+    const prevMonth = new Date(
+      presenceMonth.getFullYear(),
+      presenceMonth.getMonth() - 1,
+      1,
+    );
+    return (
+      prevMonth >=
+      new Date(billingStart.getFullYear(), billingStart.getMonth(), 1)
+    );
+  };
+
+  const canGoToNextMonth = () => {
+    if (!billing?.end) return false;
+    const billingEnd = new Date(billing.end);
+    const nextMonth = new Date(
+      presenceMonth.getFullYear(),
+      presenceMonth.getMonth() + 1,
+      1,
+    );
+    return (
+      nextMonth <= new Date(billingEnd.getFullYear(), billingEnd.getMonth(), 1)
+    );
   };
 
   const isDateMarked = (date) => {
@@ -1188,6 +1232,7 @@ const BillsScreen = ({ navigation }) => {
               {/* Calendar Navigation */}
               <View style={styles.presenceCalendarHeader}>
                 <TouchableOpacity
+                  disabled={!canGoToPreviousMonth()}
                   onPress={() =>
                     setPresenceMonth(
                       new Date(
@@ -1197,7 +1242,11 @@ const BillsScreen = ({ navigation }) => {
                     )
                   }
                 >
-                  <Ionicons name="chevron-back" size={28} color="#bdb246" />
+                  <Ionicons
+                    name="chevron-back"
+                    size={28}
+                    color={canGoToPreviousMonth() ? "#bdb246" : "#ccc"}
+                  />
                 </TouchableOpacity>
 
                 <Text style={styles.presenceMonthYear}>
@@ -1208,6 +1257,7 @@ const BillsScreen = ({ navigation }) => {
                 </Text>
 
                 <TouchableOpacity
+                  disabled={!canGoToNextMonth()}
                   onPress={() =>
                     setPresenceMonth(
                       new Date(
@@ -1217,7 +1267,11 @@ const BillsScreen = ({ navigation }) => {
                     )
                   }
                 >
-                  <Ionicons name="chevron-forward" size={28} color="#bdb246" />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={28}
+                    color={canGoToNextMonth() ? "#bdb246" : "#ccc"}
+                  />
                 </TouchableOpacity>
               </View>
 
@@ -1976,10 +2030,10 @@ const styles = StyleSheet.create({
   presenceWeekDaysContainer: {
     flexDirection: "row",
     marginBottom: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
   },
   presenceWeekDayHeader: {
-    flex: 1,
+    width: "14.285%",
     alignItems: "center",
     paddingVertical: 8,
   },
@@ -1991,16 +2045,17 @@ const styles = StyleSheet.create({
   presenceCalendarDaysContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
     marginBottom: 16,
+    justifyContent: "space-between",
   },
   presenceDayCell: {
-    width: "14.28%",
+    width: "14.285%",
     aspectRatio: 1,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 4,
-    marginHorizontal: 2,
+    marginBottom: 2,
+    marginHorizontal: 0,
     borderRadius: 8,
     backgroundColor: "#f5f5f5",
     position: "relative",

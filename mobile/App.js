@@ -9,6 +9,8 @@ import RegisterScreen from "./src/screens/auth/RegisterScreen";
 import ClientNavigator from "./src/navigation/ClientNavigator";
 import AdminNavigator from "./src/navigation/AdminNavigator";
 import SplashScreen from "./src/screens/SplashScreen";
+import notificationService from "./src/services/notificationService";
+import updateService from "./src/services/updateService";
 
 const Stack = createNativeStackNavigator();
 
@@ -68,6 +70,40 @@ function RootNavigator() {
 }
 
 export default function App() {
+  const [updateStatus, setUpdateStatus] = React.useState(null);
+
+  React.useEffect(() => {
+    checkAppVersion();
+  }, []);
+
+  const checkAppVersion = async () => {
+    // Get backend URL from environment or use default
+    const backendURL =
+      process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+
+    const status = await updateService.checkForUpdate(backendURL);
+    setUpdateStatus(status);
+
+    // Show alert if update is required
+    if (status.requiresUpdate) {
+      updateService.showUpdateAlert(status.isForced, status.updateUrl);
+    }
+  };
+
+  // If forced update is required, show blocking screen
+  if (updateStatus?.isForced) {
+    return (
+      <SafeAreaProvider>
+        <View style={styles.container}>
+          <Text style={styles.title}>Update Required</Text>
+          <Text style={styles.subtitle}>
+            A new version is available. Please update the app to continue.
+          </Text>
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

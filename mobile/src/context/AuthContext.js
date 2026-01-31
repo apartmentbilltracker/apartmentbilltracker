@@ -1,6 +1,7 @@
 import React, { useEffect, useReducer, useCallback } from "react";
 import * as SecureStore from "expo-secure-store";
 import { authService } from "../services/apiService";
+import notificationService from "../services/notificationService";
 
 export const AuthContext = React.createContext();
 
@@ -134,6 +135,10 @@ export const AuthProvider = ({ children }) => {
         console.log("User:", user ? "exists" : "missing");
         await SecureStore.setItemAsync("authToken", token);
         dispatch({ type: "SIGN_IN", payload: { token, user } });
+
+        // Schedule daily presence reminder notification at 9 AM
+        await notificationService.scheduleDailyPresenceReminder(20, 0);
+
         return { success: true };
       } catch (error) {
         console.log("Login error:", error);
@@ -151,6 +156,10 @@ export const AuthProvider = ({ children }) => {
         const { token, user } = data;
         await SecureStore.setItemAsync("authToken", token);
         dispatch({ type: "SIGN_UP", payload: { token, user } });
+
+        // Schedule daily presence reminder notification at 9 AM
+        await notificationService.scheduleDailyPresenceReminder(9, 0);
+
         return { success: true };
       } catch (error) {
         console.log("Signup error:", error);
@@ -167,6 +176,9 @@ export const AuthProvider = ({ children }) => {
       } catch (error) {
         console.log("Logout error:", error);
       } finally {
+        // Cancel all notifications when signing out
+        await notificationService.cancelAllNotifications();
+
         await SecureStore.deleteItemAsync("authToken");
         dispatch({ type: "SIGN_OUT" });
       }

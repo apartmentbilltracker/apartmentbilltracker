@@ -35,12 +35,10 @@ const RegisterScreen = ({ navigation }) => {
   const [request, response, promptAsync] = Google.useAuthRequest(
     Platform.OS === "android"
       ? {
-          // For Android, we need androidClientId - provide dummy for now
-          // In production, create one in Google Cloud Console
           androidClientId:
-            "606324852974-9np8i5l01h6h8lf9k9g6i5k6i5k6j5k6.apps.googleusercontent.com",
+            "606324852974-o8iif7sorc9m6ti5t2jkagfipn9otphf.apps.googleusercontent.com",
           webClientId:
-            "606324852974-j342727qvkfesqtn0d9o7n71c42ntunr.apps.googleusercontent.com",
+            "606324852974-v7bbavpuso71banjo6v7r01ks2sam2mo.apps.googleusercontent.com",
         }
       : {
           webClientId:
