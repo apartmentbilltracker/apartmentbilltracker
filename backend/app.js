@@ -203,6 +203,34 @@ app.get("/api/v2/debug/smtp-check", (req, res) => {
   socket.connect(port, host);
 });
 
+// App Version Check Endpoint
+app.get("/api/app-version", (req, res) => {
+  try {
+    // Define minimum version - update this when releasing new app versions
+    const minVersion = process.env.MIN_APP_VERSION || "1.0.0";
+    const isForced = process.env.FORCE_APP_UPDATE === "true" || false;
+    // Default to GitHub releases page if no URL specified
+    const updateUrl =
+      process.env.APP_UPDATE_URL ||
+      "https://github.com/mjdev031219/abt-mobile-app/releases";
+
+    res.status(200).json({
+      success: true,
+      minVersion,
+      isForced,
+      updateUrl,
+      message: "Version check successful",
+    });
+  } catch (error) {
+    console.error("Error in version check:", error);
+    res.status(500).json({
+      success: false,
+      message: "Version check failed",
+      error: error.message,
+    });
+  }
+});
+
 app.use("/api/v2/user", user);
 app.use("/api/v2/rooms", room);
 app.use("/api/v2/billing-cycles", billingCycleRoutes);
