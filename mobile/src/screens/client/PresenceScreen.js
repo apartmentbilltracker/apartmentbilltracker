@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext, useRef } from "react";
-import { useIsFocused } from "@react-navigation/native";
+import React, { useState, useEffect, useContext, useRef, useMemo } from "react";
+import { useIsFocused, useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { AuthContext } from "../../context/AuthContext";
 
 const PresenceScreen = () => {
   const { state } = useContext(AuthContext);
+  const userId = state?.user?._id; // MUST be defined before useMemo
   const isFocused = useIsFocused();
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -34,49 +35,161 @@ const PresenceScreen = () => {
     selectedRoom?.currentCycleId ||
     (selectedRoom?.billing?.start && selectedRoom?.billing?.end),
   );
+
+  // Check if current user has paid all their bills - MEMOIZED to ensure re-render
+  const userPaidStatus = useMemo(() => {
+    if (!selectedRoom || !userId) {
+      console.log("🔍 useMemo skipped - selectedRoom or userId missing");
+      return false;
+    }
+
+    console.log("🔍🔍 useMemo RECALCULATING payment status for user:", userId);
+    console.log("   Current selectedRoom ID:", selectedRoom._id);
+    console.log(
+      "   memberPayments:",
+      JSON.stringify(
+        selectedRoom.memberPayments?.map((mp) => ({
+          memberName: mp.memberName,
+          member: mp.member,
+          rentStatus: mp.rentStatus,
+          electricityStatus: mp.electricityStatus,
+          waterStatus: mp.waterStatus,
+        })),
+      ),
+    );
+
+    const userPayment = selectedRoom.memberPayments?.find(
+      (mp) => String(mp.member) === String(userId),
+    );
+
+    console.log("   User payment found:", userPayment ? "YES" : "NO");
+
+    if (!userPayment) {
+      console.log("   Result: false (user payment not found)");
+      return false;
+    }
+
+    const allPaid =
+      userPayment.rentStatus === "paid" &&
+      userPayment.electricityStatus === "paid" &&
+      userPayment.waterStatus === "paid";
+
+    console.log(
+      "   Status check - Rent:",
+      userPayment.rentStatus,
+      "| Electricity:",
+      userPayment.electricityStatus,
+      "| Water:",
+      userPayment.waterStatus,
+      "| RESULT:",
+      allPaid ? "PAID ✅" : "NOT PAID ❌",
+    );
+
+    return allPaid;
+  }, [selectedRoom, userId]);
+
+  // Individual user can mark presence only if they have NOT paid for this cycle
+  const canMarkPresence = hasActiveCycle && !userPaidStatus;
+
   const [markedDates, setMarkedDates] = useState([]);
   const [rangeStartDate, setRangeStartDate] = useState(null);
   const [markingMultiple, setMarkingMultiple] = useState(false);
 
-  const userId = state?.user?._id;
+  // Guaranteed refresh using useFocusEffect - runs every time screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log(
+        "🔄🔄 PresenceScreen - useFocusEffect TRIGGERED (guaranteed fresh data)",
+      );
+      const forceRefresh = async () => {
+        try {
+          // Wait for backend to process any pending payments
+          console.log("⏳ Waiting 2 seconds for backend to process payment...");
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+
+          console.log("📡 Fetching fresh rooms from backend NOW...");
+          const response = await roomService.getClientRooms();
+          const data = response.data || response;
+          const fetchedRooms = data.rooms || data || [];
+
+          console.log("✅ Fresh rooms fetched! Count:", fetchedRooms.length);
+          if (fetchedRooms.length > 0) {
+            console.log("   Room ID:", fetchedRooms[0]._id);
+            console.log(
+              "   memberPayments:",
+              JSON.stringify(
+                fetchedRooms[0].memberPayments.map((mp) => ({
+                  memberName: mp.memberName,
+                  rentStatus: mp.rentStatus,
+                  electricityStatus: mp.electricityStatus,
+                  waterStatus: mp.waterStatus,
+                })),
+              ),
+            );
+          }
+
+          console.log("📌 Updating state with fresh rooms...");
+          setRooms(fetchedRooms);
+          if (fetchedRooms.length > 0) {
+            console.log("📌 Setting selectedRoom to first room");
+            setSelectedRoom(fetchedRooms[0]);
+          }
+        } catch (error) {
+          console.error("❌ Error in useFocusEffect:", error);
+        }
+      };
+
+      forceRefresh();
+
+      // Cleanup if needed
+      return () => {
+        // Runs when component loses focus
+        console.log("🔄🔄 PresenceScreen - Lost focus, cleanup");
+      };
+    }, []),
+  );
 
   useEffect(() => {
     fetchRooms();
   }, []);
 
-  // Refetch rooms when screen gains focus to get updated billing info
   useEffect(() => {
-    if (isFocused) {
-      fetchRooms();
-    }
-  }, [isFocused]);
+    if (selectedRoom && selectedRoom._id) {
+      console.log("🎯 selectedRoom changed, logging state:");
+      console.log("   Room ID:", selectedRoom._id);
+      console.log(
+        "   memberPayments:",
+        JSON.stringify(
+          selectedRoom.memberPayments?.map((mp) => ({
+            memberName: mp.memberName,
+            rentStatus: mp.rentStatus,
+            electricityStatus: mp.electricityStatus,
+            waterStatus: mp.waterStatus,
+          })),
+        ),
+      );
 
-  useEffect(() => {
-    if (selectedRoom) {
+      // Load marked dates for calendar
       loadMarkedDates();
     }
-  }, [selectedRoom, currentMonth]);
+  }, [selectedRoom?._id]);
 
-  const fetchRooms = async () => {
+  const fetchRooms = async (skipAutoSelect = false) => {
     try {
       setLoading(true);
-      const response = await roomService.getRooms();
-      console.log("Presence Screen - getRooms response:", response);
+      const response = await roomService.getClientRooms();
+      console.log("Presence Screen - getClientRooms response:", response);
       // Handle response structure from fetch API: response = { data, status }
       const data = response.data || response;
       const fetchedRooms = data.rooms || data || [];
       console.log("Presence Screen - fetched rooms:", fetchedRooms);
 
-      // Filter to only show rooms user is part of
-      const userRooms = fetchedRooms.filter((room) =>
-        room.members?.some(
-          (m) => String(m.user?._id || m.user) === String(userId),
-        ),
-      );
-
-      setRooms(userRooms);
-      if (userRooms.length > 0 && !selectedRoom) {
-        setSelectedRoom(userRooms[0]);
+      // Backend already filters to show only rooms user is part of (via $or query with memberPayments)
+      // So use all returned rooms without additional filtering
+      setRooms(fetchedRooms);
+      // Skip auto-selection if explicitly requested (e.g., when returning from payment)
+      if (!skipAutoSelect && fetchedRooms.length > 0 && !selectedRoom) {
+        setSelectedRoom(fetchedRooms[0]);
       }
     } catch (error) {
       console.error("Error fetching rooms:", error);
@@ -96,8 +209,15 @@ const PresenceScreen = () => {
     if (!selectedRoom || !userId) return;
 
     try {
+      // Fetch full room data directly to get presence (list endpoint excludes presence)
+      const roomResponse = await roomService.getRoomById(selectedRoom._id);
+      const roomData = roomResponse.data || roomResponse;
+      const room = roomData.room || roomData;
+
+      console.log("Presence Screen - Room data with members:", room.members);
+
       // Find current user's member record in the room
-      const currentUserMember = selectedRoom.members?.find(
+      const currentUserMember = room.members?.find(
         (m) => String(m.user?._id || m.user) === String(userId),
       );
 
@@ -109,6 +229,7 @@ const PresenceScreen = () => {
           .filter(Boolean);
         setMarkedDates(normalized);
       } else {
+        console.log("No presence data found for user:", userId);
         setMarkedDates([]);
       }
     } catch (error) {
@@ -119,10 +240,10 @@ const PresenceScreen = () => {
   const markPresence = async (date) => {
     if (!selectedRoom || !userId) return;
 
-    if (!hasActiveCycle) {
+    if (!canMarkPresence) {
       Alert.alert(
         "No active billing cycle or billing period",
-        "Unable to mark presence because there is no active billing cycle or billing period. Please contact your admin.",
+        "Unable to mark presence because there is no active billing cycle or billing period, or you have already paid all your bills. Please contact your admin.",
       );
       return;
     }
@@ -171,6 +292,8 @@ const PresenceScreen = () => {
             });
             pendingUpdatesRef.current.clear();
             console.log("Presence update succeeded for", dateStr);
+            // Reload marked dates from backend to prevent stale state on rapid clicks
+            await loadMarkedDates();
           } catch (error) {
             console.error("Error marking presence (retry):", error);
             setMarkedDates(prevMarked);
@@ -196,6 +319,8 @@ const PresenceScreen = () => {
         });
         pendingUpdatesRef.current.clear();
         console.log("Presence update succeeded for", dateStr);
+        // Reload marked dates from backend to prevent stale state on rapid clicks
+        await loadMarkedDates();
       } catch (error) {
         // Revert optimistic update
         pendingUpdatesRef.current.clear();
@@ -506,7 +631,10 @@ const PresenceScreen = () => {
     return hasActiveCycle && isDateInBillingRange(date) && !isFutureDate(date);
   };
 
-  const calendarDays = generateCalendarDays();
+  const calendarDays = useMemo(
+    () => generateCalendarDays(),
+    [currentMonth, markedDates],
+  );
   const monthName = currentMonth.toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
@@ -561,7 +689,19 @@ const PresenceScreen = () => {
         </ScrollView>
       </View>
 
-      {selectedRoom && (
+      {!selectedRoom && rooms.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.emptyCard}>
+            <MaterialIcons name="info-outline" size={48} color="#b38604" />
+            <Text style={styles.emptyText}>Select a Room</Text>
+            <Text style={styles.emptySubtext}>
+              Choose a room from above to mark attendance
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {selectedRoom && canMarkPresence ? (
         <>
           {/* Quick Actions */}
           <View style={styles.section}>
@@ -571,17 +711,9 @@ const PresenceScreen = () => {
             <TouchableOpacity
               style={[
                 styles.markButton,
-                (marking || markingMultiple || !hasActiveCycle) &&
-                  styles.buttonDisabled,
+                (marking || markingMultiple) && styles.buttonDisabled,
               ]}
               onPress={() => {
-                if (!hasActiveCycle) {
-                  Alert.alert(
-                    "No active billing cycle or billing period",
-                    "Unable to mark presence because there is no active billing cycle or billing period. Please contact your admin.",
-                  );
-                  return;
-                }
                 markTodayPresence();
               }}
               disabled={marking || markingMultiple || !hasActiveCycle}
@@ -852,6 +984,22 @@ const PresenceScreen = () => {
             </View>
           </View>
         </>
+      ) : selectedRoom && userPaidStatus ? (
+        <View style={styles.emptyState}>
+          <MaterialIcons name="hourglass-empty" size={48} color="#b38604" />
+          <Text style={styles.emptyText}>Already Paid All Bills</Text>
+          <Text style={styles.emptySubtext}>
+            You have already paid all your bills for this billing period
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.emptyState}>
+          <MaterialIcons name="hourglass-empty" size={48} color="#b38604" />
+          <Text style={styles.emptyText}>No Active Billing Cycle</Text>
+          <Text style={styles.emptySubtext}>
+            Waiting for admin to set billing details for this billing period
+          </Text>
+        </View>
       )}
 
       {rooms.length === 0 && (

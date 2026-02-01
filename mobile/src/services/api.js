@@ -4,11 +4,11 @@ import { getAPIBaseURL } from "../config/config";
 class APIClient {
   constructor() {
     this.baseURL = getAPIBaseURL();
-    this.timeout = 15000;
+    this.timeout = 30000; // Increased from 15s to 30s to handle slower queries
 
     console.log("\n=== API Initialization ===");
     console.log("Base URL:", this.baseURL);
-    console.log("Timeout: 15000ms");
+    console.log("Timeout: 30000ms");
     console.log("============================\n");
   }
 

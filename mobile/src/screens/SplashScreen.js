@@ -59,14 +59,8 @@ const SplashScreen = () => {
       <BlurView intensity={70} style={styles.blurContainer}>
         <View style={styles.container}>
           {/* Building Icon with Pulse Animation */}
-          <Animated.View
-            style={[
-              styles.iconContainer,
-              { transform: [{ scale: scaleAnim }] },
-            ]}
-          >
-            <Image source={require("../assets/icon.png")} style={styles.icon} />
-          </Animated.View>
+
+          <Image source={require("../assets/icon.png")} style={styles.icon} />
 
           {/* Title */}
           <Text style={styles.title}>Apartment Bill Tracker</Text>

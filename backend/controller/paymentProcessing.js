@@ -15,6 +15,87 @@ const generateGCashQRData = (amount, referenceNumber, merchantId) => {
   return `gcash|${amount}|${referenceNumber}|${merchantId}`;
 };
 
+// Helper: Check if all members have paid all bills, and clear billing if so
+const checkAndClearBillingIfComplete = async (room) => {
+  if (!room.memberPayments || !room.billing) return;
+
+  const allBillsPaid = room.memberPayments.every((mp) => {
+    // Check if this member needs to pay rent
+    if (room.billing.rent > 0 && mp.rentStatus !== "paid") return false;
+    // Check if this member needs to pay electricity
+    if (room.billing.electricity > 0 && mp.electricityStatus !== "paid")
+      return false;
+    // Check if this member needs to pay water
+    if (room.billing.water > 0 && mp.waterStatus !== "paid") return false;
+    return true;
+  });
+
+  if (allBillsPaid) {
+    console.log("✅ All members have paid! Closing billing cycle...");
+
+    // Log what we're about to archive
+    console.log("   📦 ARCHIVING CYCLE WITH:");
+    console.log("      Rent:", room.billing.rent);
+    console.log("      Electricity:", room.billing.electricity);
+    console.log("      Water:", room.billing.water, "<-- CHECK THIS");
+
+    // Archive current billing cycle to history BEFORE clearing
+    const completedCycle = {
+      startDate: room.billing.start,
+      endDate: room.billing.end,
+      rent: room.billing.rent,
+      electricity: room.billing.electricity,
+      water: room.billing.water,
+      currentReading: room.billing.currentReading,
+      previousReading: room.billing.previousReading,
+      completedDate: new Date(),
+      memberPayments: room.memberPayments.map((mp) => ({
+        member: mp.member,
+        memberName: mp.memberName,
+        rentStatus: mp.rentStatus,
+        electricityStatus: mp.electricityStatus,
+        waterStatus: mp.waterStatus,
+        rentPaidDate: mp.rentPaidDate,
+        electricityPaidDate: mp.electricityPaidDate,
+        waterPaidDate: mp.waterPaidDate,
+      })),
+    };
+
+    // Add to billing history
+    if (!room.billingHistory) {
+      room.billingHistory = [];
+    }
+    room.billingHistory.push(completedCycle);
+    console.log("📋 Billing cycle archived to history");
+
+    // Clear the current billing cycle and reset member payment statuses
+    room.billing = {
+      rent: 0,
+      electricity: 0,
+      water: 0,
+      start: null,
+      end: null,
+      currentReading: null,
+      previousReading: null,
+    };
+
+    // Reset all member payment statuses to "pending" for next cycle
+    room.memberPayments = room.memberPayments.map((mp) => ({
+      ...mp,
+      rentStatus: "pending",
+      electricityStatus: "pending",
+      waterStatus: "pending",
+      rentPaidDate: null,
+      electricityPaidDate: null,
+      waterPaidDate: null,
+    }));
+
+    console.log(
+      "🔄 Billing cycle cleared and member statuses reset for next cycle",
+    );
+  }
+};
+
 // 1. Initiate GCash Payment
 router.post(
   "/initiate-gcash",
@@ -110,27 +191,104 @@ router.post(
 
       await transaction.save();
 
-      // Update room payment status
+      // Update room payment status and deduct from billing
       const room = await Room.findById(transaction.room);
       if (room) {
+        console.log(
+          "💳 GCash Payment - Processing payment for user:",
+          transaction.payer,
+        );
+        console.log("   Room memberPayments:", room.memberPayments);
+
         const memberPayment = room.memberPayments.find(
           (mp) => mp.member.toString() === transaction.payer.toString(),
         );
 
+        console.log("   Found memberPayment:", memberPayment);
+        console.log("   Bill type:", transaction.billType);
+
         if (memberPayment) {
-          if (transaction.billType === "rent") {
+          console.log("   ✅ Member payment found, updating status...");
+          if (transaction.billType === "total") {
+            // When paying total (all bills), mark all statuses as paid for THIS member
             memberPayment.rentStatus = "paid";
             memberPayment.rentPaidDate = new Date();
+            memberPayment.electricityStatus = "paid";
+            memberPayment.electricityPaidDate = new Date();
+            memberPayment.waterStatus = "paid";
+            memberPayment.waterPaidDate = new Date();
+            // DO NOT modify room.billing amounts - keep original for other members' calculations
+            console.log("   Updated all statuses to: paid (TOTAL payment)");
+            console.log(
+              "   ⚠️  NOT modifying billing amounts - keep original for other members",
+            );
+          } else if (transaction.billType === "rent") {
+            memberPayment.rentStatus = "paid";
+            memberPayment.rentPaidDate = new Date();
+            // DO NOT modify room.billing - keep original
+            console.log("   Updated rentStatus to: paid");
           } else if (transaction.billType === "electricity") {
             memberPayment.electricityStatus = "paid";
             memberPayment.electricityPaidDate = new Date();
+            // DO NOT modify room.billing - keep original
+            console.log("   Updated electricityStatus to: paid");
           } else if (transaction.billType === "water") {
             memberPayment.waterStatus = "paid";
             memberPayment.waterPaidDate = new Date();
+            // DO NOT modify room.billing - keep original
+            console.log("   Updated waterStatus to: paid");
           }
+        } else {
+          console.log("   ❌ Member payment NOT found!");
         }
 
+        // Check if all members have paid - if so, clear billing cycle
+        await checkAndClearBillingIfComplete(room);
+
+        // Log state BEFORE save
+        console.log(
+          "   📊 Member payments BEFORE save:",
+          JSON.stringify(
+            room.memberPayments.map((mp) => ({
+              member: mp.member,
+              memberName: mp.memberName,
+              rentStatus: mp.rentStatus,
+              electricityStatus: mp.electricityStatus,
+              waterStatus: mp.waterStatus,
+            })),
+          ),
+        );
+
         await room.save();
+
+        // Log state AFTER save to confirm persistence
+        console.log("   ✅ Room saved! Final state:");
+        const savedRoom = await Room.findById(room._id);
+        console.log(
+          "   📊 Member payments AFTER save:",
+          JSON.stringify(
+            savedRoom.memberPayments.map((mp) => ({
+              member: mp.member,
+              memberName: mp.memberName,
+              rentStatus: mp.rentStatus,
+              electricityStatus: mp.electricityStatus,
+              waterStatus: mp.waterStatus,
+            })),
+          ),
+        );
+        console.log(
+          "   💧 BILLING STATE - Rent:",
+          savedRoom.billing?.rent,
+          "| Electricity:",
+          savedRoom.billing?.electricity,
+          "| Water:",
+          savedRoom.billing?.water,
+        );
+        console.log(
+          "   📚 BILLING HISTORY:",
+          savedRoom.billingHistory?.length || 0,
+          "cycles archived",
+        );
       }
 
       res.status(200).json({
@@ -150,7 +308,7 @@ router.post(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { roomId, amount, billType } = req.body;
+      const { roomId, amount, billType, bankName } = req.body;
 
       if (!roomId || !amount || !billType) {
         return next(
@@ -176,7 +334,7 @@ router.post(
         status: "pending",
         bankTransfer: {
           referenceNumber,
-          bankName: process.env.BANK_NAME || "BDO",
+          bankName: bankName || process.env.BANK_NAME || "BPI",
           accountName:
             process.env.BANK_ACCOUNT_NAME || "Apartment Bill Tracker",
           accountNumber: process.env.BANK_ACCOUNT_NUMBER || "XXXX-XXXX-XXXX",
@@ -212,12 +370,10 @@ router.post(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { transactionId, depositDate, proofImageUrl } = req.body;
+      const { transactionId, depositDate, proofImageUrl, bankName } = req.body;
 
-      if (!transactionId || !depositDate) {
-        return next(
-          new ErrorHandler("Transaction ID and Deposit Date are required", 400),
-        );
+      if (!transactionId) {
+        return next(new ErrorHandler("Transaction ID is required", 400));
       }
 
       const transaction = await PaymentTransaction.findById(transactionId);
@@ -230,34 +386,118 @@ router.post(
       }
 
       // Update bank transfer details
-      transaction.bankTransfer.depositDate = new Date(depositDate);
-      transaction.bankTransfer.depositProof = proofImageUrl;
+      if (bankName) {
+        transaction.bankTransfer.bankName = bankName;
+      }
+      if (depositDate) {
+        transaction.bankTransfer.depositDate = new Date(depositDate);
+      }
+      if (proofImageUrl) {
+        transaction.bankTransfer.depositProof = proofImageUrl;
+      }
       transaction.status = "completed";
       transaction.completionDate = new Date();
 
       await transaction.save();
 
-      // Update room payment status
+      // Update room payment status and deduct from billing
       const room = await Room.findById(transaction.room);
       if (room) {
+        console.log(
+          "💳 Bank Transfer Payment - Processing payment for user:",
+          transaction.payer,
+        );
+        console.log("   Room memberPayments:", room.memberPayments);
+
         const memberPayment = room.memberPayments.find(
           (mp) => mp.member.toString() === transaction.payer.toString(),
         );
 
+        console.log("   Found memberPayment:", memberPayment);
+        console.log("   Bill type:", transaction.billType);
+
         if (memberPayment) {
-          if (transaction.billType === "rent") {
+          console.log("   ✅ Member payment found, updating status...");
+          if (transaction.billType === "total") {
+            // When paying total (all bills), mark all statuses as paid for THIS member
             memberPayment.rentStatus = "paid";
             memberPayment.rentPaidDate = new Date();
+            memberPayment.electricityStatus = "paid";
+            memberPayment.electricityPaidDate = new Date();
+            memberPayment.waterStatus = "paid";
+            memberPayment.waterPaidDate = new Date();
+            // DO NOT modify room.billing amounts - keep original for other members' calculations
+            console.log("   Updated all statuses to: paid (TOTAL payment)");
+            console.log(
+              "   ⚠️  NOT modifying billing amounts - keep original for other members",
+            );
+          } else if (transaction.billType === "rent") {
+            memberPayment.rentStatus = "paid";
+            memberPayment.rentPaidDate = new Date();
+            // DO NOT modify room.billing - keep original
+            console.log("   Updated rentStatus to: paid");
           } else if (transaction.billType === "electricity") {
             memberPayment.electricityStatus = "paid";
             memberPayment.electricityPaidDate = new Date();
+            // DO NOT modify room.billing - keep original
+            console.log("   Updated electricityStatus to: paid");
           } else if (transaction.billType === "water") {
             memberPayment.waterStatus = "paid";
             memberPayment.waterPaidDate = new Date();
+            // DO NOT modify room.billing - keep original
+            console.log("   Updated waterStatus to: paid");
           }
+        } else {
+          console.log("   ❌ Member payment NOT found!");
         }
 
+        // Check if all members have paid - if so, clear billing cycle
+        await checkAndClearBillingIfComplete(room);
+
+        // Log state BEFORE save
+        console.log(
+          "   📊 Member payments BEFORE save:",
+          JSON.stringify(
+            room.memberPayments.map((mp) => ({
+              member: mp.member,
+              memberName: mp.memberName,
+              rentStatus: mp.rentStatus,
+              electricityStatus: mp.electricityStatus,
+              waterStatus: mp.waterStatus,
+            })),
+          ),
+        );
+
         await room.save();
+
+        // Log state AFTER save to confirm persistence
+        console.log("   ✅ Room saved! Final state:");
+        const savedRoom = await Room.findById(room._id);
+        console.log(
+          "   📊 Member payments AFTER save:",
+          JSON.stringify(
+            savedRoom.memberPayments.map((mp) => ({
+              member: mp.member,
+              memberName: mp.memberName,
+              rentStatus: mp.rentStatus,
+              electricityStatus: mp.electricityStatus,
+              waterStatus: mp.waterStatus,
+            })),
+          ),
+        );
+        console.log(
+          "   💧 BILLING STATE - Rent:",
+          savedRoom.billing?.rent,
+          "| Electricity:",
+          savedRoom.billing?.electricity,
+          "| Water:",
+          savedRoom.billing?.water,
+        );
+        console.log(
+          "   📚 BILLING HISTORY:",
+          savedRoom.billingHistory?.length || 0,
+          "cycles archived",
+        );
       }
 
       res.status(200).json({
@@ -322,25 +562,102 @@ router.post(
 
       await transaction.save();
 
-      // Update room payment status
+      // Update room payment status and deduct from billing
+      console.log(
+        "💳 Cash Payment - Processing payment for user:",
+        req.user._id,
+      );
+      console.log("   Room memberPayments:", room.memberPayments);
+
       const memberPayment = room.memberPayments.find(
         (mp) => mp.member.toString() === req.user._id.toString(),
       );
 
+      console.log("   Found memberPayment:", memberPayment);
+      console.log("   Bill type:", billType);
+
       if (memberPayment) {
-        if (billType === "rent") {
+        console.log("   ✅ Member payment found, updating status...");
+        if (billType === "total") {
+          // When paying total (all bills), mark all statuses as paid for THIS member
           memberPayment.rentStatus = "paid";
           memberPayment.rentPaidDate = new Date();
+          memberPayment.electricityStatus = "paid";
+          memberPayment.electricityPaidDate = new Date();
+          memberPayment.waterStatus = "paid";
+          memberPayment.waterPaidDate = new Date();
+          // DO NOT modify room.billing amounts - keep original for other members' calculations
+          console.log("   Updated all statuses to: paid (TOTAL payment)");
+          console.log(
+            "   ⚠️  NOT modifying billing amounts - keep original for other members",
+          );
+        } else if (billType === "rent") {
+          memberPayment.rentStatus = "paid";
+          memberPayment.rentPaidDate = new Date();
+          // DO NOT modify room.billing - keep original
+          console.log("   Updated rentStatus to: paid");
         } else if (billType === "electricity") {
           memberPayment.electricityStatus = "paid";
           memberPayment.electricityPaidDate = new Date();
+          // DO NOT modify room.billing - keep original
+          console.log("   Updated electricityStatus to: paid");
         } else if (billType === "water") {
           memberPayment.waterStatus = "paid";
           memberPayment.waterPaidDate = new Date();
+          // DO NOT modify room.billing - keep original
+          console.log("   Updated waterStatus to: paid");
         }
+      } else {
+        console.log("   ❌ Member payment NOT found!");
       }
 
+      // Check if all members have paid - if so, clear billing cycle
+      await checkAndClearBillingIfComplete(room);
+
+      // Log state BEFORE save
+      console.log(
+        "   📊 Member payments BEFORE save:",
+        JSON.stringify(
+          room.memberPayments.map((mp) => ({
+            member: mp.member,
+            memberName: mp.memberName,
+            rentStatus: mp.rentStatus,
+            electricityStatus: mp.electricityStatus,
+            waterStatus: mp.waterStatus,
+          })),
+        ),
+      );
+
       await room.save();
+
+      // Log state AFTER save to confirm persistence
+      console.log("   ✅ Room saved! Final state:");
+      const savedRoom = await Room.findById(room._id);
+      console.log(
+        "   📊 Member payments AFTER save:",
+        JSON.stringify(
+          savedRoom.memberPayments.map((mp) => ({
+            member: mp.member,
+            memberName: mp.memberName,
+            rentStatus: mp.rentStatus,
+            electricityStatus: mp.electricityStatus,
+            waterStatus: mp.waterStatus,
+          })),
+        ),
+      );
+      console.log(
+        "   💧 BILLING STATE - Rent:",
+        savedRoom.billing?.rent,
+        "| Electricity:",
+        savedRoom.billing?.electricity,
+        "| Water:",
+        savedRoom.billing?.water,
+      );
+      console.log(
+        "   📚 BILLING HISTORY:",
+        savedRoom.billingHistory?.length || 0,
+        "cycles archived",
+      );
 
       res.status(200).json({
         success: true,
@@ -362,7 +679,11 @@ router.get(
       const { roomId } = req.params;
       const { status, paymentMethod } = req.query;
 
-      let query = { room: roomId };
+      // Filter to show only current user's transactions (their own payment history)
+      let query = {
+        room: roomId,
+        payer: req.user._id, // Only show payments made by current user
+      };
 
       if (status) {
         query.status = status;
@@ -478,6 +799,115 @@ router.get(
           byPayer,
           transactionCount: transactions.length,
         },
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+// 9. Get Billing History for a Room
+router.get(
+  "/billing-history/:roomId",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { roomId } = req.params;
+      const room = await Room.findById(roomId).select("billingHistory");
+
+      if (!room) {
+        return next(new ErrorHandler("Room not found", 404));
+      }
+
+      const history = (room.billingHistory || []).map((cycle) => ({
+        _id: cycle._id || `${cycle.completedDate}-${cycle.startDate}`,
+        startDate: cycle.startDate || cycle.start,
+        endDate: cycle.endDate || cycle.end,
+        rent: cycle.rent || 0,
+        electricity: cycle.electricity || 0,
+        water: cycle.water || cycle.waterBillAmount || 0,
+        previousReading: cycle.previousReading || cycle.previousMeterReading,
+        currentReading: cycle.currentReading || cycle.currentMeterReading,
+        completedDate: cycle.completedDate || cycle.createdAt,
+        status: "completed",
+        memberPayments: cycle.memberPayments || [],
+      }));
+
+      res.status(200).json({
+        success: true,
+        data: history,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+// 10. Get Billing Cycles (alias for billing history)
+router.get(
+  "/billing-cycles/room/:roomId",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { roomId } = req.params;
+      const room = await Room.findById(roomId).select(
+        "billing billingHistory memberPayments",
+      );
+
+      if (!room) {
+        return next(new ErrorHandler("Room not found", 404));
+      }
+
+      const cycles = [];
+
+      // Add current billing cycle if active
+      if (room.billing && room.billing.start && room.billing.end) {
+        cycles.push({
+          _id: `active-${roomId}`,
+          startDate: room.billing.start,
+          endDate: room.billing.end,
+          rent: room.billing.rent || 0,
+          electricity: room.billing.electricity || 0,
+          waterBillAmount: room.billing.water || 0,
+          previousMeterReading: room.billing.previousReading,
+          currentMeterReading: room.billing.currentReading,
+          status: "active",
+          membersCount: room.memberPayments?.length || 0,
+          totalBilledAmount:
+            (room.billing.rent || 0) +
+            (room.billing.electricity || 0) +
+            (room.billing.water || 0),
+        });
+      }
+
+      // Add completed cycles from history
+      if (room.billingHistory && room.billingHistory.length > 0) {
+        room.billingHistory.forEach((cycle) => {
+          cycles.push({
+            _id: cycle._id || `${cycle.completedDate}-${cycle.startDate}`,
+            startDate: cycle.startDate || cycle.start,
+            endDate: cycle.endDate || cycle.end,
+            rent: cycle.rent || 0,
+            electricity: cycle.electricity || 0,
+            waterBillAmount: cycle.water || cycle.waterBillAmount || 0,
+            previousMeterReading:
+              cycle.previousReading || cycle.previousMeterReading,
+            currentMeterReading:
+              cycle.currentReading || cycle.currentMeterReading,
+            closedAt: cycle.completedDate || cycle.createdAt,
+            status: "completed",
+            membersCount: cycle.memberPayments?.length || 0,
+            totalBilledAmount:
+              (cycle.rent || 0) +
+              (cycle.electricity || 0) +
+              (cycle.water || cycle.waterBillAmount || 0),
+          });
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: cycles,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));

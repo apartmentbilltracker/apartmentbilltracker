@@ -45,8 +45,13 @@ const BillsScreen = ({ navigation }) => {
   const userId = state?.user?._id;
 
   useEffect(() => {
-    fetchRooms();
-  }, []);
+    if (isFocused) {
+      // Always reset selectedRoom when returning to this screen
+      setSelectedRoom(null); // Reset selected room to show default fallback
+      // Then fetch rooms WITH auto-selection to load fresh payment data
+      fetchRooms(false); // Pass false to auto-select first room (CRITICAL for payment updates!)
+    }
+  }, [isFocused]);
 
   // Refetch whenever user profile changes (name or avatar)
   useEffect(() => {
@@ -57,6 +62,16 @@ const BillsScreen = ({ navigation }) => {
   useEffect(() => {
     if (selectedRoom) {
       loadMemberPresence(selectedRoom._id);
+      console.log("📍 BillsScreen - selectedRoom changed");
+      console.log("   Room ID:", selectedRoom._id);
+      console.log("   memberPayments:", selectedRoom.memberPayments);
+      console.log("   billing:", selectedRoom.billing);
+      if (
+        selectedRoom.memberPayments &&
+        selectedRoom.memberPayments.length > 0
+      ) {
+        console.log("   First memberPayment:", selectedRoom.memberPayments[0]);
+      }
     }
   }, [selectedRoom]);
 
@@ -86,12 +101,12 @@ const BillsScreen = ({ navigation }) => {
     }
   };
 
-  const fetchRooms = async () => {
+  const fetchRooms = async (skipAutoSelect = false) => {
     try {
       setLoading(true);
       console.log("Fetching rooms...");
-      const response = await roomService.getRooms();
-      console.log("Bills Screen - getRooms response:", response);
+      const response = await roomService.getClientRooms();
+      console.log("Bills Screen - getClientRooms response:", response);
       // Handle response structure from fetch API: response = { data, status }
       const data = response.data || response;
       const fetchedRooms = data.rooms || data || [];
@@ -101,28 +116,26 @@ const BillsScreen = ({ navigation }) => {
         fetchedRooms[0]?.members,
       );
 
-      // Filter to show only rooms user is part of
-      const userRooms = fetchedRooms.filter((room) =>
-        room.members?.some(
-          (m) => String(m.user?._id || m.user) === String(userId),
-        ),
-      );
-
-      console.log("Bills Screen - user rooms:", userRooms);
-      setRooms(userRooms);
+      // Backend already filters to show only rooms user is part of (via $or query with memberPayments)
+      // So use all returned rooms without additional filtering
+      console.log("Bills Screen - user rooms:", fetchedRooms);
+      setRooms(fetchedRooms);
 
       // Update selectedRoom with fresh data or set to first room
-      if (selectedRoom && userRooms.length > 0) {
-        // Find the updated version of the currently selected room
-        const updatedSelectedRoom = userRooms.find(
-          (room) => room._id === selectedRoom._id,
-        );
-        if (updatedSelectedRoom) {
-          setSelectedRoom(updatedSelectedRoom);
-          console.log("Updated selectedRoom with fresh data");
+      // Skip auto-selection if explicitly requested (e.g., when returning from payment)
+      if (!skipAutoSelect) {
+        if (selectedRoom && fetchedRooms.length > 0) {
+          // Find the updated version of the currently selected room
+          const updatedSelectedRoom = fetchedRooms.find(
+            (room) => room._id === selectedRoom._id,
+          );
+          if (updatedSelectedRoom) {
+            setSelectedRoom(updatedSelectedRoom);
+            console.log("Updated selectedRoom with fresh data");
+          }
+        } else if (fetchedRooms.length > 0) {
+          setSelectedRoom(fetchedRooms[0]);
         }
-      } else if (userRooms.length > 0) {
-        setSelectedRoom(userRooms[0]);
       }
     } catch (error) {
       console.error("Error fetching rooms:", error.message);
@@ -175,6 +188,42 @@ const BillsScreen = ({ navigation }) => {
       totalDays += presence.length;
     });
     return totalDays * WATER_BILL_PER_DAY;
+  };
+
+  // Check if current user has paid all their bills
+  const hasUserPaidAllBills = () => {
+    if (!selectedRoom || !userId) return false;
+
+    console.log("🔍 BillsScreen - Checking payment status for user:", userId);
+    console.log("   memberPayments available:", selectedRoom.memberPayments);
+
+    // Find user's payment status
+    const userPayment = selectedRoom.memberPayments?.find(
+      (mp) => String(mp.member) === String(userId),
+    );
+
+    console.log("   userPayment found:", userPayment);
+
+    if (!userPayment) return false;
+
+    // User has paid all bills if all statuses are "paid"
+    const allPaid =
+      userPayment.rentStatus === "paid" &&
+      userPayment.electricityStatus === "paid" &&
+      userPayment.waterStatus === "paid";
+
+    console.log(
+      "   rentStatus:",
+      userPayment.rentStatus,
+      "electricityStatus:",
+      userPayment.electricityStatus,
+      "waterStatus:",
+      userPayment.waterStatus,
+      "allPaid:",
+      allPaid,
+    );
+
+    return allPaid;
   };
 
   const calculateMemberWaterBill = (memberId) => {
@@ -454,19 +503,36 @@ const BillsScreen = ({ navigation }) => {
 
             <!-- Members & Water Bill -->
             <div class="section">
-              <div class="section-title">Members Breakdown</div>
+              <div class="section-title">Members Breakdown & Payment Status</div>
               <div class="member-list">
                 ${selectedRoom.members
-                  .map(
-                    (member) => `
+                  .map((member) => {
+                    const memberPayment = selectedRoom.memberPayments?.find(
+                      (mp) =>
+                        mp.member?._id === member.user?._id ||
+                        mp.member === member.user?._id,
+                    );
+                    const rentStatus = memberPayment?.rentStatus || "unpaid";
+                    const electricityStatus =
+                      memberPayment?.electricityStatus || "unpaid";
+                    const waterStatus = memberPayment?.waterStatus || "unpaid";
+
+                    return `
                   <div class="member-item">
-                    <span class="member-name">${member.user?.name || "Unknown"}</span>
-                    <span class="member-days">${(memberPresence[member._id] || []).length}d</span>
-                    <span class="member-water">₱${calculateMemberWaterBill(member._id).toFixed(2)}</span>
-                    <span class="member-status">${member.isPayer ? "Payor" : "Non-Payor"}</span>
+                    <div style="display: flex; flex-direction: column; width: 100%;">
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span class="member-name">${member.user?.name || "Unknown"}</span>
+                        <span class="member-status">${member.isPayer ? "Payor" : "Non-Payor"}</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; font-size: 11px; color: #666;">
+                        <span>Rent: ${rentStatus === "paid" ? "✓ Paid" : "Unpaid"}</span>
+                        <span>Electricity: ${electricityStatus === "paid" ? "✓ Paid" : "Unpaid"}</span>
+                        <span>Water: ${waterStatus === "paid" ? "✓ Paid" : "Unpaid"}</span>
+                      </div>
+                    </div>
                   </div>
-                `,
-                  )
+                `;
+                  })
                   .join("")}
               </div>
             </div>
@@ -654,9 +720,21 @@ const BillsScreen = ({ navigation }) => {
           </ScrollView>
         </View>
 
+        {!selectedRoom && rooms.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.emptyCard}>
+              <MaterialIcons name="info-outline" size={48} color="#b38604" />
+              <Text style={styles.emptyText}>Select a Room</Text>
+              <Text style={styles.emptySubtext}>
+                Choose a room from above to view billing details
+              </Text>
+            </View>
+          </View>
+        )}
+
         {selectedRoom && (
           <>
-            {billing?.start && billing?.end ? (
+            {billing?.start && billing?.end && !hasUserPaidAllBills() ? (
               <>
                 {/* Billing Period */}
                 <View style={styles.section}>
@@ -994,6 +1072,20 @@ const BillsScreen = ({ navigation }) => {
                   </View>
                 )}
               </>
+            ) : hasUserPaidAllBills() ? (
+              <View style={styles.section}>
+                <View style={styles.emptyCard}>
+                  <MaterialIcons
+                    name="hourglass-empty"
+                    size={48}
+                    color="#b38604"
+                  />
+                  <Text style={styles.emptyText}>Bills Paid</Text>
+                  <Text style={styles.emptySubtext}>
+                    You have already paid all bills for this billing period
+                  </Text>
+                </View>
+              </View>
             ) : (
               <View style={styles.section}>
                 <View style={styles.emptyCard}>

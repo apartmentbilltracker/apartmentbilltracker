@@ -49,6 +49,10 @@ const AdminBillingScreen = ({ navigation }) => {
   useEffect(() => {
     if (isFocused) {
       fetchRooms();
+      // Also refetch details of the currently selected room to get updated members list
+      if (selectedRoom) {
+        fetchRoomDetails(selectedRoom._id);
+      }
     }
   }, [isFocused]);
 

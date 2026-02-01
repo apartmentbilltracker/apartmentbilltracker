@@ -21,9 +21,11 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
   const fetchPaymentHistory = async () => {
     try {
       setError("");
-      const response = await apiService.getPaymentHistory(roomId);
+      const response = await apiService.getTransactions(roomId);
       if (response.success) {
-        setPayments(response.payments || []);
+        setPayments(response.transactions || []);
+      } else {
+        setError("No transactions found");
       }
     } catch (err) {
       console.error("Error fetching payment history:", err);
@@ -158,7 +160,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
                               ? "flash-on"
                               : payment.billType === "water"
                                 ? "opacity"
-                                : "summarize"
+                                : "receipt-long"
                         }
                         size={20}
                         color="#fff"
@@ -169,7 +171,9 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
                         {getBillTypeLabel(payment.billType)}
                       </Text>
                       <Text style={styles.paidBy}>
-                        Paid by: {payment.paidBy?.name || "Unknown"}
+                        Status:{" "}
+                        {payment.status.charAt(0).toUpperCase() +
+                          payment.status.slice(1)}
                       </Text>
                     </View>
                   </View>
@@ -194,27 +198,44 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
                   </View>
 
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Date Paid:</Text>
+                    <Text style={styles.detailLabel}>Date:</Text>
                     <Text style={styles.detailValue}>
-                      {formatDate(payment.paymentDate)}
+                      {formatDate(payment.transactionDate)}
                     </Text>
                   </View>
 
-                  {payment.reference && (
+                  {payment.gcash?.referenceNumber && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Reference:</Text>
                       <Text style={styles.detailValue}>
-                        {payment.reference}
+                        {payment.gcash.referenceNumber}
                       </Text>
                     </View>
                   )}
 
-                  {payment.billingCycleStart && (
+                  {payment.bankTransfer?.referenceNumber && (
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Billing Period:</Text>
+                      <Text style={styles.detailLabel}>Reference:</Text>
                       <Text style={styles.detailValue}>
-                        {formatDate(payment.billingCycleStart)} to{" "}
-                        {formatDate(payment.billingCycleEnd)}
+                        {payment.bankTransfer.referenceNumber}
+                      </Text>
+                    </View>
+                  )}
+
+                  {payment.bankTransfer?.bankName && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Bank:</Text>
+                      <Text style={styles.detailValue}>
+                        {payment.bankTransfer.bankName}
+                      </Text>
+                    </View>
+                  )}
+
+                  {payment.cash?.receiptNumber && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Receipt #:</Text>
+                      <Text style={styles.detailValue}>
+                        {payment.cash.receiptNumber}
                       </Text>
                     </View>
                   )}
@@ -232,6 +253,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+    marginTop: 40,
   },
   header: {
     flexDirection: "row",
@@ -242,7 +264,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
-    marginTop: 10,
+    marginTop: 0,
   },
   backButton: {
     width: 40,

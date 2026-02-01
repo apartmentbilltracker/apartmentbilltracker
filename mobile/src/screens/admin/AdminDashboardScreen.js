@@ -95,9 +95,6 @@ const AdminDashboardScreen = ({ navigation }) => {
           <Text style={styles.greeting}>Welcome</Text>
           <Text style={styles.userName}>{state.user?.name || "Admin"}</Text>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
       </View>
 
       <View style={styles.statsContainer}>

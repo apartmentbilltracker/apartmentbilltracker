@@ -27,15 +27,120 @@ router.post("/", isAuthenticated, async (req, res, next) => {
 });
 
 // list rooms
-router.get("/", async (req, res, next) => {
+router.get("/", isAuthenticated, async (req, res, next) => {
   try {
-    // include billing and members so clients can determine membership and billing info
-    const rooms = await Room.find().populate(
-      "members.user",
-      "name email avatar",
+    console.log(
+      "GET /api/v2/rooms - User ID:",
+      req.user._id,
+      "Role:",
+      req.user.role,
     );
+    let query;
+
+    // Admin sees all rooms, regular users see only rooms they're members of or have been members of
+    if (req.user.role && req.user.role.includes("admin")) {
+      query = Room.find();
+      console.log("User is admin, fetching all rooms");
+    } else {
+      // Users see rooms they're currently members of, OR rooms they were previously members of (in memberPayments)
+      query = Room.find({
+        $or: [
+          { "members.user": req.user._id }, // Currently a member
+          { "memberPayments.member": req.user._id }, // Was previously a member (has payment records)
+        ],
+      });
+      console.log("User is regular user, fetching via $or query");
+    }
+
+    const rooms = await query
+      .populate("members.user", "name email avatar")
+      .select("-members.presence"); // Exclude presence data for list view to reduce payload
+
+    console.log("Rooms found:", rooms.length);
+    if (rooms.length === 0) {
+      console.log(
+        "No rooms found. Checking if user has any room memberships...",
+      );
+      const allRooms = await Room.find();
+      console.log("Total rooms in database:", allRooms.length);
+      allRooms.forEach((room) => {
+        const isMember = room.members.some(
+          (m) => String(m.user) === String(req.user._id),
+        );
+        const hasPayment = room.memberPayments.some(
+          (mp) => String(mp.member) === String(req.user._id),
+        );
+        console.log(
+          `Room "${room.name}": isMember=${isMember}, hasPayment=${hasPayment}`,
+        );
+        if (room.members.length > 0) {
+          console.log(
+            `  Members: ${room.members.map((m) => `${String(m.user)} (${m.name})`).join(", ")}`,
+          );
+        }
+        if (room.memberPayments.length > 0) {
+          console.log(
+            `  Payments: ${room.memberPayments.map((mp) => `${String(mp.member)} (${mp.memberName})`).join(", ")}`,
+          );
+        }
+      });
+    }
+
     res.status(200).json({ success: true, rooms });
   } catch (error) {
+    console.error("Error in GET /api/v2/rooms:", error);
+    next(new ErrorHandler(error.message, 500));
+  }
+});
+
+// list rooms for client view (respects membership only, ignores admin role)
+router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
+  try {
+    console.log("GET /api/v2/rooms/client/my-rooms - User ID:", req.user._id);
+
+    // Always filter by membership, even if user is admin
+    // This ensures admins see only their joined rooms when in client view
+    const query = Room.find({
+      $or: [
+        { "members.user": req.user._id }, // Currently a member
+        { "memberPayments.member": req.user._id }, // Was previously a member (has payment records)
+      ],
+    });
+
+    const rooms = await query
+      .populate("members.user", "name email avatar")
+      .select("-members.presence");
+
+    // Explicitly log memberPayments for debugging
+    console.log("Client my-rooms endpoint response:");
+    rooms.forEach((room, idx) => {
+      console.log(`Room ${idx}: ${room.name}`);
+      console.log(`  Members: ${room.members.length}`);
+      console.log(`  Member Payments: ${JSON.stringify(room.memberPayments)}`);
+    });
+
+    console.log("Client view rooms found:", rooms.length);
+    res.status(200).json({ success: true, rooms });
+  } catch (error) {
+    console.error("Error in GET /client/my-rooms:", error);
+    next(new ErrorHandler(error.message, 500));
+  }
+});
+
+// browse all rooms (for joining) - available to authenticated users
+router.get("/browse/available", isAuthenticated, async (req, res, next) => {
+  try {
+    console.log("GET /api/v2/rooms/browse/available - User ID:", req.user._id);
+
+    // Return ALL rooms with member info, so user can see what's available to join
+    const rooms = await Room.find()
+      .populate("members.user", "name email avatar")
+      .select("-members.presence");
+
+    console.log("Available rooms for browse:", rooms.length);
+    res.status(200).json({ success: true, rooms });
+  } catch (error) {
+    console.error("Error in GET /browse/available:", error);
     next(new ErrorHandler(error.message, 500));
   }
 });
@@ -83,6 +188,21 @@ router.post("/:id/join", isAuthenticated, async (req, res, next) => {
       name: req.user.name || req.user.email,
       isPayer,
     });
+
+    // Also add to memberPayments for payment tracking
+    const existsInMemberPayments = room.memberPayments.find(
+      (mp) => String(mp.member) === String(req.user._id),
+    );
+    if (!existsInMemberPayments) {
+      room.memberPayments.push({
+        member: req.user._id,
+        memberName: req.user.name || req.user.email,
+        rentStatus: "pending",
+        electricityStatus: "pending",
+        waterStatus: "pending",
+      });
+    }
+
     await room.save();
 
     // Populate before returning with billing
@@ -237,17 +357,42 @@ router.put("/:id/billing", isAuthenticated, async (req, res, next) => {
     }
     if (typeof rent === "number") room.billing.rent = rent;
     room.billing.electricity = computedElectricity ?? 0;
+    if (typeof water === "number") room.billing.water = water;
     if (typeof previousReading === "number")
       room.billing.previousReading = previousReading;
     if (typeof currentReading === "number")
       room.billing.currentReading = currentReading;
     room.billing.updatedAt = new Date();
 
+    // Ensure all active members have entries in memberPayments
+    // This is critical for payment status tracking to work correctly
+    if (start && end) {
+      room.members.forEach((member) => {
+        const existsInMemberPayments = room.memberPayments.find(
+          (mp) => String(mp.member) === String(member.user),
+        );
+        if (!existsInMemberPayments) {
+          console.log(
+            `Creating memberPayment entry for ${member.name} in room ${room.name}`,
+          );
+          room.memberPayments.push({
+            member: member.user,
+            memberName: member.name,
+            rentStatus: "pending",
+            electricityStatus: "pending",
+            waterStatus: "pending",
+          });
+        }
+      });
+    }
+
     await room.save();
 
     // Return room with populated data
     const populatedRoom = await Room.findById(req.params.id)
-      .select("name description code createdAt billing billingHistory members")
+      .select(
+        "name description code createdAt billing billingHistory members memberPayments",
+      )
       .populate("members.user", "name email avatar");
 
     res.status(200).json({ success: true, room: populatedRoom });

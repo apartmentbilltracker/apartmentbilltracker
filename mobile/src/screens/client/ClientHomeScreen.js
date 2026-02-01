@@ -38,29 +38,39 @@ const ClientHomeScreen = ({ navigation }) => {
   const fetchRooms = async () => {
     try {
       setLoading(true);
-      const response = await roomService.getRooms();
-      console.log("getRooms response:", response);
-      // Handle response structure from fetch API: response = { data, status }
-      const data = response.data || response;
-      const rooms = data.rooms || data || [];
-      console.log("Rooms fetched:", rooms);
 
-      const myRoom = rooms.find((room) =>
-        room.members?.some(
-          (m) => String(m.user?._id || m.user) === String(userId),
-        ),
-      );
-      setUserJoinedRoom(myRoom || null);
+      // Fetch user's rooms (current and previous memberships) - use client endpoint
+      // to ensure even admins see only their joined rooms when in client view
+      const userRoomsResponse = await roomService.getClientRooms();
+      const userRoomsData = userRoomsResponse.data || userRoomsResponse;
+      const userRooms = userRoomsData.rooms || userRoomsData || [];
 
-      const notJoined = rooms.filter(
-        (room) =>
-          !room.members?.some(
-            (m) => String(m.user?._id || m.user) === String(userId),
-          ),
-      );
-      setUnjoinedRooms(notJoined);
+      console.log("User rooms fetched:", userRooms.length);
+      setUserJoinedRoom(userRooms[0] || null);
+
+      // Fetch ALL available rooms to browse
+      try {
+        const availableRoomsResponse = await roomService.getAvailableRooms();
+        const availableRoomsData =
+          availableRoomsResponse.data || availableRoomsResponse;
+        const allRooms = availableRoomsData.rooms || availableRoomsData || [];
+
+        // Filter to get rooms user hasn't joined yet
+        const userRoomIds = userRooms.map((r) => r._id);
+        const notJoined = allRooms.filter(
+          (room) => !userRoomIds.includes(room._id),
+        );
+
+        console.log("Available rooms to join:", notJoined.length);
+        setUnjoinedRooms(notJoined);
+      } catch (error) {
+        console.error("Error fetching available rooms:", error);
+        setUnjoinedRooms([]);
+      }
     } catch (error) {
       console.error("Error fetching rooms:", error);
+      setUserJoinedRoom(null);
+      setUnjoinedRooms([]);
     } finally {
       setLoading(false);
     }

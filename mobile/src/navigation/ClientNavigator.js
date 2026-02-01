@@ -9,6 +9,11 @@ import BillsScreen from "../screens/client/BillsScreen";
 import BillingHistoryScreen from "../screens/client/BillingHistoryScreen";
 import RoomDetailsScreen from "../screens/client/RoomDetailsScreen";
 import ProfileScreen from "../screens/client/ProfileScreen";
+import PaymentMethodScreen from "../screens/client/PaymentMethodScreen";
+import GCashPaymentScreen from "../screens/client/GCashPaymentScreen";
+import BankTransferPaymentScreen from "../screens/client/BankTransferPaymentScreen";
+import CashPaymentScreen from "../screens/client/CashPaymentScreen";
+import PaymentHistoryScreen from "../screens/client/PaymentHistoryScreen";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -98,6 +103,31 @@ const BillsStack = () => (
       name="Billing"
       component={BillingScreen}
       options={{ title: "Billing Details" }}
+    />
+    <Stack.Screen
+      name="PaymentMethod"
+      component={PaymentMethodScreen}
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="GCashPayment"
+      component={GCashPaymentScreen}
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="BankTransferPayment"
+      component={BankTransferPaymentScreen}
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="CashPayment"
+      component={CashPaymentScreen}
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="PaymentHistory"
+      component={PaymentHistoryScreen}
+      options={{ headerShown: false }}
     />
   </Stack.Navigator>
 );

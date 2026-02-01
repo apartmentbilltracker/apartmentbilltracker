@@ -19,6 +19,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [qrData, setQrData] = useState(null);
   const [referenceNumber, setReferenceNumber] = useState("");
+  const [transactionId, setTransactionId] = useState("");
   const [step, setStep] = useState("qr"); // qr, verify, success
   const [mobileNumber, setMobileNumber] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
@@ -39,6 +40,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       if (response.success) {
         setQrData(response.qrData);
         setReferenceNumber(response.transaction.referenceNumber);
+        setTransactionId(response.transaction._id);
         setStep("qr");
       }
     } catch (error) {
@@ -58,7 +60,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
     try {
       setVerifyLoading(true);
       const response = await apiService.verifyGCash({
-        transactionId: referenceNumber,
+        transactionId,
         mobileNumber,
       });
 
@@ -69,11 +71,16 @@ const GCashPaymentScreen = ({ navigation, route }) => {
             {
               text: "View History",
               onPress: () =>
-                navigation.navigate("PaymentHistory", { refresh: true }),
+                navigation.navigate("PaymentHistory", {
+                  roomId,
+                  roomName,
+                  refresh: true,
+                }),
             },
             {
               text: "Back to Bills",
-              onPress: () => navigation.navigate("Bills", { refresh: true }),
+              onPress: () =>
+                navigation.navigate("BillsMain", { refresh: true }),
             },
           ]);
         }, 500);
@@ -310,6 +317,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+    marginTop: 40,
   },
   header: {
     flexDirection: "row",
@@ -320,7 +328,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
-    marginTop: 10,
+    marginTop: 0,
   },
   backButton: {
     width: 40,

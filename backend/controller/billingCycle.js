@@ -102,6 +102,14 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
       prevReading,
       currReading,
     });
+    console.log(
+      "   ✅ Will update room.billing with: Rent=",
+      rentAmount,
+      " | Electricity=",
+      electricityAmount,
+      " | Water=",
+      waterAmount,
+    );
 
     members.forEach((m) => {
       const presenceArray = Array.isArray(m.presence) ? m.presence : [];
@@ -193,6 +201,7 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
         "billing.end": endDate,
         "billing.rent": rentAmount,
         "billing.electricity": electricityAmount,
+        "billing.water": waterAmount,
         "billing.previousReading": prevReading,
         "billing.currentReading": currReading,
       },

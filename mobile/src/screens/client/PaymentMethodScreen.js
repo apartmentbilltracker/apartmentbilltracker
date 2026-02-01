@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   Modal,
+  Image,
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -20,7 +21,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       id: "gcash",
       name: "GCash",
       description: "Send via GCash App",
-      icon: "google",
+      image: require("../../assets/gcash-icon.png"),
       color: "#0066FF",
       details: "Quick and secure mobile payment",
     },
@@ -115,11 +116,15 @@ const PaymentMethodScreen = ({ navigation, route }) => {
                 { backgroundColor: `${method.color}15` },
               ]}
             >
-              <MaterialCommunityIcons
-                name={method.icon}
-                size={28}
-                color={method.color}
-              />
+              {method.image ? (
+                <Image source={method.image} style={styles.methodImage} />
+              ) : (
+                <MaterialCommunityIcons
+                  name={method.icon}
+                  size={28}
+                  color={method.color}
+                />
+              )}
             </View>
 
             <View style={styles.methodContent}>
@@ -214,6 +219,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+    marginTop: 40,
   },
   header: {
     flexDirection: "row",
@@ -224,7 +230,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
-    marginTop: 10,
+    marginTop: 0,
   },
   backButton: {
     width: 40,
@@ -309,6 +315,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
+  },
+  methodImage: {
+    width: 40,
+    height: 40,
+    resizeMode: "contain",
   },
   methodContent: {
     flex: 1,

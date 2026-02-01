@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -26,6 +27,17 @@ const BillingHistoryScreen = ({ route }) => {
   useEffect(() => {
     fetchBillingCycles();
   }, [roomId]);
+
+  // Refresh when screen comes into focus (e.g., after payment)
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log("📚 BillingHistoryScreen - useFocusEffect TRIGGERED");
+      fetchBillingCycles();
+      return () => {
+        /* cleanup */
+      };
+    }, [roomId]),
+  );
 
   const fetchBillingCycles = async () => {
     try {

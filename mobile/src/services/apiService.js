@@ -44,6 +44,10 @@ export const authService = {
 // Room Services
 export const roomService = {
   getRooms: () => api.get("/api/v2/rooms").then(extractData),
+  getClientRooms: () =>
+    api.get("/api/v2/rooms/client/my-rooms").then(extractData),
+  getAvailableRooms: () =>
+    api.get("/api/v2/rooms/browse/available").then(extractData),
   getRoomById: (id) => api.get(`/api/v2/rooms/${id}`).then(extractData),
   getRoomDetails: (id) => api.get(`/api/v2/rooms/${id}`).then(extractData),
   createRoom: (data) => api.post("/api/v2/rooms", data).then(extractData),
