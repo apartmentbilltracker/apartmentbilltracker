@@ -86,7 +86,7 @@ const PresenceScreen = () => {
     );
 
     return allPaid;
-  }, [selectedRoom, userId]);
+  }, [selectedRoom, userId, selectedRoom?.memberPayments?.length]);
 
   // Individual user can mark presence only if they have NOT paid for this cycle
   const canMarkPresence = hasActiveCycle && !userPaidStatus;
@@ -94,6 +94,7 @@ const PresenceScreen = () => {
   const [markedDates, setMarkedDates] = useState([]);
   const [rangeStartDate, setRangeStartDate] = useState(null);
   const [markingMultiple, setMarkingMultiple] = useState(false);
+  const [isMarkingInProgress, setIsMarkingInProgress] = useState(false); // Prevent duplicate requests
 
   // Guaranteed refresh using useFocusEffect - runs every time screen comes into focus
   useFocusEffect(
@@ -133,6 +134,8 @@ const PresenceScreen = () => {
           if (fetchedRooms.length > 0) {
             console.log("📌 Setting selectedRoom to first room");
             setSelectedRoom(fetchedRooms[0]);
+            // IMPORTANT: Reload marked dates after room selection updates
+            await loadMarkedDates();
           }
         } catch (error) {
           console.error("❌ Error in useFocusEffect:", error);
@@ -168,11 +171,16 @@ const PresenceScreen = () => {
           })),
         ),
       );
+      console.log("   userPaidStatus will be recalculated:", userPaidStatus);
+      console.log(
+        "   canMarkPresence will be:",
+        hasActiveCycle && !userPaidStatus,
+      );
 
       // Load marked dates for calendar
       loadMarkedDates();
     }
-  }, [selectedRoom?._id]);
+  }, [selectedRoom?._id, userPaidStatus]);
 
   const fetchRooms = async (skipAutoSelect = false) => {
     try {
@@ -248,9 +256,20 @@ const PresenceScreen = () => {
       return;
     }
 
+    // Prevent duplicate marking requests
+    if (isMarkingInProgress) {
+      console.log("⏱️ Mark request already in progress, skipping duplicate");
+      return;
+    }
+
     const dateStr = formatToYMD(date);
 
-    // Add to pending updates
+    // Prevent double-clicking the same date
+    if (pendingUpdatesRef.current.has(dateStr)) {
+      console.log(`⏱️ Date ${dateStr} already being processed`);
+      return;
+    }
+
     pendingUpdatesRef.current.add(dateStr);
 
     // Capture current state for potential revert
@@ -263,7 +282,7 @@ const PresenceScreen = () => {
       : [...prevMarked, dateStr];
     const updatedDates = Array.from(new Set(optimisticallyMarked)).sort();
 
-    // Apply optimistic update immediately
+    // Apply optimistic update immediately (instant UI feedback)
     setMarkedDates(updatedDates);
     if (selectedRoom && selectedRoom.members) {
       const updatedMembers = selectedRoom.members.map((m) => {
@@ -275,56 +294,37 @@ const PresenceScreen = () => {
       setSelectedRoom({ ...selectedRoom, members: updatedMembers });
     }
 
-    // Clear previous debounce timer
+    // Clear previous timer
     if (updateTimeoutRef.current) {
       clearTimeout(updateTimeoutRef.current);
     }
 
-    // Debounce the API call - wait 500ms before sending
+    // Debounce API call: wait 600ms for user to stop clicking, then send
     updateTimeoutRef.current = setTimeout(async () => {
-      // Only send if not already updating
-      if (isUpdatingRef.current) {
-        // Schedule another retry
-        updateTimeoutRef.current = setTimeout(async () => {
-          try {
-            await presenceService.markPresence(selectedRoom._id, {
-              presenceDates: updatedDates,
-            });
-            pendingUpdatesRef.current.clear();
-            console.log("Presence update succeeded for", dateStr);
-            // Reload marked dates from backend to prevent stale state on rapid clicks
-            await loadMarkedDates();
-          } catch (error) {
-            console.error("Error marking presence (retry):", error);
-            setMarkedDates(prevMarked);
-            if (selectedRoom && selectedRoom.members) {
-              const revertedMembers = selectedRoom.members.map((m) => {
-                if (String(m.user?._id || m.user) === String(userId)) {
-                  return { ...m, presence: prevMarked };
-                }
-                return m;
-              });
-              setSelectedRoom({ ...selectedRoom, members: revertedMembers });
-            }
-            Alert.alert("Error", error.message || "Failed to update presence");
-          }
-        }, 500);
+      // Prevent duplicate API calls
+      if (isMarkingInProgress) {
+        console.log("⏱️ Another marking request in progress, will retry");
+        updateTimeoutRef.current = setTimeout(() => markPresence(date), 300);
         return;
       }
 
-      isUpdatingRef.current = true;
+      setIsMarkingInProgress(true);
+
       try {
+        console.log("📤 Sending presence update:", updatedDates);
         await presenceService.markPresence(selectedRoom._id, {
           presenceDates: updatedDates,
         });
+
         pendingUpdatesRef.current.clear();
-        console.log("Presence update succeeded for", dateStr);
-        // Reload marked dates from backend to prevent stale state on rapid clicks
+        console.log("✅ Presence update succeeded");
+
+        // Reload from backend to ensure sync (but don't override optimistic update yet)
         await loadMarkedDates();
       } catch (error) {
-        // Revert optimistic update
+        // Revert optimistic update on error
+        console.error("❌ Error marking presence:", error);
         pendingUpdatesRef.current.clear();
-        console.error("Error marking presence:", error);
         setMarkedDates(prevMarked);
         if (selectedRoom && selectedRoom.members) {
           const revertedMembers = selectedRoom.members.map((m) => {
@@ -337,9 +337,9 @@ const PresenceScreen = () => {
         }
         Alert.alert("Error", error.message || "Failed to update presence");
       } finally {
-        isUpdatingRef.current = false;
+        setIsMarkingInProgress(false);
       }
-    }, 500); // Debounce delay
+    }, 600); // Increased debounce to 600ms for better batching
   };
 
   const markTodayPresence = async () => {
@@ -905,11 +905,6 @@ const PresenceScreen = () => {
                         >
                           {date.getDate()}
                         </Text>
-                        {isDateMarked(date) && (
-                          <View style={styles.markedIndicator}>
-                            <Ionicons name="checkmark" size={12} color="#fff" />
-                          </View>
-                        )}
                         {isRangeStart && (
                           <View style={styles.rangeStartIndicator}>
                             <MaterialIcons name="flag" size={10} color="#fff" />
@@ -1163,17 +1158,6 @@ const styles = StyleSheet.create({
   markedNumber: {
     color: "#28a745",
   },
-  markedIndicator: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#28a745",
-    justifyContent: "center",
-    alignItems: "center",
-  },
   rangeStartCell: {
     backgroundColor: "#fff3cd",
     borderWidth: 2,
@@ -1348,6 +1332,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#666",
     marginTop: 4,
+    paddingHorizontal: 20,
     textAlign: "center",
   },
 });

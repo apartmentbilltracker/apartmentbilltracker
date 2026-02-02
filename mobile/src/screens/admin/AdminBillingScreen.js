@@ -122,6 +122,30 @@ const AdminBillingScreen = ({ navigation }) => {
     }, 0);
   };
 
+  // Calculate payor's water share with new formula:
+  // = payor's own water + (non-payors' water / payor count)
+  const calculatePayorWaterShare = () => {
+    const payorCount = members.filter((m) => m.isPayer !== false).length || 1;
+    if (payorCount === 0) return 0;
+
+    let payorOwnWater = 0;
+    let nonPayorWater = 0;
+
+    members.forEach((member) => {
+      const presenceDays = member.presence ? member.presence.length : 0;
+      if (member.isPayer !== false) {
+        payorOwnWater += calculateWaterBill(presenceDays);
+      } else {
+        nonPayorWater += calculateWaterBill(presenceDays);
+      }
+    });
+
+    // Average across payors
+    const avgPayorOwnWater = payorOwnWater / payorCount;
+    const sharedNonPayorWater = nonPayorWater / payorCount;
+    return avgPayorOwnWater + sharedNonPayorWater;
+  };
+
   const getTotalBilling = () => {
     const rentValue = Number(rent || 0);
     const electricityValue = Number(electricity || 0);
@@ -155,13 +179,37 @@ const AdminBillingScreen = ({ navigation }) => {
   const handleSaveBilling = async () => {
     if (!selectedRoom) return;
 
+    // Comprehensive validation
     if (!startDate || !endDate) {
-      Alert.alert("Error", "Please set billing period dates");
+      Alert.alert(
+        "❌ Missing Dates",
+        "Please set BOTH start and end billing period dates",
+      );
+      return;
+    }
+
+    if (!rent && !electricity && !prevReading && !currReading) {
+      Alert.alert(
+        "⚠️ Empty Billing",
+        "Please enter at least Rent, Electricity amounts, or meter readings",
+      );
+      return;
+    }
+
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    if (startDateObj >= endDateObj) {
+      Alert.alert(
+        "❌ Invalid Date Range",
+        "Start date must be before end date",
+      );
       return;
     }
 
     try {
       setSaving(true);
+
+      // Step 1: Save billing information (dates and amounts)
       await billingService.saveBilling(selectedRoom._id, {
         start: startDate,
         end: endDate,
@@ -170,13 +218,49 @@ const AdminBillingScreen = ({ navigation }) => {
         previousReading: prevReading ? Number(prevReading) : undefined,
         currentReading: currReading ? Number(currReading) : undefined,
       });
+
+      console.log("✅ Billing period saved, now creating new billing cycle...");
+
+      // Step 2: AUTOMATICALLY create a new billing cycle to reset member statuses to "pending"
+      // This is critical - without this, members will still show as "paid" from previous cycle
+      const currentWaterBill = calculateTotalWaterBill();
+      const payload = {
+        roomId: selectedRoom._id,
+        startDate: startDate,
+        endDate: endDate,
+        rent: parseFloat(rent) || 0,
+        electricity: parseFloat(electricity) || 0,
+        waterBillAmount: currentWaterBill,
+        previousMeterReading: prevReading ? parseFloat(prevReading) : null,
+        currentMeterReading: currReading ? parseFloat(currReading) : null,
+      };
+
+      const createResponse = await apiService.post(
+        "/api/v2/billing-cycles/create",
+        payload,
+      );
+
+      if (!createResponse.success) {
+        throw new Error("Failed to create billing cycle");
+      }
+
+      console.log(
+        "✅ New billing cycle created - member statuses reset to 'pending'",
+      );
+
       await fetchRooms();
       setEditMode(false);
-      Alert.alert("Success", "Billing information saved");
+      Alert.alert(
+        "Success",
+        "Billing period saved and new cycle created - member payment statuses reset to pending",
+      );
     } catch (error) {
+      console.error("Error saving billing:", error);
       Alert.alert(
         "Error",
-        error.response?.data?.message || "Failed to save billing",
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to save billing",
       );
     } finally {
       setSaving(false);
@@ -538,6 +622,22 @@ const AdminBillingScreen = ({ navigation }) => {
                     </Text>
                     <Text style={styles.totalWaterAmount}>
                       ₱{calculateTotalWaterBill().toFixed(2)}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.totalWaterBillRow,
+                      {
+                        marginTop: 12,
+                        paddingTop: 12,
+                        borderTopWidth: 1,
+                        borderTopColor: "#e0e0e0",
+                      },
+                    ]}
+                  >
+                    <Text style={styles.totalWaterLabel}>Water per Payor:</Text>
+                    <Text style={styles.totalWaterAmount}>
+                      ₱{calculatePayorWaterShare().toFixed(2)}
                     </Text>
                   </View>
                 </>

@@ -425,7 +425,6 @@ const styles = StyleSheet.create({
   icon: {
     width: 90,
     height: 90,
-    marginTop: 10,
     resizeMode: "contain",
   },
 });

@@ -49,6 +49,7 @@ const paymentTransactionSchema = new mongoose.Schema({
   // Common fields
   transactionDate: { type: Date, default: Date.now },
   completionDate: Date, // When payment was confirmed
+  cancellationDate: Date, // When payment was cancelled by user
   receiptUrl: String, // Generated receipt URL
   billingCycleStart: Date,
   billingCycleEnd: Date,

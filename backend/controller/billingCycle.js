@@ -41,20 +41,23 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
     });
     const cycleNumber = (lastCycle?.cycleNumber || 0) + 1;
 
-    // Check for overlapping cycles
-    const overlappingCycle = await BillingCycle.findOne({
+    // Check for overlapping cycles and auto-archive them
+    const overlappingCycles = await BillingCycle.find({
       room: roomId,
       status: "active",
       $or: [{ startDate: { $lt: endDate }, endDate: { $gt: startDate } }],
     });
 
-    if (overlappingCycle) {
-      return next(
-        new ErrorHandler(
-          "An active billing cycle already exists for this date range",
-          409,
-        ),
+    if (overlappingCycles.length > 0) {
+      console.log(
+        `🔄 Auto-archiving ${overlappingCycles.length} overlapping cycle(s) before creating new one...`,
       );
+      // Archive overlapping cycles so new cycle can be created
+      for (const cycle of overlappingCycles) {
+        cycle.status = "closed";
+        await cycle.save();
+        console.log(`   ✅ Archived cycle ${cycle._id} (${cycle.cycleNumber})`);
+      }
     }
 
     // Prepare snapshot and member charges
@@ -191,7 +194,49 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
 
     await billingCycle.save();
 
-    // Update room with current cycle and set billing snapshot
+    // IMPORTANT: When creating a NEW billing cycle, reset all member payment statuses to "pending"
+    // This happens after the PREVIOUS cycle was archived with "paid" statuses showing
+    // Now we start fresh for the new cycle
+
+    // Build the reset memberPayments array
+    const resetMemberPayments = room.memberPayments.map((mp) => ({
+      _id: mp._id,
+      member: mp.member,
+      memberName: mp.memberName,
+      rentStatus: "pending",
+      electricityStatus: "pending",
+      waterStatus: "pending",
+      rentPaidDate: null,
+      electricityPaidDate: null,
+      waterPaidDate: null,
+    }));
+
+    console.log("🔄 Resetting memberPayments to pending:");
+    console.log(
+      "   Before:",
+      JSON.stringify(
+        room.memberPayments.map((mp) => ({
+          member: mp.member,
+          memberName: mp.memberName,
+          rentStatus: mp.rentStatus,
+          electricityStatus: mp.electricityStatus,
+          waterStatus: mp.waterStatus,
+        })),
+      ),
+    );
+    console.log(
+      "   After:",
+      JSON.stringify(
+        resetMemberPayments.map((mp) => ({
+          member: mp.member,
+          memberName: mp.memberName,
+          rentStatus: mp.rentStatus,
+          electricityStatus: mp.electricityStatus,
+          waterStatus: mp.waterStatus,
+        })),
+      ),
+    );
+
     await Room.findByIdAndUpdate(
       roomId,
       {
@@ -204,8 +249,14 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
         "billing.water": waterAmount,
         "billing.previousReading": prevReading,
         "billing.currentReading": currReading,
+        // Reset all member payment statuses to "pending" for the NEW cycle
+        memberPayments: resetMemberPayments,
       },
       { new: true },
+    );
+
+    console.log(
+      "✅ NEW billing cycle created - member statuses reset to 'pending'",
     );
 
     res.status(201).json({
@@ -219,6 +270,7 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
   }
 });
 
+// Helper: recalculate water amount for a cycle based on current member presence
 // Get all billing cycles for a room
 exports.getBillingCycles = catchAsyncErrors(async (req, res, next) => {
   const { roomId } = req.params;
@@ -240,9 +292,32 @@ exports.getBillingCycles = catchAsyncErrors(async (req, res, next) => {
       .populate("createdBy", "name email")
       .populate("closedBy", "name email");
 
+    // Ensure waterBillAmount is always present (for old cycles that might not have it)
+    const enrichedCycles = cycles.map((cycle) => {
+      const cycleObj = cycle.toObject();
+      // If waterBillAmount is missing, try to use water field, otherwise default to 0
+      if (
+        cycleObj.waterBillAmount === undefined ||
+        cycleObj.waterBillAmount === null
+      ) {
+        cycleObj.waterBillAmount =
+          cycleObj.water || cycleObj.billBreakdown?.water || 0;
+      }
+      return cycleObj;
+    });
+
+    console.log(
+      `📚 getBillingCycles: Returning ${enrichedCycles.length} cycles with waterBillAmount`,
+    );
+    enrichedCycles.forEach((c, i) => {
+      console.log(
+        `   Cycle ${i + 1}: id=${c._id}, status=${c.status}, water=${c.waterBillAmount}, rent=${c.rent}`,
+      );
+    });
+
     res.status(200).json({
       success: true,
-      data: cycles,
+      data: enrichedCycles,
     });
   } catch (error) {
     console.error("Error fetching billing cycles:", error);
@@ -266,9 +341,19 @@ exports.getBillingCycleById = catchAsyncErrors(async (req, res, next) => {
       return next(new ErrorHandler("Billing cycle not found", 404));
     }
 
+    // Ensure waterBillAmount is always present (for old cycles that might not have it)
+    const cycleObj = cycle.toObject();
+    if (
+      cycleObj.waterBillAmount === undefined ||
+      cycleObj.waterBillAmount === null
+    ) {
+      cycleObj.waterBillAmount =
+        cycleObj.water || cycleObj.billBreakdown?.water || 0;
+    }
+
     res.status(200).json({
       success: true,
-      data: cycle,
+      data: cycleObj,
     });
   } catch (error) {
     console.error("Error fetching billing cycle:", error);

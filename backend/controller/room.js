@@ -457,6 +457,128 @@ router.post("/:id/presence", isAuthenticated, async (req, res, next) => {
     room.members[memberIndex].presence = presenceDates;
     await room.save();
 
+    // IMPORTANT: If there's an active billing cycle, recalculate water amount based on current presence
+    if (room.currentCycleId) {
+      const BillingCycle = require("../model/billingCycle");
+      const activeCycle = await BillingCycle.findById(room.currentCycleId);
+
+      if (activeCycle && activeCycle.status === "active") {
+        // Recalculate water amount based on current presence data in billing date range
+        const start = new Date(activeCycle.startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(activeCycle.endDate);
+        end.setHours(0, 0, 0, 0);
+
+        // Calculate total presence days for all members within billing range
+        let totalPresenceDays = 0;
+        let totalPayorPresenceDays = 0;
+        let totalNonPayorWater = 0;
+
+        (room.members || []).forEach((member) => {
+          const presenceArray = Array.isArray(member.presence)
+            ? member.presence
+            : [];
+          const presenceDaysInRange = presenceArray.reduce((count, d) => {
+            const dt = new Date(d);
+            dt.setHours(0, 0, 0, 0);
+            return dt >= start && dt <= end ? count + 1 : count;
+          }, 0);
+          member._presenceDays = presenceDaysInRange;
+
+          // Total presence (ALL members)
+          totalPresenceDays += presenceDaysInRange;
+
+          // Payor presence (for rent/electricity split)
+          if (member.isPayer !== false) {
+            totalPayorPresenceDays += presenceDaysInRange;
+          } else {
+            // Non-payor water contribution (included in total but paid by payors)
+            totalNonPayorWater += presenceDaysInRange * 5;
+          }
+        });
+
+        // Water amount = ALL members' presence days × ₱5 (including non-payors)
+        const recalculatedWaterAmount = totalPresenceDays * 5;
+
+        if (recalculatedWaterAmount !== activeCycle.waterBillAmount) {
+          console.log(
+            `💧 Recalculating water for active cycle ${activeCycle._id}:`,
+          );
+          console.log(
+            `   Old: ₱${activeCycle.waterBillAmount}, New: ₱${recalculatedWaterAmount} (${totalPresenceDays} days × ₱5 from ALL members)`,
+          );
+
+          activeCycle.waterBillAmount = recalculatedWaterAmount;
+
+          // Update billBreakdown
+          if (activeCycle.billBreakdown) {
+            activeCycle.billBreakdown.water = recalculatedWaterAmount;
+          } else {
+            activeCycle.billBreakdown = {
+              rent: activeCycle.rent || 0,
+              electricity: activeCycle.electricity || 0,
+              water: recalculatedWaterAmount,
+              other: 0,
+            };
+          }
+
+          // RECALCULATE MEMBER CHARGES WITH UPDATED WATER
+          const rentAmount = activeCycle.rent || 0;
+          const electricityAmount = activeCycle.electricity || 0;
+          const payorCount =
+            (room.members || []).filter((m) => m.isPayer !== false).length || 1;
+
+          const memberCharges = (room.members || []).map((m) => {
+            const presenceDays = m._presenceDays || 0;
+
+            // Water share calculation for payors:
+            // Each payor keeps their own water (presenceDays × ₱5)
+            // PLUS their share of non-payors' water (split equally among payors)
+            const memberOwnWater = presenceDays * 5;
+            const waterShare =
+              m.isPayer !== false
+                ? memberOwnWater +
+                  (payorCount > 0 ? totalNonPayorWater / payorCount : 0)
+                : 0; // Non-payors pay 0 (their water is covered by payors)
+
+            const rentShare =
+              payorCount > 0 && m.isPayer ? rentAmount / payorCount : 0;
+            const electricityShare =
+              payorCount > 0 && m.isPayer ? electricityAmount / payorCount : 0;
+            const totalDue = rentShare + electricityShare + waterShare;
+
+            return {
+              userId: m.user,
+              name: m.name || undefined,
+              isPayer: m.isPayer !== false,
+              presenceDays,
+              waterBillShare: Number(waterShare.toFixed(2)),
+              rentShare: Number(rentShare.toFixed(2)),
+              electricityShare: Number(electricityShare.toFixed(2)),
+              totalDue: Number(totalDue.toFixed(2)),
+            };
+          });
+
+          activeCycle.memberCharges = memberCharges;
+
+          // Recalculate total billed amount
+          activeCycle.totalBilledAmount =
+            (activeCycle.rent || 0) +
+            (activeCycle.electricity || 0) +
+            recalculatedWaterAmount;
+
+          await activeCycle.save();
+          console.log(
+            `   ✅ Cycle updated with new water amount and member charges recalculated`,
+          );
+        }
+
+        // Also update room.billing.water to reflect current cycle's water
+        room.billing.water = recalculatedWaterAmount;
+        await room.save();
+      }
+    }
+
     // Return populated room
     const populatedRoom = await Room.findById(req.params.id)
       .select("name description code createdAt billing billingHistory members")

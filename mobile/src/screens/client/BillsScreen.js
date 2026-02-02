@@ -13,7 +13,7 @@ import {
   Image,
 } from "react-native";
 import { MaterialIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
-import { roomService } from "../../services/apiService";
+import { roomService, billingCycleService } from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
 
 const colors = {
@@ -32,6 +32,7 @@ const BillsScreen = ({ navigation }) => {
   const isFocused = useIsFocused();
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [activeCycle, setActiveCycle] = useState(null); // Active billing cycle with memberCharges
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [memberPresence, setMemberPresence] = useState({}); // { memberId: presenceArray }
@@ -62,6 +63,7 @@ const BillsScreen = ({ navigation }) => {
   useEffect(() => {
     if (selectedRoom) {
       loadMemberPresence(selectedRoom._id);
+      fetchActiveBillingCycle(selectedRoom._id); // Fetch active cycle for accurate charges
       console.log("📍 BillsScreen - selectedRoom changed");
       console.log("   Room ID:", selectedRoom._id);
       console.log("   memberPayments:", selectedRoom.memberPayments);
@@ -98,6 +100,40 @@ const BillsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error("Error loading member presence:", error);
+    }
+  };
+
+  const fetchActiveBillingCycle = async (roomId) => {
+    try {
+      console.log("🔄 Fetching active billing cycle for room:", roomId);
+      const response = await billingCycleService.getBillingCycles(roomId);
+      console.log("📦 getBillingCycles response:", response);
+
+      // Response could be: array directly, or { data: array }
+      let cycles = Array.isArray(response) ? response : response?.data || [];
+      console.log("📋 Parsed cycles:", cycles);
+
+      // Find active cycle
+      const active = cycles.find((c) => c.status === "active");
+      if (active) {
+        setActiveCycle(active);
+        console.log(
+          "✅ Active cycle found:",
+          active._id,
+          "with memberCharges count:",
+          active.memberCharges?.length,
+        );
+        console.log(
+          "   memberCharges:",
+          JSON.stringify(active.memberCharges, null, 2),
+        );
+      } else {
+        console.log("⚠️ No active cycle found in", cycles.length, "cycles");
+        setActiveCycle(null);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching active billing cycle:", error);
+      setActiveCycle(null);
     }
   };
 
@@ -156,8 +192,35 @@ const BillsScreen = ({ navigation }) => {
   };
 
   const calculateBillShare = () => {
-    if (!selectedRoom?.billing) return null;
+    if (!selectedRoom?.billing || !userId) return null;
 
+    // PRIORITY 1: Use activeCycle memberCharges if available (backend pre-calculated)
+    if (activeCycle?.memberCharges) {
+      console.log("💼 calculateBillShare: Using activeCycle memberCharges");
+      const userCharge = activeCycle.memberCharges.find(
+        (c) => String(c.userId) === String(userId),
+      );
+      if (userCharge) {
+        console.log("   Found user charge:", {
+          water: userCharge.waterBillShare,
+          rent: userCharge.rentShare,
+          electricity: userCharge.electricityShare,
+          total: userCharge.totalDue,
+        });
+        return {
+          rent: userCharge.rentShare || 0,
+          electricity: userCharge.electricityShare || 0,
+          water: userCharge.waterBillShare || 0,
+          total: userCharge.totalDue || 0,
+          payorCount: activeCycle.memberCharges.filter((c) => c.isPayer).length,
+        };
+      }
+    }
+
+    // FALLBACK: Calculate from room data if no active cycle
+    console.log(
+      "⚠️ calculateBillShare: No activeCycle, using fallback calculation",
+    );
     const billing = selectedRoom.billing;
     const members = selectedRoom.members || [];
     const payorCount = Math.max(
@@ -181,6 +244,7 @@ const BillsScreen = ({ navigation }) => {
   };
 
   const calculateTotalWaterBill = () => {
+    // Total water = ALL members' presence days × ₱5 (including non-payors)
     if (!selectedRoom?.members) return 0;
     let totalDays = 0;
     selectedRoom.members.forEach((member) => {
@@ -226,9 +290,105 @@ const BillsScreen = ({ navigation }) => {
     return allPaid;
   };
 
+  // Calculate individual member's water consumption (for "Room Members & Water Bill" section)
   const calculateMemberWaterBill = (memberId) => {
+    // Show INDIVIDUAL water consumption (days × ₱5)
+    // Non-payors' portion is NOT added here - only show what this member consumed
+    if (!selectedRoom?.members) return 0;
+
+    const member = selectedRoom.members.find((m) => m._id === memberId);
+    if (!member) return 0;
+
     const presence = memberPresence[memberId] || [];
     return presence.length * WATER_BILL_PER_DAY;
+  };
+
+  const calculateMemberWaterShare = (memberId) => {
+    // Show what PAYOR needs to PAY (own consumption + split of non-payors)
+    // This is displayed in the "Your Share" section
+    // For non-payors, returns 0
+    if (!selectedRoom?.members) return 0;
+
+    const member = selectedRoom.members.find((m) => m._id === memberId);
+    if (!member) return 0;
+
+    // Non-payors always pay ₱0 for water
+    if (!member.isPayer) return 0;
+
+    // PRIORITY 1: Use active billing cycle data if available (backend pre-calculated, most accurate)
+    if (activeCycle?.memberCharges && userId) {
+      console.log(
+        `💧 calculateMemberWaterShare: Using activeCycle memberCharges for ${memberId}`,
+      );
+      const userCharge = activeCycle.memberCharges.find(
+        (c) => String(c.userId) === String(memberId),
+      );
+      if (userCharge && userCharge.isPayer) {
+        console.log(
+          `   Found user charge water share: ${userCharge.waterBillShare}`,
+        );
+        return userCharge.waterBillShare || 0;
+      }
+    }
+
+    // FALLBACK: Manual calculation from room data
+    console.log(
+      `⚠️ calculateMemberWaterShare: No activeCycle, using fallback for ${memberId}`,
+    );
+    const payorCount =
+      selectedRoom.members.filter((m) => m.isPayer).length || 1;
+    let nonPayorWater = 0;
+
+    selectedRoom.members.forEach((member) => {
+      if (!member.isPayer) {
+        const presenceDays = memberPresence[member._id]?.length || 0;
+        nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
+      }
+    });
+
+    const presence = memberPresence[memberId] || [];
+    const memberOwnWater = presence.length * WATER_BILL_PER_DAY;
+    const sharedNonPayorWater = payorCount > 0 ? nonPayorWater / payorCount : 0;
+
+    console.log(
+      `   Fallback: own=${memberOwnWater}, shared=${sharedNonPayorWater}, total=${memberOwnWater + sharedNonPayorWater}`,
+    );
+    return memberOwnWater + sharedNonPayorWater;
+  };
+
+  // Get water breakdown details for display
+  const getWaterShareBreakdown = () => {
+    if (!selectedRoom?.members || !userId) return null;
+
+    const payorCount =
+      selectedRoom.members.filter((m) => m.isPayer).length || 1;
+    const currentUserMember = selectedRoom.members.find(
+      (m) => String(m.user?._id || m.user) === String(userId),
+    );
+
+    if (!currentUserMember?.isPayer) return null;
+
+    const userPresence = memberPresence[currentUserMember._id]?.length || 0;
+    const ownWater = userPresence * WATER_BILL_PER_DAY;
+
+    let nonPayorWater = 0;
+    selectedRoom.members.forEach((member) => {
+      if (!member.isPayer) {
+        const presenceDays = memberPresence[member._id]?.length || 0;
+        nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
+      }
+    });
+
+    const sharedNonPayorWater = payorCount > 0 ? nonPayorWater / payorCount : 0;
+    const totalWaterShare = ownWater + sharedNonPayorWater;
+
+    return {
+      ownWater,
+      nonPayorWater,
+      sharedNonPayorWater,
+      payorCount,
+      totalWaterShare,
+    };
   };
 
   // Calendar helper functions for presence modal
@@ -879,96 +1039,6 @@ const BillsScreen = ({ navigation }) => {
                   </>
                 ) : null}
 
-                {/* Your Share */}
-                {billShare && isUserPayor && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Your Share</Text>
-                    <View style={styles.yourShareCard}>
-                      <View style={styles.shareRow}>
-                        <View style={styles.shareItem}>
-                          <Text style={styles.shareLabel}>Rent Share</Text>
-                          <Text style={styles.shareValue}>
-                            ₱{billShare.rent.toFixed(2)}
-                          </Text>
-                          <Text style={styles.shareNote}>
-                            Split among {billShare.payorCount} payor(s)
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.shareDivider} />
-                      <View style={styles.shareRow}>
-                        <View style={styles.shareItem}>
-                          <Text style={styles.shareLabel}>
-                            Electricity Share
-                          </Text>
-                          <Text style={styles.shareValue}>
-                            ₱{billShare.electricity.toFixed(2)}
-                          </Text>
-                          <Text style={styles.shareNote}>
-                            Split among {billShare.payorCount} payor(s)
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.shareDivider} />
-                      <View style={styles.shareRow}>
-                        <View style={styles.shareItem}>
-                          <Text style={styles.shareLabel}>Water Share</Text>
-                          <Text style={styles.shareValue}>
-                            ₱{billShare.water.toFixed(2)}
-                          </Text>
-                          <Text style={styles.shareNote}>
-                            Split among {billShare.payorCount} payor(s)
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.shareDivider} />
-                      <View style={styles.shareTotal}>
-                        <Text style={styles.totalLabel}>Total Due</Text>
-                        <Text style={styles.totalAmount}>
-                          ₱{billShare.total.toFixed(2)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Pay Now Button */}
-                    <TouchableOpacity
-                      style={styles.payNowButton}
-                      onPress={() => {
-                        if (selectedRoom && billShare) {
-                          navigation.navigate("PaymentMethod", {
-                            roomId: selectedRoom._id,
-                            roomName: selectedRoom.name,
-                            amount: billShare.total,
-                            billType: "total",
-                          });
-                        }
-                      }}
-                    >
-                      <MaterialIcons
-                        name="payment"
-                        size={20}
-                        color="#fff"
-                        style={{ marginRight: 8 }}
-                      />
-                      <Text style={styles.payNowButtonText}>Pay Now</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {!isUserPayor && (
-                  <View style={styles.section}>
-                    <View style={styles.nonPayorCard}>
-                      <MaterialIcons name="info" size={24} color="#17a2b8" />
-                      <Text style={styles.nonPayorText}>
-                        You are not a payor for this room
-                      </Text>
-                      <Text style={styles.nonPayorSubtext}>
-                        Only payors see billing shares
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
                 {/* Members Breakdown */}
                 {selectedRoom.members && selectedRoom.members.length > 0 && (
                   <View style={styles.section}>
@@ -1068,6 +1138,110 @@ const BillsScreen = ({ navigation }) => {
                           Units
                         </Text>
                       </View>
+                    </View>
+                  </View>
+                )}
+
+                {/* Your Share */}
+                {billShare && isUserPayor && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Your Share</Text>
+                    <View style={styles.yourShareCard}>
+                      <View style={styles.shareRow}>
+                        <View style={styles.shareItem}>
+                          <Text style={styles.shareLabel}>Rent Share</Text>
+                          <Text style={styles.shareValue}>
+                            ₱{billShare.rent.toFixed(2)}
+                          </Text>
+                          <Text style={styles.shareNote}>
+                            Split among {billShare.payorCount} payor(s)
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.shareDivider} />
+                      <View style={styles.shareRow}>
+                        <View style={styles.shareItem}>
+                          <Text style={styles.shareLabel}>
+                            Electricity Share
+                          </Text>
+                          <Text style={styles.shareValue}>
+                            ₱{billShare.electricity.toFixed(2)}
+                          </Text>
+                          <Text style={styles.shareNote}>
+                            Split among {billShare.payorCount} payor(s)
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.shareDivider} />
+                      <View style={styles.shareRow}>
+                        <View style={styles.shareItem}>
+                          <Text style={styles.shareLabel}>Water Share</Text>
+                          <Text style={styles.shareValue}>
+                            ₱{billShare.water.toFixed(2)}
+                          </Text>
+                          {getWaterShareBreakdown() && (
+                            <>
+                              <Text style={styles.shareBreakdownText}>
+                                Your consumption: ₱
+                                {getWaterShareBreakdown().ownWater.toFixed(2)}
+                              </Text>
+                              {getWaterShareBreakdown().sharedNonPayorWater >
+                                0 && (
+                                <Text style={styles.shareBreakdownText}>
+                                  + Non-payors share: ₱
+                                  {getWaterShareBreakdown().sharedNonPayorWater.toFixed(
+                                    2,
+                                  )}
+                                </Text>
+                              )}
+                            </>
+                          )}
+                        </View>
+                      </View>
+                      <View style={styles.shareDivider} />
+                      <View style={styles.shareTotal}>
+                        <Text style={styles.totalLabel}>Total Due</Text>
+                        <Text style={styles.totalAmount}>
+                          ₱{billShare.total.toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Pay Now Button */}
+                    <TouchableOpacity
+                      style={styles.payNowButton}
+                      onPress={() => {
+                        if (selectedRoom && billShare) {
+                          navigation.navigate("PaymentMethod", {
+                            roomId: selectedRoom._id,
+                            roomName: selectedRoom.name,
+                            amount: billShare.total,
+                            billType: "total",
+                          });
+                        }
+                      }}
+                    >
+                      <MaterialIcons
+                        name="payment"
+                        size={20}
+                        color="#fff"
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={styles.payNowButtonText}>Pay Now</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {!isUserPayor && (
+                  <View style={styles.section}>
+                    <View style={styles.nonPayorCard}>
+                      <MaterialIcons name="info" size={24} color="#17a2b8" />
+                      <Text style={styles.nonPayorText}>
+                        You are not a payor for this room
+                      </Text>
+                      <Text style={styles.nonPayorSubtext}>
+                        Only payors see billing shares
+                      </Text>
                     </View>
                   </View>
                 )}
@@ -1665,6 +1839,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#999",
     marginTop: 2,
+  },
+  shareBreakdownText: {
+    fontSize: 11,
+    color: "#666",
+    marginTop: 2,
+    fontStyle: "italic",
   },
   shareDivider: {
     height: 1,

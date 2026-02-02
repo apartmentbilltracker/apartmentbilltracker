@@ -23,10 +23,66 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const [step, setStep] = useState("qr"); // qr, verify, success
   const [mobileNumber, setMobileNumber] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   useEffect(() => {
     initiateGCashPayment();
   }, []);
+
+  const handleBack = async () => {
+    if (transactionId && step === "qr") {
+      try {
+        await apiService.cancelTransaction(transactionId);
+      } catch (err) {
+        // ignore
+      }
+    }
+    navigation.goBack();
+  };
+
+  const handleCancelPayment = async () => {
+    if (!transactionId) return navigation.goBack();
+
+    Alert.alert(
+      "Cancel Payment",
+      "Are you sure you want to cancel this payment?",
+      [
+        { text: "No" },
+        {
+          text: "Yes",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setCancelLoading(true);
+              await apiService.cancelTransaction(transactionId);
+              Alert.alert("Cancelled", "Payment has been cancelled");
+              navigation.goBack();
+            } catch (err) {
+              Alert.alert("Error", err?.message || "Failed to cancel payment");
+            } finally {
+              setCancelLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // Cancel pending transaction if user leaves before completing payment
+  useEffect(() => {
+    return () => {
+      const cancelOnUnmount = async () => {
+        if (transactionId && step === "qr") {
+          try {
+            await apiService.cancelTransaction(transactionId);
+          } catch (err) {
+            // Ignore errors on cancel
+          }
+        }
+      };
+      cancelOnUnmount();
+    };
+  }, [transactionId, step]);
 
   const initiateGCashPayment = async () => {
     try {
@@ -116,10 +172,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <View style={styles.headerContent}>
@@ -317,7 +370,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
-    marginTop: 40,
   },
   header: {
     flexDirection: "row",
@@ -328,7 +380,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
-    marginTop: 0,
   },
   backButton: {
     width: 40,
@@ -518,6 +569,19 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.6,
+  },
+  cancelButton: {
+    backgroundColor: "#d32f2f",
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  cancelButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   successContainer: {
     alignItems: "center",

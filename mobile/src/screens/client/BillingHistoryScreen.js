@@ -87,6 +87,27 @@ const BillingHistoryScreen = ({ route }) => {
     return "₱" + (parseFloat(amount) || 0).toFixed(2);
   };
 
+  const WATER_BILL_PER_DAY = 5; // ₱5 per day
+
+  const getMemberWaterBreakdown = (member) => {
+    // Calculate individual consumption and payor share breakdown
+    if (!member.isPayer || !member.presenceDays) return null;
+
+    const ownWater = member.presenceDays * WATER_BILL_PER_DAY;
+    const waterShare = member.waterBillShare || 0;
+    const sharedNonPayorWater = waterShare - ownWater;
+
+    // Only show breakdown if there's a non-payor share
+    if (sharedNonPayorWater > 0) {
+      return {
+        ownWater,
+        sharedNonPayorWater,
+        waterShare,
+      };
+    }
+    return null;
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case "active":
@@ -286,67 +307,101 @@ const BillingHistoryScreen = ({ route }) => {
 
                 {/* Member Charges */}
                 {selectedCycle.memberCharges &&
-                  selectedCycle.memberCharges.length > 0 && (
+                  selectedCycle.memberCharges.filter((m) => m.isPayer).length >
+                    0 && (
                     <View style={styles.section}>
                       <Text style={styles.sectionTitle}>Member Charges</Text>
                       <View style={styles.membersContainer}>
-                        {selectedCycle.memberCharges.map((member, index) => (
-                          <View
-                            key={index}
-                            style={[
-                              styles.memberCard,
-                              index !==
-                                selectedCycle.memberCharges.length - 1 &&
-                                styles.memberCardBorder,
-                            ]}
-                          >
-                            <View style={styles.memberHeader}>
-                              <View>
-                                <Text style={styles.memberName}>
-                                  {member.name}
+                        {selectedCycle.memberCharges
+                          .filter((m) => m.isPayer)
+                          .map((member, index) => (
+                            <View
+                              key={index}
+                              style={[
+                                styles.memberCard,
+                                index !==
+                                  selectedCycle.memberCharges.filter(
+                                    (m) => m.isPayer,
+                                  ).length -
+                                    1 && styles.memberCardBorder,
+                              ]}
+                            >
+                              <View style={styles.memberHeader}>
+                                <View>
+                                  <Text style={styles.memberName}>
+                                    {member.name}
+                                  </Text>
+                                  {member.isPayer && (
+                                    <View style={styles.payerBadge}>
+                                      <Ionicons
+                                        name="person-circle"
+                                        size={14}
+                                        color="#4CAF50"
+                                      />
+                                      <Text style={styles.payerText}>
+                                        Payor
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
+                                <Text style={styles.memberTotal}>
+                                  {formatCurrency(member.totalDue || 0)}
                                 </Text>
-                                {member.isPayer && (
-                                  <View style={styles.payerBadge}>
-                                    <Ionicons
-                                      name="person-circle"
-                                      size={14}
-                                      color="#4CAF50"
-                                    />
-                                    <Text style={styles.payerText}>Payor</Text>
+                              </View>
+
+                              <View style={styles.memberDetails}>
+                                {member.presenceDays > 0 && (
+                                  <Text style={styles.memberDetailText}>
+                                    Presence: {member.presenceDays} days
+                                  </Text>
+                                )}
+                                {member.rentShare > 0 && (
+                                  <Text style={styles.memberDetailText}>
+                                    Rent Share:{" "}
+                                    {formatCurrency(member.rentShare)}
+                                  </Text>
+                                )}
+                                {member.electricityShare > 0 && (
+                                  <Text style={styles.memberDetailText}>
+                                    Electricity Share:{" "}
+                                    {formatCurrency(member.electricityShare)}
+                                  </Text>
+                                )}
+                                {member.waterBillShare > 0 && (
+                                  <View>
+                                    <Text style={styles.memberDetailText}>
+                                      Water Share:{" "}
+                                      {formatCurrency(member.waterBillShare)}
+                                    </Text>
+                                    {getMemberWaterBreakdown(member) && (
+                                      <Text
+                                        style={[
+                                          styles.memberDetailText,
+                                          {
+                                            fontSize: 10,
+                                            color: "#666",
+                                            fontStyle: "italic",
+                                            marginTop: 4,
+                                          },
+                                        ]}
+                                      >
+                                        Your consumption:{" "}
+                                        {formatCurrency(
+                                          getMemberWaterBreakdown(member)
+                                            .ownWater,
+                                        )}{" "}
+                                        + Non-payors share:{" "}
+                                        {formatCurrency(
+                                          getMemberWaterBreakdown(member)
+                                            .sharedNonPayorWater,
+                                        )}
+                                      </Text>
+                                    )}
                                   </View>
                                 )}
                               </View>
-                              <Text style={styles.memberTotal}>
-                                {formatCurrency(member.totalDue || 0)}
-                              </Text>
                             </View>
-
-                            <View style={styles.memberDetails}>
-                              {member.presenceDays > 0 && (
-                                <Text style={styles.memberDetailText}>
-                                  Presence: {member.presenceDays} days
-                                </Text>
-                              )}
-                              {member.rentShare > 0 && (
-                                <Text style={styles.memberDetailText}>
-                                  Rent Share: {formatCurrency(member.rentShare)}
-                                </Text>
-                              )}
-                              {member.electricityShare > 0 && (
-                                <Text style={styles.memberDetailText}>
-                                  Electricity Share:{" "}
-                                  {formatCurrency(member.electricityShare)}
-                                </Text>
-                              )}
-                              {member.waterBillShare > 0 && (
-                                <Text style={styles.memberDetailText}>
-                                  Water Share:{" "}
-                                  {formatCurrency(member.waterBillShare)}
-                                </Text>
-                              )}
-                            </View>
-                          </View>
-                        ))}
+                          ))}
                       </View>
                     </View>
                   )}

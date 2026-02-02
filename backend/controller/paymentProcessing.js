@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const PaymentTransaction = require("../model/paymentTransaction");
 const Room = require("../model/room");
+const BillingCycle = require("../model/billingCycle");
 const User = require("../model/user");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
@@ -15,9 +16,59 @@ const generateGCashQRData = (amount, referenceNumber, merchantId) => {
   return `gcash|${amount}|${referenceNumber}|${merchantId}`;
 };
 
+// Helper: Calculate water charges from presence marking
+// Water is calculated: marked_days × daily_rate
+const recalculateWaterFromPresence = (room) => {
+  if (!room.members || room.members.length === 0) {
+    console.log("   💧 No members found, water = 0");
+    return 0; // No members, no water
+  }
+
+  const WATER_RATE_PER_DAY = 5; // ₱5 per day (can be configurable)
+
+  // Get unique presence days across all members
+  const allPresenceDays = new Set();
+  room.members.forEach((member) => {
+    if (Array.isArray(member.presence)) {
+      member.presence.forEach((day) => {
+        allPresenceDays.add(String(day)); // Store as string to avoid duplication
+      });
+    }
+  });
+
+  const totalPresenceDays = allPresenceDays.size;
+  const calculatedWater = totalPresenceDays * WATER_RATE_PER_DAY;
+
+  console.log(
+    `   💧 Recalculating water from presence: ${totalPresenceDays} days × ₱${WATER_RATE_PER_DAY}/day = ₱${calculatedWater}`,
+  );
+
+  return calculatedWater;
+};
+
 // Helper: Check if all members have paid all bills, and clear billing if so
 const checkAndClearBillingIfComplete = async (room) => {
   if (!room.memberPayments || !room.billing) return;
+
+  // IMPORTANT: Recalculate water from presence marking BEFORE checking if all bills are paid
+  const calculatedWater = recalculateWaterFromPresence(room);
+  room.billing.water = calculatedWater;
+
+  // Debug: Log all member payment statuses
+  console.log("🔍 Checking if all members have paid:");
+  console.log(
+    "   Billing amounts - Rent:",
+    room.billing.rent,
+    "| Electricity:",
+    room.billing.electricity,
+    "| Water:",
+    room.billing.water,
+  );
+  room.memberPayments.forEach((mp, idx) => {
+    console.log(
+      `   Member ${idx} (${mp.memberName}): Rent=${mp.rentStatus}, Electricity=${mp.electricityStatus}, Water=${mp.waterStatus}`,
+    );
+  });
 
   const allBillsPaid = room.memberPayments.every((mp) => {
     // Check if this member needs to pay rent
@@ -30,25 +81,36 @@ const checkAndClearBillingIfComplete = async (room) => {
     return true;
   });
 
+  console.log("   Result: allBillsPaid =", allBillsPaid);
+
   if (allBillsPaid) {
     console.log("✅ All members have paid! Closing billing cycle...");
+
+    // Ensure water is numeric (normalize undefined to 0 from admin setup)
+    const waterAmount =
+      typeof room.billing.water === "number" ? room.billing.water : 0;
+    if (room.billing.water !== waterAmount) {
+      room.billing.water = waterAmount;
+    }
 
     // Log what we're about to archive
     console.log("   📦 ARCHIVING CYCLE WITH:");
     console.log("      Rent:", room.billing.rent);
     console.log("      Electricity:", room.billing.electricity);
-    console.log("      Water:", room.billing.water, "<-- CHECK THIS");
+    console.log("      Water:", waterAmount);
 
     // Archive current billing cycle to history BEFORE clearing
     const completedCycle = {
-      startDate: room.billing.start,
-      endDate: room.billing.end,
-      rent: room.billing.rent,
-      electricity: room.billing.electricity,
-      water: room.billing.water,
-      currentReading: room.billing.currentReading,
-      previousReading: room.billing.previousReading,
-      completedDate: new Date(),
+      // Use field names that match the Room.billingHistory schema (start/end)
+      start: room.billing.start,
+      end: room.billing.end,
+      rent: room.billing.rent || 0,
+      electricity: room.billing.electricity || 0,
+      // Use normalized water amount
+      water: waterAmount,
+      currentReading: room.billing.currentReading || null,
+      previousReading: room.billing.previousReading || null,
+      createdAt: new Date(),
       memberPayments: room.memberPayments.map((mp) => ({
         member: mp.member,
         memberName: mp.memberName,
@@ -68,7 +130,118 @@ const checkAndClearBillingIfComplete = async (room) => {
     room.billingHistory.push(completedCycle);
     console.log("📋 Billing cycle archived to history");
 
-    // Clear the current billing cycle and reset member payment statuses
+    // Mark the BillingCycle document (if present) as completed
+    try {
+      let cycleUpdated = false;
+
+      // First try: use currentCycleId if available
+      if (room.currentCycleId) {
+        const updated = await BillingCycle.findByIdAndUpdate(
+          room.currentCycleId,
+          {
+            status: "completed",
+            closedAt: new Date(),
+          },
+          { new: true },
+        );
+        if (updated) {
+          console.log(
+            "📌 BillingCycle document marked as completed via currentCycleId:",
+            room.currentCycleId,
+          );
+          cycleUpdated = true;
+        }
+      }
+
+      // Fallback: try to find an active cycle matching dates and room
+      if (!cycleUpdated && room.billing.start && room.billing.end) {
+        const foundCycle = await BillingCycle.findOne({
+          room: room._id,
+          status: "active",
+        });
+        if (foundCycle) {
+          foundCycle.status = "completed";
+          foundCycle.closedAt = new Date();
+          await foundCycle.save();
+          console.log(
+            "📌 BillingCycle document marked as completed via fallback search:",
+            foundCycle._id,
+          );
+          cycleUpdated = true;
+        }
+      }
+
+      // If no cycle found, create one for archival purposes
+      if (!cycleUpdated && room.billing.start && room.billing.end) {
+        const cycleNumber = (room.billingHistory?.length || 0) + 1;
+        const rentAmount = room.billing.rent || 0;
+        const electricityAmount = room.billing.electricity || 0;
+        const waterAmount = room.billing.water || 0;
+
+        // Calculate member charges based on equal split (all members split equally)
+        // OR by presence days if available
+        const totalMembers = room.memberPayments?.length || 1;
+        const rentShare = rentAmount / totalMembers;
+        const electricityShare = electricityAmount / totalMembers;
+        const waterShare = waterAmount / totalMembers;
+
+        const memberCharges =
+          room.memberPayments?.map((mp) => ({
+            userId: mp.member,
+            name: mp.memberName,
+            isPayer: true,
+            presenceDays: 0,
+            waterBillShare: Number(waterShare.toFixed(2)),
+            rentShare: Number(rentShare.toFixed(2)),
+            electricityShare: Number(electricityShare.toFixed(2)),
+            totalDue: Number(
+              (rentShare + electricityShare + waterShare).toFixed(2),
+            ),
+          })) || [];
+
+        const newCycle = new BillingCycle({
+          room: room._id,
+          cycleNumber,
+          startDate: room.billing.start,
+          endDate: room.billing.end,
+          rent: rentAmount,
+          electricity: electricityAmount,
+          waterBillAmount: waterAmount,
+          status: "completed",
+          closedAt: new Date(),
+          totalBilledAmount: rentAmount + electricityAmount + waterAmount,
+          membersCount: totalMembers,
+          billBreakdown: {
+            rent: rentAmount,
+            electricity: electricityAmount,
+            water: waterAmount,
+            other: 0,
+          },
+          memberCharges,
+        });
+        await newCycle.save();
+        console.log(
+          "🆕 Created new BillingCycle document (completed):",
+          newCycle._id,
+        );
+        cycleUpdated = true;
+
+        // Update room with reference
+        room.currentCycleId = newCycle._id;
+        if (!room.billingCycles) room.billingCycles = [];
+        room.billingCycles.push(newCycle._id);
+      }
+
+      if (!cycleUpdated) {
+        console.log(
+          "⚠️  Could not mark or create BillingCycle (missing dates?)",
+        );
+      }
+    } catch (err) {
+      console.error("Error marking/creating BillingCycle:", err);
+    }
+
+    // Clear the current billing cycle (but DON'T reset member payment statuses yet)
     room.billing = {
       rent: 0,
       electricity: 0,
@@ -79,20 +252,19 @@ const checkAndClearBillingIfComplete = async (room) => {
       previousReading: null,
     };
 
-    // Reset all member payment statuses to "pending" for next cycle
-    room.memberPayments = room.memberPayments.map((mp) => ({
-      ...mp,
-      rentStatus: "pending",
-      electricityStatus: "pending",
-      waterStatus: "pending",
-      rentPaidDate: null,
-      electricityPaidDate: null,
-      waterPaidDate: null,
-    }));
-
+    // DO NOT reset member payment statuses here!
+    // Keep statuses as "paid" so users see "Already Paid All Bills" on PresenceScreen
+    // Statuses will only reset when admin creates a NEW billing cycle
     console.log(
-      "🔄 Billing cycle cleared and member statuses reset for next cycle",
+      "🔄 Billing cycle cleared. Member statuses kept as 'paid' until next cycle is created by admin",
     );
+
+    // Clear presence dates for all members (reset for next billing cycle)
+    room.members = room.members.map((member) => ({
+      ...member,
+      presence: [],
+    }));
+    console.log("📅 Presence dates cleared for all members");
   }
 };
 
@@ -670,6 +842,58 @@ router.post(
   }),
 );
 
+// 5.5 Cancel a Pending Transaction (user-initiated cancel)
+router.post(
+  "/cancel-transaction",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { transactionId } = req.body;
+      if (!transactionId) {
+        return next(new ErrorHandler("Transaction ID is required", 400));
+      }
+
+      const transaction = await PaymentTransaction.findById(transactionId);
+      if (!transaction) {
+        return next(new ErrorHandler("Transaction not found", 404));
+      }
+
+      // Only the payer may cancel their own pending transaction
+      if (transaction.payer.toString() !== req.user._id.toString()) {
+        return next(
+          new ErrorHandler("Unauthorized to cancel this transaction", 403),
+        );
+      }
+
+      if (transaction.status !== "pending") {
+        return next(
+          new ErrorHandler("Cannot cancel a processed transaction", 400),
+        );
+      }
+
+      console.log(
+        "🔁 Cancelling transaction:",
+        transactionId,
+        "by",
+        req.user._id,
+      );
+      transaction.status = "cancelled";
+      transaction.cancellationDate = new Date();
+
+      await transaction.save();
+      console.log("✅ Transaction cancelled:", transaction._id);
+
+      res.status(200).json({
+        success: true,
+        message: "Transaction cancelled",
+        transaction,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
 // 6. Get Payment Transactions (for member)
 router.get(
   "/transactions/:roomId",
@@ -686,8 +910,15 @@ router.get(
       };
 
       if (status) {
-        query.status = status;
+        // Allow explicit status filter. Use status=all to include cancelled if needed.
+        if (status !== "all") {
+          query.status = status;
+        }
+      } else {
+        // By default exclude cancelled transactions from user's history
+        query.status = { $ne: "cancelled" };
       }
+
       if (paymentMethod) {
         query.paymentMethod = paymentMethod;
       }

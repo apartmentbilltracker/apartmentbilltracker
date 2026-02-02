@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused, useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -13,7 +13,11 @@ import {
 } from "react-native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
-import { billingService, roomService } from "../../services/apiService";
+import {
+  billingService,
+  billingCycleService,
+  roomService,
+} from "../../services/apiService";
 
 const colors = {
   primary: "#b38604",
@@ -32,8 +36,32 @@ const BillingScreen = ({ route }) => {
   const { state } = useContext(AuthContext);
   const isFocused = useIsFocused();
   const [billing, setBilling] = useState(null);
+  const [activeCycle, setActiveCycle] = useState(null); // Active billing cycle with memberCharges
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Guaranteed refresh when screen comes into focus (e.g., after new billing cycle created)
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log(
+        "🔄🔄 BillingScreen - useFocusEffect TRIGGERED (guaranteed fresh data after cycle creation)",
+      );
+      const forceRefresh = async () => {
+        try {
+          // Wait for backend to process any new cycle creation
+          console.log(
+            "⏳ Waiting 2 seconds for backend to process new billing cycle...",
+          );
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          console.log("📡 Fetching fresh billing data NOW...");
+          await fetchBilling();
+        } catch (error) {
+          console.error("❌ Error in BillingScreen useFocusEffect:", error);
+        }
+      };
+      forceRefresh();
+    }, [roomId]),
+  );
 
   useEffect(() => {
     fetchBilling();
@@ -64,12 +92,40 @@ const BillingScreen = ({ route }) => {
         billing: room.billing,
         members: room.members,
       });
+
+      // Fetch active billing cycle for accurate charges
+      fetchActiveBillingCycle(roomId);
     } catch (error) {
       console.error("Error fetching billing:", error.message);
       console.error("Error details:", error);
       Alert.alert("Error", "Failed to load billing information");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchActiveBillingCycle = async (roomId) => {
+    try {
+      console.log("Fetching active billing cycle for room:", roomId);
+      const response = await billingCycleService.getBillingCycles(roomId);
+      const cycles = response?.data || response || [];
+
+      // Find active cycle
+      const active = cycles.find((c) => c.status === "active");
+      if (active) {
+        setActiveCycle(active);
+        console.log(
+          "Active cycle found:",
+          active._id,
+          "with memberCharges:",
+          active.memberCharges,
+        );
+      } else {
+        setActiveCycle(null);
+      }
+    } catch (error) {
+      console.error("Error fetching active billing cycle:", error);
+      setActiveCycle(null);
     }
   };
 
@@ -85,6 +141,7 @@ const BillingScreen = ({ route }) => {
   };
 
   const calculateTotalWaterBill = () => {
+    // Total water = ALL members' presence days × ₱5 (including non-payors)
     if (!billing?.members) return 0;
     let totalDays = 0;
     billing.members.forEach((member) => {
@@ -100,9 +157,100 @@ const BillingScreen = ({ route }) => {
     return payorCount > 0 ? payorCount : 1;
   };
 
-  const calculateShare = (amount, totalMembers) => {
-    if (!amount || !totalMembers) return 0;
-    return amount / totalMembers;
+  // Simple share calculator: divide amount by payor count
+  // This is fallback for when activeCycle is not available
+  const calculateShare = (amount, payorCount) => {
+    if (!amount || payorCount <= 0) return 0;
+    return amount / payorCount;
+  };
+
+  // Get current user's charges from active cycle if available
+  const getCurrentUserChargesFromCycle = () => {
+    if (!activeCycle?.memberCharges || !state?.user?._id) return null;
+    return activeCycle.memberCharges.find(
+      (c) => String(c.userId) === String(state.user._id),
+    );
+  };
+
+  const calculatePayorWaterShare = () => {
+    // Each payor's water = their own presence × ₱5 + (non-payors' water / payor count)
+    if (!billing?.members) return 0;
+
+    // PRIORITY 1: Use active billing cycle data if available (backend pre-calculated, most accurate)
+    if (activeCycle?.memberCharges && state?.user?._id) {
+      console.log(
+        `💧 BillingScreen calculatePayorWaterShare: Using activeCycle memberCharges`,
+      );
+      const currentUserCharge = activeCycle.memberCharges.find(
+        (c) => String(c.userId) === String(state.user._id),
+      );
+      if (currentUserCharge && currentUserCharge.isPayer) {
+        console.log(
+          `   Found user charge water share: ${currentUserCharge.waterBillShare}`,
+        );
+        return currentUserCharge.waterBillShare || 0;
+      }
+    }
+
+    // FALLBACK: Manual calculation from room data
+    console.log(
+      `⚠️ BillingScreen calculatePayorWaterShare: No activeCycle, using fallback`,
+    );
+    const payorCount = getPayorCount();
+    let payorOwnWater = 0;
+    let nonPayorWater = 0;
+
+    billing.members.forEach((member) => {
+      const presenceDays = member.presence ? member.presence.length : 0;
+      if (member.isPayer) {
+        payorOwnWater += presenceDays * WATER_BILL_PER_DAY;
+      } else {
+        nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
+      }
+    });
+
+    // Calculate share: own water + split non-payor water
+    const myPresenceDays =
+      billing.members.find(
+        (m) => String(m.user?._id || m.user) === String(state?.user?._id),
+      )?.presence?.length || 0;
+    const myOwnWater = myPresenceDays * WATER_BILL_PER_DAY;
+    const sharedNonPayorWater = payorCount > 0 ? nonPayorWater / payorCount : 0;
+    console.log(
+      `   Fallback calc: own=${myOwnWater}, shared=${sharedNonPayorWater}, total=${myOwnWater + sharedNonPayorWater}`,
+    );
+    return myOwnWater + sharedNonPayorWater;
+  };
+
+  // Get water breakdown details for display (shows own consumption vs split non-payor water)
+  const getPayorWaterBreakdown = () => {
+    if (!billing?.members) return null;
+
+    const payorCount = getPayorCount();
+    const myPresenceDays =
+      billing.members.find(
+        (m) => String(m.user?._id || m.user) === String(state?.user?._id),
+      )?.presence?.length || 0;
+    const myOwnWater = myPresenceDays * WATER_BILL_PER_DAY;
+
+    let nonPayorWater = 0;
+    billing.members.forEach((member) => {
+      if (!member.isPayer) {
+        const presenceDays = member.presence ? member.presence.length : 0;
+        nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
+      }
+    });
+
+    const sharedNonPayorWater = payorCount > 0 ? nonPayorWater / payorCount : 0;
+    const totalWaterShare = myOwnWater + sharedNonPayorWater;
+
+    return {
+      myOwnWater,
+      nonPayorWater,
+      sharedNonPayorWater,
+      payorCount,
+      totalWaterShare,
+    };
   };
 
   if (loading) {
@@ -229,13 +377,20 @@ const BillingScreen = ({ route }) => {
             </Text>
           </View>
           <View style={styles.breakdownItem}>
-            <Text style={styles.label}>Water per Payor</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>Water per Payor</Text>
+              {getPayorWaterBreakdown() &&
+                getPayorWaterBreakdown().sharedNonPayorWater > 0 && (
+                  <Text style={styles.breakdownNote}>
+                    Your consumption: ₱
+                    {getPayorWaterBreakdown().myOwnWater.toFixed(2)} +
+                    Non-payors share: ₱
+                    {getPayorWaterBreakdown().sharedNonPayorWater.toFixed(2)}
+                  </Text>
+                )}
+            </View>
             <Text style={[styles.value, { color: "#2196F3" }]}>
-              ₱
-              {calculateShare(
-                calculateTotalWaterBill(),
-                getPayorCount(),
-              ).toFixed(2)}
+              ₱{calculatePayorWaterShare().toFixed(2)}
             </Text>
           </View>
           <View style={[styles.breakdownItem, { borderBottomWidth: 0 }]}>
@@ -250,9 +405,9 @@ const BillingScreen = ({ route }) => {
             >
               ₱
               {(
-                calculateShare(billing?.billing?.rent, getPayorCount()) +
-                calculateShare(billing?.billing?.electricity, getPayorCount()) +
-                calculateShare(calculateTotalWaterBill(), getPayorCount())
+                (billing?.billing?.rent || 0) / getPayorCount() +
+                (billing?.billing?.electricity || 0) / getPayorCount() +
+                calculatePayorWaterShare()
               ).toFixed(2)}
             </Text>
           </View>
@@ -405,6 +560,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: colors.dark,
+  },
+  breakdownNote: {
+    fontSize: 10,
+    color: "#999",
+    fontStyle: "italic",
+    marginTop: 6,
+    marginRight: 8,
+    flex: 1,
   },
   memberItem: {
     flexDirection: "row",

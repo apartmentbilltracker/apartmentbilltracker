@@ -23,7 +23,36 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const [referenceNumber, setReferenceNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
   const [transactionId, setTransactionId] = useState("");
+
+  const handleCancelTransfer = () => {
+    if (!transactionId) return navigation.goBack();
+
+    Alert.alert(
+      "Cancel Transfer",
+      "Are you sure you want to cancel this transfer?",
+      [
+        { text: "No" },
+        {
+          text: "Yes",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setCancelLoading(true);
+              await apiService.cancelTransaction(transactionId);
+              Alert.alert("Cancelled", "Transfer has been cancelled");
+              navigation.goBack();
+            } catch (err) {
+              Alert.alert("Error", err?.message || "Failed to cancel transfer");
+            } finally {
+              setCancelLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const banks = [
     {
@@ -41,6 +70,22 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       setLoading(false);
     }
   }, [step]);
+
+  // Cancel pending transaction if user leaves before completing payment
+  useEffect(() => {
+    return () => {
+      const cancelOnUnmount = async () => {
+        if (transactionId && step === "qr") {
+          try {
+            await apiService.cancelTransaction(transactionId);
+          } catch (err) {
+            // Ignore errors on cancel
+          }
+        }
+      };
+      cancelOnUnmount();
+    };
+  }, [transactionId, step]);
 
   const initiateBankTransfer = async () => {
     try {
@@ -119,7 +164,16 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={async () => {
+            if (transactionId && step === "qr") {
+              try {
+                await apiService.cancelTransaction(transactionId);
+              } catch (err) {
+                // ignore
+              }
+            }
+            navigation.goBack();
+          }}
           style={styles.backButton}
         >
           <MaterialIcons name="arrow-back" size={24} color="#333" />
@@ -295,6 +349,18 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
               )}
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={[styles.cancelButton, cancelLoading && styles.disabled]}
+              onPress={handleCancelTransfer}
+              disabled={cancelLoading}
+            >
+              {cancelLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.cancelButtonText}>Cancel Transfer</Text>
+              )}
+            </TouchableOpacity>
+
             <Text style={styles.confirmHint}>
               Click confirm once you've sent the transfer from your bank app
             </Text>
@@ -422,7 +488,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
-    marginTop: 40,
   },
   header: {
     flexDirection: "row",
@@ -433,7 +498,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
-    marginTop: 0,
   },
   backButton: {
     width: 40,
@@ -668,6 +732,19 @@ const styles = StyleSheet.create({
     color: "#999",
     textAlign: "center",
     marginBottom: 16,
+  },
+  cancelButton: {
+    backgroundColor: "#d32f2f",
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  cancelButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   disabled: {
     opacity: 0.6,

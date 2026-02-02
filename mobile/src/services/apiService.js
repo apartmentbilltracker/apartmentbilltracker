@@ -206,6 +206,12 @@ export const paymentProcessingService = {
   recordCash: (data) =>
     api.post("/api/v2/payment-processing/record-cash", data).then(extractData),
 
+  // Cancel a pending transaction (user backs out before completing payment)
+  cancelTransaction: (data) =>
+    api
+      .post("/api/v2/payment-processing/cancel-transaction", data)
+      .then(extractData),
+
   getTransactions: (roomId) =>
     api
       .get(`/api/v2/payment-processing/transactions/${roomId}`)
@@ -275,6 +281,9 @@ export const apiService = {
     paymentProcessingService.initiateBankTransfer(data),
   confirmBankTransfer: (data) =>
     paymentProcessingService.confirmBankTransfer(data),
+  // Payment Processing helpers
+  cancelTransaction: (transactionId) =>
+    paymentProcessingService.cancelTransaction({ transactionId }),
   recordCash: (data) => paymentProcessingService.recordCash(data),
   getTransactions: (roomId) => paymentProcessingService.getTransactions(roomId),
   getTransaction: (transactionId) =>

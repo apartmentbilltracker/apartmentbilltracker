@@ -45,7 +45,7 @@ const SplashScreen = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 2000); // Very long timeout to keep splash visible
+    }, 8000); // Very long timeout to keep splash visible
 
     return () => clearTimeout(timer);
   }, []);
