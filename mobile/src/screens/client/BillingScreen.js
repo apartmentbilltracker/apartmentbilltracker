@@ -302,44 +302,42 @@ const BillingScreen = ({ route }) => {
           <Text style={styles.cardTitle}>Billing Summary</Text>
         </View>
 
-        <View style={styles.billingRow}>
-          <View>
-            <Text style={styles.label}>Total Rent</Text>
-            <Text style={styles.amount}>₱{billing?.billing?.rent || "0"}</Text>
+        <View style={styles.billingSummaryContainer}>
+          <View style={styles.billingSummaryItem}>
+            <Text style={styles.billingSummaryLabel}>Rent</Text>
+            <Text style={styles.billingSummaryAmount}>
+              ₱{billing?.billing?.rent || "0"}
+            </Text>
           </View>
-          <View style={styles.dividerVertical} />
-          <View>
-            <Text style={styles.label}>Total Electricity</Text>
-            <Text style={styles.amount}>
+          <View style={styles.billingSummaryItem}>
+            <Text style={styles.billingSummaryLabel}>Electricity</Text>
+            <Text style={styles.billingSummaryAmount}>
               ₱{billing?.billing?.electricity || "0"}
             </Text>
           </View>
-          <View style={styles.dividerVertical} />
-          <View>
-            <Text style={styles.label}>Total Water</Text>
-            <Text style={[styles.amount, { color: "#2196F3" }]}>
+          <View style={styles.billingSummaryItem}>
+            <Text style={styles.billingSummaryLabel}>Water</Text>
+            <Text style={[styles.billingSummaryAmount, { color: "#2196F3" }]}>
               ₱{calculateTotalWaterBill().toFixed(2)}
+            </Text>
+          </View>
+          <View style={styles.billingSummaryItem}>
+            <Text style={styles.billingSummaryLabel}>Internet</Text>
+            <Text style={[styles.billingSummaryAmount, { color: "#9c27b0" }]}>
+              ₱{billing?.billing?.internet || "0"}
             </Text>
           </View>
         </View>
 
-        <View
-          style={{
-            marginTop: 12,
-            paddingTop: 12,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-          }}
-        >
-          <Text style={styles.label}>Grand Total</Text>
-          <Text
-            style={[styles.amount, { color: colors.success, fontSize: 20 }]}
-          >
+        <View style={styles.billingSummaryTotal}>
+          <Text style={styles.billingSummaryTotalLabel}>Grand Total</Text>
+          <Text style={styles.billingSummaryTotalAmount}>
             ₱
             {(
               parseFloat(billing?.billing?.rent || 0) +
               parseFloat(billing?.billing?.electricity || 0) +
-              calculateTotalWaterBill()
+              calculateTotalWaterBill() +
+              parseFloat(billing?.billing?.internet || 0)
             ).toFixed(2)}
           </Text>
         </View>
@@ -393,6 +391,13 @@ const BillingScreen = ({ route }) => {
               ₱{calculatePayorWaterShare().toFixed(2)}
             </Text>
           </View>
+          <View style={styles.breakdownItem}>
+            <Text style={styles.label}>Internet per Payor</Text>
+            <Text style={styles.value}>
+              ₱
+              {((billing?.billing?.internet || 0) / getPayorCount()).toFixed(2)}
+            </Text>
+          </View>
           <View style={[styles.breakdownItem, { borderBottomWidth: 0 }]}>
             <Text style={[styles.label, { fontWeight: "700" }]}>
               Total per Payor
@@ -407,7 +412,8 @@ const BillingScreen = ({ route }) => {
               {(
                 (billing?.billing?.rent || 0) / getPayorCount() +
                 (billing?.billing?.electricity || 0) / getPayorCount() +
-                calculatePayorWaterShare()
+                calculatePayorWaterShare() +
+                (billing?.billing?.internet || 0) / getPayorCount()
               ).toFixed(2)}
             </Text>
           </View>
@@ -639,6 +645,48 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#999",
     marginVertical: 20,
+  },
+  billingSummaryContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+  },
+  billingSummaryItem: {
+    width: "48%",
+    backgroundColor: colors.lightGray,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    alignItems: "center",
+  },
+  billingSummaryLabel: {
+    fontSize: 12,
+    color: "#999",
+    marginBottom: 6,
+  },
+  billingSummaryAmount: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  billingSummaryTotal: {
+    backgroundColor: colors.success + "15",
+    padding: 16,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.success,
+    marginTop: 8,
+  },
+  billingSummaryTotalLabel: {
+    fontSize: 12,
+    color: "#999",
+    marginBottom: 6,
+  },
+  billingSummaryTotalAmount: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: colors.success,
   },
 });
 

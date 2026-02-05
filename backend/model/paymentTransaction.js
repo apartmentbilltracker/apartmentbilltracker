@@ -6,7 +6,7 @@ const paymentTransactionSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   billType: {
     type: String,
-    enum: ["rent", "electricity", "water", "total"],
+    enum: ["rent", "electricity", "water", "internet", "total"],
     required: true,
   },
   paymentMethod: {
@@ -53,6 +53,7 @@ const paymentTransactionSchema = new mongoose.Schema({
   receiptUrl: String, // Generated receipt URL
   billingCycleStart: Date,
   billingCycleEnd: Date,
+  billingCycleId: { type: mongoose.Schema.Types.ObjectId, ref: "BillingCycle" }, // Direct reference to cycle
 
   // For tracking
   createdAt: { type: Date, default: Date.now },

@@ -210,7 +210,8 @@ const BillingHistoryScreen = ({ route }) => {
                       ? cycle.totalBilledAmount
                       : (cycle.rent || 0) +
                           (cycle.electricity || 0) +
-                          (cycle.waterBillAmount || 0),
+                          (cycle.waterBillAmount || 0) +
+                          (cycle.internet || 0),
                   )}
                 </Text>
                 <Ionicons name="chevron-forward" size={20} color="#b38604" />
@@ -292,13 +293,20 @@ const BillingHistoryScreen = ({ route }) => {
                         {formatCurrency(selectedCycle.waterBillAmount)}
                       </Text>
                     </View>
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>Internet</Text>
+                      <Text style={styles.billAmount}>
+                        {formatCurrency(selectedCycle.internet)}
+                      </Text>
+                    </View>
                     <View style={[styles.billRow, styles.totalRow]}>
                       <Text style={styles.billLabel}>Total</Text>
                       <Text style={styles.totalBillAmount}>
                         {formatCurrency(
                           (selectedCycle.rent || 0) +
                             (selectedCycle.electricity || 0) +
-                            (selectedCycle.waterBillAmount || 0),
+                            (selectedCycle.waterBillAmount || 0) +
+                            (selectedCycle.internet || 0),
                         )}
                       </Text>
                     </View>

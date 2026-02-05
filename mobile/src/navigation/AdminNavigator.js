@@ -8,6 +8,13 @@ import AdminBillingScreen from "../screens/admin/AdminBillingScreen";
 import AdminBillingCycleScreen from "../screens/admin/AdminBillingCycleScreen";
 import AdminMembersScreen from "../screens/admin/AdminMembersScreen";
 import AdminProfileScreen from "../screens/admin/AdminProfileScreen";
+import AdminPaymentVerificationScreen from "../screens/admin/AdminPaymentVerificationScreen";
+import AdminFinancialDashboardScreen from "../screens/admin/AdminFinancialDashboardScreen";
+import AdminBillingDetailsScreen from "../screens/admin/AdminBillingDetailsScreen";
+import AdminAdjustmentsScreen from "../screens/admin/AdminAdjustmentsScreen";
+import AdminRemindersScreen from "../screens/admin/AdminRemindersScreen";
+import AdminPresenceRemindersScreen from "../screens/admin/AdminPresenceRemindersScreen";
+import AdminAnnouncementsScreen from "../screens/admin/AdminAnnouncementsScreen";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -73,6 +80,36 @@ const BillingStack = () => (
         title: `Billing Cycles - ${route.params?.roomName || "Room"}`,
       })}
     />
+    <Stack.Screen
+      name="PaymentVerification"
+      component={AdminPaymentVerificationScreen}
+      options={{ title: "Payment Verification" }}
+    />
+    <Stack.Screen
+      name="FinancialDashboard"
+      component={AdminFinancialDashboardScreen}
+      options={{ title: "Financial Dashboard" }}
+    />
+    <Stack.Screen
+      name="BillingDetails"
+      component={AdminBillingDetailsScreen}
+      options={{ title: "Billing Details" }}
+    />
+    <Stack.Screen
+      name="Adjustments"
+      component={AdminAdjustmentsScreen}
+      options={{ title: "Charge Adjustments" }}
+    />
+    <Stack.Screen
+      name="Reminders"
+      component={AdminRemindersScreen}
+      options={{ title: "Payment Reminders" }}
+    />
+    <Stack.Screen
+      name="PresenceReminders"
+      component={AdminPresenceRemindersScreen}
+      options={{ title: "Presence Reminders" }}
+    />
   </Stack.Navigator>
 );
 
@@ -114,6 +151,25 @@ const ProfileStack = () => (
   </Stack.Navigator>
 );
 
+const AnnouncementsStack = () => (
+  <Stack.Navigator
+    screenOptions={{
+      headerStyle: {
+        backgroundColor: "#f8f9fa",
+      },
+      headerTitleStyle: {
+        fontWeight: "600",
+      },
+    }}
+  >
+    <Stack.Screen
+      name="AdminAnnouncements"
+      component={AdminAnnouncementsScreen}
+      options={{ title: "Announcements" }}
+    />
+  </Stack.Navigator>
+);
+
 const AdminNavigator = () => {
   return (
     <Tab.Navigator
@@ -129,6 +185,8 @@ const AdminNavigator = () => {
             iconName = focused ? "wallet" : "wallet-outline";
           } else if (route.name === "MembersStack") {
             iconName = focused ? "people" : "people-outline";
+          } else if (route.name === "AnnouncementsStack") {
+            iconName = focused ? "megaphone" : "megaphone-outline";
           } else if (route.name === "ProfileStack") {
             iconName = focused ? "person" : "person-outline";
           }
@@ -157,6 +215,11 @@ const AdminNavigator = () => {
         name="MembersStack"
         component={MembersStack}
         options={{ title: "Members" }}
+      />
+      <Tab.Screen
+        name="AnnouncementsStack"
+        component={AnnouncementsStack}
+        options={{ title: "Announcements" }}
       />
       <Tab.Screen
         name="ProfileStack"

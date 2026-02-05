@@ -97,6 +97,10 @@ class APIClient {
     return this.makeRequest(endpoint, { method: "PUT", body });
   }
 
+  patch(endpoint, body) {
+    return this.makeRequest(endpoint, { method: "PATCH", body });
+  }
+
   delete(endpoint) {
     return this.makeRequest(endpoint, { method: "DELETE" });
   }

@@ -205,11 +205,13 @@ const BillsScreen = ({ navigation }) => {
           water: userCharge.waterBillShare,
           rent: userCharge.rentShare,
           electricity: userCharge.electricityShare,
+          internet: userCharge.internetShare,
           total: userCharge.totalDue,
         });
         return {
           rent: userCharge.rentShare || 0,
           electricity: userCharge.electricityShare || 0,
+          internet: userCharge.internetShare || 0,
           water: userCharge.waterBillShare || 0,
           total: userCharge.totalDue || 0,
           payorCount: activeCycle.memberCharges.filter((c) => c.isPayer).length,
@@ -232,26 +234,61 @@ const BillsScreen = ({ navigation }) => {
     const electricityPerPayor = billing.electricity
       ? billing.electricity / payorCount
       : 0;
-    const waterPerPayor = calculateTotalWaterBill() / payorCount;
+    const internetPerPayor = billing.internet
+      ? billing.internet / payorCount
+      : 0;
+
+    // Calculate water share inline in fallback to avoid timing issues
+    // Get current user's member object
+    const currentUserMember = selectedRoom.members.find(
+      (m) => String(m.user?._id || m.user) === String(userId),
+    );
+
+    let waterShare = 0;
+    if (currentUserMember?.isPayer && memberPresence[currentUserMember._id]) {
+      // Current user's own water consumption
+      const userPresenceDays =
+        memberPresence[currentUserMember._id]?.length || 0;
+      const userOwnWater = userPresenceDays * WATER_BILL_PER_DAY;
+
+      // Non-payors' water to split
+      let nonPayorWater = 0;
+      members.forEach((m) => {
+        if (!m.isPayer) {
+          const presenceDays = memberPresence[m._id]?.length || 0;
+          nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
+        }
+      });
+
+      const sharedNonPayorWater =
+        payorCount > 0 ? nonPayorWater / payorCount : 0;
+      waterShare = userOwnWater + sharedNonPayorWater;
+      console.log(
+        `   Fallback water calc: own=${userOwnWater}, shared=${sharedNonPayorWater}, total=${waterShare}`,
+      );
+    }
 
     return {
       rent: rentPerPayor,
       electricity: electricityPerPayor,
-      water: waterPerPayor,
-      total: rentPerPayor + electricityPerPayor + waterPerPayor,
+      internet: internetPerPayor,
+      water: waterShare,
+      total: rentPerPayor + electricityPerPayor + internetPerPayor + waterShare,
       payorCount,
     };
   };
 
   const calculateTotalWaterBill = () => {
     // Total water = ALL members' presence days × ₱5 (including non-payors)
-    if (!selectedRoom?.members) return 0;
+    if (!selectedRoom?.members || selectedRoom.members.length === 0) return 0;
     let totalDays = 0;
     selectedRoom.members.forEach((member) => {
       const presence = memberPresence[member._id] || [];
       totalDays += presence.length;
     });
-    return totalDays * WATER_BILL_PER_DAY;
+    const result = totalDays * WATER_BILL_PER_DAY;
+    // Ensure we always return a number, never undefined
+    return typeof result === "number" ? result : 0;
   };
 
   // Check if current user has paid all their bills
@@ -274,7 +311,8 @@ const BillsScreen = ({ navigation }) => {
     const allPaid =
       userPayment.rentStatus === "paid" &&
       userPayment.electricityStatus === "paid" &&
-      userPayment.waterStatus === "paid";
+      userPayment.waterStatus === "paid" &&
+      userPayment.internetStatus === "paid";
 
     console.log(
       "   rentStatus:",
@@ -283,6 +321,8 @@ const BillsScreen = ({ navigation }) => {
       userPayment.electricityStatus,
       "waterStatus:",
       userPayment.waterStatus,
+      "internetStatus:",
+      userPayment.internetStatus,
       "allPaid:",
       allPaid,
     );
@@ -300,7 +340,8 @@ const BillsScreen = ({ navigation }) => {
     if (!member) return 0;
 
     const presence = memberPresence[memberId] || [];
-    return presence.length * WATER_BILL_PER_DAY;
+    const result = presence.length * WATER_BILL_PER_DAY;
+    return typeof result === "number" ? result : 0;
   };
 
   const calculateMemberWaterShare = (memberId) => {
@@ -353,7 +394,8 @@ const BillsScreen = ({ navigation }) => {
     console.log(
       `   Fallback: own=${memberOwnWater}, shared=${sharedNonPayorWater}, total=${memberOwnWater + sharedNonPayorWater}`,
     );
-    return memberOwnWater + sharedNonPayorWater;
+    const result = memberOwnWater + sharedNonPayorWater;
+    return typeof result === "number" ? result : 0;
   };
 
   // Get water breakdown details for display
@@ -389,6 +431,30 @@ const BillsScreen = ({ navigation }) => {
       payorCount,
       totalWaterShare,
     };
+  };
+
+  // Check if payment is allowed based on billing cycle end date
+  const isPaymentAllowed = () => {
+    if (!selectedRoom?.billing?.end) return true; // Allow if no end date
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to midnight for fair date comparison
+
+    const endDate = new Date(selectedRoom.billing.end);
+    endDate.setHours(0, 0, 0, 0); // Reset time to midnight
+
+    // Payment allowed if today >= endDate
+    return today >= endDate;
+  };
+
+  // Get formatted end date for display
+  const getFormattedEndDate = () => {
+    if (!selectedRoom?.billing?.end) return "";
+    return new Date(selectedRoom.billing.end).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   };
 
   // Calendar helper functions for presence modal
@@ -501,11 +567,15 @@ const BillsScreen = ({ navigation }) => {
           })
         : "Not set";
 
-      const totalWater = calculateTotalWaterBill().toFixed(2);
+      const totalWaterValue = calculateTotalWaterBill() || 0;
+      const totalWater = (
+        typeof totalWaterValue === "number" ? totalWaterValue : 0
+      ).toFixed(2);
       const grandTotal = (
         (billing.rent || 0) +
         (billing.electricity || 0) +
-        parseFloat(totalWater)
+        parseFloat(totalWater) +
+        (billing.internet || 0)
       ).toFixed(2);
 
       // Generate receipt-style HTML
@@ -676,6 +746,8 @@ const BillsScreen = ({ navigation }) => {
                     const electricityStatus =
                       memberPayment?.electricityStatus || "unpaid";
                     const waterStatus = memberPayment?.waterStatus || "unpaid";
+                    const internetStatus =
+                      memberPayment?.internetStatus || "unpaid";
 
                     return `
                   <div class="member-item">
@@ -688,6 +760,7 @@ const BillsScreen = ({ navigation }) => {
                         <span>Rent: ${rentStatus === "paid" ? "✓ Paid" : "Unpaid"}</span>
                         <span>Electricity: ${electricityStatus === "paid" ? "✓ Paid" : "Unpaid"}</span>
                         <span>Water: ${waterStatus === "paid" ? "✓ Paid" : "Unpaid"}</span>
+                        <span>Internet: ${internetStatus === "paid" ? "✓ Paid" : "Unpaid"}</span>
                       </div>
                     </div>
                   </div>
@@ -698,30 +771,60 @@ const BillsScreen = ({ navigation }) => {
             </div>
 
             ${
-              isUserPayor && billShare
+              isUserPayor && currentUserMember
                 ? `
             <!-- Your Share -->
             <div class="your-share">
               <div class="your-share-title">YOUR SHARE (PAYOR)</div>
               <div class="row">
                 <span class="label">Rent Share:</span>
-                <span class="value">₱${billShare.rent.toFixed(2)}</span>
+                <span class="value">₱${(billing.rent ? billing.rent / (selectedRoom.members.filter((m) => m.isPayer).length || 1) : 0).toFixed(2)}</span>
               </div>
               <div class="row">
                 <span class="label">Electricity:</span>
-                <span class="value">₱${billShare.electricity.toFixed(2)}</span>
+                <span class="value">₱${(billing.electricity ? billing.electricity / (selectedRoom.members.filter((m) => m.isPayer).length || 1) : 0).toFixed(2)}</span>
               </div>
               <div class="row">
                 <span class="label">Water Share:</span>
-                <span class="value">₱${billShare.water.toFixed(2)}</span>
+                <span class="value">₱${calculateMemberWaterShare(currentUserMember._id).toFixed(2)}</span>
               </div>
+              ${
+                getWaterShareBreakdown()
+                  ? `
+              <div class="row" style="font-size: 10px; color: #666; margin-top: 3px;">
+                <span class="label">Your consumption: ₱${getWaterShareBreakdown().ownWater.toFixed(2)}</span>
+              </div>
+              ${
+                getWaterShareBreakdown().sharedNonPayorWater > 0
+                  ? `
+              <div class="row" style="font-size: 10px; color: #666; margin-top: 1px;">
+                <span class="label">+ Non-payors share: ₱${getWaterShareBreakdown().sharedNonPayorWater.toFixed(2)}</span>
+              </div>
+              `
+                  : ""
+              }
+              `
+                  : ""
+              }
               <div class="divider-line"></div>
               <div class="total-row" style="border-top: none; padding-top: 0;">
                 <span class="total-label">AMOUNT DUE</span>
-                <span class="total-value">₱${billShare.total.toFixed(2)}</span>
+                <span class="total-value">₱${(
+                  (billing.rent
+                    ? billing.rent /
+                      (selectedRoom.members.filter((m) => m.isPayer).length ||
+                        1)
+                    : 0) +
+                  (billing.electricity
+                    ? billing.electricity /
+                      (selectedRoom.members.filter((m) => m.isPayer).length ||
+                        1)
+                    : 0) +
+                  calculateMemberWaterShare(currentUserMember._id)
+                ).toFixed(2)}</span>
               </div>
               <div class="row" style="font-size: 10px; color: #666; margin-top: 5px;">
-                <span class="label">Split among ${billShare.payorCount} payor(s)</span>
+                <span class="label">Split among ${selectedRoom.members.filter((m) => m.isPayer).length || 1} payor(s)</span>
               </div>
             </div>
             `
@@ -746,6 +849,17 @@ const BillsScreen = ({ navigation }) => {
       `;
 
       // Prepare structured receipt data
+      // Calculate individual payor shares based on their presence days
+      const payorCount =
+        selectedRoom.members.filter((m) => m.isPayer).length || 1;
+      const rentPerPayor = billing.rent ? billing.rent / payorCount : 0;
+      const electricityPerPayor = billing.electricity
+        ? billing.electricity / payorCount
+        : 0;
+      const internetPerPayor = billing.internet
+        ? billing.internet / payorCount
+        : 0;
+
       const receipt = {
         roomName: selectedRoom.name,
         startDate,
@@ -756,31 +870,57 @@ const BillsScreen = ({ navigation }) => {
           rent: (billing.rent || 0).toFixed(2),
           electricity: (billing.electricity || 0).toFixed(2),
           water: totalWater,
-          total: grandTotal,
+          internet: (billing.internet || 0).toFixed(2),
+          total: (
+            (billing.rent || 0) +
+            (billing.electricity || 0) +
+            parseFloat(totalWater) +
+            (billing.internet || 0)
+          ).toFixed(2),
         },
         members: selectedRoom.members.map((member) => ({
           name: member.user?.name || "Unknown",
           presenceDays: (memberPresence[member._id] || []).length,
           waterBill: calculateMemberWaterBill(member._id).toFixed(2),
           isPayer: member.isPayer,
-          billShare:
-            member.isPayer && billShare
-              ? {
-                  rent: billShare.rent.toFixed(2),
-                  electricity: billShare.electricity.toFixed(2),
-                  water: billShare.water.toFixed(2),
-                  total: billShare.total.toFixed(2),
-                }
-              : null,
+          billShare: member.isPayer
+            ? {
+                rent: rentPerPayor.toFixed(2),
+                electricity: electricityPerPayor.toFixed(2),
+                water: calculateMemberWaterShare(member._id).toFixed(2),
+                internet: internetPerPayor.toFixed(2),
+                total: (
+                  rentPerPayor +
+                  electricityPerPayor +
+                  calculateMemberWaterShare(member._id) +
+                  internetPerPayor
+                ).toFixed(2),
+              }
+            : null,
         })),
         userShare:
-          isUserPayor && billShare
+          isUserPayor && currentUserMember
             ? {
-                rent: billShare.rent.toFixed(2),
-                electricity: billShare.electricity.toFixed(2),
-                water: billShare.water.toFixed(2),
-                total: billShare.total.toFixed(2),
-                payerCount: billShare.payerCount,
+                rent: rentPerPayor.toFixed(2),
+                electricity: electricityPerPayor.toFixed(2),
+                water: calculateMemberWaterShare(currentUserMember._id).toFixed(
+                  2,
+                ),
+                internet: internetPerPayor.toFixed(2),
+                waterBreakdown: getWaterShareBreakdown()
+                  ? {
+                      ownWater: getWaterShareBreakdown().ownWater.toFixed(2),
+                      nonPayorShare:
+                        getWaterShareBreakdown().sharedNonPayorWater.toFixed(2),
+                    }
+                  : null,
+                total: (
+                  rentPerPayor +
+                  electricityPerPayor +
+                  calculateMemberWaterShare(currentUserMember._id) +
+                  internetPerPayor
+                ).toFixed(2),
+                payorCount: payorCount,
               }
             : null,
         generatedDate: new Date().toLocaleDateString("en-US", {
@@ -1005,6 +1145,23 @@ const BillsScreen = ({ navigation }) => {
                             </Text>
                           </View>
 
+                          <View style={styles.totalBillCard}>
+                            <View style={styles.totalBillIconContainer}>
+                              <MaterialIcons
+                                name="wifi"
+                                size={24}
+                                color="#9c27b0"
+                              />
+                            </View>
+                            <Text style={styles.totalBillLabel}>Internet</Text>
+                            <Text style={styles.totalBillAmount}>
+                              ₱{billing.internet || 0}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Row 3 - Total */}
+                        <View style={styles.totalBillsRow}>
                           <View
                             style={[
                               styles.totalBillCard,
@@ -1029,7 +1186,8 @@ const BillsScreen = ({ navigation }) => {
                               {(
                                 (billing.rent || 0) +
                                 (billing.electricity || 0) +
-                                calculateTotalWaterBill()
+                                calculateTotalWaterBill() +
+                                (billing.internet || 0)
                               ).toFixed(2)}
                             </Text>
                           </View>
@@ -1151,7 +1309,7 @@ const BillsScreen = ({ navigation }) => {
                         <View style={styles.shareItem}>
                           <Text style={styles.shareLabel}>Rent Share</Text>
                           <Text style={styles.shareValue}>
-                            ₱{billShare.rent.toFixed(2)}
+                            ₱{(billShare?.rent || 0).toFixed(2)}
                           </Text>
                           <Text style={styles.shareNote}>
                             Split among {billShare.payorCount} payor(s)
@@ -1165,7 +1323,19 @@ const BillsScreen = ({ navigation }) => {
                             Electricity Share
                           </Text>
                           <Text style={styles.shareValue}>
-                            ₱{billShare.electricity.toFixed(2)}
+                            ₱{(billShare?.electricity || 0).toFixed(2)}
+                          </Text>
+                          <Text style={styles.shareNote}>
+                            Split among {billShare.payorCount} payor(s)
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.shareDivider} />
+                      <View style={styles.shareRow}>
+                        <View style={styles.shareItem}>
+                          <Text style={styles.shareLabel}>Internet Share</Text>
+                          <Text style={styles.shareValue}>
+                            ₱{(billShare?.internet || 0).toFixed(2)}
                           </Text>
                           <Text style={styles.shareNote}>
                             Split among {billShare.payorCount} payor(s)
@@ -1177,7 +1347,7 @@ const BillsScreen = ({ navigation }) => {
                         <View style={styles.shareItem}>
                           <Text style={styles.shareLabel}>Water Share</Text>
                           <Text style={styles.shareValue}>
-                            ₱{billShare.water.toFixed(2)}
+                            ₱{(billShare?.water || 0).toFixed(2)}
                           </Text>
                           {getWaterShareBreakdown() && (
                             <>
@@ -1202,33 +1372,52 @@ const BillsScreen = ({ navigation }) => {
                       <View style={styles.shareTotal}>
                         <Text style={styles.totalLabel}>Total Due</Text>
                         <Text style={styles.totalAmount}>
-                          ₱{billShare.total.toFixed(2)}
+                          ₱{(billShare?.total || 0).toFixed(2)}
                         </Text>
                       </View>
                     </View>
 
                     {/* Pay Now Button */}
-                    <TouchableOpacity
-                      style={styles.payNowButton}
-                      onPress={() => {
-                        if (selectedRoom && billShare) {
-                          navigation.navigate("PaymentMethod", {
-                            roomId: selectedRoom._id,
-                            roomName: selectedRoom.name,
-                            amount: billShare.total,
-                            billType: "total",
-                          });
-                        }
-                      }}
-                    >
-                      <MaterialIcons
-                        name="payment"
-                        size={20}
-                        color="#fff"
-                        style={{ marginRight: 8 }}
-                      />
-                      <Text style={styles.payNowButtonText}>Pay Now</Text>
-                    </TouchableOpacity>
+                    {isPaymentAllowed() ? (
+                      <TouchableOpacity
+                        style={styles.payNowButton}
+                        onPress={() => {
+                          if (selectedRoom && billShare) {
+                            navigation.navigate("PaymentMethod", {
+                              roomId: selectedRoom._id,
+                              roomName: selectedRoom.name,
+                              amount: billShare.total,
+                              billType: "total",
+                            });
+                          }
+                        }}
+                      >
+                        <MaterialIcons
+                          name="payment"
+                          size={20}
+                          color="#fff"
+                          style={{ marginRight: 8 }}
+                        />
+                        <Text style={styles.payNowButtonText}>Pay Now</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.paymentLockedContainer}>
+                        <View style={styles.paymentLockedBox}>
+                          <MaterialIcons
+                            name="lock-clock"
+                            size={24}
+                            color="#ff9800"
+                            style={{ marginBottom: 8 }}
+                          />
+                          <Text style={styles.paymentLockedText}>
+                            Payment opens on {getFormattedEndDate()}
+                          </Text>
+                          <Text style={styles.paymentLockedSubtext}>
+                            Return on the billing period end date to pay
+                          </Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
                 )}
 
@@ -1395,6 +1584,12 @@ const BillsScreen = ({ navigation }) => {
                   ₱{receiptData.bills.water}
                 </Text>
               </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Internet</Text>
+                <Text style={styles.receiptAmount}>
+                  ₱{receiptData.bills.internet}
+                </Text>
+              </View>
               <View style={styles.receiptTotalRow}>
                 <Text style={styles.receiptTotalLabel}>TOTAL BILLS</Text>
                 <Text style={styles.receiptTotalAmount}>
@@ -1461,6 +1656,9 @@ const BillsScreen = ({ navigation }) => {
                             <Text style={styles.receiptBillPerMemberDetail}>
                               Water: ₱{member.billShare.water}
                             </Text>
+                            <Text style={styles.receiptBillPerMemberDetail}>
+                              Internet: ₱{member.billShare.internet}
+                            </Text>
                           </View>
                           <Text style={styles.receiptBillPerMemberTotal}>
                             Total: ₱{member.billShare.total}
@@ -1491,11 +1689,44 @@ const BillsScreen = ({ navigation }) => {
                   </Text>
                 </View>
                 <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Internet Share:</Text>
+                  <Text style={styles.receiptAmount}>
+                    ₱{receiptData.userShare.internet}
+                  </Text>
+                </View>
+                <View style={styles.receiptRow}>
                   <Text style={styles.receiptLabel}>Water Share:</Text>
                   <Text style={styles.receiptAmount}>
                     ₱{receiptData.userShare.water}
                   </Text>
                 </View>
+                {receiptData.userShare.waterBreakdown && (
+                  <View style={[styles.receiptRow, { marginTop: 0 }]}>
+                    <Text
+                      style={[
+                        styles.receiptLabel,
+                        { fontSize: 11, color: "#666", fontStyle: "italic" },
+                      ]}
+                    >
+                      <Ionicons
+                        name="information-circle-outline"
+                        size={14}
+                        color="#666"
+                      />{" "}
+                      Your consumption: ₱
+                      {receiptData.userShare.waterBreakdown.ownWater}
+                      {parseFloat(
+                        receiptData.userShare.waterBreakdown.nonPayorShare,
+                      ) > 0 && (
+                        <Text>
+                          {" "}
+                          + Non-payors share: ₱
+                          {receiptData.userShare.waterBreakdown.nonPayorShare}
+                        </Text>
+                      )}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.receiptTotalRow}>
                   <Text style={styles.receiptTotalLabel}>AMOUNT DUE</Text>
                   <Text style={styles.receiptTotalAmount}>
@@ -1627,7 +1858,7 @@ const BillsScreen = ({ navigation }) => {
                         >
                           {date.getDate()}
                         </Text>
-                        {isDateMarked(date) && (
+                        {/* {isDateMarked(date) && (
                           <View style={styles.presenceCheckmarkContainer}>
                             <Ionicons
                               name="checkmark-circle"
@@ -1635,7 +1866,7 @@ const BillsScreen = ({ navigation }) => {
                               color="#fff"
                             />
                           </View>
-                        )}
+                        )} */}
                       </>
                     ) : null}
                   </View>
@@ -1888,6 +2119,33 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: "#fff",
+  },
+  paymentLockedContainer: {
+    marginTop: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  paymentLockedBox: {
+    backgroundColor: "#fff3cd",
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    borderLeftWidth: 4,
+    borderLeftColor: "#ff9800",
+    width: "100%",
+  },
+  paymentLockedText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#ff6f00",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  paymentLockedSubtext: {
+    fontSize: 12,
+    color: "#e65100",
+    textAlign: "center",
   },
   nonPayorCard: {
     backgroundColor: "#d1ecf1",

@@ -130,6 +130,16 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+
+  // Expo Push Token for real-time notifications
+  expoPushToken: {
+    type: String,
+    default: null,
+  },
+  expoPushTokenUpdatedAt: {
+    type: Date,
+    default: null,
+  },
 });
 
 // Hash password before saving if modified

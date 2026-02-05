@@ -150,10 +150,138 @@ const RoomDetailsScreen = ({ route, navigation }) => {
       {/* Room Description */}
       {room.description && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>About</Text>
+          <View style={styles.cardHeader}>
+            <MaterialIcons
+              name="info-outline"
+              size={24}
+              color={colors.primary}
+            />
+            <Text style={styles.cardTitle}>About</Text>
+          </View>
+
           <Text style={styles.description}>{room.description}</Text>
         </View>
       )}
+
+      {/* Gallery */}
+      <View style={styles.card}>
+        {/* Amenities Section */}
+        <View style={styles.amenitiesSection}>
+          <Text style={styles.subSectionTitle}>🏠 Amenities</Text>
+          <View style={styles.amenitiesGrid}>
+            <View style={styles.amenityItem}>
+              <View style={styles.amenityIcon}>
+                <MaterialIcons name="wifi" size={24} color={colors.primary} />
+              </View>
+              <Text style={styles.amenityLabel}>WiFi</Text>
+            </View>
+            <View style={styles.amenityItem}>
+              <View style={styles.amenityIcon}>
+                <MaterialIcons
+                  name="kitchen"
+                  size={24}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.amenityLabel}>Kitchen</Text>
+            </View>
+            <View style={styles.amenityItem}>
+              <View style={styles.amenityIcon}>
+                <MaterialIcons
+                  name="bathtub"
+                  size={24}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.amenityLabel}>Bathroom</Text>
+            </View>
+            <View style={styles.amenityItem}>
+              <View style={styles.amenityIcon}>
+                <MaterialIcons
+                  name="king-bed"
+                  size={24}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.amenityLabel}>Bedroom</Text>
+            </View>
+            <View style={styles.amenityItem}>
+              <View style={styles.amenityIcon}>
+                <MaterialIcons
+                  name="water-damage"
+                  size={24}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.amenityLabel}>Hot Water</Text>
+            </View>
+            <View style={styles.amenityItem}>
+              <View style={styles.amenityIcon}>
+                <MaterialIcons name="groups" size={24} color={colors.primary} />
+              </View>
+              <Text style={styles.amenityLabel}>Common Area</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* House Rules Section */}
+        <View style={styles.rulesSection}>
+          <Text style={styles.subSectionTitle}>📋 House Rules</Text>
+          <View style={styles.rulesList}>
+            <View style={styles.ruleItem}>
+              <MaterialIcons
+                name="check-circle"
+                size={18}
+                color={colors.success}
+                style={styles.ruleIcon}
+              />
+              <Text style={styles.ruleText}>Quiet hours: 10 PM - 7 AM</Text>
+            </View>
+            <View style={styles.ruleItem}>
+              <MaterialIcons
+                name="check-circle"
+                size={18}
+                color={colors.success}
+                style={styles.ruleIcon}
+              />
+              <Text style={styles.ruleText}>
+                Keep common areas clean at all times
+              </Text>
+            </View>
+            <View style={styles.ruleItem}>
+              <MaterialIcons
+                name="check-circle"
+                size={18}
+                color={colors.success}
+                style={styles.ruleIcon}
+              />
+              <Text style={styles.ruleText}>
+                Guests must be informed in advance
+              </Text>
+            </View>
+            <View style={styles.ruleItem}>
+              <MaterialIcons
+                name="check-circle"
+                size={18}
+                color={colors.success}
+                style={styles.ruleIcon}
+              />
+              <Text style={styles.ruleText}>
+                Share responsibility for utilities
+              </Text>
+            </View>
+            <View style={styles.ruleItem}>
+              <MaterialIcons
+                name="check-circle"
+                size={18}
+                color={colors.success}
+                style={styles.ruleIcon}
+              />
+              <Text style={styles.ruleText}>No smoking inside the room</Text>
+            </View>
+          </View>
+        </View>
+      </View>
 
       {/* Billing Summary */}
       {billing?.billing?.start && billing?.billing?.end ? (
@@ -184,6 +312,12 @@ const RoomDetailsScreen = ({ route, navigation }) => {
               </Text>
             </View>
             <View style={styles.billingItem}>
+              <Text style={styles.billingLabel}>Total Internet</Text>
+              <Text style={styles.billingValue}>
+                ₱{billing?.billing?.internet || "0"}
+              </Text>
+            </View>
+            <View style={styles.billingItem}>
               <Text style={styles.billingLabel}>Total Water</Text>
               <Text style={[styles.billingValue, { color: "#2196F3" }]}>
                 ₱{calculateTotalWaterBill().toFixed(2)}
@@ -203,7 +337,8 @@ const RoomDetailsScreen = ({ route, navigation }) => {
                 {(
                   parseFloat(billing?.billing?.rent || 0) +
                   parseFloat(billing?.billing?.electricity || 0) +
-                  calculateTotalWaterBill()
+                  calculateTotalWaterBill() +
+                  parseFloat(billing?.billing?.internet || 0)
                 ).toFixed(2)}
               </Text>
             </View>
@@ -391,6 +526,7 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     color: "#666",
+    textAlign: "justify",
     lineHeight: 20,
   },
   billingGrid: {
@@ -545,6 +681,63 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.danger,
     textAlign: "center",
+  },
+  amenitiesSection: {
+    marginBottom: 16,
+  },
+  subSectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.dark,
+    marginBottom: 12,
+  },
+  amenitiesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  amenityItem: {
+    width: "31%",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  amenityIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: colors.lightGray,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  amenityLabel: {
+    fontSize: 11,
+    color: "#666",
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  rulesSection: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 12,
+  },
+  rulesList: {
+    gap: 8,
+    paddingLeft: 8,
+  },
+  ruleItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  ruleIcon: {
+    marginRight: 10,
+    marginTop: 2,
+  },
+  ruleText: {
+    fontSize: 12,
+    color: "#666",
+    flex: 1,
+    lineHeight: 16,
   },
 });
 

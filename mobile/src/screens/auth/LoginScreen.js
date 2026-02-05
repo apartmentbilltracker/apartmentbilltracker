@@ -14,7 +14,9 @@ import {
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
+import * as Notifications from "expo-notifications";
 import { AuthContext } from "../../context/AuthContext";
+import { apiService } from "../../services/apiService";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -111,6 +113,35 @@ const LoginScreen = ({ navigation }) => {
 
     if (!result.success) {
       setError(result.error);
+    } else {
+      // Register push token after successful login
+      await registerPushToken();
+    }
+  };
+
+  // Register Expo push token with backend
+  const registerPushToken = async () => {
+    try {
+      // Request notification permissions
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== "granted") {
+        console.log("Notification permissions not granted");
+        return;
+      }
+
+      // Get the push token
+      const token = await Notifications.getExpoPushTokenAsync();
+      console.log("Expo push token:", token.data);
+
+      // Send token to backend
+      await apiService.post("/api/v2/notifications/register-token", {
+        expoPushToken: token.data,
+      });
+
+      console.log("Push token registered successfully");
+    } catch (error) {
+      console.error("Error registering push token:", error);
+      // Don't fail login if token registration fails
     }
   };
 

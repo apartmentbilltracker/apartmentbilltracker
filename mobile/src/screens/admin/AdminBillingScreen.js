@@ -38,6 +38,7 @@ const AdminBillingScreen = ({ navigation }) => {
   const [endDate, setEndDate] = useState("");
   const [rent, setRent] = useState("");
   const [electricity, setElectricity] = useState("");
+  const [internet, setInternet] = useState("");
   const [prevReading, setPrevReading] = useState("");
   const [currReading, setCurrReading] = useState("");
 
@@ -48,23 +49,86 @@ const AdminBillingScreen = ({ navigation }) => {
   // Re-fetch rooms when screen gains focus so newly created rooms appear immediately
   useEffect(() => {
     if (isFocused) {
+      console.log(
+        "🔄 [BILLING SCREEN] Screen focused - checking for closed cycle",
+      );
       fetchRooms();
-      // Also refetch details of the currently selected room to get updated members list
+      // Check if cycle is closed FIRST before fetching members
       if (selectedRoom) {
-        fetchRoomDetails(selectedRoom._id);
+        checkAndResetIfCycleClosed();
       }
     }
   }, [isFocused]);
 
   useEffect(() => {
     if (selectedRoom) {
-      fetchRoomDetails(selectedRoom._id);
+      // Only fetch room details if we need to (will be checked in checkAndResetIfCycleClosed)
+      checkAndResetIfCycleClosed();
     }
   }, [selectedRoom]);
 
-  useEffect(() => {
-    if (selectedRoom?.billing) {
-      const billing = selectedRoom.billing;
+  // Check if current billing cycle is closed and reset amounts if so
+  const checkAndResetIfCycleClosed = async () => {
+    if (!selectedRoom) return;
+
+    try {
+      // First refetch the latest room data to check currentCycleId
+      const roomResponse = await roomService.getRoomDetails(selectedRoom._id);
+      const latestRoom = roomResponse.room || roomResponse.data?.room;
+
+      if (!latestRoom || !latestRoom.currentCycleId) {
+        // No active cycle - reset all amounts and clear members
+        console.log(
+          "✅ No active cycle - resetting billing amounts and clearing members",
+        );
+        setStartDate("");
+        setEndDate("");
+        setRent("");
+        setElectricity("");
+        setInternet("");
+        setPrevReading("");
+        setCurrReading("");
+        setMembers([]); // Clear members to remove water calculations
+        return;
+      }
+
+      // Fetch the billing cycle to check its status
+      try {
+        const response = await apiService.get(
+          `/api/v2/billing-cycles/${latestRoom.currentCycleId}`,
+        );
+
+        if (response?.data?.status === "completed") {
+          // Cycle is closed - reset all amounts and clear members
+          console.log(
+            "🔄 Billing cycle is closed - resetting amounts and clearing members",
+          );
+          setStartDate("");
+          setEndDate("");
+          setRent("");
+          setElectricity("");
+          setInternet("");
+          setPrevReading("");
+          setCurrReading("");
+          setMembers([]); // Clear members to remove water calculations
+          Alert.alert(
+            "✅ Cycle Closed",
+            "This billing cycle has been completed. All amounts have been reset.",
+            [{ text: "OK" }],
+          );
+          return;
+        }
+      } catch (cycleError) {
+        // If we can't fetch the cycle details, assume it's still active
+        // and load the billing data from the room object
+        console.log(
+          "⚠️  Could not fetch cycle details, loading from room data:",
+          cycleError.message,
+        );
+      }
+
+      // Cycle is still active (either confirmed or couldn't verify, so assume active) - show amounts and load members
+      const billing = latestRoom.billing;
       setStartDate(
         billing.start
           ? new Date(billing.start).toISOString().split("T")[0]
@@ -75,10 +139,33 @@ const AdminBillingScreen = ({ navigation }) => {
       );
       setRent(String(billing.rent || ""));
       setElectricity(String(billing.electricity || ""));
+      setInternet(String(billing.internet || ""));
       setPrevReading(String(billing.previousReading || ""));
       setCurrReading(String(billing.currentReading || ""));
+      // Load members for water calculation since cycle is active
+      setMembers(latestRoom.members || []);
+    } catch (error) {
+      console.log("Error checking cycle status:", error);
+      // On error, still try to show the data instead of clearing
+      // Only clear if we're sure there's no cycle
+      const billing = selectedRoom.billing;
+      if (billing && billing.rent) {
+        setStartDate(
+          billing.start
+            ? new Date(billing.start).toISOString().split("T")[0]
+            : "",
+        );
+        setEndDate(
+          billing.end ? new Date(billing.end).toISOString().split("T")[0] : "",
+        );
+        setRent(String(billing.rent || ""));
+        setElectricity(String(billing.electricity || ""));
+        setPrevReading(String(billing.previousReading || ""));
+        setCurrReading(String(billing.currentReading || ""));
+        setMembers(selectedRoom.members || []);
+      }
     }
-  }, [selectedRoom]);
+  };
 
   const fetchRooms = async (isRefresh = false) => {
     try {
@@ -150,7 +237,8 @@ const AdminBillingScreen = ({ navigation }) => {
     const rentValue = Number(rent || 0);
     const electricityValue = Number(electricity || 0);
     const waterBill = calculateTotalWaterBill();
-    return rentValue + electricityValue + waterBill;
+    const internetValue = Number(internet || 0);
+    return rentValue + electricityValue + waterBill + internetValue;
   };
 
   // Calculate electricity amount from meter readings
@@ -215,11 +303,10 @@ const AdminBillingScreen = ({ navigation }) => {
         end: endDate,
         rent: rent ? Number(rent) : undefined,
         electricity: electricity ? Number(electricity) : undefined,
+        internet: internet ? Number(internet) : undefined,
         previousReading: prevReading ? Number(prevReading) : undefined,
         currentReading: currReading ? Number(currReading) : undefined,
       });
-
-      console.log("✅ Billing period saved, now creating new billing cycle...");
 
       // Step 2: AUTOMATICALLY create a new billing cycle to reset member statuses to "pending"
       // This is critical - without this, members will still show as "paid" from previous cycle
@@ -230,10 +317,16 @@ const AdminBillingScreen = ({ navigation }) => {
         endDate: endDate,
         rent: parseFloat(rent) || 0,
         electricity: parseFloat(electricity) || 0,
+        internet: parseFloat(internet) || 0,
         waterBillAmount: currentWaterBill,
         previousMeterReading: prevReading ? parseFloat(prevReading) : null,
         currentMeterReading: currReading ? parseFloat(currReading) : null,
       };
+
+      // Ensure internet is a valid number, not NaN
+      if (isNaN(payload.internet)) {
+        payload.internet = 0;
+      }
 
       const createResponse = await apiService.post(
         "/api/v2/billing-cycles/create",
@@ -280,6 +373,10 @@ const AdminBillingScreen = ({ navigation }) => {
 
       // Step 1: Store the current billing data before clearing
       const currentWaterBill = calculateTotalWaterBill();
+      let internetValue = parseFloat(internet);
+      if (isNaN(internetValue)) {
+        internetValue = undefined; // Don't send if not entered, let backend use fallback
+      }
       const payload = {
         roomId: selectedRoom._id,
         startDate: startDate,
@@ -290,6 +387,17 @@ const AdminBillingScreen = ({ navigation }) => {
         previousMeterReading: prevReading ? parseFloat(prevReading) : null,
         currentMeterReading: currReading ? parseFloat(currReading) : null,
       };
+
+      // Only include internet if it was explicitly entered
+      if (internetValue !== undefined && internetValue > 0) {
+        payload.internet = internetValue;
+      }
+
+      console.log(
+        "🔍 Billing Cycle Payload:",
+        JSON.stringify(payload, null, 2),
+      );
+      console.log("📊 Internet value in payload:", payload.internet);
 
       // Step 2: Create billing cycle with current data
       // Create and immediately close the billing cycle
@@ -445,11 +553,90 @@ const AdminBillingScreen = ({ navigation }) => {
                 ₱{calculateTotalWaterBill().toFixed(2)}
               </Text>
             </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Internet</Text>
+              <Text style={[styles.summaryValue, { color: "#9c27b0" }]}>
+                ₱{Number(internet || 0).toFixed(2)}
+              </Text>
+            </View>
             <View style={[styles.summaryCard, styles.totalCard]}>
               <Text style={styles.summaryLabel}>Total</Text>
               <Text style={[styles.summaryValue, { color: "#28a745" }]}>
                 ₱{getTotalBilling().toFixed(2)}
               </Text>
+            </View>
+          </View>
+
+          {/* Quick Access Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Admin Tools</Text>
+            <View style={styles.quickAccessContainer}>
+              <TouchableOpacity
+                style={styles.quickAccessBtn}
+                onPress={() =>
+                  navigation.navigate("BillingStack", {
+                    screen: "PaymentVerification",
+                    params: { room: selectedRoom },
+                  })
+                }
+              >
+                <Text style={styles.quickAccessBtnIcon}>✓</Text>
+                <Text style={styles.quickAccessBtnText}>Verify Payments</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickAccessBtn}
+                onPress={() =>
+                  navigation.navigate("BillingStack", {
+                    screen: "FinancialDashboard",
+                    params: { room: selectedRoom },
+                  })
+                }
+              >
+                <Text style={styles.quickAccessBtnIcon}>📊</Text>
+                <Text style={styles.quickAccessBtnText}>
+                  Financial Dashboard
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickAccessBtn}
+                onPress={() =>
+                  navigation.navigate("BillingStack", {
+                    screen: "Adjustments",
+                    params: { room: selectedRoom },
+                  })
+                }
+              >
+                <Text style={styles.quickAccessBtnIcon}>⚙️</Text>
+                <Text style={styles.quickAccessBtnText}>Adjust Charges</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickAccessBtn}
+                onPress={() =>
+                  navigation.navigate("BillingStack", {
+                    screen: "Reminders",
+                    params: { room: selectedRoom },
+                  })
+                }
+              >
+                <Text style={styles.quickAccessBtnIcon}>🔔</Text>
+                <Text style={styles.quickAccessBtnText}>Send Reminders</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickAccessBtn}
+                onPress={() =>
+                  navigation.navigate("BillingStack", {
+                    screen: "PresenceReminders",
+                    params: { room: selectedRoom },
+                  })
+                }
+              >
+                <Text style={styles.quickAccessBtnIcon}>📍</Text>
+                <Text style={styles.quickAccessBtnText}>Presence Check</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -508,6 +695,16 @@ const AdminBillingScreen = ({ navigation }) => {
               placeholder="2000"
               value={electricity}
               onChangeText={setElectricity}
+              keyboardType="decimal-pad"
+              editable={editMode && !saving}
+            />
+
+            <Text style={styles.inputLabel}>Internet (₱)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="999"
+              value={internet}
+              onChangeText={setInternet}
               keyboardType="decimal-pad"
               editable={editMode && !saving}
             />
@@ -622,22 +819,6 @@ const AdminBillingScreen = ({ navigation }) => {
                     </Text>
                     <Text style={styles.totalWaterAmount}>
                       ₱{calculateTotalWaterBill().toFixed(2)}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.totalWaterBillRow,
-                      {
-                        marginTop: 12,
-                        paddingTop: 12,
-                        borderTopWidth: 1,
-                        borderTopColor: "#e0e0e0",
-                      },
-                    ]}
-                  >
-                    <Text style={styles.totalWaterLabel}>Water per Payor:</Text>
-                    <Text style={styles.totalWaterAmount}>
-                      ₱{calculatePayorWaterShare().toFixed(2)}
                     </Text>
                   </View>
                 </>
@@ -933,6 +1114,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#666",
     marginTop: 8,
+    textAlign: "center",
+  },
+  quickAccessContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  quickAccessBtn: {
+    width: "48%",
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: "#b38604",
+  },
+  quickAccessBtnIcon: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  quickAccessBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#333",
     textAlign: "center",
   },
 });

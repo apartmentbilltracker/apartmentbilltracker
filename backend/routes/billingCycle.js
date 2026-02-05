@@ -25,11 +25,11 @@ router.post("/create", isAdmin, createBillingCycle);
 // Get all cycles for a room
 router.get("/room/:roomId", getBillingCycles);
 
+// Get active cycle for a room (must be before /:cycleId to avoid being matched as cycleId)
+router.get("/active/:roomId", getActiveCycle);
+
 // Get single cycle details
 router.get("/:cycleId", getBillingCycleById);
-
-// Get active cycle for a room
-router.get("/active/:roomId", getActiveCycle);
 
 // Update cycle details (admin only)
 router.put("/:cycleId", isAdmin, updateBillingCycle);

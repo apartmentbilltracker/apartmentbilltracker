@@ -226,10 +226,40 @@ export const paymentProcessingService = {
     api.get(`/api/v2/payment-processing/analytics/${roomId}`).then(extractData),
 };
 
+export const announcementService = {
+  getRoomAnnouncements: (roomId) =>
+    api.get(`/api/v2/announcements/${roomId}`).then(extractData),
+
+  createAnnouncement: (roomId, title, content) =>
+    api
+      .post("/api/v2/announcements/create", {
+        roomId,
+        title,
+        content,
+      })
+      .then(extractData),
+
+  addComment: (announcementId, text) =>
+    api
+      .post(`/api/v2/announcements/${announcementId}/comments`, {
+        text,
+      })
+      .then(extractData),
+
+  deleteAnnouncement: (announcementId) =>
+    api.delete(`/api/v2/announcements/${announcementId}`).then(extractData),
+
+  deleteComment: (announcementId, commentId) =>
+    api
+      .delete(`/api/v2/announcements/${announcementId}/comments/${commentId}`)
+      .then(extractData),
+};
+
 export const apiService = {
   get: (url) => api.get(url).then(extractData),
   post: (url, data) => api.post(url, data).then(extractData),
   put: (url, data) => api.put(url, data).then(extractData),
+  patch: (url, data = {}) => api.patch(url, data).then(extractData),
   delete: (url) => api.delete(url).then(extractData),
   // Payment methods
   getPaymentHistory: (roomId) => paymentService.getPaymentHistory(roomId),

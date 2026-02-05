@@ -29,18 +29,11 @@ router.post("/", isAuthenticated, async (req, res, next) => {
 // list rooms
 router.get("/", isAuthenticated, async (req, res, next) => {
   try {
-    console.log(
-      "GET /api/v2/rooms - User ID:",
-      req.user._id,
-      "Role:",
-      req.user.role,
-    );
     let query;
 
     // Admin sees all rooms, regular users see only rooms they're members of or have been members of
     if (req.user.role && req.user.role.includes("admin")) {
       query = Room.find();
-      console.log("User is admin, fetching all rooms");
     } else {
       // Users see rooms they're currently members of, OR rooms they were previously members of (in memberPayments)
       query = Room.find({
@@ -49,42 +42,11 @@ router.get("/", isAuthenticated, async (req, res, next) => {
           { "memberPayments.member": req.user._id }, // Was previously a member (has payment records)
         ],
       });
-      console.log("User is regular user, fetching via $or query");
     }
 
     const rooms = await query
       .populate("members.user", "name email avatar")
       .select("-members.presence"); // Exclude presence data for list view to reduce payload
-
-    console.log("Rooms found:", rooms.length);
-    if (rooms.length === 0) {
-      console.log(
-        "No rooms found. Checking if user has any room memberships...",
-      );
-      const allRooms = await Room.find();
-      console.log("Total rooms in database:", allRooms.length);
-      allRooms.forEach((room) => {
-        const isMember = room.members.some(
-          (m) => String(m.user) === String(req.user._id),
-        );
-        const hasPayment = room.memberPayments.some(
-          (mp) => String(mp.member) === String(req.user._id),
-        );
-        console.log(
-          `Room "${room.name}": isMember=${isMember}, hasPayment=${hasPayment}`,
-        );
-        if (room.members.length > 0) {
-          console.log(
-            `  Members: ${room.members.map((m) => `${String(m.user)} (${m.name})`).join(", ")}`,
-          );
-        }
-        if (room.memberPayments.length > 0) {
-          console.log(
-            `  Payments: ${room.memberPayments.map((mp) => `${String(mp.member)} (${mp.memberName})`).join(", ")}`,
-          );
-        }
-      });
-    }
 
     res.status(200).json({ success: true, rooms });
   } catch (error) {
@@ -96,8 +58,6 @@ router.get("/", isAuthenticated, async (req, res, next) => {
 // list rooms for client view (respects membership only, ignores admin role)
 router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
   try {
-    console.log("GET /api/v2/rooms/client/my-rooms - User ID:", req.user._id);
-
     // Always filter by membership, even if user is admin
     // This ensures admins see only their joined rooms when in client view
     const query = Room.find({
@@ -111,15 +71,15 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
       .populate("members.user", "name email avatar")
       .select("-members.presence");
 
-    // Explicitly log memberPayments for debugging
-    console.log("Client my-rooms endpoint response:");
-    rooms.forEach((room, idx) => {
-      console.log(`Room ${idx}: ${room.name}`);
-      console.log(`  Members: ${room.members.length}`);
-      console.log(`  Member Payments: ${JSON.stringify(room.memberPayments)}`);
+    // Log presence clearing verification
+    rooms.forEach((room) => {
+      console.log(`[MY-ROOMS] ${room.name}:`);
+      room.members.forEach((m) => {
+        const presenceCount = (m.presence || []).length;
+        console.log(`  - ${m.name}: presence=${presenceCount}`);
+      });
     });
 
-    console.log("Client view rooms found:", rooms.length);
     res.status(200).json({ success: true, rooms });
   } catch (error) {
     console.error("Error in GET /client/my-rooms:", error);
@@ -153,6 +113,16 @@ router.get("/:id", async (req, res, next) => {
       "name email avatar",
     );
     if (!room) return next(new ErrorHandler("Room not found", 404));
+
+    // Log presence data in room members to verify clearing worked
+    console.log(
+      `[ROOM GET] ${room.name}: Members presence:`,
+      room.members.map((m) => ({
+        name: m.name,
+        presenceCount: (m.presence || []).length,
+      })),
+    );
+
     res.status(200).json({ success: true, room });
   } catch (error) {
     next(new ErrorHandler(error.message, 500));
@@ -309,8 +279,16 @@ router.delete(
 // update billing for a room
 router.put("/:id/billing", isAuthenticated, async (req, res, next) => {
   try {
-    const { start, end, rent, electricity, previousReading, currentReading } =
-      req.body;
+    const {
+      start,
+      end,
+      rent,
+      electricity,
+      water,
+      internet,
+      previousReading,
+      currentReading,
+    } = req.body;
     const room = await Room.findById(req.params.id);
     if (!room) return next(new ErrorHandler("Room not found", 404));
 
@@ -331,6 +309,8 @@ router.put("/:id/billing", isAuthenticated, async (req, res, next) => {
         end: room.billing.end,
         rent: room.billing.rent,
         electricity: room.billing.electricity,
+        water: room.billing.water,
+        internet: room.billing.internet,
         previousReading: room.billing.previousReading,
         currentReading: room.billing.currentReading,
         createdAt: room.billing.updatedAt || new Date(),
@@ -358,6 +338,7 @@ router.put("/:id/billing", isAuthenticated, async (req, res, next) => {
     if (typeof rent === "number") room.billing.rent = rent;
     room.billing.electricity = computedElectricity ?? 0;
     if (typeof water === "number") room.billing.water = water;
+    if (typeof internet === "number") room.billing.internet = internet;
     if (typeof previousReading === "number")
       room.billing.previousReading = previousReading;
     if (typeof currentReading === "number")
@@ -381,6 +362,7 @@ router.put("/:id/billing", isAuthenticated, async (req, res, next) => {
             rentStatus: "pending",
             electricityStatus: "pending",
             waterStatus: "pending",
+            internetStatus: "pending",
           });
         }
       });
@@ -525,6 +507,7 @@ router.post("/:id/presence", isAuthenticated, async (req, res, next) => {
           // RECALCULATE MEMBER CHARGES WITH UPDATED WATER
           const rentAmount = activeCycle.rent || 0;
           const electricityAmount = activeCycle.electricity || 0;
+          const internetAmount = activeCycle.internet || 0;
           const payorCount =
             (room.members || []).filter((m) => m.isPayer !== false).length || 1;
 
@@ -545,7 +528,10 @@ router.post("/:id/presence", isAuthenticated, async (req, res, next) => {
               payorCount > 0 && m.isPayer ? rentAmount / payorCount : 0;
             const electricityShare =
               payorCount > 0 && m.isPayer ? electricityAmount / payorCount : 0;
-            const totalDue = rentShare + electricityShare + waterShare;
+            const internetShare =
+              payorCount > 0 && m.isPayer ? internetAmount / payorCount : 0;
+            const totalDue =
+              rentShare + electricityShare + waterShare + internetShare;
 
             return {
               userId: m.user,
@@ -555,6 +541,7 @@ router.post("/:id/presence", isAuthenticated, async (req, res, next) => {
               waterBillShare: Number(waterShare.toFixed(2)),
               rentShare: Number(rentShare.toFixed(2)),
               electricityShare: Number(electricityShare.toFixed(2)),
+              internetShare: Number(internetShare.toFixed(2)),
               totalDue: Number(totalDue.toFixed(2)),
             };
           });
@@ -565,6 +552,7 @@ router.post("/:id/presence", isAuthenticated, async (req, res, next) => {
           activeCycle.totalBilledAmount =
             (activeCycle.rent || 0) +
             (activeCycle.electricity || 0) +
+            (activeCycle.internet || 0) +
             recalculatedWaterAmount;
 
           await activeCycle.save();

@@ -14,6 +14,7 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
     previousMeterReading,
     currentMeterReading,
     waterBillAmount,
+    internet,
   } = req.body;
 
   // Validation
@@ -49,14 +50,10 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
     });
 
     if (overlappingCycles.length > 0) {
-      console.log(
-        `🔄 Auto-archiving ${overlappingCycles.length} overlapping cycle(s) before creating new one...`,
-      );
       // Archive overlapping cycles so new cycle can be created
       for (const cycle of overlappingCycles) {
-        cycle.status = "closed";
+        cycle.status = "archived";
         await cycle.save();
-        console.log(`   ✅ Archived cycle ${cycle._id} (${cycle.cycleNumber})`);
       }
     }
 
@@ -75,8 +72,19 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
         ? waterBillAmount
         : (room.billing?.waterBillAmount ?? room.billing?.water ?? 0),
     );
+    const internetAmount = Number(
+      internet !== undefined && internet !== null
+        ? internet
+        : (room.billing?.internet ?? 0),
+    );
 
-    // Fallback for meter readings as well
+    console.log("🔍 Billing values received in backend:");
+    console.log("  Internet from request.body:", internet);
+    console.log("  Internet as Number:", internetAmount);
+    console.log("  room.billing object:", room.billing);
+    console.log("  room.billing?.internet:", room.billing?.internet);
+    console.log("  Full req.body:", req.body);
+
     const prevReading =
       previousMeterReading !== undefined && previousMeterReading !== null
         ? previousMeterReading
@@ -95,24 +103,6 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
     start.setHours(0, 0, 0, 0);
     const end = new Date(endDate);
     end.setHours(0, 0, 0, 0);
-
-    // Debug logging to help diagnose cases where breakdown/charges are empty
-    console.log("Creating billing cycle - derived amounts:", {
-      rentAmount,
-      electricityAmount,
-      waterAmount,
-      membersCount: members.length,
-      prevReading,
-      currReading,
-    });
-    console.log(
-      "   ✅ Will update room.billing with: Rent=",
-      rentAmount,
-      " | Electricity=",
-      electricityAmount,
-      " | Water=",
-      waterAmount,
-    );
 
     members.forEach((m) => {
       const presenceArray = Array.isArray(m.presence) ? m.presence : [];
@@ -137,20 +127,53 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
       }
     });
 
+    // Compute total presence days for non-payors (to split among payors)
+    let totalNonPayorPresenceDays = 0;
+    members.forEach((m) => {
+      if (m.isPayer === false) {
+        totalNonPayorPresenceDays += m._presenceDays || 0;
+      }
+    });
+    const WATER_BILL_PER_DAY = 5; // ₱5 per day
+    const nonPayorWaterAmount = totalNonPayorPresenceDays * WATER_BILL_PER_DAY;
+
+    console.log("💰 CALCULATION DEBUG:");
+    console.log("  payorCount:", payorCount);
+    console.log("  rentAmount:", rentAmount);
+    console.log("  electricityAmount:", electricityAmount);
+    console.log("  internetAmount:", internetAmount);
+    console.log("  waterBillAmount:", waterAmount);
+
     members.forEach((m) => {
       const presenceDays = m._presenceDays || 0;
 
-      // Water share: only for payors, split by their presence days
-      const waterShare =
-        m.isPayer !== false && totalPayorPresenceDays > 0
-          ? (presenceDays / totalPayorPresenceDays) * waterAmount
-          : 0;
+      // Water share: For payors, own consumption + split of non-payors' water
+      // For non-payors, always 0
+      let waterShare = 0;
+      if (m.isPayer !== false) {
+        // Payor's own water consumption
+        const ownWater = presenceDays * WATER_BILL_PER_DAY;
+        // Split non-payors' water equally among payors
+        const sharedNonPayorWater =
+          payorCount > 0 ? nonPayorWaterAmount / payorCount : 0;
+        waterShare = ownWater + sharedNonPayorWater;
+      }
 
       const rentShare =
         payorCount > 0 && m.isPayer ? rentAmount / payorCount : 0;
       const electricityShare =
         payorCount > 0 && m.isPayer ? electricityAmount / payorCount : 0;
-      const totalDue = rentShare + electricityShare + waterShare;
+      const internetShare =
+        payorCount > 0 && m.isPayer ? internetAmount / payorCount : 0;
+      const totalDue =
+        rentShare + electricityShare + waterShare + internetShare;
+
+      console.log(`  📋 Member ${m.name || m.user}:`);
+      console.log(`    isPayer: ${m.isPayer}, presenceDays: ${presenceDays}`);
+      console.log(
+        `    rentShare: ${rentShare}, electricityShare: ${electricityShare}, internetShare: ${internetShare}`,
+      );
+      console.log(`    waterShare: ${waterShare}, totalDue: ${totalDue}`);
 
       memberCharges.push({
         userId: m.user,
@@ -160,12 +183,15 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
         waterBillShare: Number(waterShare.toFixed(2)),
         rentShare: Number(rentShare.toFixed(2)),
         electricityShare: Number(electricityShare.toFixed(2)),
+        internetShare: Number(internetShare.toFixed(2)),
         totalDue: Number(totalDue.toFixed(2)),
       });
     });
 
     const totalBilledAmount = Number(
-      (rentAmount + electricityAmount + waterAmount).toFixed(2),
+      (rentAmount + electricityAmount + waterAmount + internetAmount).toFixed(
+        2,
+      ),
     );
 
     // Create new billing cycle
@@ -177,6 +203,7 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
       rent: rentAmount,
       electricity: electricityAmount,
       waterBillAmount: waterAmount,
+      internet: internetAmount,
       previousMeterReading: prevReading,
       currentMeterReading: currReading,
       createdBy: req.user._id,
@@ -187,6 +214,7 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
         rent: rentAmount,
         electricity: electricityAmount,
         water: waterAmount,
+        internet: internetAmount,
         other: 0,
       },
       memberCharges,
@@ -194,69 +222,60 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
 
     await billingCycle.save();
 
-    // IMPORTANT: When creating a NEW billing cycle, reset all member payment statuses to "pending"
-    // This happens after the PREVIOUS cycle was archived with "paid" statuses showing
-    // Now we start fresh for the new cycle
+    // Build the reset memberPayments array - create fresh records for each member
+    const resetMemberPayments = room.members
+      .filter((m) => m.user) // Only include members with valid user references
+      .map((member) => ({
+        member: member.user,
+        memberName: member.name || undefined,
+        rentStatus: "pending",
+        electricityStatus: "pending",
+        waterStatus: "pending",
+        internetStatus: "pending",
+        rentPaidDate: null,
+        electricityPaidDate: null,
+        waterPaidDate: null,
+        internetPaidDate: null,
+      }));
 
-    // Build the reset memberPayments array
-    const resetMemberPayments = room.memberPayments.map((mp) => ({
-      _id: mp._id,
-      member: mp.member,
-      memberName: mp.memberName,
-      rentStatus: "pending",
-      electricityStatus: "pending",
-      waterStatus: "pending",
-      rentPaidDate: null,
-      electricityPaidDate: null,
-      waterPaidDate: null,
-    }));
-
-    console.log("🔄 Resetting memberPayments to pending:");
+    // Also reset members' presence array for fresh water calculation in new cycle
+    const updatedRoom = await Room.findById(roomId);
     console.log(
-      "   Before:",
-      JSON.stringify(
-        room.memberPayments.map((mp) => ({
-          member: mp.member,
-          memberName: mp.memberName,
-          rentStatus: mp.rentStatus,
-          electricityStatus: mp.electricityStatus,
-          waterStatus: mp.waterStatus,
-        })),
-      ),
+      `[CREATE CYCLE] Clearing presence for ${updatedRoom.members.length} members`,
     );
-    console.log(
-      "   After:",
-      JSON.stringify(
-        resetMemberPayments.map((mp) => ({
-          member: mp.member,
-          memberName: mp.memberName,
-          rentStatus: mp.rentStatus,
-          electricityStatus: mp.electricityStatus,
-          waterStatus: mp.waterStatus,
-        })),
-      ),
-    );
+    if (updatedRoom && updatedRoom.members) {
+      updatedRoom.members.forEach((m) => {
+        const beforeCount = (m.presence || []).length;
+        m.presence = []; // Clear presence data for fresh cycle
+        console.log(
+          `[CREATE CYCLE] Member ${m.name}: presence ${beforeCount} → 0`,
+        );
+      });
+      // Mark the members array as modified so Mongoose knows to save it
+      updatedRoom.markModified("members");
+    }
 
-    await Room.findByIdAndUpdate(
-      roomId,
-      {
-        $push: { billingCycles: billingCycle._id },
-        currentCycleId: billingCycle._id,
-        "billing.start": startDate,
-        "billing.end": endDate,
-        "billing.rent": rentAmount,
-        "billing.electricity": electricityAmount,
-        "billing.water": waterAmount,
-        "billing.previousReading": prevReading,
-        "billing.currentReading": currReading,
-        // Reset all member payment statuses to "pending" for the NEW cycle
-        memberPayments: resetMemberPayments,
-      },
-      { new: true },
-    );
+    // Update billing cycle reference and payment statuses
+    updatedRoom.billingCycles.push(billingCycle._id);
+    updatedRoom.currentCycleId = billingCycle._id;
+    updatedRoom.billing.start = startDate;
+    updatedRoom.billing.end = endDate;
+    updatedRoom.billing.rent = rentAmount;
+    updatedRoom.billing.electricity = electricityAmount;
+    updatedRoom.billing.water = waterAmount;
+    updatedRoom.billing.internet = internetAmount;
+    updatedRoom.billing.previousReading = prevReading;
+    updatedRoom.billing.currentReading = currReading;
+    updatedRoom.memberPayments = resetMemberPayments;
+
+    const result = await updatedRoom.save();
 
     console.log(
-      "✅ NEW billing cycle created - member statuses reset to 'pending'",
+      `[CREATE CYCLE] After update - Room presence check:`,
+      result.members.map((m) => ({
+        name: m.name,
+        presenceCount: (m.presence || []).length,
+      })),
     );
 
     res.status(201).json({
@@ -266,6 +285,16 @@ exports.createBillingCycle = catchAsyncErrors(async (req, res, next) => {
     });
   } catch (error) {
     console.error("Error creating billing cycle:", error);
+    console.error("Error details:", {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      validationErrors: error.errors
+        ? Object.keys(error.errors).map(
+            (k) => `${k}: ${error.errors[k].message}`,
+          )
+        : null,
+    });
     next(new ErrorHandler("Failed to create billing cycle", 500));
   }
 });
@@ -330,12 +359,16 @@ exports.getBillingCycleById = catchAsyncErrors(async (req, res, next) => {
   const { cycleId } = req.params;
 
   try {
+    // Validate cycleId format
+    if (!cycleId || cycleId.length !== 24) {
+      return next(new ErrorHandler("Invalid billing cycle ID", 400));
+    }
+
     const cycle = await BillingCycle.findById(cycleId)
       .populate("room")
       .populate("createdBy", "name email")
-      .populate("closedBy", "name email")
-      .populate("bills")
-      .populate("expenses");
+      .populate("closedBy", "name email");
+    // Note: Removed populate for "bills" and "expenses" as these models may not exist
 
     if (!cycle) {
       return next(new ErrorHandler("Billing cycle not found", 404));

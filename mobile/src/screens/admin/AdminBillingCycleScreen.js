@@ -29,6 +29,7 @@ const AdminBillingCycleScreen = ({ route }) => {
     rent: "",
     electricity: "",
     waterBillAmount: "",
+    internet: "",
     previousMeterReading: "",
     currentMeterReading: "",
   });
@@ -196,6 +197,7 @@ const AdminBillingCycleScreen = ({ route }) => {
       endDate: newEnd,
       rent: "",
       electricity: "",
+      internet: "",
       waterBillAmount: "",
       previousMeterReading: "",
       currentMeterReading: "",
@@ -294,6 +296,10 @@ const AdminBillingCycleScreen = ({ route }) => {
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Electricity:</Text>
                   <Text style={styles.detailValue}>₱{cycle.electricity}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Internet:</Text>
+                  <Text style={styles.detailValue}>₱{cycle.internet}</Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Water Bill:</Text>

@@ -133,6 +133,11 @@ const room = require("./controller/room");
 const billingCycleRoutes = require("./routes/billingCycle");
 const paymentRoutes = require("./controller/payment");
 const paymentProcessingRoutes = require("./controller/paymentProcessing");
+const adminFinancialRoutes = require("./controller/adminFinancial");
+const adminBillingRoutes = require("./controller/adminBilling");
+const adminRemindersRoutes = require("./controller/adminReminders");
+const notificationsRoutes = require("./controller/notifications");
+const announcementRoutes = require("./routes/announcement");
 
 // 5. Debug Endpoints (Add before routes)
 app.post("/api/v2/debug/upload", (req, res) => {
@@ -238,6 +243,11 @@ app.use("/api/v2/rooms", room);
 app.use("/api/v2/billing-cycles", billingCycleRoutes);
 app.use("/api/v2/payments", paymentRoutes);
 app.use("/api/v2/payment-processing", paymentProcessingRoutes);
+app.use("/api/v2/admin/financial", adminFinancialRoutes);
+app.use("/api/v2/admin/billing", adminBillingRoutes);
+app.use("/api/v2/admin/reminders", adminRemindersRoutes);
+app.use("/api/v2/notifications", notificationsRoutes);
+app.use("/api/v2/announcements", announcementRoutes);
 
 // Logout route - ensures the token cookie is properly removed
 app.get("/api/v2/user/logout", async (req, res, next) => {

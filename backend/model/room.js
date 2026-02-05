@@ -20,6 +20,7 @@ const roomSchema = new mongoose.Schema({
     rent: { type: Number },
     electricity: { type: Number },
     water: { type: Number },
+    internet: { type: Number },
     previousReading: { type: Number },
     currentReading: { type: Number },
     updatedAt: { type: Date, default: Date.now },
@@ -47,6 +48,12 @@ const roomSchema = new mongoose.Schema({
         default: "pending",
       },
       waterPaidDate: { type: Date },
+      internetStatus: {
+        type: String,
+        enum: ["pending", "paid", "overdue"],
+        default: "pending",
+      },
+      internetPaidDate: { type: Date },
     },
   ],
   billingHistory: [

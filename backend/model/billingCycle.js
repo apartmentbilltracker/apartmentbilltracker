@@ -21,6 +21,7 @@ const billingCycleSchema = new mongoose.Schema({
     rent: { type: Number, default: 0 },
     electricity: { type: Number, default: 0 },
     water: { type: Number, default: 0 },
+    internet: { type: Number, default: 0 },
     other: { type: Number, default: 0 },
   },
 
@@ -28,6 +29,7 @@ const billingCycleSchema = new mongoose.Schema({
   rent: { type: Number },
   electricity: { type: Number },
   waterBillAmount: { type: Number }, // Flat water bill for the cycle
+  internet: { type: Number }, // Internet bill amount for the cycle
   previousMeterReading: { type: Number }, // Previous water meter reading
   currentMeterReading: { type: Number }, // Current water meter reading
 
@@ -41,6 +43,7 @@ const billingCycleSchema = new mongoose.Schema({
       waterBillShare: { type: Number, default: 0 }, // Water bill assigned to this member
       rentShare: { type: Number, default: 0 },
       electricityShare: { type: Number, default: 0 },
+      internetShare: { type: Number, default: 0 },
       totalDue: { type: Number, default: 0 },
     },
   ],

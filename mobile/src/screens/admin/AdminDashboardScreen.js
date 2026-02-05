@@ -11,13 +11,16 @@ import {
   TextInput,
   FlatList,
   Alert,
+  Dimensions,
 } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { roomService, apiService } from "../../services/apiService";
 
 const AdminDashboardScreen = ({ navigation }) => {
   const { state, signOut, switchView } = useContext(AuthContext);
+  const isFocused = useIsFocused();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -27,11 +30,73 @@ const AdminDashboardScreen = ({ navigation }) => {
   const [newRoomName, setNewRoomName] = useState("");
   const [newRoomDesc, setNewRoomDesc] = useState("");
   const [creatingRoom, setCreatingRoom] = useState(false);
+  const [paymentStats, setPaymentStats] = useState({
+    totalCollected: 0,
+    totalPending: 0,
+    collectionRate: 0,
+  });
+  const [billingByMonth, setBillingByMonth] = useState([]);
 
   useEffect(() => {
     fetchRooms();
     fetchBillingTotals();
+    fetchPaymentStats();
   }, []);
+
+  // Check if any billing cycle was closed and refresh data
+  useEffect(() => {
+    if (isFocused) {
+      console.log(
+        "🔄 [ADMIN DASHBOARD] Screen focused - refreshing all dashboard data",
+      );
+      // Clear cached payment stats first
+      setPaymentStats({
+        totalCollected: 0,
+        totalPending: 0,
+        collectionRate: 0,
+      });
+      // Refetch all data
+      fetchPaymentStats();
+      fetchRooms();
+      fetchBillingTotals();
+    }
+  }, [isFocused]);
+
+  const fetchPaymentStats = async () => {
+    try {
+      // Add timestamp to force fresh data
+      const timestamp = new Date().getTime();
+      const response = await apiService.get(
+        `/api/v2/admin/billing/payment-stats?t=${timestamp}`,
+      );
+      console.log("🔍 Payment stats response:", response);
+
+      if (response.success && response.data) {
+        console.log("✅ Setting payment stats:", response.data);
+        setPaymentStats(response.data);
+      } else if (response.data) {
+        console.log(
+          "✅ Setting payment stats (no success flag):",
+          response.data,
+        );
+        setPaymentStats(response.data);
+      } else {
+        console.log("⚠️  No data in payment stats response");
+        setPaymentStats({
+          totalCollected: 0,
+          totalPending: 0,
+          collectionRate: 0,
+        });
+      }
+    } catch (error) {
+      console.log("❌ Error fetching payment stats:", error);
+      setPaymentStats({
+        totalCollected: 0,
+        totalPending: 0,
+        collectionRate: 0,
+      });
+    }
+  };
 
   const fetchRooms = async () => {
     try {
@@ -46,7 +111,11 @@ const AdminDashboardScreen = ({ navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchRooms(), fetchBillingTotals()]);
+    await Promise.all([
+      fetchRooms(),
+      fetchBillingTotals(),
+      fetchPaymentStats(),
+    ]);
     setRefreshing(false);
   };
 
@@ -55,7 +124,6 @@ const AdminDashboardScreen = ({ navigation }) => {
     0,
   );
 
-  const [billingByMonth, setBillingByMonth] = useState([]);
   const fetchBillingTotals = async (months = 6) => {
     try {
       const res = await apiService.get(
@@ -90,79 +158,107 @@ const AdminDashboardScreen = ({ navigation }) => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
+      {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>Welcome</Text>
+          <Text style={styles.greeting}>Welcome Back</Text>
           <Text style={styles.userName}>{state.user?.name || "Admin"}</Text>
         </View>
+        <View style={styles.headerIcon}>
+          <Ionicons name="bar-chart" size={32} color="#b38604" />
+        </View>
       </View>
 
+      {/* Key Metrics - Payment Status */}
+      <View style={styles.metricsSection}>
+        <Text style={styles.metricsTitle}>Payment Collection</Text>
+        <View style={styles.metricsRow}>
+          <View style={[styles.metricCard, { backgroundColor: "#4CAF50" }]}>
+            <View style={styles.metricHeader}>
+              <Ionicons name="checkmark-circle" size={24} color="#fff" />
+              <Text style={styles.metricLabel}>Collected</Text>
+            </View>
+            <Text style={styles.metricValue}>
+              ₱{(paymentStats.totalCollected || 0).toFixed(2)}
+            </Text>
+          </View>
+          <View style={[styles.metricCard, { backgroundColor: "#FF6B6B" }]}>
+            <View style={styles.metricHeader}>
+              <Ionicons name="alert-circle" size={24} color="#fff" />
+              <Text style={styles.metricLabel}>Pending</Text>
+            </View>
+            <Text style={styles.metricValue}>
+              ₱{(paymentStats.totalPending || 0).toFixed(2)}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.collectionRateContainer}>
+          <Text style={styles.collectionRateLabel}>Collection Rate</Text>
+          <View style={styles.progressBar}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${Math.min(100, paymentStats.collectionRate || 0)}%`,
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.collectionRateValue}>
+            {(paymentStats.collectionRate || 0).toFixed(0)}%
+          </Text>
+        </View>
+      </View>
+
+      {/* Quick Stats */}
       <View style={styles.statsContainer}>
         <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <View style={styles.statRow}>
-              <Ionicons
-                name="home-outline"
-                size={18}
-                color="#6c7a89"
-                style={{ marginRight: 8 }}
-              />
-              <Text style={styles.statLabel}>Total Rooms</Text>
+          <View style={styles.quickStatCard}>
+            <View style={styles.quickStatIcon}>
+              <Ionicons name="home" size={24} color="#b38604" />
             </View>
-            <Text style={styles.statValue}>{rooms.length}</Text>
+            <Text style={styles.quickStatValue}>{rooms.length}</Text>
+            <Text style={styles.quickStatLabel}>Rooms</Text>
           </View>
-          <View style={styles.statCard}>
-            <View style={styles.statRow}>
-              <Ionicons
-                name="people-outline"
-                size={18}
-                color="#6c7a89"
-                style={{ marginRight: 8 }}
-              />
-              <Text style={styles.statLabel}>Total Members</Text>
+          <View style={styles.quickStatCard}>
+            <View style={styles.quickStatIcon}>
+              <Ionicons name="people" size={24} color="#17a2b8" />
             </View>
-            <Text style={styles.statValue}>{totalMembers}</Text>
+            <Text style={styles.quickStatValue}>{totalMembers}</Text>
+            <Text style={styles.quickStatLabel}>Members</Text>
           </View>
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <View style={styles.statRow}>
-              <Ionicons
-                name="person-circle"
-                size={18}
-                color="#6c7a89"
-                style={{ marginRight: 8 }}
-              />
-              <Text style={styles.statLabel}>Payor Members</Text>
+          <View style={styles.quickStatCard}>
+            <View style={styles.quickStatIcon}>
+              <Ionicons name="wallet" size={24} color="#4CAF50" />
             </View>
-            <Text style={styles.statValue}>{totalPayorMembers}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <View style={styles.statRow}>
-              <Ionicons
-                name="cash-outline"
-                size={18}
-                color="#17a2b8"
-                style={{ marginRight: 8 }}
-              />
-              <Text style={styles.statLabel}>Billed (last 6 mo)</Text>
-            </View>
-            <Text style={styles.statValue}>₱{totalBilledLastN.toFixed(2)}</Text>
+            <Text style={styles.quickStatValue}>
+              ₱{(totalBilledLastN / 1000).toFixed(0)}k
+            </Text>
+            <Text style={styles.quickStatLabel}>Billed (6mo)</Text>
           </View>
         </View>
       </View>
 
+      {/* Billing Trend Chart */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Billing - Last 6 months</Text>
+        <View style={styles.chartHeaderContainer}>
+          <View>
+            <Text style={styles.sectionTitle}>Monthly Billing Trend</Text>
+            <Text style={styles.chartSubtitle}>6-month overview</Text>
+          </View>
+          <View style={styles.trendBadge}>
+            <Ionicons name="trending-up" size={18} color="#4CAF50" />
+          </View>
+        </View>
 
         {billingByMonth.length === 0 ? (
           <Text style={styles.noDataText}>No billing data yet</Text>
         ) : (
-          <View style={{ paddingVertical: 8 }}>
-            {/* Axis + bars */}
-            <View style={styles.barChartOuter}>
-              <View style={styles.yAxis}>
+          <View style={styles.chartWrapper}>
+            {/* Chart Container */}
+            <View style={styles.chartContainer}>
+              {/* Y-Axis */}
+              <View style={styles.yAxisContainer}>
                 {(() => {
                   const max = Math.max(
                     ...billingByMonth.map((x) => x.total || 0),
@@ -171,15 +267,16 @@ const AdminDashboardScreen = ({ navigation }) => {
                   const mid = Math.round(max / 2);
                   return (
                     <>
-                      <Text style={styles.axisLabel}>₱{Math.round(max)}</Text>
-                      <Text style={styles.axisLabel}>₱{mid}</Text>
-                      <Text style={styles.axisLabel}>₱0</Text>
+                      <Text style={styles.yAxisLabel}>₱{Math.round(max)}</Text>
+                      <Text style={styles.yAxisLabel}>₱{mid}</Text>
+                      <Text style={styles.yAxisLabel}>₱0</Text>
                     </>
                   );
                 })()}
               </View>
 
-              <View style={styles.barChartContainer}>
+              {/* Bars */}
+              <View style={styles.barsContainer}>
                 {billingByMonth.map((b) => {
                   const max = Math.max(
                     ...billingByMonth.map((x) => x.total || 0),
@@ -189,39 +286,80 @@ const AdminDashboardScreen = ({ navigation }) => {
                     ((b.total || 0) / max) * 100,
                   );
                   return (
-                    <View key={`${b.year}-${b.month}`} style={styles.barColumn}>
-                      <Text style={styles.barValue}>
-                        ₱{(b.total || 0).toFixed(0)}
-                      </Text>
-                      <View
-                        style={[
-                          styles.bar,
-                          { height: `${Math.max(8, heightPercent)}%` },
-                        ]}
-                      />
-                      <Text style={styles.barMonth}>{b.label}</Text>
+                    <View
+                      key={`${b.year}-${b.month}`}
+                      style={styles.barWrapper}
+                    >
+                      <View style={styles.barValueContainer}>
+                        <Text style={styles.barAmountText}>
+                          ₱{Math.round(b.total || 0)}
+                        </Text>
+                      </View>
+                      <View style={styles.barBackground}>
+                        <View
+                          style={[
+                            styles.barFill,
+                            { height: `${Math.max(10, heightPercent)}%` },
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.barMonthLabel}>{b.label}</Text>
                     </View>
                   );
                 })}
               </View>
             </View>
 
-            <View style={styles.chartFooterRow}>
-              <Text style={styles.footerSmall}>
-                Average/Month: ₱{avgPerMonth.toFixed(2)}
-              </Text>
-              <Text style={styles.footerSmall}>
-                Highest:{" "}
-                {highest.label || `${highest.month}/${highest.year || ""}`} ₱
-                {(highest.total || 0).toFixed(2)}
-              </Text>
+            {/* Footer Stats */}
+            <View style={styles.chartStatsRow}>
+              <View style={styles.statBox}>
+                <View style={styles.statIconBox}>
+                  <Ionicons name="calculator" size={20} color="#2196F3" />
+                </View>
+                <View style={styles.statTextBox}>
+                  <Text style={styles.statLabel}>Avg/Month</Text>
+                  <Text style={styles.statValue}>
+                    ₱{avgPerMonth.toFixed(0)}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.divider} />
+
+              <View style={styles.statBox}>
+                <View
+                  style={styles.statIconBox}
+                  style={{ backgroundColor: "#E8F5E9" }}
+                >
+                  <Ionicons name="arrow-up" size={20} color="#4CAF50" />
+                </View>
+                <View style={styles.statTextBox}>
+                  <Text style={styles.statLabel}>Highest</Text>
+                  <Text style={styles.statValue}>
+                    ₱{(highest.total || 0).toFixed(0)}
+                  </Text>
+                  <Text style={styles.statSubtitle}>
+                    {highest.label || `${highest.month}/${highest.year || ""}`}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
         )}
+      </View>
 
-        <Text style={[styles.sectionTitle, { marginTop: 16 }]}>
-          Rooms Overview
-        </Text>
+      {/* Rooms Overview */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Rooms Overview</Text>
+          <TouchableOpacity
+            style={styles.viewAllButton}
+            onPress={() => navigation.navigate("RoomManagement")}
+          >
+            <Text style={styles.viewAllText}>View All</Text>
+            <Ionicons name="arrow-forward" size={16} color="#b38604" />
+          </TouchableOpacity>
+        </View>
 
         {loading ? (
           <ActivityIndicator
@@ -232,29 +370,41 @@ const AdminDashboardScreen = ({ navigation }) => {
         ) : rooms.length === 0 ? (
           <Text style={styles.emptyText}>No rooms created yet</Text>
         ) : (
-          rooms.map((room) => (
-            <View key={room._id} style={styles.roomCard}>
-              <View style={styles.roomCardHeader}>
-                <Text style={styles.roomName}>{room.name}</Text>
-                <Text style={styles.memberBadge}>
-                  {room.members?.length || 0}
-                </Text>
-              </View>
-              <Text style={styles.roomDescription}>{room.description}</Text>
-              <View style={styles.roomFooter}>
-                <View>
-                  <Text style={styles.footerLabel}>Billing Period</Text>
-                  <Text style={styles.footerValue}>
-                    {room.billing?.start && room.billing?.end
-                      ? `${new Date(room.billing.start).toLocaleDateString()} - ${new Date(room.billing.end).toLocaleDateString()}`
-                      : "Not set"}
+          rooms.slice(0, 3).map((room) => (
+            <TouchableOpacity
+              key={room._id}
+              style={styles.roomCardNew}
+              activeOpacity={0.7}
+              onPress={() =>
+                navigation.navigate("BillingStack", {
+                  screen: "AdminBilling",
+                  params: { roomId: room._id, roomName: room.name },
+                })
+              }
+            >
+              <View style={styles.roomCardLeft}>
+                <View style={styles.roomIcon}>
+                  <Ionicons name="home" size={20} color="#fff" />
+                </View>
+                <View style={styles.roomInfo}>
+                  <Text style={styles.roomNameNew}>{room.name}</Text>
+                  <Text style={styles.roomMemberCount}>
+                    {room.members?.length || 0} members
                   </Text>
                 </View>
               </View>
-            </View>
+              <View style={styles.roomCardRight}>
+                <Text style={styles.roomMemberBadge}>
+                  {room.members?.length || 0}
+                </Text>
+                <Ionicons name="chevron-forward" size={20} color="#b38604" />
+              </View>
+            </TouchableOpacity>
           ))
         )}
       </View>
+
+      <View style={{ height: 20 }} />
     </ScrollView>
   );
 };
@@ -262,7 +412,7 @@ const AdminDashboardScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f0f2f5",
   },
   header: {
     backgroundColor: "#fff",
@@ -271,188 +421,365 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+    borderBottomColor: "#e8e8e8",
+  },
+  headerIcon: {
+    backgroundColor: "#fef3e2",
+    borderRadius: 12,
+    padding: 10,
   },
   greeting: {
-    fontSize: 14,
-    color: "#888",
+    fontSize: 13,
+    color: "#999",
+    fontWeight: "500",
   },
   userName: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
-    color: "#333",
+    color: "#1a1a1a",
+    marginTop: 4,
   },
-  buttonGroup: {
+  metricsSection: {
+    backgroundColor: "#fff",
+    padding: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    borderRadius: 14,
+    marginBottom: 12,
+  },
+  metricsTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1a1a1a",
+    marginBottom: 12,
+  },
+  metricsRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 12,
+    marginBottom: 16,
+  },
+  metricCard: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 16,
+  },
+  metricHeader: {
+    flexDirection: "row",
     alignItems: "center",
+    marginBottom: 8,
+    gap: 8,
   },
-  switchButton: {
-    backgroundColor: "#4CAF50",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  switchButtonText: {
+  metricLabel: {
     color: "#fff",
-    fontWeight: "600",
     fontSize: 12,
-  },
-  logoutButton: {
-    backgroundColor: "#ff6b6b",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  logoutText: {
-    color: "#fff",
     fontWeight: "600",
+    flex: 1,
+  },
+  metricValue: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  collectionRateContainer: {
+    backgroundColor: "#f9f9f9",
+    borderRadius: 10,
+    padding: 12,
+  },
+  collectionRateLabel: {
+    fontSize: 12,
+    color: "#666",
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#b38604",
+    borderRadius: 4,
+  },
+  collectionRateValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#b38604",
   },
   statsContainer: {
-    padding: 16,
-    gap: 12,
+    paddingHorizontal: 12,
+    marginBottom: 8,
   },
   statsRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
-  statCard: {
+  quickStatCard: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 16,
     borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statRow: {
-    flexDirection: "row",
+    padding: 14,
     alignItems: "center",
-    marginBottom: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  statLabel: {
-    fontSize: 12,
-    color: "#666",
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#2d6a6a",
-    marginTop: 6,
-  },
-  section: {
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
-  },
-  roomCard: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  roomCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  quickStatIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
   },
-  roomName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
+  quickStatValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1a1a1a",
+    marginBottom: 4,
   },
-  memberBadge: {
-    backgroundColor: "#2d6a6a",
-    color: "#fff",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+  quickStatLabel: {
+    fontSize: 11,
+    color: "#999",
+    fontWeight: "500",
+  },
+  section: {
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1a1a1a",
+  },
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  viewAllText: {
+    color: "#b38604",
     fontSize: 12,
     fontWeight: "600",
-  },
-  roomDescription: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 12,
   },
   barChartOuter: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 8,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+  },
+  chartHeaderContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  chartSubtitle: {
+    fontSize: 13,
+    color: "#999",
+    marginTop: 2,
+  },
+  trendBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#F0F9FF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  chartWrapper: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    elevation: 2,
+  },
+  chartContainer: {
+    flexDirection: "row",
+    marginBottom: 20,
+    height: 200,
+  },
+  yAxisContainer: {
+    width: 50,
+    justifyContent: "space-between",
+    paddingRight: 12,
+    paddingTop: 8,
+    paddingBottom: 28,
+  },
+  yAxisLabel: {
+    fontSize: 11,
+    color: "#999",
+    fontWeight: "600",
+  },
+  barsContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+    paddingBottom: 20,
+  },
+  barWrapper: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  barValueContainer: {
+    marginBottom: 8,
+    minHeight: 20,
+    justifyContent: "center",
+  },
+  barAmountText: {
+    fontSize: 11,
+    color: "#333",
+    fontWeight: "700",
+  },
+  barBackground: {
+    width: "100%",
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+    borderRadius: 8,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  barFill: {
+    width: "100%",
+    backgroundColor: "#b38604",
+    borderRadius: 8,
+  },
+  barMonthLabel: {
+    fontSize: 11,
+    color: "#666",
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  chartStatsRow: {
+    flexDirection: "row",
+    backgroundColor: "#fafafa",
+    borderRadius: 12,
+    padding: 14,
+    gap: 0,
+  },
+  statBox: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  statIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#E3F2FD",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  statTextBox: {
+    flex: 1,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: "#999",
+    fontWeight: "500",
+  },
+  statValue: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  statSubtitle: {
+    fontSize: 10,
+    color: "#bbb",
+    marginTop: 1,
+  },
+  divider: {
+    width: 1,
+    backgroundColor: "#e0e0e0",
+    marginHorizontal: 10,
   },
   yAxis: {
     width: 48,
     alignItems: "flex-start",
     paddingRight: 8,
   },
-  axisLabel: {
-    fontSize: 11,
-    color: "#999",
-    marginBottom: 12,
-  },
-  barChartContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 8,
-    height: 140,
-  },
-  barColumn: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  bar: {
-    width: "70%",
-    backgroundColor: "#2d6a6a",
-    borderRadius: 6,
-  },
-  barValue: {
-    fontSize: 11,
-    color: "#333",
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-  barMonth: {
-    fontSize: 12,
-    marginTop: 8,
-    color: "#666",
-  },
-  chartFooterRow: {
+  roomCardNew: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 10,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  footerSmall: {
-    fontSize: 12,
-    color: "#666",
+  roomCardLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 12,
   },
-  roomFooter: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+  roomIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: "#b38604",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  footerLabel: {
-    fontSize: 12,
-    color: "#888",
+  roomInfo: {
+    flex: 1,
+  },
+  roomNameNew: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1a1a1a",
     marginBottom: 4,
   },
-  footerValue: {
-    fontSize: 13,
+  roomMemberCount: {
+    fontSize: 12,
+    color: "#999",
+    fontWeight: "500",
+  },
+  roomCardRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  roomMemberBadge: {
+    backgroundColor: "#f0f0f0",
+    color: "#666",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#333",
   },
   emptyText: {
     textAlign: "center",
     color: "#999",
     marginTop: 20,
+  },
+  noDataText: {
+    textAlign: "center",
+    color: "#999",
+    marginVertical: 20,
   },
 });
 
