@@ -13,6 +13,8 @@ const notificationLogSchema = new mongoose.Schema({
       "payment_received",
       "billing_cycle_started",
       "settlement_alert",
+      "member_status_changed",
+      "presence_reminder",
       "general",
     ],
     required: true,

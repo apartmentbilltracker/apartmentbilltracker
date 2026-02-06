@@ -2,6 +2,7 @@ import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
+import { supportService } from "../services/apiService";
 import AdminDashboardScreen from "../screens/admin/AdminDashboardScreen";
 import AdminRoomManagementScreen from "../screens/admin/AdminRoomManagementScreen";
 import AdminBillingScreen from "../screens/admin/AdminBillingScreen";
@@ -15,6 +16,9 @@ import AdminAdjustmentsScreen from "../screens/admin/AdminAdjustmentsScreen";
 import AdminRemindersScreen from "../screens/admin/AdminRemindersScreen";
 import AdminPresenceRemindersScreen from "../screens/admin/AdminPresenceRemindersScreen";
 import AdminAnnouncementsScreen from "../screens/admin/AdminAnnouncementsScreen";
+import AdminSupportTicketsScreen from "../screens/admin/AdminSupportTicketsScreen";
+import AdminBugReportsScreen from "../screens/admin/AdminBugReportsScreen";
+import AdminFAQScreen from "../screens/admin/AdminFAQScreen";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -148,6 +152,21 @@ const ProfileStack = () => (
       component={AdminProfileScreen}
       options={{ title: "Profile" }}
     />
+    <Stack.Screen
+      name="SupportTickets"
+      component={AdminSupportTicketsScreen}
+      options={{ title: "Support Tickets" }}
+    />
+    <Stack.Screen
+      name="BugReports"
+      component={AdminBugReportsScreen}
+      options={{ title: "Bug Reports" }}
+    />
+    <Stack.Screen
+      name="ManageFAQs"
+      component={AdminFAQScreen}
+      options={{ title: "Manage FAQs" }}
+    />
   </Stack.Navigator>
 );
 
@@ -171,6 +190,30 @@ const AnnouncementsStack = () => (
 );
 
 const AdminNavigator = () => {
+  const [unreadSupportCount, setUnreadSupportCount] = React.useState(0);
+
+  const fetchUnreadSupportCount = async () => {
+    try {
+      const ticketsResponse = await supportService.getAllTickets();
+      const tickets = Array.isArray(ticketsResponse) ? ticketsResponse : ticketsResponse?.data || [];
+      const unreadTickets = tickets.filter(t => !t.isReadByAdmin && t.replies && t.replies.length > 0).length;
+
+      const bugsResponse = await supportService.getAllBugReports();
+      const bugs = Array.isArray(bugsResponse) ? bugsResponse : bugsResponse?.data || [];
+      const unreadBugs = bugs.filter(b => !b.isReadByAdmin && b.responses && b.responses.length > 0).length;
+
+      const totalUnread = unreadTickets + unreadBugs;
+      setUnreadSupportCount(totalUnread > 0 ? 1 : 0);
+      console.log("Admin support unread count updated:", totalUnread);
+    } catch (error) {
+      console.error("Error fetching admin support unread count:", error);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchUnreadSupportCount();
+  }, []);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -224,7 +267,20 @@ const AdminNavigator = () => {
       <Tab.Screen
         name="ProfileStack"
         component={ProfileStack}
-        options={{ title: "Profile" }}
+        options={{
+          title: "Profile",
+          tabBarBadge: unreadSupportCount > 0 ? "●" : null,
+          tabBarBadgeStyle: {
+            backgroundColor: "transparent",
+            fontSize: 16,
+            color: "#e74c3c",
+          },
+        }}
+        listeners={({ navigation }) => ({
+          focus: () => {
+            fetchUnreadSupportCount();
+          },
+        })}
       />
     </Tab.Navigator>
   );

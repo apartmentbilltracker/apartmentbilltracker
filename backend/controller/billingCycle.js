@@ -409,6 +409,7 @@ const recomputeCycleSnapshot = async (cycle) => {
   const rentAmount = Number(cycle.rent || cycle.rent || 0);
   const electricityAmount = Number(cycle.electricity || 0);
   const waterAmount = Number(cycle.waterBillAmount || cycle.water || 0);
+  const internetAmount = Number(cycle.internet || 0);
 
   // Build presence totals
   let totalPresenceDays = 0;
@@ -434,19 +435,37 @@ const recomputeCycleSnapshot = async (cycle) => {
     }
   });
 
+  // Calculate non-payor water (to be split among payors)
+  let totalNonPayorPresenceDays = 0;
+  members.forEach((m) => {
+    if (m.isPayer === false) {
+      totalNonPayorPresenceDays += m._presenceDays || 0;
+    }
+  });
+  const WATER_BILL_PER_DAY = 5;
+  const nonPayorWaterAmount = totalNonPayorPresenceDays * WATER_BILL_PER_DAY;
+
   const memberCharges = members.map((m) => {
     const presenceDays = m._presenceDays || 0;
 
-    // Water share: only for payors, split by their presence days
-    const waterShare =
-      m.isPayer !== false && totalPayorPresenceDays > 0
-        ? (presenceDays / totalPayorPresenceDays) * waterAmount
-        : 0;
+    // Water share: For payors, own consumption + split of non-payors' water
+    // For non-payors, always 0
+    let waterShare = 0;
+    if (m.isPayer !== false) {
+      // Payor's own water consumption
+      const ownWater = presenceDays * WATER_BILL_PER_DAY;
+      // Split non-payors' water equally among payors
+      const sharedNonPayorWater =
+        payorCount > 0 ? nonPayorWaterAmount / payorCount : 0;
+      waterShare = ownWater + sharedNonPayorWater;
+    }
 
-    const rentShare = payerCount > 0 && m.isPayer ? rentAmount / payerCount : 0;
+    const rentShare = payorCount > 0 && m.isPayer ? rentAmount / payorCount : 0;
     const electricityShare =
-      payerCount > 0 && m.isPayer ? electricityAmount / payerCount : 0;
-    const totalDue = rentShare + electricityShare + waterShare;
+      payorCount > 0 && m.isPayer ? electricityAmount / payorCount : 0;
+    const internetShare =
+      payorCount > 0 && m.isPayer ? internetAmount / payorCount : 0;
+    const totalDue = rentShare + electricityShare + waterShare + internetShare;
 
     return {
       userId: m.user,
@@ -456,12 +475,13 @@ const recomputeCycleSnapshot = async (cycle) => {
       waterBillShare: Number(waterShare.toFixed(2)),
       rentShare: Number(rentShare.toFixed(2)),
       electricityShare: Number(electricityShare.toFixed(2)),
+      internetShare: Number(internetShare.toFixed(2)),
       totalDue: Number(totalDue.toFixed(2)),
     };
   });
 
   const totalBilledAmount = Number(
-    (rentAmount + electricityAmount + waterAmount).toFixed(2),
+    (rentAmount + electricityAmount + waterAmount + internetAmount).toFixed(2),
   );
 
   // Apply to cycle
@@ -532,7 +552,15 @@ exports.closeBillingCycle = catchAsyncErrors(async (req, res, next) => {
 // Update billing cycle (add member charges, update bills, etc.)
 exports.updateBillingCycle = catchAsyncErrors(async (req, res, next) => {
   const { cycleId } = req.params;
-  const { memberCharges, totalBilledAmount, billBreakdown } = req.body;
+  const {
+    memberCharges,
+    totalBilledAmount,
+    billBreakdown,
+    rent,
+    electricity,
+    waterBillAmount,
+    internet,
+  } = req.body;
 
   try {
     const cycle = await BillingCycle.findById(cycleId);
@@ -546,9 +574,36 @@ exports.updateBillingCycle = catchAsyncErrors(async (req, res, next) => {
       );
     }
 
-    if (memberCharges) {
+    // Update billing amounts if provided
+    if (rent !== undefined) {
+      cycle.rent = Number(rent);
+    }
+    if (electricity !== undefined) {
+      cycle.electricity = Number(electricity);
+    }
+    if (waterBillAmount !== undefined) {
+      cycle.waterBillAmount = Number(waterBillAmount);
+    }
+    if (internet !== undefined) {
+      cycle.internet = Number(internet);
+    }
+
+    // If billing amounts were updated, recalculate member charges using existing presence
+    if (
+      rent !== undefined ||
+      electricity !== undefined ||
+      waterBillAmount !== undefined ||
+      internet !== undefined
+    ) {
+      console.log(
+        `[UPDATE-CYCLE] Recalculating charges from existing presence (rent=${rent}, elec=${electricity}, water=${waterBillAmount}, inet=${internet})`,
+      );
+      await recomputeCycleSnapshot(cycle);
+    } else if (memberCharges) {
+      // Direct charge update (if provided)
       cycle.memberCharges = memberCharges;
     }
+
     if (totalBilledAmount !== undefined) {
       cycle.totalBilledAmount = totalBilledAmount;
     }
@@ -728,6 +783,93 @@ exports.getBillingTotalsByMonth = catchAsyncErrors(async (req, res, next) => {
   } catch (error) {
     console.error("Error computing billing totals by month:", error);
     next(new ErrorHandler("Failed to compute billing totals", 500));
+  }
+});
+
+// Get latest billing cycle with payment stats
+exports.getLatestBillingCycleStats = catchAsyncErrors(async (req, res, next) => {
+  try {
+    console.log("🔍 [getLatestBillingCycleStats] Starting endpoint call...");
+    
+    // Get the latest billing cycle (most recent by creation date)
+    const latestCycle = await BillingCycle.findOne()
+      .sort({ createdAt: -1 })
+      .populate("room");
+    
+    console.log("📦 [getLatestBillingCycleStats] Latest cycle found:", latestCycle ? latestCycle._id : "NONE");
+
+    if (!latestCycle) {
+      console.log("❌ [getLatestBillingCycleStats] No cycle found");
+      return res.status(200).json({ success: true, data: null });
+    }
+
+    console.log("✅ [getLatestBillingCycleStats] Cycle found, memberCharges count:", latestCycle.memberCharges?.length || 0);
+
+    // Get the room to access memberPayments
+    const room = await Room.findById(latestCycle.room);
+    console.log("📦 [getLatestBillingCycleStats] Room memberPayments:", room?.memberPayments);
+
+    // Calculate payment stats for this cycle
+    let totalBilledAmount = latestCycle.totalBilledAmount || 0;
+    let totalCollected = 0;
+    let totalPending = 0;
+
+    if (latestCycle.memberCharges && latestCycle.memberCharges.length > 0) {
+      latestCycle.memberCharges.forEach((charge) => {
+        const chargeAmount =
+          (charge.rentShare || 0) +
+          (charge.electricityShare || 0) +
+          (charge.waterBillShare || 0) +
+          (charge.internetShare || 0);
+
+        // Check if member has paid all bills
+        const memberPayment = room?.memberPayments?.find(
+          (mp) =>
+            String(mp.member?._id || mp.member) ===
+            String(charge.userId),
+        );
+
+        // Member is considered paid only if all bill types are paid
+        const allBillsPaid =
+          memberPayment &&
+          memberPayment.rentStatus === "paid" &&
+          memberPayment.electricityStatus === "paid" &&
+          memberPayment.waterStatus === "paid" &&
+          memberPayment.internetStatus === "paid";
+
+        if (allBillsPaid) {
+          totalCollected += chargeAmount;
+        } else {
+          totalPending += chargeAmount;
+        }
+      });
+    }
+
+    const collectionRate =
+      totalBilledAmount > 0
+        ? Math.round((totalCollected / totalBilledAmount) * 100)
+        : 0;
+
+    const data = {
+      _id: latestCycle._id,
+      startDate: latestCycle.startDate,
+      endDate: latestCycle.endDate,
+      room: latestCycle.room?.name,
+      roomId: latestCycle.room?._id,
+      status: latestCycle.status,
+      totalBilledAmount: Number(totalBilledAmount.toFixed(2)),
+      totalCollected: Number(totalCollected.toFixed(2)),
+      totalPending: Number(totalPending.toFixed(2)),
+      collectionRate,
+    };
+
+    console.log("✅ [getLatestBillingCycleStats] Response data:", data);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("❌ [getLatestBillingCycleStats] Error:", error);
+    next(
+      new ErrorHandler("Failed to get latest billing cycle stats", 500),
+    );
   }
 });
 

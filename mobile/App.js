@@ -6,6 +6,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, AuthContext } from "./src/context/AuthContext";
 import LoginScreen from "./src/screens/auth/LoginScreen";
 import RegisterScreen from "./src/screens/auth/RegisterScreen";
+import RegisterStep1Screen from "./src/screens/auth/RegisterStep1Screen";
+import RegisterStep2Screen from "./src/screens/auth/RegisterStep2Screen";
+import RegisterStep3Screen from "./src/screens/auth/RegisterStep3Screen";
 import ForgotPasswordScreen from "./src/screens/auth/ForgotPasswordScreen";
 import VerifyResetCodeScreen from "./src/screens/auth/VerifyResetCodeScreen";
 import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
@@ -92,6 +95,9 @@ function RootNavigator() {
         <>
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen name="RegisterStep1" component={RegisterStep1Screen} />
+          <Stack.Screen name="RegisterStep2" component={RegisterStep2Screen} />
+          <Stack.Screen name="RegisterStep3" component={RegisterStep3Screen} />
           <Stack.Screen
             name="ForgotPassword"
             component={ForgotPasswordScreen}

@@ -19,6 +19,7 @@ import {
   roomService,
   memberService,
   billingCycleService,
+  apiService,
 } from "../../services/apiService";
 
 const ClientHomeScreen = ({ navigation }) => {
@@ -32,6 +33,9 @@ const ClientHomeScreen = ({ navigation }) => {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expandedStats, setExpandedStats] = useState(false);
   const [activeCycle, setActiveCycle] = useState(null);
+  const [statusChangeNotifications, setStatusChangeNotifications] = useState(
+    [],
+  );
 
   const userId = state?.user?._id;
   const userName = state?.user?.name || "User";
@@ -65,8 +69,12 @@ const ClientHomeScreen = ({ navigation }) => {
     // Only show payment status for payors
     if (!userMember.isPayer) return null;
 
+    // FIX: Compare memberPayment's user ID (mp.member) with user's actual ID (userMember.user)
+    // NOT with member ID (userMember._id)
     const userPayment = userJoinedRoom.memberPayments?.find(
-      (mp) => String(mp.member?._id || mp.member) === String(userMember._id),
+      (mp) =>
+        String(mp.member?._id || mp.member) ===
+        String(userMember.user?._id || userMember.user),
     );
 
     if (!userPayment) return null;
@@ -95,6 +103,16 @@ const ClientHomeScreen = ({ navigation }) => {
   // Calculate billing countdown
   const getBillingCountdown = () => {
     if (!userJoinedRoom?.billing?.end) return null;
+
+    // CRITICAL: Only show countdown if the current cycle is still active (not completed)
+    if (activeCycle && activeCycle.status !== "active") {
+      console.log(
+        "📌 Billing cycle is",
+        activeCycle.status,
+        "- hiding countdown",
+      );
+      return null;
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -133,53 +151,49 @@ const ClientHomeScreen = ({ navigation }) => {
   // Get expense breakdown for modal
   const getExpenseBreakdown = () => {
     // Use activeCycle if available for accurate calculations
-    if (activeCycle) {
+    if (activeCycle?.memberCharges) {
       const payorCount =
         activeCycle.memberCharges?.filter((c) => c.isPayer).length || 1;
       const total = activeCycle.totalBilledAmount || 0;
 
-      // Get current user's actual share to use as "per payor" reference
+      // Get current user's actual share
       const userCharge = activeCycle.memberCharges?.find(
         (c) => String(c.userId) === String(userId),
       );
-      const perPayor =
-        userCharge?.totalDue || (payorCount > 0 ? total / payorCount : 0);
 
-      // Calculate individual bill amounts from memberCharges
-      let rentSum = 0,
-        electricitySum = 0,
-        internetSum = 0,
-        waterSum = 0;
-      activeCycle.memberCharges?.forEach((charge) => {
-        if (charge.isPayer) {
-          rentSum += charge.rentShare || 0;
-          electricitySum += charge.electricityShare || 0;
-          internetSum += charge.internetShare || 0;
-          waterSum += charge.waterBillShare || 0;
-        }
-      });
+      if (userCharge && userCharge.isPayer) {
+        // For payors, show their actual per-payor share (includes own consumption + shared non-payor consumption)
+        const perPayor = userCharge.totalDue || 0;
 
-      return {
-        rent: {
-          amount: rentSum,
-          percentage: total > 0 ? (rentSum / total) * 100 : 0,
-        },
-        electricity: {
-          amount: electricitySum,
-          percentage: total > 0 ? (electricitySum / total) * 100 : 0,
-        },
-        internet: {
-          amount: internetSum,
-          percentage: total > 0 ? (internetSum / total) * 100 : 0,
-        },
-        water: {
-          amount: waterSum,
-          percentage: total > 0 ? (waterSum / total) * 100 : 0,
-        },
-        total,
-        perPayor,
-        payorCount,
-      };
+        return {
+          rent: {
+            amount: userCharge.rentShare || 0,
+            percentage:
+              total > 0 ? ((userCharge.rentShare || 0) / total) * 100 : 0,
+          },
+          electricity: {
+            amount: userCharge.electricityShare || 0,
+            percentage:
+              total > 0
+                ? ((userCharge.electricityShare || 0) / total) * 100
+                : 0,
+          },
+          internet: {
+            amount: userCharge.internetShare || 0,
+            percentage:
+              total > 0 ? ((userCharge.internetShare || 0) / total) * 100 : 0,
+          },
+          water: {
+            // Already calculated correctly: own consumption + shared non-payor consumption
+            amount: userCharge.waterBillShare || 0,
+            percentage:
+              total > 0 ? ((userCharge.waterBillShare || 0) / total) * 100 : 0,
+          },
+          total,
+          perPayor,
+          payorCount,
+        };
+      }
     }
 
     // Fallback to billing data if no activeCycle
@@ -191,17 +205,17 @@ const ClientHomeScreen = ({ navigation }) => {
       members.filter((m) => m.isPayer).length || 1,
     );
 
-    const rent = userJoinedRoom.billing.rent || 0;
-    const electricity = userJoinedRoom.billing.electricity || 0;
-    const internet = userJoinedRoom.billing.internet || 0;
-
-    // Water is typically calculated from billing data or use total water bill if available
-    const water = userJoinedRoom.billing.water || 0;
+    const rent = (userJoinedRoom.billing.rent || 0) / payorCount;
+    const electricity = (userJoinedRoom.billing.electricity || 0) / payorCount;
+    const internet = (userJoinedRoom.billing.internet || 0) / payorCount;
+    // Note: Water calculation in fallback is estimated as total/payorCount
+    // For accurate calculation (own consumption + shared non-payor), use activeCycle data
+    const water = (userJoinedRoom.billing.water || 0) / payorCount;
 
     const total = rent + electricity + internet + water;
 
-    // Per payor is the total cost divided by number of payors
-    const perPayor = payorCount > 0 ? total / payorCount : 0;
+    // Per payor is each payor's share (already divided above)
+    const perPayor = total;
 
     return {
       rent: { amount: rent, percentage: total > 0 ? (rent / total) * 100 : 0 },
@@ -246,23 +260,75 @@ const ClientHomeScreen = ({ navigation }) => {
     });
   };
 
+  // Get payors' payment status details
+  const getPayorsPaymentStatus = () => {
+    if (!userJoinedRoom?.members || !userJoinedRoom?.memberPayments) return [];
+
+    const payors = userJoinedRoom.members.filter((m) => m.isPayer);
+
+    return payors.map((payor) => {
+      const payment = userJoinedRoom.memberPayments.find(
+        (mp) =>
+          String(mp.member?._id || mp.member) ===
+          String(payor.user?._id || payor.user),
+      );
+
+      return {
+        name: payor.user?.name || "Unknown",
+        userId: String(payor.user?._id || payor.user),
+        payment: {
+          rent: payment?.rentStatus || "unpaid",
+          electricity: payment?.electricityStatus || "unpaid",
+          water: payment?.waterStatus || "unpaid",
+          internet: payment?.internetStatus || "unpaid",
+        },
+        allPaid:
+          payment?.rentStatus === "paid" &&
+          payment?.electricityStatus === "paid" &&
+          payment?.waterStatus === "paid" &&
+          (payment?.internetStatus === "paid" ||
+            !userJoinedRoom.billing?.internet),
+      };
+    });
+  };
+
   useEffect(() => {
     fetchRooms();
   }, []);
 
-  // Refresh room data when screen comes into focus to update payment status
+  const fetchStatusChangeNotifications = async () => {
+    try {
+      const response = await apiService.get("/api/v2/notifications");
+      const allNotifications = response.notifications || [];
+      // Filter for only unread member status change notifications
+      const statusChanges = allNotifications.filter(
+        (notif) =>
+          notif.notificationType === "member_status_changed" && !notif.isRead,
+      );
+      setStatusChangeNotifications(statusChanges);
+    } catch (error) {
+      console.error("Error fetching status notifications:", error);
+    }
+  };
+
+  // Refresh room data when screen comes into focus to update payment status and billing cycle
   useFocusEffect(
     React.useCallback(() => {
       fetchRooms();
+      fetchStatusChangeNotifications();
     }, []),
   );
 
-  // Fetch active billing cycle when room changes
+  // Fetch active billing cycle when room changes or when members/payments change
   useEffect(() => {
     if (userJoinedRoom?._id) {
       fetchActiveBillingCycle(userJoinedRoom._id);
     }
-  }, [userJoinedRoom?._id]);
+  }, [
+    userJoinedRoom?._id,
+    userJoinedRoom?.members?.length,
+    userJoinedRoom?.memberPayments?.length,
+  ]);
 
   const fetchActiveBillingCycle = async (roomId) => {
     try {
@@ -288,7 +354,13 @@ const ClientHomeScreen = ({ navigation }) => {
       const userRooms = userRoomsData.rooms || userRoomsData || [];
 
       console.log("User rooms fetched:", userRooms.length);
-      setUserJoinedRoom(userRooms[0] || null);
+      const firstRoom = userRooms[0] || null;
+      setUserJoinedRoom(firstRoom);
+
+      // Refetch active billing cycle if room exists
+      if (firstRoom?._id) {
+        await fetchActiveBillingCycle(firstRoom._id);
+      }
 
       // Fetch ALL available rooms to browse
       try {
@@ -629,8 +701,29 @@ const ClientHomeScreen = ({ navigation }) => {
         <View style={styles.header}>
           <Text style={styles.greeting}>{getTimeBasedGreeting()}</Text>
           <Text style={styles.name}>{userName}! 👋</Text>
-          <Text style={styles.subtitle}>Welcome to Apartment Bill Tracker</Text>
+          <Text style={styles.subtitle}>
+            Welcome to Apartment Bill Tracker
+          </Text>
         </View>
+
+        {/* Status Change Notifications Banner */}
+        {statusChangeNotifications.length > 0 && (
+          <View style={styles.notificationBanner}>
+            <MaterialIcons name="info" size={20} color="#FF6B35" />
+            <View style={styles.notificationContent}>
+              <Text style={styles.notificationTitle}>Status Update</Text>
+              <Text style={styles.notificationMessage} numberOfLines={2}>
+                {statusChangeNotifications[0].message}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("ProfileStack")}
+              style={styles.notificationAction}
+            >
+              <Text style={styles.notificationActionText}>View</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {loading ? (
           <View style={styles.centerContainer}>
@@ -673,108 +766,6 @@ const ClientHomeScreen = ({ navigation }) => {
                     </View>
                   )}
                 </View>
-
-                {/* Payment Status Card */}
-                {getPaymentStatus() && (
-                  <TouchableOpacity
-                    style={styles.paymentStatusCard}
-                    onPress={() => setShowStatusModal(true)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.paymentStatusHeader}>
-                      <MaterialIcons
-                        name={
-                          getPaymentStatus().allPaid
-                            ? "check-circle"
-                            : "pending-actions"
-                        }
-                        size={24}
-                        color={
-                          getPaymentStatus().allPaid ? "#27ae60" : "#ff9800"
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.paymentStatusTitle,
-                          {
-                            color: getPaymentStatus().allPaid
-                              ? "#27ae60"
-                              : "#ff9800",
-                          },
-                        ]}
-                      >
-                        {getPaymentStatus().allPaid
-                          ? "All Paid ✓"
-                          : "Payment Pending"}
-                      </Text>
-                      <MaterialIcons
-                        name="chevron-right"
-                        size={20}
-                        color="#b38604"
-                        style={{ marginLeft: "auto" }}
-                      />
-                    </View>
-                    {!getPaymentStatus().allPaid && (
-                      <Text style={styles.paymentStatusSubtext}>
-                        {getPaymentStatus().pendingCount} bill(s) awaiting
-                        payment
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                )}
-
-                {/* Billing Countdown Card */}
-                {getBillingCountdown() &&
-                  getPaymentStatus() &&
-                  !getPaymentStatus().allPaid && (
-                    <TouchableOpacity
-                      style={styles.billingCountdownCard}
-                      onPress={() => {
-                        // Refetch active cycle to get latest presence data
-                        if (userJoinedRoom?._id) {
-                          fetchActiveBillingCycle(userJoinedRoom._id);
-                        }
-                        setShowExpenseModal(true);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.countdownHeader}>
-                        <MaterialIcons name="timer" size={20} color="#b38604" />
-                        <Text style={styles.countdownTitle}>
-                          {getBillingCountdown().daysRemaining === 0
-                            ? "Payment due today"
-                            : `${getBillingCountdown().daysRemaining} day${getBillingCountdown().daysRemaining === 1 ? "" : "s"} until ${getBillingCountdown().billingEnd}`}
-                        </Text>
-                      </View>
-                      <View style={styles.progressBarContainer}>
-                        <View
-                          style={[
-                            styles.progressBar,
-                            {
-                              width: `${getBillingCountdown().percentage}%`,
-                              backgroundColor:
-                                getBillingCountdown().daysRemaining <= 3
-                                  ? "#e74c3c"
-                                  : getBillingCountdown().daysRemaining <= 7
-                                    ? "#ff9800"
-                                    : "#27ae60",
-                            },
-                          ]}
-                        />
-                      </View>
-                      <View style={styles.countdownFooter}>
-                        <Text style={styles.countdownSubtext}>
-                          {getBillingCountdown().percentage.toFixed(0)}% through
-                          billing cycle
-                        </Text>
-                        <MaterialIcons
-                          name="chevron-right"
-                          size={20}
-                          color="#b38604"
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  )}
 
                 {/* Quick Action Buttons */}
                 <View style={styles.quickActionsContainer}>
@@ -826,6 +817,266 @@ const ClientHomeScreen = ({ navigation }) => {
                     <Text style={styles.quickActionText}>Details</Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Payment Status Card */}
+                {getPaymentStatus() && (
+                  <TouchableOpacity
+                    style={styles.paymentStatusCard}
+                    onPress={() => setShowStatusModal(true)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.paymentStatusHeader}>
+                      <MaterialIcons
+                        name={
+                          getPaymentStatus().allPaid
+                            ? "check-circle"
+                            : "pending-actions"
+                        }
+                        size={24}
+                        color={
+                          getPaymentStatus().allPaid ? "#27ae60" : "#ff9800"
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.paymentStatusTitle,
+                          {
+                            color: getPaymentStatus().allPaid
+                              ? "#27ae60"
+                              : "#ff9800",
+                          },
+                        ]}
+                      >
+                        {getPaymentStatus().allPaid
+                          ? "All Paid ✓"
+                          : "Payment Pending"}
+                      </Text>
+                      <MaterialIcons
+                        name="chevron-right"
+                        size={20}
+                        color="#b38604"
+                        style={{ marginLeft: "auto" }}
+                      />
+                    </View>
+                    {!getPaymentStatus().allPaid && (
+                      <Text style={styles.paymentStatusSubtext}>
+                        {getPaymentStatus().pendingCount} bill(s) awaiting
+                        payment
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {/* Billing Countdown Card - Only show if user has NOT paid all bills */}
+                {getBillingCountdown() &&
+                  isCurrentUserPayor() &&
+                  getPaymentStatus() &&
+                  !getPaymentStatus().allPaid && (
+                    <TouchableOpacity
+                      style={styles.billingCountdownCard}
+                      onPress={() => {
+                        // Refetch active cycle to get latest presence data
+                        if (userJoinedRoom?._id) {
+                          fetchActiveBillingCycle(userJoinedRoom._id);
+                        }
+                        setShowExpenseModal(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.countdownHeader}>
+                        <MaterialIcons name="timer" size={20} color="#b38604" />
+                        <Text style={styles.countdownTitle}>
+                          {getBillingCountdown().daysRemaining === 0
+                            ? "Billing cycle ends today"
+                            : getBillingCountdown().daysRemaining > 0
+                              ? `Billing cycle ends in ${getBillingCountdown().daysRemaining} day${getBillingCountdown().daysRemaining === 1 ? "" : "s"}`
+                              : "Billing cycle overdue"}
+                        </Text>
+                      </View>
+                      <View style={styles.progressBarContainer}>
+                        <View
+                          style={[
+                            styles.progressBar,
+                            {
+                              width: `${getBillingCountdown().percentage}%`,
+                              backgroundColor:
+                                getBillingCountdown().daysRemaining <= 3
+                                  ? "#e74c3c"
+                                  : getBillingCountdown().daysRemaining <= 7
+                                    ? "#ff9800"
+                                    : "#27ae60",
+                            },
+                          ]}
+                        />
+                      </View>
+                      <View style={styles.countdownFooter}>
+                        <Text style={styles.countdownSubtext}>
+                          {getBillingCountdown().percentage.toFixed(0)}% through
+                          billing cycle
+                        </Text>
+                        <MaterialIcons
+                          name="chevron-right"
+                          size={20}
+                          color="#b38604"
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
+                {/* Payors Payment Status */}
+                {getPayorsPaymentStatus().length > 0 && (
+                  <View style={styles.payorsStatusCard}>
+                    <View style={styles.cardHeaderRow}>
+                      <MaterialIcons name="people" size={20} color="#b38604" />
+                      <Text style={styles.payorsStatusTitle}>
+                        Payors Payment Status
+                      </Text>
+                    </View>
+
+                    {/* Billing Period Info */}
+                    {userJoinedRoom?.billing?.start &&
+                      userJoinedRoom?.billing?.end && (
+                        <View style={styles.billingPeriodInfo}>
+                          <MaterialIcons
+                            name="calendar-today"
+                            size={14}
+                            color="#666"
+                          />
+                          <Text style={styles.billingPeriodText}>
+                            {new Date(
+                              userJoinedRoom.billing.start,
+                            ).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}{" "}
+                            -{" "}
+                            {new Date(
+                              userJoinedRoom.billing.end,
+                            ).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </Text>
+                        </View>
+                      )}
+
+                    {getPayorsPaymentStatus().map((payor, index) => (
+                      <View key={payor.userId} style={styles.payorStatusRow}>
+                        <View style={styles.payorInfo}>
+                          <Text style={styles.payorName}>{payor.name}</Text>
+                          {payor.allPaid && (
+                            <View style={styles.allPaidBadge}>
+                              <MaterialIcons
+                                name="check-circle"
+                                size={14}
+                                color="#fff"
+                              />
+                              <Text style={styles.allPaidText}>All Paid</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <View style={styles.billsStatusGrid}>
+                          {/* Rent Status */}
+                          <View style={styles.billStatus}>
+                            <Text style={styles.billLabel}>R</Text>
+                            <MaterialIcons
+                              name={
+                                payor.payment.rent === "paid"
+                                  ? "check-circle"
+                                  : "cancel"
+                              }
+                              size={16}
+                              color={
+                                payor.payment.rent === "paid"
+                                  ? "#27ae60"
+                                  : "#e74c3c"
+                              }
+                            />
+                          </View>
+
+                          {/* Electricity Status */}
+                          <View style={styles.billStatus}>
+                            <Text style={styles.billLabel}>E</Text>
+                            <MaterialIcons
+                              name={
+                                payor.payment.electricity === "paid"
+                                  ? "check-circle"
+                                  : "cancel"
+                              }
+                              size={16}
+                              color={
+                                payor.payment.electricity === "paid"
+                                  ? "#27ae60"
+                                  : "#e74c3c"
+                              }
+                            />
+                          </View>
+
+                          {/* Water Status */}
+                          <View style={styles.billStatus}>
+                            <Text style={styles.billLabel}>W</Text>
+                            <MaterialIcons
+                              name={
+                                payor.payment.water === "paid"
+                                  ? "check-circle"
+                                  : "cancel"
+                              }
+                              size={16}
+                              color={
+                                payor.payment.water === "paid"
+                                  ? "#27ae60"
+                                  : "#e74c3c"
+                              }
+                            />
+                          </View>
+
+                          {/* Internet Status - Only if internet is billed */}
+                          {userJoinedRoom.billing?.internet && (
+                            <View style={styles.billStatus}>
+                              <Text style={styles.billLabel}>I</Text>
+                              <MaterialIcons
+                                name={
+                                  payor.payment.internet === "paid"
+                                    ? "check-circle"
+                                    : "cancel"
+                                }
+                                size={16}
+                                color={
+                                  payor.payment.internet === "paid"
+                                    ? "#27ae60"
+                                    : "#e74c3c"
+                                }
+                              />
+                            </View>
+                          )}
+                        </View>
+
+                        {index < getPayorsPaymentStatus().length - 1 && (
+                          <View style={styles.payorDivider} />
+                        )}
+                      </View>
+                    ))}
+
+                    <View style={styles.billLegend}>
+                      <Text style={styles.legendLabel}>
+                        R = Rent • E = Electricity • W = Water
+                        {userJoinedRoom.billing?.internet && " • I = Internet"}
+                      </Text>
+                    </View>
+
+                    {/* Info Note */}
+                    <View style={styles.infoNote}>
+                      <MaterialIcons name="info" size={14} color="#2196F3" />
+                      <Text style={styles.infoNoteText}>
+                        Payment status automatically resets when a new billing
+                        period is created.
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </View>
             ) : (
               <View style={styles.section}>
@@ -1119,6 +1370,130 @@ const styles = StyleSheet.create({
     color: "#333",
     marginTop: 6,
   },
+  // Payors Payment Status Styles
+  payorsStatusCard: {
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  payorsStatusTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1a1a1a",
+    marginLeft: 8,
+  },
+  billingPeriodInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f5f9ff",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginBottom: 12,
+    gap: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#2196F3",
+  },
+  billingPeriodText: {
+    fontSize: 12,
+    color: "#2196F3",
+    fontWeight: "600",
+    flex: 1,
+  },
+  payorStatusRow: {
+    marginBottom: 12,
+  },
+  payorInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  payorName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#333",
+  },
+  allPaidBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#27ae60",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  allPaidText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  billsStatusGrid: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    backgroundColor: "#f9f9f9",
+    borderRadius: 8,
+  },
+  billStatus: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  billLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#666",
+  },
+  payorDivider: {
+    height: 1,
+    backgroundColor: "#f0f0f0",
+    marginTop: 12,
+  },
+  billLegend: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+    alignItems: "center",
+  },
+  legendLabel: {
+    fontSize: 11,
+    color: "#999",
+    fontStyle: "italic",
+  },
+  infoNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#e8f5e9",
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 6,
+    marginTop: 12,
+    gap: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#2196F3",
+  },
+  infoNoteText: {
+    fontSize: 11,
+    color: "#1565c0",
+    fontWeight: "500",
+    flex: 1,
+    lineHeight: 16,
+  },
   // Modal Styles
   modalOverlay: {
     flex: 1,
@@ -1258,6 +1633,44 @@ const styles = StyleSheet.create({
   modalButtonText: {
     color: "#fff",
     fontSize: 14,
+    fontWeight: "700",
+  },
+  notificationBanner: {
+    backgroundColor: "#FFF3E0",
+    borderLeftWidth: 4,
+    borderLeftColor: "#FF6B35",
+    marginHorizontal: 12,
+    marginVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  notificationContent: {
+    flex: 1,
+    gap: 4,
+  },
+  notificationTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FF6B35",
+  },
+  notificationMessage: {
+    fontSize: 12,
+    color: "#666",
+    fontWeight: "500",
+  },
+  notificationAction: {
+    backgroundColor: "#FF6B35",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  notificationActionText: {
+    color: "#fff",
+    fontSize: 11,
     fontWeight: "700",
   },
 });

@@ -297,7 +297,7 @@ const AdminBillingScreen = ({ navigation }) => {
     try {
       setSaving(true);
 
-      // Step 1: Save billing information (dates and amounts)
+      // Step 1: Save billing information to room object
       await billingService.saveBilling(selectedRoom._id, {
         start: startDate,
         end: endDate,
@@ -308,45 +308,77 @@ const AdminBillingScreen = ({ navigation }) => {
         currentReading: currReading ? Number(currReading) : undefined,
       });
 
-      // Step 2: AUTOMATICALLY create a new billing cycle to reset member statuses to "pending"
-      // This is critical - without this, members will still show as "paid" from previous cycle
+      // Step 2: Check if an active billing cycle exists
       const currentWaterBill = calculateTotalWaterBill();
-      const payload = {
+      let internetValue = parseFloat(internet);
+      if (isNaN(internetValue)) {
+        internetValue = 0;
+      }
+
+      const cyclePayload = {
         roomId: selectedRoom._id,
         startDate: startDate,
         endDate: endDate,
         rent: parseFloat(rent) || 0,
         electricity: parseFloat(electricity) || 0,
-        internet: parseFloat(internet) || 0,
         waterBillAmount: currentWaterBill,
+        internet: internetValue,
         previousMeterReading: prevReading ? parseFloat(prevReading) : null,
         currentMeterReading: currReading ? parseFloat(currReading) : null,
       };
 
-      // Ensure internet is a valid number, not NaN
-      if (isNaN(payload.internet)) {
-        payload.internet = 0;
+      if (!selectedRoom.currentCycleId) {
+        // NEW CYCLE: Create the billing cycle document (first time saving billing)
+        console.log("📝 Creating new billing cycle (first save)...");
+        const createResponse = await apiService.post(
+          "/api/v2/billing-cycles/create",
+          cyclePayload,
+        );
+
+        if (!createResponse.success) {
+          throw new Error("Failed to create billing cycle");
+        }
+
+        console.log(
+          "✅ New billing cycle created. Presence data will be used for charges.",
+        );
+        Alert.alert(
+          "Success",
+          "Billing cycle created with current member presence. Click Archive & Close Cycle when ready to finalize.",
+        );
+      } else {
+        // EXISTING CYCLE: Update the active cycle (preserve presence, update amounts)
+        console.log(
+          "✏️  Updating existing billing cycle (preserving presence)...",
+        );
+        const updateResponse = await apiService.put(
+          `/api/v2/billing-cycles/${selectedRoom.currentCycleId}`,
+          {
+            memberCharges: undefined, // Let backend recompute with current presence
+            totalBilledAmount: undefined,
+            billBreakdown: undefined,
+            rent: cyclePayload.rent,
+            electricity: cyclePayload.electricity,
+            waterBillAmount: cyclePayload.waterBillAmount,
+            internet: cyclePayload.internet,
+          },
+        );
+
+        if (!updateResponse.success) {
+          throw new Error("Failed to update billing cycle");
+        }
+
+        console.log(
+          "✅ Billing cycle updated. Presence data preserved. Charges will be recalculated.",
+        );
+        Alert.alert(
+          "Success",
+          "Billing amounts updated. Member presence preserved. Click Archive & Close Cycle when ready.",
+        );
       }
-
-      const createResponse = await apiService.post(
-        "/api/v2/billing-cycles/create",
-        payload,
-      );
-
-      if (!createResponse.success) {
-        throw new Error("Failed to create billing cycle");
-      }
-
-      console.log(
-        "✅ New billing cycle created - member statuses reset to 'pending'",
-      );
 
       await fetchRooms();
       setEditMode(false);
-      Alert.alert(
-        "Success",
-        "Billing period saved and new cycle created - member payment statuses reset to pending",
-      );
     } catch (error) {
       console.error("Error saving billing:", error);
       Alert.alert(

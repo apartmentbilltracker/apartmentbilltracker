@@ -9,6 +9,8 @@ import BillsScreen from "../screens/client/BillsScreen";
 import BillingHistoryScreen from "../screens/client/BillingHistoryScreen";
 import RoomDetailsScreen from "../screens/client/RoomDetailsScreen";
 import ProfileScreen from "../screens/client/ProfileScreen";
+import MyTicketsScreen from "../screens/client/MyTicketsScreen";
+import MyBugReportsScreen from "../screens/client/MyBugReportsScreen";
 import PaymentMethodScreen from "../screens/client/PaymentMethodScreen";
 import GCashPaymentScreen from "../screens/client/GCashPaymentScreen";
 import BankTransferPaymentScreen from "../screens/client/BankTransferPaymentScreen";
@@ -157,6 +159,16 @@ const ProfileStack = () => (
       component={ProfileScreen}
       options={{ title: "Profile" }}
     />
+    <Stack.Screen
+      name="MyTickets"
+      component={MyTicketsScreen}
+      options={{ title: "My Support Tickets" }}
+    />
+    <Stack.Screen
+      name="MyBugReports"
+      component={MyBugReportsScreen}
+      options={{ title: "My Bug Reports" }}
+    />
   </Stack.Navigator>
 );
 
@@ -203,6 +215,7 @@ const ClientNavigator = () => {
   const { state } = useContext(AuthContext);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [announcementCount, setAnnouncementCount] = React.useState(0);
+  const [unreadSupportCount, setUnreadSupportCount] = React.useState(0);
   const userId = state?.user?._id;
   const notificationRefreshRef = React.useRef(null);
   const announcementRefreshRef = React.useRef(null);
@@ -248,8 +261,18 @@ const ClientNavigator = () => {
         const announcements = Array.isArray(announcementsResponse)
           ? announcementsResponse
           : announcementsResponse?.data || [];
-        setAnnouncementCount(announcements.length);
-        console.log("Announcement count updated:", announcements.length);
+        
+        // Count only unread announcements (where current user is not in readBy array)
+        const unreadCount = announcements.filter(
+          (announcement) =>
+            !announcement.readBy ||
+            !announcement.readBy.some(
+              (readUserId) => String(readUserId) === String(userId),
+            ),
+        ).length;
+        
+        setAnnouncementCount(unreadCount);
+        console.log("Announcement unread count updated:", unreadCount);
       } else {
         setAnnouncementCount(0);
       }
@@ -258,10 +281,30 @@ const ClientNavigator = () => {
     }
   };
 
+  const fetchUnreadSupportCount = async () => {
+    try {
+      const { supportService } = require("../services/apiService");
+      const ticketsResponse = await supportService.getUserTickets();
+      const tickets = Array.isArray(ticketsResponse) ? ticketsResponse : ticketsResponse?.data || [];
+      const unreadTickets = tickets.filter(t => !t.isReadByUser && t.replies && t.replies.length > 0).length;
+
+      const bugsResponse = await supportService.getUserBugReports();
+      const bugs = Array.isArray(bugsResponse) ? bugsResponse : bugsResponse?.data || [];
+      const unreadBugs = bugs.filter(b => !b.isReadByUser && b.responses && b.responses.length > 0).length;
+
+      const totalUnread = unreadTickets + unreadBugs;
+      setUnreadSupportCount(totalUnread > 0 ? 1 : 0); // Show dot if any unread
+      console.log("Support unread count updated:", totalUnread);
+    } catch (error) {
+      console.error("Error fetching support unread count:", error);
+    }
+  };
+
   React.useEffect(() => {
     // Fetch unread count when component mounts
     fetchUnreadCount();
     fetchAnnouncementCount();
+    fetchUnreadSupportCount();
 
     // Store function reference to be called from other components
     notificationRefreshRef.current = fetchUnreadCount;
@@ -329,8 +372,9 @@ const ClientNavigator = () => {
         }}
         listeners={({ navigation }) => ({
           focus: () => {
-            // Clear badge when user views announcements
-            setAnnouncementCount(0);
+            // Refresh announcement count after user views announcements
+            // This will now reflect the actual unread count (should be 0 after viewing)
+            fetchAnnouncementCount();
           },
         })}
       />
@@ -361,7 +405,20 @@ const ClientNavigator = () => {
       <Tab.Screen
         name="ProfileStack"
         component={ProfileStack}
-        options={{ title: "Profile" }}
+        options={{
+          title: "Profile",
+          tabBarBadge: unreadSupportCount > 0 ? "●" : null,
+          tabBarBadgeStyle: {
+            backgroundColor: "transparent",
+            fontSize: 16,
+            color: "#e74c3c",
+          },
+        }}
+        listeners={({ navigation }) => ({
+          focus: () => {
+            fetchUnreadSupportCount();
+          },
+        })}
       />
     </Tab.Navigator>
   );

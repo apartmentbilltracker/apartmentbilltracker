@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,17 +11,20 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { MaterialIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../../context/AuthContext";
+import { supportService } from "../../services/apiService";
 
-const AdminProfileScreen = () => {
+const AdminProfileScreen = ({ navigation }) => {
   const { state, signOut, updateUserProfile, switchView } =
     useContext(AuthContext);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editName, setEditName] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [unreadTickets, setUnreadTickets] = useState(0);
+  const [unreadBugReports, setUnreadBugReports] = useState(0);
 
   const user = state.user || {};
 
@@ -95,6 +98,31 @@ const AdminProfileScreen = () => {
     return null;
   };
 
+  useEffect(() => {
+    const fetchUnreadCounts = async () => {
+      try {
+        const ticketsResponse = await supportService.getAllTickets();
+        const tickets = Array.isArray(ticketsResponse) ? ticketsResponse : ticketsResponse?.data || [];
+        const unreadTicketCount = tickets.filter(t => !t.isReadByAdmin && t.replies && t.replies.length > 0).length;
+        setUnreadTickets(unreadTicketCount);
+
+        const bugsResponse = await supportService.getAllBugReports();
+        const bugs = Array.isArray(bugsResponse) ? bugsResponse : bugsResponse?.data || [];
+        const unreadBugCount = bugs.filter(b => !b.isReadByAdmin && b.responses && b.responses.length > 0).length;
+        setUnreadBugReports(unreadBugCount);
+      } catch (error) {
+        console.error("Error fetching unread counts:", error);
+      }
+    };
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchUnreadCounts();
+    });
+
+    fetchUnreadCounts();
+    return unsubscribe;
+  }, [navigation]);
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.profileHeader}>
@@ -152,6 +180,72 @@ const AdminProfileScreen = () => {
           <Text style={styles.infoLabel}>Build</Text>
           <Text style={styles.infoValue}>1</Text>
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.titleWithDot}>
+          <Text style={styles.sectionTitle}>Support Management</Text>
+          {unreadTickets > 0 || unreadBugReports > 0 && <View style={styles.unreadDotSmall} />}
+        </View>
+        <TouchableOpacity
+          style={[styles.managementButton, { borderLeftColor: "#0a66c2" }]}
+          onPress={() => navigation.navigate("SupportTickets")}
+          activeOpacity={0.7}
+        >
+          <View style={styles.managementIconContainer}>
+            <FontAwesome name="ticket" size={24} color="#0a66c2" />
+          </View>
+          <View style={styles.managementButtonContent}>
+            <View style={styles.titleWithDot}>
+              <Text style={styles.managementButtonTitle}>Support Tickets</Text>
+              {unreadTickets > 0 && <View style={styles.unreadDotSmall} />}
+            </View>
+            <Text style={styles.managementButtonDesc}>
+              Manage client support requests
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.managementButton, { borderLeftColor: "#e74c3c" }]}
+          onPress={() => navigation.navigate("BugReports")}
+          activeOpacity={0.7}
+        >
+          <View style={styles.managementIconContainer}>
+            <Ionicons name="bug" size={24} color="#e74c3c" />
+          </View>
+          <View style={styles.managementButtonContent}>
+            <View style={styles.titleWithDot}>
+              <Text style={styles.managementButtonTitle}>Bug Reports</Text>
+              {unreadBugReports > 0 && <View style={styles.unreadDotSmall} />}
+            </View>
+            <Text style={styles.managementButtonDesc}>
+              Review and fix reported issues
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.managementButton,
+            { borderLeftColor: "#27ae60", borderBottomWidth: 0 },
+          ]}
+          onPress={() => navigation.navigate("ManageFAQs")}
+          activeOpacity={0.7}
+        >
+          <View style={styles.managementIconContainer}>
+            <Ionicons name="help" size={24} color="#27ae60" />
+          </View>
+          <View style={styles.managementButtonContent}>
+            <Text style={styles.managementButtonTitle}>Manage FAQs</Text>
+            <Text style={styles.managementButtonDesc}>
+              Create and edit frequently asked questions
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
@@ -485,6 +579,50 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  managementButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+    backgroundColor: "#fafbfc",
+    borderLeftWidth: 4,
+  },
+  managementIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#f3f7fc",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  managementButtonContent: {
+    flex: 1,
+  },
+  managementButtonTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#333",
+    marginBottom: 2,
+  },
+  managementButtonDesc: {
+    fontSize: 12,
+    color: "#888",
+    lineHeight: 16,
+  },
+  titleWithDot: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  unreadDotSmall: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#e74c3c",
   },
 });
 

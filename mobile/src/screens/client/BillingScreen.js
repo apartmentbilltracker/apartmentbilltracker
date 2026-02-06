@@ -93,8 +93,11 @@ const BillingScreen = ({ route }) => {
         members: room.members,
       });
 
-      // Fetch active billing cycle for accurate charges
-      fetchActiveBillingCycle(roomId);
+      // CRITICAL: Fetch active billing cycle BEFORE marking as loaded
+      // This ensures activeCycle is available for accurate water calculations
+      console.log("🔄 Fetching active billing cycle before rendering charges...");
+      await fetchActiveBillingCycle(roomId);
+      console.log("✅ Active billing cycle loaded - ready to render accurate charges");
     } catch (error) {
       console.error("Error fetching billing:", error.message);
       console.error("Error details:", error);
@@ -179,54 +182,73 @@ const BillingScreen = ({ route }) => {
     // PRIORITY 1: Use active billing cycle data if available (backend pre-calculated, most accurate)
     if (activeCycle?.memberCharges && state?.user?._id) {
       console.log(
-        `💧 BillingScreen calculatePayorWaterShare: Using activeCycle memberCharges`,
+        `💧 BillingScreen calculatePayorWaterShare: Using activeCycle memberCharges (most accurate)`,
       );
       const currentUserCharge = activeCycle.memberCharges.find(
         (c) => String(c.userId) === String(state.user._id),
       );
       if (currentUserCharge && currentUserCharge.isPayer) {
         console.log(
-          `   Found user charge water share: ${currentUserCharge.waterBillShare}`,
+          `   ✅ Found user charge water share: ${currentUserCharge.waterBillShare} (from pre-calculated backend data)`,
         );
         return currentUserCharge.waterBillShare || 0;
       }
     }
 
-    // FALLBACK: Manual calculation from room data
+    // FALLBACK: Only used if activeCycle is not yet loaded (shouldn't happen in normal flow)
+    // This fallback is intentionally SIMPLE to avoid calculation inconsistencies
     console.log(
-      `⚠️ BillingScreen calculatePayorWaterShare: No activeCycle, using fallback`,
+      `⚠️ BillingScreen calculatePayorWaterShare: No activeCycle loaded yet, using simple fallback`,
     );
-    const payorCount = getPayorCount();
-    let payorOwnWater = 0;
-    let nonPayorWater = 0;
+    console.warn(
+      "   ⚠️ NOTICE: Water calculation is using fallback (activeCycle not loaded). This should be rare!",
+    );
 
+    // Simple fallback: just count all members with isPayer set to true
+    const totalPayorCount = (billing.members || []).filter(
+      (m) => m.isPayer !== false,
+    ).length || 1;
+    
+    // Find current user
+    const myMember = billing.members.find(
+      (m) => String(m.user?._id || m.user) === String(state?.user?._id),
+    );
+    
+    if (!myMember || !myMember.isPayer) {
+      return 0; // Non-payors don't pay water
+    }
+
+    // Calculate this user's water share: own consumption + split non-payor water
+    const myPresenceDays = myMember.presence ? myMember.presence.length : 0;
+    const myOwnWater = myPresenceDays * WATER_BILL_PER_DAY;
+
+    let nonPayorWater = 0;
     billing.members.forEach((member) => {
-      const presenceDays = member.presence ? member.presence.length : 0;
-      if (member.isPayer) {
-        payorOwnWater += presenceDays * WATER_BILL_PER_DAY;
-      } else {
+      if (!member.isPayer || member.isPayer === false) {
+        const presenceDays = member.presence ? member.presence.length : 0;
         nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
       }
     });
 
-    // Calculate share: own water + split non-payor water
-    const myPresenceDays =
-      billing.members.find(
-        (m) => String(m.user?._id || m.user) === String(state?.user?._id),
-      )?.presence?.length || 0;
-    const myOwnWater = myPresenceDays * WATER_BILL_PER_DAY;
-    const sharedNonPayorWater = payorCount > 0 ? nonPayorWater / payorCount : 0;
+    const sharedNonPayorWater =
+      totalPayorCount > 0 ? nonPayorWater / totalPayorCount : 0;
+    const totalWaterShare = myOwnWater + sharedNonPayorWater;
+
     console.log(
-      `   Fallback calc: own=${myOwnWater}, shared=${sharedNonPayorWater}, total=${myOwnWater + sharedNonPayorWater}`,
+      `   Fallback calc: own=${myOwnWater}, shared=${sharedNonPayorWater}, total=${totalWaterShare} (totalPayors=${totalPayorCount})`,
     );
-    return myOwnWater + sharedNonPayorWater;
+    return totalWaterShare;
   };
 
   // Get water breakdown details for display (shows own consumption vs split non-payor water)
   const getPayorWaterBreakdown = () => {
     if (!billing?.members) return null;
 
-    const payorCount = getPayorCount();
+    // Use same calculation as calculatePayorWaterShare for consistency
+    const totalPayorCount = (billing.members || []).filter(
+      (m) => m.isPayer !== false,
+    ).length || 1;
+
     const myPresenceDays =
       billing.members.find(
         (m) => String(m.user?._id || m.user) === String(state?.user?._id),
@@ -235,20 +257,21 @@ const BillingScreen = ({ route }) => {
 
     let nonPayorWater = 0;
     billing.members.forEach((member) => {
-      if (!member.isPayer) {
+      if (!member.isPayer || member.isPayer === false) {
         const presenceDays = member.presence ? member.presence.length : 0;
         nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
       }
     });
 
-    const sharedNonPayorWater = payorCount > 0 ? nonPayorWater / payorCount : 0;
+    const sharedNonPayorWater =
+      totalPayorCount > 0 ? nonPayorWater / totalPayorCount : 0;
     const totalWaterShare = myOwnWater + sharedNonPayorWater;
 
     return {
       myOwnWater,
       nonPayorWater,
       sharedNonPayorWater,
-      payorCount,
+      payorCount: totalPayorCount,
       totalWaterShare,
     };
   };
@@ -347,7 +370,7 @@ const BillingScreen = ({ route }) => {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <MaterialIcons name="people" size={24} color={colors.primary} />
-          <Text style={styles.cardTitle}>Per Payor Breakdown</Text>
+          <Text style={styles.cardTitle}>Your Share</Text>
         </View>
 
         <View style={styles.memberBreakdown}>

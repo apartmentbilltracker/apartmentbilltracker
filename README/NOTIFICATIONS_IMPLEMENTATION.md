@@ -230,8 +230,43 @@ options: {
 - [ ] Add notification expiry (auto-delete old notifications)
 - [ ] Rich notifications with action buttons (Pay Now, etc)
 
+### ⚠️ CRITICAL: Production Build Configuration
+
+**For notifications to work in built APKs and iOS apps (not just Expo Go):**
+
+The `expo-notifications` plugin MUST be configured in `app.json`:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./src/assets/icon.png",
+          "colors": ["#b38604"],
+          "modes": ["production"]
+        }
+      ]
+    ]
+  }
+}
+```
+
+**Without this plugin:**
+- ❌ Notifications won't work in production builds (APK/iOS)
+- ✅ Notifications still work in Expo Go (has all native modules pre-built)
+- ✅ All backend code is correct and ready
+
+**After adding the plugin:**
+1. Rebuild APK: `eas build --platform android --profile production --clear-cache`
+2. Rebuild iOS: `eas build --platform ios --profile production --clear-cache`
+3. Test by sending presence reminders to built app
+
+See [PUSH_NOTIFICATION_FIX.md](../PUSH_NOTIFICATION_FIX.md) for detailed troubleshooting.
+
 ---
 
-**Status: ✅ PRODUCTION READY**
+**Status: ✅ PRODUCTION READY** (with app.json plugin configuration)
 
 Both email and in-app push notifications are fully implemented and integrated. System is online-compatible and uses Expo's reliable push service.

@@ -18,6 +18,30 @@ const announcementSchema = new mongoose.Schema({
       createdAt: { type: Date, default: Date.now },
     },
   ],
+  reactions: [
+    {
+      user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      type: {
+        type: String,
+        enum: ["like", "love", "haha", "wow", "sad", "angry"],
+        required: true,
+      },
+      createdAt: { type: Date, default: Date.now },
+    },
+  ],
+  shares: [
+    {
+      user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      userName: { type: String },
+      sharedAt: { type: Date, default: Date.now },
+    },
+  ],
+  readBy: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

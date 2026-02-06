@@ -36,11 +36,13 @@ const AdminDashboardScreen = ({ navigation }) => {
     collectionRate: 0,
   });
   const [billingByMonth, setBillingByMonth] = useState([]);
+  const [latestBillingCycle, setLatestBillingCycle] = useState(null);
 
   useEffect(() => {
     fetchRooms();
     fetchBillingTotals();
     fetchPaymentStats();
+    fetchLatestBillingCycle();
   }, []);
 
   // Check if any billing cycle was closed and refresh data
@@ -57,6 +59,7 @@ const AdminDashboardScreen = ({ navigation }) => {
       });
       // Refetch all data
       fetchPaymentStats();
+      fetchLatestBillingCycle();
       fetchRooms();
       fetchBillingTotals();
     }
@@ -95,6 +98,44 @@ const AdminDashboardScreen = ({ navigation }) => {
         totalPending: 0,
         collectionRate: 0,
       });
+    }
+  };
+
+  const fetchLatestBillingCycle = async () => {
+    try {
+      // Fetch latest billing cycle stats
+      console.log("🔍 Calling /api/v2/billing-cycles/totals/latest...");
+      const response = await apiService.get(
+        "/api/v2/billing-cycles/totals/latest",
+      );
+      // apiService.get() extracts response.data from axios response
+      // So response is {success: true, data: {...}} structure
+      console.log("📦 Full response received:", response);
+      
+      let cycleData = null;
+      
+      // Check if response has nested data structure
+      if (response && response.success && response.data && response.data._id) {
+        cycleData = response.data;
+        console.log("✅ Using response.data structure:", cycleData);
+      } else if (response && response._id) {
+        // Direct data structure
+        cycleData = response;
+        console.log("✅ Using direct response structure:", cycleData);
+      } else {
+        console.log("❌ No valid cycle data in response, got:", response);
+      }
+      
+      if (cycleData) {
+        setLatestBillingCycle(cycleData);
+        console.log("✅ Latest billing cycle state updated with:", cycleData);
+      } else {
+        setLatestBillingCycle(null);
+      }
+    } catch (error) {
+      console.log("❌ Error fetching latest billing cycle:", error);
+      console.log("Error details:", error.response || error.message);
+      setLatestBillingCycle(null);
     }
   };
 
@@ -171,7 +212,25 @@ const AdminDashboardScreen = ({ navigation }) => {
 
       {/* Key Metrics - Payment Status */}
       <View style={styles.metricsSection}>
-        <Text style={styles.metricsTitle}>Payment Collection</Text>
+        <View style={styles.metricsHeaderRow}>
+          <Text style={styles.metricsTitle}>Payment Collection</Text>
+          {latestBillingCycle?.startDate && latestBillingCycle?.endDate && (
+            <View style={styles.billingPeriodBadge}>
+              <MaterialIcons name="calendar-today" size={12} color="#b38604" />
+              <Text style={styles.billingPeriodText}>
+                {new Date(latestBillingCycle.startDate).toLocaleDateString(
+                  "en-US",
+                  { month: "short", day: "numeric" },
+                )}{" "}
+                -{" "}
+                {new Date(latestBillingCycle.endDate).toLocaleDateString(
+                  "en-US",
+                  { month: "short", day: "numeric" },
+                )}
+              </Text>
+            </View>
+          )}
+        </View>
         <View style={styles.metricsRow}>
           <View style={[styles.metricCard, { backgroundColor: "#4CAF50" }]}>
             <View style={styles.metricHeader}>
@@ -179,7 +238,7 @@ const AdminDashboardScreen = ({ navigation }) => {
               <Text style={styles.metricLabel}>Collected</Text>
             </View>
             <Text style={styles.metricValue}>
-              ₱{(paymentStats.totalCollected || 0).toFixed(2)}
+              ₱{(latestBillingCycle?.totalCollected || 0).toFixed(2)}
             </Text>
           </View>
           <View style={[styles.metricCard, { backgroundColor: "#FF6B6B" }]}>
@@ -188,7 +247,7 @@ const AdminDashboardScreen = ({ navigation }) => {
               <Text style={styles.metricLabel}>Pending</Text>
             </View>
             <Text style={styles.metricValue}>
-              ₱{(paymentStats.totalPending || 0).toFixed(2)}
+              ₱{(latestBillingCycle?.totalPending || 0).toFixed(2)}
             </Text>
           </View>
         </View>
@@ -199,13 +258,13 @@ const AdminDashboardScreen = ({ navigation }) => {
               style={[
                 styles.progressFill,
                 {
-                  width: `${Math.min(100, paymentStats.collectionRate || 0)}%`,
+                  width: `${Math.min(100, latestBillingCycle?.collectionRate || 0)}%`,
                 },
               ]}
             />
           </View>
           <Text style={styles.collectionRateValue}>
-            {(paymentStats.collectionRate || 0).toFixed(0)}%
+            {(latestBillingCycle?.collectionRate || 0).toFixed(0)}%
           </Text>
         </View>
       </View>
@@ -780,6 +839,27 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#999",
     marginVertical: 20,
+  },
+  metricsHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+    gap: 12,
+  },
+  billingPeriodBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#fef3e2",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  billingPeriodText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#666",
   },
 });
 

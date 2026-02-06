@@ -138,6 +138,7 @@ const adminBillingRoutes = require("./controller/adminBilling");
 const adminRemindersRoutes = require("./controller/adminReminders");
 const notificationsRoutes = require("./controller/notifications");
 const announcementRoutes = require("./routes/announcement");
+const supportRoutes = require("./routes/support");
 
 // 5. Debug Endpoints (Add before routes)
 app.post("/api/v2/debug/upload", (req, res) => {
@@ -248,6 +249,7 @@ app.use("/api/v2/admin/billing", adminBillingRoutes);
 app.use("/api/v2/admin/reminders", adminRemindersRoutes);
 app.use("/api/v2/notifications", notificationsRoutes);
 app.use("/api/v2/announcements", announcementRoutes);
+app.use("/api/v2/support", supportRoutes);
 
 // Logout route - ensures the token cookie is properly removed
 app.get("/api/v2/user/logout", async (req, res, next) => {

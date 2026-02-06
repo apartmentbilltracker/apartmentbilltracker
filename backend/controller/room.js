@@ -1,8 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const Room = require("../model/room");
+const User = require("../model/user");
 const { isAuthenticated } = require("../middleware/auth");
 const ErrorHandler = require("../utils/ErrorHandler");
+const createNotification = require("../utils/createNotification");
 const PDFDocument = require("pdfkit");
 
 // create room
@@ -250,6 +252,72 @@ router.delete("/:id", isAuthenticated, async (req, res, next) => {
     next(new ErrorHandler(error.message, 500));
   }
 });
+
+// Admin: update a member in room (e.g., toggle payor status)
+router.put(
+  "/:id/members/:memberId",
+  isAuthenticated,
+  async (req, res, next) => {
+    try {
+      const room = await Room.findById(req.params.id);
+      if (!room) return next(new ErrorHandler("Room not found", 404));
+
+      const memberIndex = room.members.findIndex(
+        (m) => String(m._id) === String(req.params.memberId),
+      );
+      if (memberIndex === -1)
+        return next(new ErrorHandler("Member not found in room", 404));
+
+      const oldPayorStatus = room.members[memberIndex].isPayer;
+      const adminName = req.user?.name || "Administrator";
+
+      // Update allowed fields
+      const allowedUpdates = ["isPayer", "name"];
+      allowedUpdates.forEach((field) => {
+        if (req.body.hasOwnProperty(field)) {
+          room.members[memberIndex][field] = req.body[field];
+        }
+      });
+
+      await room.save();
+
+      // Send notification if payor status changed
+      if (
+        req.body.hasOwnProperty("isPayer") &&
+        oldPayorStatus !== req.body.isPayer
+      ) {
+        const memberId = room.members[memberIndex].user;
+        const memberName = room.members[memberIndex].name;
+        const newStatus = req.body.isPayer
+          ? "marked as payor"
+          : "unmarked as payor";
+
+        await createNotification(memberId, {
+          type: "member_status_changed",
+          title: "Status Changed",
+          message: `Your status in ${room.name} has been ${newStatus} by ${adminName}.`,
+          relatedData: {
+            roomId: room._id,
+            memberId: memberId,
+            changeType: "payorStatus",
+            newStatus: req.body.isPayer,
+          },
+        }).catch((error) => {
+          console.error("Error creating notification:", error);
+          // Don't fail the request if notification fails
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Member updated successfully",
+        member: room.members[memberIndex],
+      });
+    } catch (error) {
+      next(new ErrorHandler(error.message, 500));
+    }
+  },
+);
 
 // Admin: remove a member from room
 router.delete(

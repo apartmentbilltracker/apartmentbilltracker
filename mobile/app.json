@@ -25,6 +25,16 @@
       "package": "com.apartmentbilltracker",
       "scheme": "aptbilltracker"
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./src/assets/icon.png",
+          "colors": ["#b38604"],
+          "modes": ["production"]
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "2c14cabc-44e4-4116-8a15-99bfe4feee8a"

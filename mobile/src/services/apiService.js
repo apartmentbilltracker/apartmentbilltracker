@@ -11,6 +11,22 @@ export const authService = {
   // Simple register
   register: (data) => api.post("/api/v2/user/register", data).then(extractData),
 
+  // 3-step signup: Step 1 - Create user with email and name
+  createUser: (data) =>
+    api.post("/api/v2/user/create-user", data).then(extractData),
+
+  // 3-step signup: Step 2 - Verify activation code
+  verifyActivationCode: (data) =>
+    api.post("/api/v2/user/verify-activation-code", data).then(extractData),
+
+  // 3-step signup: Step 3 - Set password
+  setPassword: (data) =>
+    api.post("/api/v2/user/set-password", data).then(extractData),
+
+  // Resend verification code
+  resendVerification: (email) =>
+    api.post("/api/v2/user/resend-verification", { email }).then(extractData),
+
   // Google login
   googleLogin: (data) =>
     api.post("/api/v2/user/google-login", data).then(extractData),
@@ -246,12 +262,44 @@ export const announcementService = {
       })
       .then(extractData),
 
+  markAsRead: (announcementId) =>
+    api
+      .put(`/api/v2/announcements/${announcementId}/mark-read`)
+      .then(extractData),
+
   deleteAnnouncement: (announcementId) =>
     api.delete(`/api/v2/announcements/${announcementId}`).then(extractData),
 
   deleteComment: (announcementId, commentId) =>
     api
       .delete(`/api/v2/announcements/${announcementId}/comments/${commentId}`)
+      .then(extractData),
+
+  // Reactions
+  addReaction: (announcementId, reactionType) =>
+    api
+      .post(`/api/v2/announcements/${announcementId}/reactions`, {
+        reactionType,
+      })
+      .then(extractData),
+
+  removeReaction: (announcementId) =>
+    api
+      .delete(`/api/v2/announcements/${announcementId}/reactions`)
+      .then(extractData),
+
+  getReactionSummary: (announcementId) =>
+    api
+      .get(`/api/v2/announcements/${announcementId}/reactions/summary`)
+      .then(extractData),
+
+  // Sharing
+  shareAnnouncement: (announcementId) =>
+    api.post(`/api/v2/announcements/${announcementId}/share`).then(extractData),
+
+  getShareCount: (announcementId) =>
+    api
+      .get(`/api/v2/announcements/${announcementId}/shares/count`)
       .then(extractData),
 };
 
@@ -319,6 +367,68 @@ export const apiService = {
   getTransaction: (transactionId) =>
     paymentProcessingService.getTransaction(transactionId),
   getAnalytics: (roomId) => paymentProcessingService.getAnalytics(roomId),
+};
+
+// Support Services (Support Tickets, FAQs, Bug Reports)
+export const supportService = {
+  // Support Tickets
+  createTicket: (data) =>
+    api.post("/api/v2/support/create-ticket", data).then(extractData),
+  getUserTickets: () => api.get("/api/v2/support/my-tickets").then(extractData),
+  getTicketDetails: (ticketId) =>
+    api.get(`/api/v2/support/ticket/${ticketId}`).then(extractData),
+  addTicketReply: (ticketId, message) =>
+    api
+      .post(`/api/v2/support/ticket/${ticketId}/reply`, { message })
+      .then(extractData),
+  markTicketAsRead: (ticketId) =>
+    api.post(`/api/v2/support/ticket/${ticketId}/read`).then(extractData),
+
+  // FAQs
+  getAllFAQs: (category) =>
+    api
+      .get(`/api/v2/support/faqs${category ? `?category=${category}` : ""}`)
+      .then(extractData),
+  getFAQCategories: () =>
+    api.get("/api/v2/support/faq-categories").then(extractData),
+  markFAQHelpful: (faqId) =>
+    api.post(`/api/v2/support/faq/${faqId}/helpful`).then(extractData),
+  markFAQNotHelpful: (faqId) =>
+    api.post(`/api/v2/support/faq/${faqId}/not-helpful`).then(extractData),
+
+  // Admin methods
+  getAllTickets: () => api.get("/api/v2/support/all-tickets").then(extractData),
+  updateTicketStatus: (ticketId, status) =>
+    api
+      .put(`/api/v2/support/ticket/${ticketId}/status`, { status })
+      .then(extractData),
+  getAdminFAQs: () => api.get("/api/v2/support/admin-faqs").then(extractData),
+  createFAQ: (data) =>
+    api.post("/api/v2/support/create-faq", data).then(extractData),
+  updateFAQ: (faqId, data) =>
+    api.put(`/api/v2/support/faq/${faqId}`, data).then(extractData),
+  deleteFAQ: (faqId) =>
+    api.delete(`/api/v2/support/faq/${faqId}`).then(extractData),
+  getAllBugReports: () =>
+    api.get("/api/v2/support/all-bug-reports").then(extractData),
+  updateBugReportStatus: (reportId, status) =>
+    api
+      .put(`/api/v2/support/bug-report/${reportId}/status`, { status })
+      .then(extractData),
+
+  // Bug Reports
+  createBugReport: (data) =>
+    api.post("/api/v2/support/create-bug-report", data).then(extractData),
+  getUserBugReports: () =>
+    api.get("/api/v2/support/my-bug-reports").then(extractData),
+  getBugReportDetails: (reportId) =>
+    api.get(`/api/v2/support/bug-report/${reportId}`).then(extractData),
+  addBugReportResponse: (reportId, message) =>
+    api
+      .post(`/api/v2/support/bug-report/${reportId}/response`, { message })
+      .then(extractData),
+  markBugReportAsRead: (reportId) =>
+    api.post(`/api/v2/support/bug-report/${reportId}/read`).then(extractData),
 };
 
 export default apiService;
