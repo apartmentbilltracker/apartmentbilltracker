@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import { useIsFocused } from "@react-navigation/native";
 import {
   View,
@@ -11,23 +11,22 @@ import {
   Alert,
   Modal,
   Image,
+  Dimensions,
 } from "react-native";
 import { MaterialIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
 import { roomService, billingCycleService } from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
+import { roundTo2 as r2 } from "../../utils/helpers";
+import { useTheme } from "../../theme/ThemeContext";
 
-const colors = {
-  primary: "#b38604",
-  dark: "#1a1a1a",
-  lightGray: "#f5f5f5",
-  border: "#e0e0e0",
-  success: "#27ae60",
-  danger: "#e74c3c",
-};
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const WATER_BILL_PER_DAY = 5; // 5 pesos per day
 
 const BillsScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { state } = useContext(AuthContext);
   const isFocused = useIsFocused();
   const [rooms, setRooms] = useState([]);
@@ -43,7 +42,7 @@ const BillsScreen = ({ navigation }) => {
   const [showPresenceModal, setShowPresenceModal] = useState(false);
   const [presenceMonth, setPresenceMonth] = useState(new Date()); // For calendar navigation
 
-  const userId = state?.user?._id;
+  const userId = state?.user?.id || state?.user?._id;
 
   useEffect(() => {
     if (isFocused) {
@@ -62,10 +61,10 @@ const BillsScreen = ({ navigation }) => {
 
   useEffect(() => {
     if (selectedRoom) {
-      loadMemberPresence(selectedRoom._id);
-      fetchActiveBillingCycle(selectedRoom._id); // Fetch active cycle for accurate charges
+      loadMemberPresence(selectedRoom.id || selectedRoom._id);
+      fetchActiveBillingCycle(selectedRoom.id || selectedRoom._id); // Fetch active cycle for accurate charges
       console.log("📍 BillsScreen - selectedRoom changed");
-      console.log("   Room ID:", selectedRoom._id);
+      console.log("   Room ID:", selectedRoom.id || selectedRoom._id);
       console.log("   memberPayments:", selectedRoom.memberPayments);
       console.log("   billing:", selectedRoom.billing);
       if (
@@ -92,7 +91,7 @@ const BillsScreen = ({ navigation }) => {
       if (room?.members) {
         const presenceMap = {};
         room.members.forEach((member) => {
-          presenceMap[member._id] = member.presence || [];
+          presenceMap[member.id || member._id] = member.presence || [];
           console.log(`Member ${member.user?.name} presence:`, member.presence);
         });
         setMemberPresence(presenceMap);
@@ -109,8 +108,10 @@ const BillsScreen = ({ navigation }) => {
       const response = await billingCycleService.getBillingCycles(roomId);
       console.log("📦 getBillingCycles response:", response);
 
-      // Response could be: array directly, or { data: array }
-      let cycles = Array.isArray(response) ? response : response?.data || [];
+      // Response could be: array directly, or { billingCycles: array }
+      let cycles = Array.isArray(response)
+        ? response
+        : response?.billingCycles || response?.data || [];
       console.log("📋 Parsed cycles:", cycles);
 
       // Find active cycle
@@ -119,7 +120,7 @@ const BillsScreen = ({ navigation }) => {
         setActiveCycle(active);
         console.log(
           "✅ Active cycle found:",
-          active._id,
+          active.id || active._id,
           "with memberCharges count:",
           active.memberCharges?.length,
         );
@@ -163,7 +164,8 @@ const BillsScreen = ({ navigation }) => {
         if (selectedRoom && fetchedRooms.length > 0) {
           // Find the updated version of the currently selected room
           const updatedSelectedRoom = fetchedRooms.find(
-            (room) => room._id === selectedRoom._id,
+            (room) =>
+              (room.id || room._id) === (selectedRoom.id || selectedRoom._id),
           );
           if (updatedSelectedRoom) {
             setSelectedRoom(updatedSelectedRoom);
@@ -186,7 +188,7 @@ const BillsScreen = ({ navigation }) => {
     setRefreshing(true);
     await fetchRooms();
     if (selectedRoom) {
-      await loadMemberPresence(selectedRoom._id);
+      await loadMemberPresence(selectedRoom.id || selectedRoom._id);
     }
     setRefreshing(false);
   };
@@ -194,8 +196,8 @@ const BillsScreen = ({ navigation }) => {
   const calculateBillShare = () => {
     if (!selectedRoom?.billing || !userId) return null;
 
-    // PRIORITY 1: Use activeCycle memberCharges if available (backend pre-calculated)
-    if (activeCycle?.memberCharges) {
+    // PRIORITY 1: Use activeCycle memberCharges if available AND populated
+    if (activeCycle?.memberCharges?.length > 0) {
       console.log("💼 calculateBillShare: Using activeCycle memberCharges");
       const userCharge = activeCycle.memberCharges.find(
         (c) => String(c.userId) === String(userId),
@@ -219,9 +221,11 @@ const BillsScreen = ({ navigation }) => {
       }
     }
 
-    // FALLBACK: Calculate from room data if no active cycle
+    // FALLBACK: Calculate from room data if no active cycle or empty memberCharges
     console.log(
-      "⚠️ calculateBillShare: No activeCycle, using fallback calculation",
+      activeCycle
+        ? "⚠️ calculateBillShare: activeCycle found but memberCharges empty, using fallback"
+        : "⚠️ calculateBillShare: No activeCycle yet, using fallback calculation",
     );
     const billing = selectedRoom.billing;
     const members = selectedRoom.members || [];
@@ -230,39 +234,43 @@ const BillsScreen = ({ navigation }) => {
       members.filter((m) => m.isPayer).length || 1,
     );
 
-    const rentPerPayor = billing.rent ? billing.rent / payorCount : 0;
+    const rentPerPayor = billing.rent ? r2(billing.rent / payorCount) : 0;
     const electricityPerPayor = billing.electricity
-      ? billing.electricity / payorCount
+      ? r2(billing.electricity / payorCount)
       : 0;
     const internetPerPayor = billing.internet
-      ? billing.internet / payorCount
+      ? r2(billing.internet / payorCount)
       : 0;
 
     // Calculate water share inline in fallback to avoid timing issues
     // Get current user's member object
     const currentUserMember = selectedRoom.members.find(
-      (m) => String(m.user?._id || m.user) === String(userId),
+      (m) => String(m.user?.id || m.user?._id || m.user) === String(userId),
     );
 
     let waterShare = 0;
-    if (currentUserMember?.isPayer && memberPresence[currentUserMember._id]) {
+    if (
+      currentUserMember?.isPayer &&
+      memberPresence[currentUserMember.id || currentUserMember._id]
+    ) {
       // Current user's own water consumption
       const userPresenceDays =
-        memberPresence[currentUserMember._id]?.length || 0;
+        memberPresence[currentUserMember.id || currentUserMember._id]?.length ||
+        0;
       const userOwnWater = userPresenceDays * WATER_BILL_PER_DAY;
 
       // Non-payors' water to split
       let nonPayorWater = 0;
       members.forEach((m) => {
         if (!m.isPayer) {
-          const presenceDays = memberPresence[m._id]?.length || 0;
+          const presenceDays = memberPresence[m.id || m._id]?.length || 0;
           nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
         }
       });
 
       const sharedNonPayorWater =
-        payorCount > 0 ? nonPayorWater / payorCount : 0;
-      waterShare = userOwnWater + sharedNonPayorWater;
+        payorCount > 0 ? r2(nonPayorWater / payorCount) : 0;
+      waterShare = r2(userOwnWater + sharedNonPayorWater);
       console.log(
         `   Fallback water calc: own=${userOwnWater}, shared=${sharedNonPayorWater}, total=${waterShare}`,
       );
@@ -273,7 +281,9 @@ const BillsScreen = ({ navigation }) => {
       electricity: electricityPerPayor,
       internet: internetPerPayor,
       water: waterShare,
-      total: rentPerPayor + electricityPerPayor + internetPerPayor + waterShare,
+      total: r2(
+        rentPerPayor + electricityPerPayor + internetPerPayor + waterShare,
+      ),
       payorCount,
     };
   };
@@ -283,7 +293,7 @@ const BillsScreen = ({ navigation }) => {
     if (!selectedRoom?.members || selectedRoom.members.length === 0) return 0;
     let totalDays = 0;
     selectedRoom.members.forEach((member) => {
-      const presence = memberPresence[member._id] || [];
+      const presence = memberPresence[member.id || member._id] || [];
       totalDays += presence.length;
     });
     const result = totalDays * WATER_BILL_PER_DAY;
@@ -336,7 +346,9 @@ const BillsScreen = ({ navigation }) => {
     // Non-payors' portion is NOT added here - only show what this member consumed
     if (!selectedRoom?.members) return 0;
 
-    const member = selectedRoom.members.find((m) => m._id === memberId);
+    const member = selectedRoom.members.find(
+      (m) => (m.id || m._id) === memberId,
+    );
     if (!member) return 0;
 
     const presence = memberPresence[memberId] || [];
@@ -350,14 +362,16 @@ const BillsScreen = ({ navigation }) => {
     // For non-payors, returns 0
     if (!selectedRoom?.members) return 0;
 
-    const member = selectedRoom.members.find((m) => m._id === memberId);
+    const member = selectedRoom.members.find(
+      (m) => (m.id || m._id) === memberId,
+    );
     if (!member) return 0;
 
     // Non-payors always pay ₱0 for water
     if (!member.isPayer) return 0;
 
-    // PRIORITY 1: Use active billing cycle data if available (backend pre-calculated, most accurate)
-    if (activeCycle?.memberCharges && userId) {
+    // PRIORITY 1: Use active billing cycle data if populated
+    if (activeCycle?.memberCharges?.length > 0 && userId) {
       console.log(
         `💧 calculateMemberWaterShare: Using activeCycle memberCharges for ${memberId}`,
       );
@@ -382,19 +396,21 @@ const BillsScreen = ({ navigation }) => {
 
     selectedRoom.members.forEach((member) => {
       if (!member.isPayer) {
-        const presenceDays = memberPresence[member._id]?.length || 0;
+        const presenceDays =
+          memberPresence[member.id || member._id]?.length || 0;
         nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
       }
     });
 
     const presence = memberPresence[memberId] || [];
     const memberOwnWater = presence.length * WATER_BILL_PER_DAY;
-    const sharedNonPayorWater = payorCount > 0 ? nonPayorWater / payorCount : 0;
+    const sharedNonPayorWater =
+      payorCount > 0 ? r2(nonPayorWater / payorCount) : 0;
 
     console.log(
       `   Fallback: own=${memberOwnWater}, shared=${sharedNonPayorWater}, total=${memberOwnWater + sharedNonPayorWater}`,
     );
-    const result = memberOwnWater + sharedNonPayorWater;
+    const result = r2(memberOwnWater + sharedNonPayorWater);
     return typeof result === "number" ? result : 0;
   };
 
@@ -402,27 +418,55 @@ const BillsScreen = ({ navigation }) => {
   const getWaterShareBreakdown = () => {
     if (!selectedRoom?.members || !userId) return null;
 
-    const payorCount =
-      selectedRoom.members.filter((m) => m.isPayer).length || 1;
     const currentUserMember = selectedRoom.members.find(
-      (m) => String(m.user?._id || m.user) === String(userId),
+      (m) => String(m.user?.id || m.user?._id || m.user) === String(userId),
     );
 
     if (!currentUserMember?.isPayer) return null;
 
-    const userPresence = memberPresence[currentUserMember._id]?.length || 0;
+    // PRIORITY 1: Use backend-computed breakdown from activeCycle
+    if (activeCycle?.memberCharges?.length > 0) {
+      const userCharge = activeCycle.memberCharges.find(
+        (c) => String(c.userId) === String(userId),
+      );
+      if (userCharge && userCharge.isPayer) {
+        const ownWater = userCharge.waterOwn || 0;
+        const sharedNonPayorWater = userCharge.waterSharedNonpayor || 0;
+        return {
+          ownWater,
+          nonPayorWater:
+            sharedNonPayorWater *
+            (activeCycle.memberCharges.filter((c) => c.isPayer).length || 1),
+          sharedNonPayorWater,
+          payorCount:
+            activeCycle.memberCharges.filter((c) => c.isPayer).length || 1,
+          totalWaterShare:
+            userCharge.waterBillShare || r2(ownWater + sharedNonPayorWater),
+        };
+      }
+    }
+
+    // FALLBACK: Calculate from local presence data
+    const payorCount =
+      selectedRoom.members.filter((m) => m.isPayer).length || 1;
+
+    const userPresence =
+      memberPresence[currentUserMember.id || currentUserMember._id]?.length ||
+      0;
     const ownWater = userPresence * WATER_BILL_PER_DAY;
 
     let nonPayorWater = 0;
     selectedRoom.members.forEach((member) => {
       if (!member.isPayer) {
-        const presenceDays = memberPresence[member._id]?.length || 0;
+        const presenceDays =
+          memberPresence[member.id || member._id]?.length || 0;
         nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
       }
     });
 
-    const sharedNonPayorWater = payorCount > 0 ? nonPayorWater / payorCount : 0;
-    const totalWaterShare = ownWater + sharedNonPayorWater;
+    const sharedNonPayorWater =
+      payorCount > 0 ? r2(nonPayorWater / payorCount) : 0;
+    const totalWaterShare = r2(ownWater + sharedNonPayorWater);
 
     return {
       ownWater,
@@ -739,8 +783,9 @@ const BillsScreen = ({ navigation }) => {
                   .map((member) => {
                     const memberPayment = selectedRoom.memberPayments?.find(
                       (mp) =>
-                        mp.member?._id === member.user?._id ||
-                        mp.member === member.user?._id,
+                        (mp.member?.id || mp.member?._id) ===
+                          (member.user?.id || member.user?._id) ||
+                        mp.member === (member.user?.id || member.user?._id),
                     );
                     const rentStatus = memberPayment?.rentStatus || "unpaid";
                     const electricityStatus =
@@ -772,33 +817,69 @@ const BillsScreen = ({ navigation }) => {
 
             ${
               isUserPayor && currentUserMember
-                ? `
+                ? (() => {
+                    // Use backend memberCharges when available
+                    const uc =
+                      activeCycle?.memberCharges?.length > 0
+                        ? activeCycle.memberCharges.find(
+                            (c) =>
+                              String(c.userId) ===
+                              String(
+                                currentUserMember.id || currentUserMember._id,
+                              ),
+                          )
+                        : null;
+                    const pc =
+                      selectedRoom.members.filter((m) => m.isPayer).length || 1;
+                    const _rent = uc?.isPayer
+                      ? uc.rentShare || 0
+                      : billing.rent
+                        ? r2(billing.rent / pc)
+                        : 0;
+                    const _elec = uc?.isPayer
+                      ? uc.electricityShare || 0
+                      : billing.electricity
+                        ? r2(billing.electricity / pc)
+                        : 0;
+                    const _water = calculateMemberWaterShare(
+                      currentUserMember.id || currentUserMember._id,
+                    );
+                    const _net = uc?.isPayer
+                      ? uc.internetShare || 0
+                      : billing.internet
+                        ? r2(billing.internet / pc)
+                        : 0;
+                    const _total = uc?.isPayer
+                      ? uc.totalDue || 0
+                      : r2(_rent + _elec + _water + _net);
+                    const wb = getWaterShareBreakdown();
+                    return `
             <!-- Your Share -->
             <div class="your-share">
               <div class="your-share-title">YOUR SHARE (PAYOR)</div>
               <div class="row">
                 <span class="label">Rent Share:</span>
-                <span class="value">₱${(billing.rent ? billing.rent / (selectedRoom.members.filter((m) => m.isPayer).length || 1) : 0).toFixed(2)}</span>
+                <span class="value">₱${_rent.toFixed(2)}</span>
               </div>
               <div class="row">
                 <span class="label">Electricity:</span>
-                <span class="value">₱${(billing.electricity ? billing.electricity / (selectedRoom.members.filter((m) => m.isPayer).length || 1) : 0).toFixed(2)}</span>
+                <span class="value">₱${_elec.toFixed(2)}</span>
               </div>
               <div class="row">
                 <span class="label">Water Share:</span>
-                <span class="value">₱${calculateMemberWaterShare(currentUserMember._id).toFixed(2)}</span>
+                <span class="value">₱${_water.toFixed(2)}</span>
               </div>
               ${
-                getWaterShareBreakdown()
+                wb
                   ? `
               <div class="row" style="font-size: 10px; color: #666; margin-top: 3px;">
-                <span class="label">Your consumption: ₱${getWaterShareBreakdown().ownWater.toFixed(2)}</span>
+                <span class="label">Your consumption: ₱${wb.ownWater.toFixed(2)}</span>
               </div>
               ${
-                getWaterShareBreakdown().sharedNonPayorWater > 0
+                wb.sharedNonPayorWater > 0
                   ? `
               <div class="row" style="font-size: 10px; color: #666; margin-top: 1px;">
-                <span class="label">+ Non-payors share: ₱${getWaterShareBreakdown().sharedNonPayorWater.toFixed(2)}</span>
+                <span class="label">+ Non-payors share: ₱${wb.sharedNonPayorWater.toFixed(2)}</span>
               </div>
               `
                   : ""
@@ -806,28 +887,21 @@ const BillsScreen = ({ navigation }) => {
               `
                   : ""
               }
+              <div class="row">
+                <span class="label">Internet:</span>
+                <span class="value">₱${_net.toFixed(2)}</span>
+              </div>
               <div class="divider-line"></div>
               <div class="total-row" style="border-top: none; padding-top: 0;">
                 <span class="total-label">AMOUNT DUE</span>
-                <span class="total-value">₱${(
-                  (billing.rent
-                    ? billing.rent /
-                      (selectedRoom.members.filter((m) => m.isPayer).length ||
-                        1)
-                    : 0) +
-                  (billing.electricity
-                    ? billing.electricity /
-                      (selectedRoom.members.filter((m) => m.isPayer).length ||
-                        1)
-                    : 0) +
-                  calculateMemberWaterShare(currentUserMember._id)
-                ).toFixed(2)}</span>
+                <span class="total-value">₱${_total.toFixed(2)}</span>
               </div>
               <div class="row" style="font-size: 10px; color: #666; margin-top: 5px;">
-                <span class="label">Split among ${selectedRoom.members.filter((m) => m.isPayer).length || 1} payor(s)</span>
+                <span class="label">Split among ${pc} payor(s)</span>
               </div>
             </div>
-            `
+            `;
+                  })()
                 : ""
             }
 
@@ -852,13 +926,24 @@ const BillsScreen = ({ navigation }) => {
       // Calculate individual payor shares based on their presence days
       const payorCount =
         selectedRoom.members.filter((m) => m.isPayer).length || 1;
-      const rentPerPayor = billing.rent ? billing.rent / payorCount : 0;
+      // PRIORITY 1: Use backend memberCharges for per-member shares
+      const backendCharges =
+        activeCycle?.memberCharges?.length > 0
+          ? activeCycle.memberCharges
+          : null;
+
+      const rentPerPayor = billing.rent ? r2(billing.rent / payorCount) : 0;
       const electricityPerPayor = billing.electricity
-        ? billing.electricity / payorCount
+        ? r2(billing.electricity / payorCount)
         : 0;
       const internetPerPayor = billing.internet
-        ? billing.internet / payorCount
+        ? r2(billing.internet / payorCount)
         : 0;
+
+      // Helper to get backend charge for a member
+      const getBackendCharge = (memberId) =>
+        backendCharges?.find((c) => String(c.userId) === String(memberId)) ||
+        null;
 
       const receipt = {
         roomName: selectedRoom.name,
@@ -878,50 +963,86 @@ const BillsScreen = ({ navigation }) => {
             (billing.internet || 0)
           ).toFixed(2),
         },
-        members: selectedRoom.members.map((member) => ({
-          name: member.user?.name || "Unknown",
-          presenceDays: (memberPresence[member._id] || []).length,
-          waterBill: calculateMemberWaterBill(member._id).toFixed(2),
-          isPayer: member.isPayer,
-          billShare: member.isPayer
-            ? {
-                rent: rentPerPayor.toFixed(2),
-                electricity: electricityPerPayor.toFixed(2),
-                water: calculateMemberWaterShare(member._id).toFixed(2),
-                internet: internetPerPayor.toFixed(2),
-                total: (
-                  rentPerPayor +
-                  electricityPerPayor +
-                  calculateMemberWaterShare(member._id) +
-                  internetPerPayor
-                ).toFixed(2),
-              }
-            : null,
-        })),
+        members: selectedRoom.members.map((member) => {
+          const mid = member.id || member._id;
+          const bc = getBackendCharge(
+            member.user?.id || member.user?._id || mid,
+          );
+          const useBE = bc?.isPayer;
+          return {
+            name: member.user?.name || "Unknown",
+            presenceDays: (memberPresence[mid] || []).length,
+            waterBill: calculateMemberWaterBill(mid).toFixed(2),
+            isPayer: member.isPayer,
+            billShare: member.isPayer
+              ? {
+                  rent: (useBE ? bc.rentShare : rentPerPayor).toFixed(2),
+                  electricity: (useBE
+                    ? bc.electricityShare
+                    : electricityPerPayor
+                  ).toFixed(2),
+                  water: (useBE
+                    ? bc.waterBillShare
+                    : calculateMemberWaterShare(mid)
+                  ).toFixed(2),
+                  internet: (useBE
+                    ? bc.internetShare
+                    : internetPerPayor
+                  ).toFixed(2),
+                  total: (useBE
+                    ? bc.totalDue
+                    : r2(
+                        rentPerPayor +
+                          electricityPerPayor +
+                          calculateMemberWaterShare(mid) +
+                          internetPerPayor,
+                      )
+                  ).toFixed(2),
+                }
+              : null,
+          };
+        }),
         userShare:
           isUserPayor && currentUserMember
-            ? {
-                rent: rentPerPayor.toFixed(2),
-                electricity: electricityPerPayor.toFixed(2),
-                water: calculateMemberWaterShare(currentUserMember._id).toFixed(
-                  2,
-                ),
-                internet: internetPerPayor.toFixed(2),
-                waterBreakdown: getWaterShareBreakdown()
-                  ? {
-                      ownWater: getWaterShareBreakdown().ownWater.toFixed(2),
-                      nonPayorShare:
-                        getWaterShareBreakdown().sharedNonPayorWater.toFixed(2),
-                    }
-                  : null,
-                total: (
-                  rentPerPayor +
-                  electricityPerPayor +
-                  calculateMemberWaterShare(currentUserMember._id) +
-                  internetPerPayor
-                ).toFixed(2),
-                payorCount: payorCount,
-              }
+            ? (() => {
+                const uid = currentUserMember.id || currentUserMember._id;
+                const bc = getBackendCharge(userId || uid);
+                const useBE = bc?.isPayer;
+                return {
+                  rent: (useBE ? bc.rentShare : rentPerPayor).toFixed(2),
+                  electricity: (useBE
+                    ? bc.electricityShare
+                    : electricityPerPayor
+                  ).toFixed(2),
+                  water: (useBE
+                    ? bc.waterBillShare
+                    : calculateMemberWaterShare(uid)
+                  ).toFixed(2),
+                  internet: (useBE
+                    ? bc.internetShare
+                    : internetPerPayor
+                  ).toFixed(2),
+                  waterBreakdown: getWaterShareBreakdown()
+                    ? {
+                        ownWater: getWaterShareBreakdown().ownWater.toFixed(2),
+                        nonPayorShare:
+                          getWaterShareBreakdown().sharedNonPayorWater.toFixed(
+                            2,
+                          ),
+                      }
+                    : null,
+                  total: (useBE
+                    ? bc.totalDue
+                    : r2(
+                        rentPerPayor +
+                          electricityPerPayor +
+                          calculateMemberWaterShare(uid) +
+                          internetPerPayor,
+                      )
+                  ).toFixed(2),
+                  payorCount: payorCount,
+                };
+              })()
             : null,
         generatedDate: new Date().toLocaleDateString("en-US", {
           year: "numeric",
@@ -948,85 +1069,136 @@ const BillsScreen = ({ navigation }) => {
   };
 
   const currentUserMember = selectedRoom?.members?.find(
-    (m) => String(m.user?._id || m.user) === String(userId),
+    (m) => String(m.user?.id || m.user?._id || m.user) === String(userId),
   );
 
   const billShare = calculateBillShare();
   const billing = selectedRoom?.billing || {};
   const isUserPayor = currentUserMember?.isPayer || false;
 
+  // Merge meter readings from both billing (room data) and activeCycle (direct fetch)
+  const previousReading =
+    billing.previousReading ??
+    activeCycle?.previousMeterReading ??
+    activeCycle?.previous_meter_reading ??
+    null;
+  const currentReading =
+    billing.currentReading ??
+    activeCycle?.currentMeterReading ??
+    activeCycle?.current_meter_reading ??
+    null;
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#b38604" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
+  // Helper for formatted currency
+  const fmt = (v) =>
+    `₱${(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView
         style={styles.container}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#b38604"]}
+          />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* ─── HEADER ─── */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Billing Details</Text>
-            <Text style={styles.headerSubtitle}>
-              View your share of expenses
-            </Text>
+            <View style={styles.headerTitleRow}>
+              <View style={styles.headerIconBg}>
+                <MaterialIcons
+                  name="receipt-long"
+                  size={20}
+                  color={colors.textOnAccent}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.headerTitle}>Bills & Payments</Text>
+                <Text style={styles.headerSubtitle}>
+                  {selectedRoom ? selectedRoom.name : "Select a room to view"}
+                </Text>
+              </View>
+            </View>
           </View>
           {selectedRoom && billing?.start && billing?.end && (
             <TouchableOpacity
               style={styles.exportButton}
               onPress={exportBillingData}
             >
-              <MaterialIcons name="file-download" size={24} color="white" />
+              <MaterialIcons name="share" size={18} color={colors.accent} />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Room Selector */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Room</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {rooms.map((room) => (
-              <TouchableOpacity
-                key={room._id}
-                style={[
-                  styles.roomSelector,
-                  selectedRoom?._id === room._id && styles.roomSelectorActive,
-                ]}
-                onPress={() => {
-                  setSelectedRoom(room);
-                  loadMemberPresence(room._id);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.roomSelectorText,
-                    selectedRoom?._id === room._id &&
-                      styles.roomSelectorTextActive,
-                  ]}
-                >
-                  {room.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        {/* ─── ROOM SELECTOR ─── */}
+        {rooms.length > 0 && (
+          <View style={styles.roomSelectorContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
+            >
+              {rooms.map((room) => {
+                const isActive =
+                  (selectedRoom?.id || selectedRoom?._id) ===
+                  (room.id || room._id);
+                return (
+                  <TouchableOpacity
+                    key={room.id || room._id}
+                    style={[styles.roomPill, isActive && styles.roomPillActive]}
+                    onPress={() => {
+                      setSelectedRoom(room);
+                      loadMemberPresence(room.id || room._id);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.roomPillDot,
+                        isActive && styles.roomPillDotActive,
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.roomPillText,
+                        isActive && styles.roomPillTextActive,
+                      ]}
+                    >
+                      {room.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
+        {/* No room selected prompt */}
         {!selectedRoom && rooms.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.emptyCard}>
-              <MaterialIcons name="info-outline" size={48} color="#b38604" />
-              <Text style={styles.emptyText}>Select a Room</Text>
-              <Text style={styles.emptySubtext}>
-                Choose a room from above to view billing details
+          <View style={styles.contentPadding}>
+            <View style={styles.promptCard}>
+              <View style={styles.promptIconCircle}>
+                <MaterialIcons
+                  name="touch-app"
+                  size={28}
+                  color={colors.accent}
+                />
+              </View>
+              <Text style={styles.promptTitle}>Select a Room</Text>
+              <Text style={styles.promptSubtext}>
+                Choose a room above to view your billing details
               </Text>
             </View>
           </View>
@@ -1035,195 +1207,262 @@ const BillsScreen = ({ navigation }) => {
         {selectedRoom && (
           <>
             {billing?.start && billing?.end && !hasUserPaidAllBills() ? (
-              <>
-                {/* Billing Period */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Billing Period</Text>
-                  <View style={styles.infoCard}>
-                    <View style={styles.periodItem}>
+              <View style={styles.contentPadding}>
+                {/* ─── BILLING PERIOD CARD ─── */}
+                <View style={styles.card}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardIconBg}>
                       <Ionicons
-                        name="calendar-outline"
-                        size={20}
-                        color="#b38604"
+                        name="calendar"
+                        size={16}
+                        color={colors.textOnAccent}
                       />
-                      <View style={styles.periodInfo}>
-                        <Text style={styles.periodLabel}>Start Date</Text>
-                        <Text style={styles.periodValue}>
-                          {billing.start
-                            ? new Date(billing.start).toLocaleDateString(
-                                "en-US",
-                                {
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                },
-                              )
-                            : "Not set"}
-                        </Text>
-                      </View>
                     </View>
-                    <View style={styles.divider} />
-                    <View style={styles.periodItem}>
-                      <Ionicons
-                        name="calendar-outline"
+                    <Text style={styles.cardTitle}>Billing Period</Text>
+                  </View>
+                  <View style={styles.periodRow}>
+                    <View style={styles.periodBlock}>
+                      <Text style={styles.periodBlockLabel}>Start</Text>
+                      <Text style={styles.periodBlockDate}>
+                        {new Date(billing.start).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </Text>
+                      <Text style={styles.periodBlockYear}>
+                        {new Date(billing.start).getFullYear()}
+                      </Text>
+                    </View>
+                    <View style={styles.periodArrow}>
+                      <MaterialIcons
+                        name="arrow-forward"
                         size={20}
-                        color="#b38604"
+                        color={colors.textSecondary}
                       />
-                      <View style={styles.periodInfo}>
-                        <Text style={styles.periodLabel}>End Date</Text>
-                        <Text style={styles.periodValue}>
-                          {billing.end
-                            ? new Date(billing.end).toLocaleDateString(
-                                "en-US",
-                                {
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                },
-                              )
-                            : "Not set"}
-                        </Text>
-                      </View>
+                    </View>
+                    <View style={styles.periodBlock}>
+                      <Text style={styles.periodBlockLabel}>End</Text>
+                      <Text style={styles.periodBlockDate}>
+                        {new Date(billing.end).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </Text>
+                      <Text style={styles.periodBlockYear}>
+                        {new Date(billing.end).getFullYear()}
+                      </Text>
                     </View>
                   </View>
                 </View>
 
-                {/* Total Bills Overview */}
+                {/* ─── TOTAL BILLS OVERVIEW ─── */}
                 {billing.start &&
-                billing.end &&
-                (billing.rent || billing.electricity) ? (
-                  <>
-                    <View style={styles.section}>
-                      <Text style={styles.sectionTitle}>Total Bills</Text>
-                      <View style={styles.totalBillsGrid}>
-                        {/* Row 1 */}
-                        <View style={styles.totalBillsRow}>
-                          <View style={styles.totalBillCard}>
-                            <View style={styles.totalBillIconContainer}>
-                              <MaterialIcons
-                                name="house"
-                                size={24}
-                                color="#b38604"
-                              />
-                            </View>
-                            <Text style={styles.totalBillLabel}>Rent</Text>
-                            <Text style={styles.totalBillAmount}>
-                              ₱{billing.rent || 0}
-                            </Text>
-                          </View>
-
-                          <View style={styles.totalBillCard}>
-                            <View style={styles.totalBillIconContainer}>
-                              <MaterialIcons
-                                name="flash-on"
-                                size={24}
-                                color="#ff9800"
-                              />
-                            </View>
-                            <Text style={styles.totalBillLabel}>
-                              Electricity
-                            </Text>
-                            <Text style={styles.totalBillAmount}>
-                              ₱{billing.electricity || 0}
-                            </Text>
-                          </View>
+                  billing.end &&
+                  (billing.rent || billing.electricity) && (
+                    <View style={styles.card}>
+                      <View style={styles.cardHeader}>
+                        <View
+                          style={[
+                            styles.cardIconBg,
+                            { backgroundColor: "#27ae60" },
+                          ]}
+                        >
+                          <MaterialIcons
+                            name="assessment"
+                            size={16}
+                            color={colors.textOnAccent}
+                          />
                         </View>
+                        <Text style={styles.cardTitle}>Total Bills</Text>
+                      </View>
 
-                        {/* Row 2 */}
-                        <View style={styles.totalBillsRow}>
-                          <View style={styles.totalBillCard}>
-                            <View style={styles.totalBillIconContainer}>
-                              <Ionicons
-                                name="water"
-                                size={24}
-                                color="#2196F3"
-                              />
-                            </View>
-                            <Text style={styles.totalBillLabel}>Water</Text>
-                            <Text style={styles.totalBillAmount}>
-                              ₱{calculateTotalWaterBill().toFixed(2)}
-                            </Text>
-                          </View>
-
-                          <View style={styles.totalBillCard}>
-                            <View style={styles.totalBillIconContainer}>
-                              <MaterialIcons
-                                name="wifi"
-                                size={24}
-                                color="#9c27b0"
-                              />
-                            </View>
-                            <Text style={styles.totalBillLabel}>Internet</Text>
-                            <Text style={styles.totalBillAmount}>
-                              ₱{billing.internet || 0}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Row 3 - Total */}
-                        <View style={styles.totalBillsRow}>
+                      <View style={styles.billGrid}>
+                        <View style={styles.billGridItem}>
                           <View
                             style={[
-                              styles.totalBillCard,
-                              styles.totalBillCardHighlight,
+                              styles.billIconCircle,
+                              { backgroundColor: colors.warningBg },
                             ]}
                           >
-                            <View style={styles.totalBillIconContainer}>
-                              <MaterialIcons
-                                name="monetization-on"
-                                size={24}
-                                color="#28a745"
-                              />
-                            </View>
-                            <Text style={styles.totalBillLabel}>Total</Text>
-                            <Text
-                              style={[
-                                styles.totalBillAmount,
-                                { color: "#28a745" },
-                              ]}
-                            >
-                              ₱
-                              {(
-                                (billing.rent || 0) +
-                                (billing.electricity || 0) +
-                                calculateTotalWaterBill() +
-                                (billing.internet || 0)
-                              ).toFixed(2)}
-                            </Text>
+                            <MaterialIcons
+                              name="house"
+                              size={18}
+                              color="#e65100"
+                            />
                           </View>
+                          <Text style={styles.billGridLabel}>Rent</Text>
+                          <Text style={styles.billGridAmount}>
+                            {fmt(billing.rent)}
+                          </Text>
+                        </View>
+                        <View style={styles.billGridItem}>
+                          <View
+                            style={[
+                              styles.billIconCircle,
+                              { backgroundColor: colors.warningBg },
+                            ]}
+                          >
+                            <MaterialIcons
+                              name="flash-on"
+                              size={18}
+                              color={colors.electricityColor}
+                            />
+                          </View>
+                          <Text style={styles.billGridLabel}>Electricity</Text>
+                          <Text style={styles.billGridAmount}>
+                            {fmt(billing.electricity)}
+                          </Text>
+                        </View>
+                        <View style={styles.billGridItem}>
+                          <View
+                            style={[
+                              styles.billIconCircle,
+                              { backgroundColor: colors.infoBg },
+                            ]}
+                          >
+                            <Ionicons
+                              name="water"
+                              size={18}
+                              color={colors.info}
+                            />
+                          </View>
+                          <Text style={styles.billGridLabel}>Water</Text>
+                          <Text style={styles.billGridAmount}>
+                            {fmt(calculateTotalWaterBill())}
+                          </Text>
+                        </View>
+                        <View style={styles.billGridItem}>
+                          <View
+                            style={[
+                              styles.billIconCircle,
+                              { backgroundColor: colors.purpleBg },
+                            ]}
+                          >
+                            <MaterialIcons
+                              name="wifi"
+                              size={18}
+                              color={colors.internetColor}
+                            />
+                          </View>
+                          <Text style={styles.billGridLabel}>Internet</Text>
+                          <Text style={styles.billGridAmount}>
+                            {fmt(billing.internet)}
+                          </Text>
                         </View>
                       </View>
-                    </View>
-                  </>
-                ) : null}
 
-                {/* Members Breakdown */}
+                      {/* Grand Total */}
+                      <View style={styles.grandTotalStrip}>
+                        <Text style={styles.grandTotalLabel}>Total</Text>
+                        <Text style={styles.grandTotalAmount}>
+                          {fmt(
+                            (billing.rent || 0) +
+                              (billing.electricity || 0) +
+                              calculateTotalWaterBill() +
+                              (billing.internet || 0),
+                          )}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                {/* ─── METER READINGS ─── */}
+                {(previousReading != null || currentReading != null) && (
+                  <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                      <View
+                        style={[
+                          styles.cardIconBg,
+                          { backgroundColor: "#ff9800" },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="speed"
+                          size={16}
+                          color={colors.textOnAccent}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Meter Readings</Text>
+                    </View>
+                    <View style={styles.meterRow}>
+                      <View style={styles.meterBlock}>
+                        <Text style={styles.meterLabel}>Previous</Text>
+                        <Text style={styles.meterValue}>
+                          {previousReading != null ? previousReading : "—"}
+                        </Text>
+                        <Text style={styles.meterUnit}>kWh</Text>
+                      </View>
+                      <View style={styles.meterDivider} />
+                      <View style={styles.meterBlock}>
+                        <Text style={styles.meterLabel}>Current</Text>
+                        <Text style={styles.meterValue}>
+                          {currentReading != null ? currentReading : "—"}
+                        </Text>
+                        <Text style={styles.meterUnit}>kWh</Text>
+                      </View>
+                      <View style={styles.meterDivider} />
+                      <View style={styles.meterBlock}>
+                        <Text style={styles.meterLabel}>Usage</Text>
+                        <Text style={[styles.meterValue, { color: "#e65100" }]}>
+                          {currentReading != null && previousReading != null
+                            ? currentReading - previousReading
+                            : "—"}
+                        </Text>
+                        <Text style={styles.meterUnit}>kWh</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+
+                {/* ─── MEMBERS & WATER BILL ─── */}
                 {selectedRoom.members && selectedRoom.members.length > 0 && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>
-                      Room Members & Water Bill
-                    </Text>
+                  <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                      <View
+                        style={[
+                          styles.cardIconBg,
+                          { backgroundColor: "#2196F3" },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="group"
+                          size={16}
+                          color={colors.textOnAccent}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Members & Water</Text>
+                      <View style={styles.memberCountBadge}>
+                        <Text style={styles.memberCountText}>
+                          {selectedRoom.members.length}
+                        </Text>
+                      </View>
+                    </View>
                     {selectedRoom.members.map((member, idx) => (
                       <TouchableOpacity
                         key={idx}
-                        style={styles.memberCard}
+                        style={[
+                          styles.memberRow,
+                          idx < selectedRoom.members.length - 1 &&
+                            styles.memberRowBorder,
+                        ]}
                         onPress={() => {
                           setSelectedMemberPresence({
                             name: member.user?.name || "Unknown",
-                            dates: memberPresence[member._id] || [],
+                            dates:
+                              memberPresence[member.id || member._id] || [],
                           });
                           setShowPresenceModal(true);
                         }}
-                        activeOpacity={0.7}
+                        activeOpacity={0.6}
                       >
                         {member.user?.avatar?.url ? (
                           <Image
                             source={{ uri: member.user.avatar.url }}
-                            style={styles.memberIconImage}
+                            style={styles.memberAvatar}
                           />
                         ) : (
-                          <View style={styles.memberIcon}>
-                            <Text style={styles.memberIconText}>
+                          <View style={styles.memberAvatarPlaceholder}>
+                            <Text style={styles.memberAvatarText}>
                               {(member.user?.name || "M")
                                 .charAt(0)
                                 .toUpperCase()}
@@ -1231,32 +1470,47 @@ const BillsScreen = ({ navigation }) => {
                           </View>
                         )}
                         <View style={styles.memberInfo}>
-                          <Text style={styles.memberName}>
+                          <Text style={styles.memberName} numberOfLines={1}>
                             {member.user?.name || "Unknown"}
                           </Text>
-                          {/* <Text style={styles.memberEmail}>
-                          {member.user?.email || "N/A"}
-                        </Text> */}
-                          <Text style={styles.memberPresence}>
-                            Presence:{" "}
-                            {(memberPresence[member._id] || []).length} days
-                          </Text>
+                          <View style={styles.memberMeta}>
+                            <Ionicons
+                              name="calendar-outline"
+                              size={11}
+                              color={colors.textTertiary}
+                            />
+                            <Text style={styles.memberPresenceText}>
+                              {
+                                (memberPresence[member.id || member._id] || [])
+                                  .length
+                              }{" "}
+                              days
+                            </Text>
+                          </View>
                         </View>
-                        <View style={styles.memberWaterBill}>
-                          <Text style={styles.waterBillLabel}>Water Bill</Text>
-                          <Text style={styles.waterBillAmount}>
-                            ₱{calculateMemberWaterBill(member._id).toFixed(2)}
+                        <View style={styles.memberWaterCol}>
+                          <Text style={styles.memberWaterAmount}>
+                            {fmt(
+                              calculateMemberWaterBill(member.id || member._id),
+                            )}
                           </Text>
                         </View>
                         <View
                           style={[
-                            styles.memberBadgeContainer,
+                            styles.roleBadge,
                             member.isPayer
-                              ? styles.payorBadge
-                              : styles.nonPayorBadge,
+                              ? styles.roleBadgePayor
+                              : styles.roleBadgeNon,
                           ]}
                         >
-                          <Text style={[styles.payorBadgeText]}>
+                          <Text
+                            style={[
+                              styles.roleBadgeText,
+                              member.isPayer
+                                ? styles.roleBadgeTextPayor
+                                : styles.roleBadgeTextNon,
+                            ]}
+                          >
                             {member.isPayer ? "Payor" : "Non-Payor"}
                           </Text>
                         </View>
@@ -1265,155 +1519,141 @@ const BillsScreen = ({ navigation }) => {
                   </View>
                 )}
 
-                {/* Meter Readings */}
-                {(billing.previousReading !== undefined ||
-                  billing.currentReading !== undefined) && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Meter Readings</Text>
-                    <View style={styles.readingsCard}>
-                      <View style={styles.readingItem}>
-                        <Text style={styles.readingLabel}>
-                          Previous Reading
-                        </Text>
-                        <Text style={styles.readingValue}>
-                          {billing.previousReading || "N/A"}
-                        </Text>
-                      </View>
-                      <View style={styles.readingDivider} />
-                      <View style={styles.readingItem}>
-                        <Text style={styles.readingLabel}>Current Reading</Text>
-                        <Text style={styles.readingValue}>
-                          {billing.currentReading || "N/A"}
-                        </Text>
-                      </View>
-                      <View style={styles.readingDivider} />
-                      <View style={styles.readingItem}>
-                        <Text style={styles.readingLabel}>Usage</Text>
-                        <Text style={styles.readingValue}>
-                          {billing.currentReading && billing.previousReading
-                            ? billing.currentReading - billing.previousReading
-                            : "N/A"}{" "}
-                          Units
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                )}
-
-                {/* Your Share */}
+                {/* ─── YOUR SHARE ─── */}
                 {billShare && isUserPayor && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Your Share</Text>
-                    <View style={styles.yourShareCard}>
-                      <View style={styles.shareRow}>
-                        <View style={styles.shareItem}>
-                          <Text style={styles.shareLabel}>Rent Share</Text>
-                          <Text style={styles.shareValue}>
-                            ₱{(billShare?.rent || 0).toFixed(2)}
-                          </Text>
-                          <Text style={styles.shareNote}>
-                            Split among {billShare.payorCount} payor(s)
-                          </Text>
-                        </View>
+                  <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                      <View
+                        style={[
+                          styles.cardIconBg,
+                          { backgroundColor: colors.accent },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="person"
+                          size={16}
+                          color={colors.textOnAccent}
+                        />
                       </View>
-                      <View style={styles.shareDivider} />
-                      <View style={styles.shareRow}>
-                        <View style={styles.shareItem}>
-                          <Text style={styles.shareLabel}>
-                            Electricity Share
-                          </Text>
-                          <Text style={styles.shareValue}>
-                            ₱{(billShare?.electricity || 0).toFixed(2)}
-                          </Text>
-                          <Text style={styles.shareNote}>
-                            Split among {billShare.payorCount} payor(s)
-                          </Text>
+                      <Text style={styles.cardTitle}>Your Share</Text>
+                    </View>
+
+                    <View style={styles.shareList}>
+                      {[
+                        {
+                          label: "Rent",
+                          value: billShare.rent,
+                          icon: "house",
+                          color: "#e65100",
+                        },
+                        {
+                          label: "Electricity",
+                          value: billShare.electricity,
+                          icon: "flash-on",
+                          color: colors.electricityColor,
+                        },
+                        {
+                          label: "Internet",
+                          value: billShare.internet,
+                          icon: "wifi",
+                          color: colors.internetColor,
+                        },
+                      ].map((item, i) => (
+                        <View key={i} style={styles.shareItem}>
+                          <View style={styles.shareItemLeft}>
+                            <MaterialIcons
+                              name={item.icon}
+                              size={18}
+                              color={item.color}
+                            />
+                            <Text style={styles.shareItemLabel}>
+                              {item.label}
+                            </Text>
+                          </View>
+                          <View style={styles.shareItemRight}>
+                            <Text style={styles.shareItemValue}>
+                              {fmt(item.value)}
+                            </Text>
+                            <Text
+                              style={styles.shareItemNote}
+                            >{`÷ ${billShare.payorCount}`}</Text>
+                          </View>
                         </View>
-                      </View>
-                      <View style={styles.shareDivider} />
-                      <View style={styles.shareRow}>
-                        <View style={styles.shareItem}>
-                          <Text style={styles.shareLabel}>Internet Share</Text>
-                          <Text style={styles.shareValue}>
-                            ₱{(billShare?.internet || 0).toFixed(2)}
-                          </Text>
-                          <Text style={styles.shareNote}>
-                            Split among {billShare.payorCount} payor(s)
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.shareDivider} />
-                      <View style={styles.shareRow}>
-                        <View style={styles.shareItem}>
-                          <Text style={styles.shareLabel}>Water Share</Text>
-                          <Text style={styles.shareValue}>
-                            ₱{(billShare?.water || 0).toFixed(2)}
-                          </Text>
-                          {getWaterShareBreakdown() && (
-                            <>
-                              <Text style={styles.shareBreakdownText}>
-                                Your consumption: ₱
-                                {getWaterShareBreakdown().ownWater.toFixed(2)}
+                      ))}
+
+                      {/* Water share with breakdown */}
+                      <View style={styles.shareItem}>
+                        <View style={styles.shareItemLeft}>
+                          <Ionicons
+                            name="water"
+                            size={18}
+                            color={colors.info}
+                          />
+                          <View>
+                            <Text style={styles.shareItemLabel}>Water</Text>
+                            {getWaterShareBreakdown() && (
+                              <Text style={styles.waterBreakdownNote}>
+                                Own: {fmt(getWaterShareBreakdown().ownWater)}
+                                {getWaterShareBreakdown().sharedNonPayorWater >
+                                0
+                                  ? ` + Shared: ${fmt(getWaterShareBreakdown().sharedNonPayorWater)}`
+                                  : ""}
                               </Text>
-                              {getWaterShareBreakdown().sharedNonPayorWater >
-                                0 && (
-                                <Text style={styles.shareBreakdownText}>
-                                  + Non-payors share: ₱
-                                  {getWaterShareBreakdown().sharedNonPayorWater.toFixed(
-                                    2,
-                                  )}
-                                </Text>
-                              )}
-                            </>
-                          )}
+                            )}
+                          </View>
                         </View>
-                      </View>
-                      <View style={styles.shareDivider} />
-                      <View style={styles.shareTotal}>
-                        <Text style={styles.totalLabel}>Total Due</Text>
-                        <Text style={styles.totalAmount}>
-                          ₱{(billShare?.total || 0).toFixed(2)}
-                        </Text>
+                        <View style={styles.shareItemRight}>
+                          <Text style={styles.shareItemValue}>
+                            {fmt(billShare.water)}
+                          </Text>
+                        </View>
                       </View>
                     </View>
 
-                    {/* Pay Now Button */}
+                    {/* Total Due */}
+                    <View style={styles.totalDueStrip}>
+                      <Text style={styles.totalDueLabel}>Total Due</Text>
+                      <Text style={styles.totalDueAmount}>
+                        {fmt(billShare.total)}
+                      </Text>
+                    </View>
+
+                    {/* Pay Now / Locked */}
                     {isPaymentAllowed() ? (
                       <TouchableOpacity
                         style={styles.payNowButton}
                         onPress={() => {
                           if (selectedRoom && billShare) {
                             navigation.navigate("PaymentMethod", {
-                              roomId: selectedRoom._id,
+                              roomId: selectedRoom.id || selectedRoom._id,
                               roomName: selectedRoom.name,
                               amount: billShare.total,
                               billType: "total",
                             });
                           }
                         }}
+                        activeOpacity={0.8}
                       >
                         <MaterialIcons
                           name="payment"
                           size={20}
-                          color="#fff"
-                          style={{ marginRight: 8 }}
+                          color={colors.textOnAccent}
                         />
                         <Text style={styles.payNowButtonText}>Pay Now</Text>
                       </TouchableOpacity>
                     ) : (
-                      <View style={styles.paymentLockedContainer}>
-                        <View style={styles.paymentLockedBox}>
-                          <MaterialIcons
-                            name="lock-clock"
-                            size={24}
-                            color="#ff9800"
-                            style={{ marginBottom: 8 }}
-                          />
+                      <View style={styles.paymentLockedBox}>
+                        <MaterialIcons
+                          name="lock-clock"
+                          size={20}
+                          color={colors.electricityColor}
+                        />
+                        <View style={{ flex: 1 }}>
                           <Text style={styles.paymentLockedText}>
                             Payment opens on {getFormattedEndDate()}
                           </Text>
                           <Text style={styles.paymentLockedSubtext}>
-                            Return on the billing period end date to pay
+                            Return on the billing end date to pay
                           </Text>
                         </View>
                       </View>
@@ -1421,46 +1661,66 @@ const BillsScreen = ({ navigation }) => {
                   </View>
                 )}
 
+                {/* Non-Payor Notice */}
                 {!isUserPayor && (
-                  <View style={styles.section}>
-                    <View style={styles.nonPayorCard}>
-                      <MaterialIcons name="info" size={24} color="#17a2b8" />
+                  <View style={styles.nonPayorCard}>
+                    <MaterialIcons
+                      name="info-outline"
+                      size={22}
+                      color="#0277bd"
+                    />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={styles.nonPayorText}>
                         You are not a payor for this room
                       </Text>
                       <Text style={styles.nonPayorSubtext}>
-                        Only payors see billing shares
+                        Only payors can view billing shares
                       </Text>
                     </View>
                   </View>
                 )}
-              </>
+              </View>
             ) : hasUserPaidAllBills() ? (
-              <View style={styles.section}>
-                <View style={styles.emptyCard}>
-                  <MaterialIcons
-                    name="hourglass-empty"
-                    size={48}
-                    color="#b38604"
-                  />
-                  <Text style={styles.emptyText}>Bills Paid</Text>
-                  <Text style={styles.emptySubtext}>
-                    You have already paid all bills for this billing period
+              <View style={styles.contentPadding}>
+                <View style={styles.statusCard}>
+                  <View
+                    style={[
+                      styles.statusIconCircle,
+                      { backgroundColor: colors.successBg },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="check-circle"
+                      size={40}
+                      color={colors.success}
+                    />
+                  </View>
+                  <Text style={styles.statusTitle}>All Bills Paid</Text>
+                  <Text style={styles.statusSubtext}>
+                    You have paid all bills for this billing period
                   </Text>
                 </View>
               </View>
             ) : (
-              <View style={styles.section}>
-                <View style={styles.emptyCard}>
-                  <MaterialIcons
-                    name="hourglass-empty"
-                    size={48}
-                    color="#b38604"
-                  />
-                  <Text style={styles.emptyText}>No Active Billing Cycle</Text>
-                  <Text style={styles.emptySubtext}>
-                    Waiting for admin to set billing details for this billing
-                    period
+              <View style={styles.contentPadding}>
+                <View style={styles.statusCard}>
+                  <View
+                    style={[
+                      styles.statusIconCircle,
+                      { backgroundColor: colors.warningBg },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="hourglass-empty"
+                      size={40}
+                      color="#f9a825"
+                    />
+                  </View>
+                  <Text style={styles.statusTitle}>
+                    No Active Billing Cycle
+                  </Text>
+                  <Text style={styles.statusSubtext}>
+                    Waiting for admin to set billing details
                   </Text>
                 </View>
               </View>
@@ -1469,66 +1729,119 @@ const BillsScreen = ({ navigation }) => {
         )}
 
         {rooms.length === 0 && (
-          <View style={styles.emptyState}>
-            <MaterialIcons name="inbox" size={48} color="#ccc" />
-            <Text style={styles.emptyText}>No Rooms Joined</Text>
-            <Text style={styles.emptySubtext}>
-              Join a room from Home to view billing
-            </Text>
+          <View style={styles.contentPadding}>
+            <View style={styles.statusCard}>
+              <View
+                style={[
+                  styles.statusIconCircle,
+                  { backgroundColor: colors.inputBg },
+                ]}
+              >
+                <MaterialIcons
+                  name="meeting-room"
+                  size={40}
+                  color={colors.textTertiary}
+                />
+              </View>
+              <Text style={styles.statusTitle}>No Rooms Joined</Text>
+              <Text style={styles.statusSubtext}>
+                Join a room from Home to view billing
+              </Text>
+            </View>
           </View>
         )}
 
+        {/* ─── ACTION BUTTONS ─── */}
         {selectedRoom && (
-          <TouchableOpacity
-            style={styles.billingHistoryButton}
-            onPress={() =>
-              navigation.navigate("BillingHistory", {
-                roomId: selectedRoom._id,
-                roomName: selectedRoom.name,
-              })
-            }
-          >
-            <Text style={styles.billingHistoryButtonText}>
-              📜 View Billing History
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Payment & Settlement Actions */}
-        {selectedRoom && (
-          <View style={styles.actionButtonsContainer}>
+          <View style={styles.actionsSection}>
             <TouchableOpacity
-              style={styles.actionButton}
+              style={styles.actionCard}
+              onPress={() =>
+                navigation.navigate("BillingHistory", {
+                  roomId: selectedRoom.id || selectedRoom._id,
+                  roomName: selectedRoom.name,
+                })
+              }
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.actionIconBg,
+                  { backgroundColor: colors.purpleBg },
+                ]}
+              >
+                <MaterialIcons name="history" size={20} color="#5e35b1" />
+              </View>
+              <Text style={styles.actionCardText}>Billing History</Text>
+              <MaterialIcons
+                name="chevron-right"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCard}
               onPress={() =>
                 navigation.navigate("PaymentHistory", {
-                  roomId: selectedRoom._id,
+                  roomId: selectedRoom.id || selectedRoom._id,
                   roomName: selectedRoom.name,
                 })
               }
+              activeOpacity={0.7}
             >
-              <MaterialIcons name="payment" size={20} color="#b38604" />
-              <Text style={styles.actionButtonText}>Payment History</Text>
+              <View
+                style={[
+                  styles.actionIconBg,
+                  { backgroundColor: colors.warningBg },
+                ]}
+              >
+                <MaterialIcons name="payment" size={20} color="#e65100" />
+              </View>
+              <Text style={styles.actionCardText}>Payment History</Text>
+              <MaterialIcons
+                name="chevron-right"
+                size={20}
+                color={colors.textSecondary}
+              />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionButton}
+              style={styles.actionCard}
               onPress={() =>
                 navigation.navigate("Settlement", {
-                  roomId: selectedRoom._id,
+                  roomId: selectedRoom.id || selectedRoom._id,
                   roomName: selectedRoom.name,
                 })
               }
+              activeOpacity={0.7}
             >
-              <FontAwesome name="handshake-o" size={20} color="#27ae60" />
-              <Text style={styles.actionButtonText}>Settlements</Text>
+              <View
+                style={[
+                  styles.actionIconBg,
+                  { backgroundColor: colors.successBg },
+                ]}
+              >
+                <FontAwesome
+                  name="handshake-o"
+                  size={18}
+                  color={colors.success}
+                />
+              </View>
+              <Text style={styles.actionCardText}>Settlements</Text>
+              <MaterialIcons
+                name="chevron-right"
+                size={20}
+                color={colors.textSecondary}
+              />
             </TouchableOpacity>
           </View>
         )}
 
-        <View style={{ height: 20 }} />
+        <View style={{ height: 30 }} />
       </ScrollView>
 
-      {/* Receipt Modal */}
+      {/* ─── RECEIPT MODAL ─── */}
       <Modal
         visible={showReceiptModal}
         animationType="slide"
@@ -1547,7 +1860,9 @@ const BillsScreen = ({ navigation }) => {
             <View style={styles.receiptHeader}>
               <Text style={styles.receiptTitle}>BILLING RECEIPT</Text>
               <Text style={styles.receiptRoomName}>{receiptData.roomName}</Text>
-              <Text style={styles.receiptSubtitle}>Apartment Bill Tracker</Text>
+              <Text style={styles.receiptSubtitleText}>
+                Apartment Bill Tracker
+              </Text>
             </View>
 
             {/* Billing Period */}
@@ -1618,7 +1933,11 @@ const BillsScreen = ({ navigation }) => {
                     <Text
                       style={[
                         styles.receiptMemberStatus,
-                        { color: member.isPayer ? "#28a745" : "#666" },
+                        {
+                          color: member.isPayer
+                            ? colors.success
+                            : colors.textSecondary,
+                        },
                       ]}
                     >
                       {member.isPayer ? "Payer" : "Non-Payer"}
@@ -1628,7 +1947,7 @@ const BillsScreen = ({ navigation }) => {
               ))}
             </View>
 
-            {/* Bill Per Member (for payors) */}
+            {/* Bill Per Member */}
             {receiptData.members.some((m) => m.isPayer) && (
               <View style={styles.receiptSection}>
                 <Text style={styles.receiptSectionTitle}>Bill Per Member</Text>
@@ -1705,13 +2024,17 @@ const BillsScreen = ({ navigation }) => {
                     <Text
                       style={[
                         styles.receiptLabel,
-                        { fontSize: 11, color: "#666", fontStyle: "italic" },
+                        {
+                          fontSize: 11,
+                          color: colors.textSecondary,
+                          fontStyle: "italic",
+                        },
                       ]}
                     >
                       <Ionicons
                         name="information-circle-outline"
                         size={14}
-                        color="#666"
+                        color={colors.textSecondary}
                       />{" "}
                       Your consumption: ₱
                       {receiptData.userShare.waterBreakdown.ownWater}
@@ -1756,7 +2079,7 @@ const BillsScreen = ({ navigation }) => {
         )}
       </Modal>
 
-      {/* Presence Modal */}
+      {/* ─── PRESENCE MODAL ─── */}
       <Modal
         visible={showPresenceModal}
         transparent={true}
@@ -1765,7 +2088,6 @@ const BillsScreen = ({ navigation }) => {
       >
         <View style={styles.presenceModalOverlay}>
           <View style={styles.presenceModalContainer}>
-            {/* Header */}
             <View style={styles.presenceModalHeader}>
               <Text style={styles.presenceModalTitle}>
                 {selectedMemberPresence?.name}
@@ -1774,13 +2096,10 @@ const BillsScreen = ({ navigation }) => {
                 style={styles.presenceModalCloseBtn}
                 onPress={() => setShowPresenceModal(false)}
               >
-                <Ionicons name="close" size={28} color="#333" />
+                <Ionicons name="close" size={28} color={colors.text} />
               </TouchableOpacity>
             </View>
-
-            {/* Content */}
             <ScrollView style={styles.presenceModalContent}>
-              {/* Calendar Navigation */}
               <View style={styles.presenceCalendarHeader}>
                 <TouchableOpacity
                   disabled={!canGoToPreviousMonth()}
@@ -1796,17 +2115,19 @@ const BillsScreen = ({ navigation }) => {
                   <Ionicons
                     name="chevron-back"
                     size={28}
-                    color={canGoToPreviousMonth() ? "#b38604" : "#ccc"}
+                    color={
+                      canGoToPreviousMonth()
+                        ? colors.accent
+                        : colors.textTertiary
+                    }
                   />
                 </TouchableOpacity>
-
                 <Text style={styles.presenceMonthYear}>
                   {presenceMonth.toLocaleDateString("en-US", {
                     month: "long",
                     year: "numeric",
                   })}
                 </Text>
-
                 <TouchableOpacity
                   disabled={!canGoToNextMonth()}
                   onPress={() =>
@@ -1821,12 +2142,12 @@ const BillsScreen = ({ navigation }) => {
                   <Ionicons
                     name="chevron-forward"
                     size={28}
-                    color={canGoToNextMonth() ? "#b38604" : "#ccc"}
+                    color={
+                      canGoToNextMonth() ? colors.accent : colors.textTertiary
+                    }
                   />
                 </TouchableOpacity>
               </View>
-
-              {/* Week Days Header */}
               <View style={styles.presenceWeekDaysContainer}>
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
                   (day) => (
@@ -1836,8 +2157,6 @@ const BillsScreen = ({ navigation }) => {
                   ),
                 )}
               </View>
-
-              {/* Calendar Days Grid */}
               <View style={styles.presenceCalendarDaysContainer}>
                 {generateCalendarDays().map((date, index) => (
                   <View
@@ -1849,31 +2168,18 @@ const BillsScreen = ({ navigation }) => {
                     ]}
                   >
                     {date ? (
-                      <>
-                        <Text
-                          style={[
-                            styles.presenceDayText,
-                            isDateMarked(date) && styles.presenceMarkedDayText,
-                          ]}
-                        >
-                          {date.getDate()}
-                        </Text>
-                        {/* {isDateMarked(date) && (
-                          <View style={styles.presenceCheckmarkContainer}>
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={14}
-                              color="#fff"
-                            />
-                          </View>
-                        )} */}
-                      </>
+                      <Text
+                        style={[
+                          styles.presenceDayText,
+                          isDateMarked(date) && styles.presenceMarkedDayText,
+                        ]}
+                      >
+                        {date.getDate()}
+                      </Text>
                     ) : null}
                   </View>
                 ))}
               </View>
-
-              {/* Summary */}
               <View style={styles.presenceSummary}>
                 <View style={styles.presenceSummaryItem}>
                   <View style={styles.presenceSummaryIcon} />
@@ -1890,868 +2196,895 @@ const BillsScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 20,
-    backgroundColor: "#f8f9fa",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#333",
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "#666",
-    marginTop: 4,
-  },
-  exportButton: {
-    backgroundColor: "#b38604",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#333",
-    marginBottom: 12,
-  },
-  roomSelector: {
-    backgroundColor: "#f5f5f5",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 10,
-    borderWidth: 2,
-    borderColor: "#e0e0e0",
-  },
-  roomSelectorActive: {
-    backgroundColor: "#b38604",
-    borderColor: "#b38604",
-  },
-  roomSelectorText: {
-    color: "#333",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  roomSelectorTextActive: {
-    color: "#fff",
-  },
-  infoCard: {
-    backgroundColor: "#f8f9fa",
-    borderRadius: 10,
-    padding: 14,
-  },
-  periodItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  periodInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  periodLabel: {
-    fontSize: 12,
-    color: "#666",
-    fontWeight: "500",
-  },
-  periodValue: {
-    fontSize: 14,
-    color: "#333",
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#e0e0e0",
-    marginVertical: 8,
-  },
-  totalBillsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  totalBillsGrid: {
-    gap: 12,
-  },
-  totalBillsRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  totalBillCard: {
-    flex: 1,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 10,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  totalBillCardHighlight: {
-    backgroundColor: "#e8f5e9",
-    borderWidth: 2,
-    borderColor: "#28a745",
-  },
-  totalBillIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  totalBillLabel: {
-    fontSize: 13,
-    color: "#666",
-    fontWeight: "600",
-    marginBottom: 6,
-    marginTop: 8,
-  },
-  totalBillAmount: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-  },
-  yourShareCard: {
-    backgroundColor: "#f0f8ff",
-    borderRadius: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: "#b38604",
-    overflow: "hidden",
-  },
-  shareRow: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  shareItem: {
-    flex: 1,
-  },
-  shareLabel: {
-    fontSize: 13,
-    color: "#666",
-    fontWeight: "500",
-    marginBottom: 4,
-  },
-  shareValue: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-  },
-  shareNote: {
-    fontSize: 11,
-    color: "#999",
-    marginTop: 2,
-  },
-  shareBreakdownText: {
-    fontSize: 11,
-    color: "#666",
-    marginTop: 2,
-    fontStyle: "italic",
-  },
-  shareDivider: {
-    height: 1,
-    backgroundColor: "#cee4ee",
-    marginHorizontal: 14,
-  },
-  shareTotal: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: "#e0f2f7",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  totalLabel: {
-    fontSize: 13,
-    color: "#333",
-    fontWeight: "600",
-  },
-  totalAmount: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#b38604",
-  },
-  payNowButton: {
-    flexDirection: "row",
-    backgroundColor: "#b38604",
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginTop: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  payNowButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  paymentLockedContainer: {
-    marginTop: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  paymentLockedBox: {
-    backgroundColor: "#fff3cd",
-    borderRadius: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    borderLeftWidth: 4,
-    borderLeftColor: "#ff9800",
-    width: "100%",
-  },
-  paymentLockedText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#ff6f00",
-    textAlign: "center",
-    marginBottom: 4,
-  },
-  paymentLockedSubtext: {
-    fontSize: 12,
-    color: "#e65100",
-    textAlign: "center",
-  },
-  nonPayorCard: {
-    backgroundColor: "#d1ecf1",
-    borderRadius: 10,
-    padding: 14,
-    alignItems: "center",
-    borderLeftWidth: 4,
-    borderLeftColor: "#17a2b8",
-  },
-  nonPayorText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#0c5460",
-    marginTop: 8,
-  },
-  nonPayorSubtext: {
-    fontSize: 12,
-    color: "#0c5460",
-    marginTop: 4,
-  },
-  memberCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8f9fa",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-  },
-  memberIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#b38604",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  memberIconImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-    backgroundColor: "#b38604",
-  },
-  memberIconText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  memberInfo: {
-    flex: 1,
-  },
-  memberName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
-  memberEmail: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 2,
-  },
-  memberPresence: {
-    fontSize: 11,
-    color: "#17a2b8",
-    marginTop: 4,
-    fontWeight: "500",
-  },
-  memberWaterBill: {
-    marginRight: 10,
-    alignItems: "flex-end",
-  },
-  waterBillLabel: {
-    fontSize: 10,
-    color: "#666",
-    fontWeight: "500",
-  },
-  waterBillAmount: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#2196F3",
-    marginTop: 2,
-  },
-  payorBadge: {
-    backgroundColor: colors.success,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  payorBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "white",
-  },
-  nonPayorBadge: {
-    backgroundColor: "#b8b8b8",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  nonPayorBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#666",
-  },
-  memberBadgeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  memberBadge: {
-    backgroundColor: "#e7e7e7",
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  memberBadgeText: {
-    color: "#666",
-    fontWeight: "600",
-    fontSize: 11,
-  },
-  readingsCard: {
-    backgroundColor: "#f8f9fa",
-    borderRadius: 10,
-    padding: 14,
-  },
-  readingItem: {
-    paddingVertical: 10,
-  },
-  readingLabel: {
-    fontSize: 12,
-    color: "#666",
-    fontWeight: "500",
-    marginBottom: 4,
-  },
-  readingValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#333",
-  },
-  readingDivider: {
-    height: 1,
-    backgroundColor: "#e0e0e0",
-    marginVertical: 8,
-  },
-  emptyCard: {
-    backgroundColor: "#f8f9fa",
-    borderRadius: 10,
-    paddingVertical: 30,
-    alignItems: "center",
-  },
-  emptyText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#333",
-    marginTop: 12,
-  },
-  emptySubtext: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 4,
-    textAlign: "center",
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 60,
-    marginTop: 40,
-  },
-  modalHeader: {
-    backgroundColor: "#b38604",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 24,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "white",
-  },
-  receiptContainer: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-  },
-  receiptHeader: {
-    backgroundColor: "white",
-    paddingVertical: 20,
-    alignItems: "center",
-    marginBottom: 15,
-    borderBottomWidth: 2,
-    borderBottomColor: "#b38604",
-  },
-  receiptTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-  },
-  receiptRoomName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginTop: 5,
-  },
-  receiptSubtitle: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 3,
-  },
-  receiptSection: {
-    backgroundColor: "white",
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    marginBottom: 10,
-    borderRadius: 6,
-  },
-  receiptSectionTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#333",
-    marginBottom: 10,
-    textTransform: "uppercase",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-    paddingBottom: 8,
-  },
-  receiptRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  receiptLabel: {
-    fontSize: 12,
-    color: "#666",
-  },
-  receiptValue: {
-    fontSize: 12,
-    color: "#999",
-  },
-  receiptAmount: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#28a745",
-  },
-  receiptTotalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-    marginTop: 8,
-    borderTopWidth: 2,
-    borderTopColor: "#333",
-  },
-  receiptTotalLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#333",
-  },
-  receiptTotalAmount: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#28a745",
-  },
-  receiptMemberItem: {
-    flexDirection: "row",
-    backgroundColor: "#fafafa",
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    marginBottom: 8,
-    borderRadius: 4,
-    borderLeftWidth: 3,
-    borderLeftColor: "#b38604",
-  },
-  receiptMemberName: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#333",
-  },
-  receiptMemberDays: {
-    fontSize: 11,
-    color: "#17a2b8",
-    marginTop: 3,
-  },
-  receiptMemberWater: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#2196F3",
-  },
-  receiptMemberStatus: {
-    fontSize: 10,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  receiptBillPerMemberItem: {
-    flexDirection: "row",
-    backgroundColor: "#f0f8ff",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    marginBottom: 10,
-    borderRadius: 6,
-    borderLeftWidth: 4,
-    borderLeftColor: "#2196F3",
-  },
-  receiptBillPerMemberName: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#333",
-  },
-  receiptBillPerMemberSubtext: {
-    fontSize: 10,
-    color: "#2196F3",
-    marginTop: 2,
-    fontWeight: "600",
-  },
-  receiptBillPerMemberBreakdown: {
-    marginBottom: 8,
-    alignItems: "flex-end",
-  },
-  receiptBillPerMemberDetail: {
-    fontSize: 11,
-    color: "#555",
-    marginVertical: 2,
-  },
-  receiptBillPerMemberTotal: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#2196F3",
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: "#2196F3",
-  },
-  receiptYourShare: {
-    backgroundColor: "#fffde7",
-    borderWidth: 2,
-    borderColor: "#fbc02d",
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    marginBottom: 10,
-    borderRadius: 6,
-  },
-  receiptPayorNote: {
-    fontSize: 11,
-    color: "#f57f17",
-    marginTop: 8,
-    fontWeight: "500",
-  },
-  receiptFooter: {
-    backgroundColor: "white",
-    paddingVertical: 15,
-    alignItems: "center",
-    marginTop: 15,
-    marginBottom: 20,
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
-  },
-  receiptFooterText: {
-    fontSize: 11,
-    color: "#999",
-    textAlign: "center",
-    marginVertical: 3,
-  },
-  billingHistoryButton: {
-    marginHorizontal: 16,
-    marginVertical: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: "#6c63ff",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  billingHistoryButtonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
+const createStyles = (colors) =>
+  StyleSheet.create({
+    // ─── LAYOUT ───
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+    },
+    contentPadding: {
+      paddingHorizontal: 16,
+    },
 
-  // Presence Modal Styles
-  presenceModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  presenceModalContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    maxHeight: "80%",
-    width: "100%",
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  presenceModalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: "#f8f9fa",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-  },
-  presenceModalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-    flex: 1,
-  },
-  presenceModalCloseBtn: {
-    padding: 4,
-  },
-  presenceModalContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  presenceCount: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#666",
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  presenceDatesList: {
-    gap: 10,
-  },
-  presenceDateItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#f0f8f5",
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: "#28a745",
-  },
-  presenceDateIcon: {
-    marginRight: 12,
-  },
-  presenceDateText: {
-    fontSize: 15,
-    color: "#333",
-    fontWeight: "500",
-  },
-  presenceEmptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-  },
-  presenceEmptyText: {
-    fontSize: 16,
-    color: "#999",
-    marginTop: 12,
-  },
+    // ─── HEADER ───
+    header: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 16,
+      backgroundColor: colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    headerContent: {
+      flex: 1,
+    },
+    headerTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    headerIconBg: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.text,
+      letterSpacing: -0.3,
+    },
+    headerSubtitle: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    exportButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
 
-  // New Calendar Styles for Presence Modal
-  presenceCalendarHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginBottom: 12,
-  },
-  presenceMonthYear: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-  },
-  presenceWeekDaysContainer: {
-    flexDirection: "row",
-    marginBottom: 8,
-    paddingHorizontal: 0,
-  },
-  presenceWeekDayHeader: {
-    width: "14.285%",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  presenceWeekDayText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#666",
-  },
-  presenceCalendarDaysContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: 0,
-    marginBottom: 16,
-    justifyContent: "space-between",
-  },
-  presenceDayCell: {
-    width: "14.285%",
-    aspectRatio: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 2,
-    marginHorizontal: 0,
-    borderRadius: 8,
-    backgroundColor: "#f5f5f5",
-    position: "relative",
-  },
-  presenceEmptyCell: {
-    backgroundColor: "transparent",
-  },
-  presenceMarkedCell: {
-    backgroundColor: "#28a745",
-  },
-  presenceDayText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#333",
-  },
-  presenceMarkedDayText: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-  presenceCheckmark: {
-    position: "relative",
-  },
-  presenceCheckmarkContainer: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    backgroundColor: "#27ae60",
-    borderRadius: 9,
-    width: 18,
-    height: 18,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#fff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
-  },
-  presenceSummary: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  presenceSummaryItem: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  presenceSummaryIcon: {
-    width: 12,
-    height: 12,
-    borderRadius: 2,
-    backgroundColor: "#28a745",
-    marginRight: 10,
-  },
-  presenceSummaryText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
-  },
-  actionButtonsContainer: {
-    flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  actionButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#333",
-  },
-});
+    // ─── ROOM PILLS ───
+    roomSelectorContainer: {
+      paddingVertical: 14,
+      backgroundColor: colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    roomPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.cardAlt,
+      gap: 8,
+    },
+    roomPillActive: {
+      backgroundColor: colors.accent,
+    },
+    roomPillDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.textTertiary,
+    },
+    roomPillDotActive: {
+      backgroundColor: colors.textOnAccent,
+    },
+    roomPillText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    roomPillTextActive: {
+      color: colors.textOnAccent,
+    },
+
+    // ─── PROMPT ───
+    promptCard: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 30,
+      marginTop: 20,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    promptIconCircle: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 14,
+    },
+    promptTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    promptSubtext: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 6,
+      textAlign: "center",
+    },
+
+    // ─── CARD (shared) ───
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      marginTop: 14,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 12,
+      gap: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    cardIconBg: {
+      width: 30,
+      height: 30,
+      borderRadius: 8,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    cardTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+      flex: 1,
+    },
+
+    // ─── BILLING PERIOD ───
+    periodRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+    },
+    periodBlock: {
+      flex: 1,
+      alignItems: "center",
+    },
+    periodBlockLabel: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    periodBlockDate: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.text,
+      marginTop: 4,
+    },
+    periodBlockYear: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    periodArrow: {
+      paddingHorizontal: 12,
+    },
+
+    // ─── BILL GRID ───
+    billGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      gap: 10,
+    },
+    billGridItem: {
+      width: (SCREEN_WIDTH - 76) / 2,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 10,
+      paddingVertical: 14,
+      paddingHorizontal: 12,
+      alignItems: "center",
+    },
+    billIconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    billGridLabel: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textTertiary,
+      marginBottom: 4,
+    },
+    billGridAmount: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    grandTotalStrip: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: colors.successBg,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    grandTotalLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.success,
+    },
+    grandTotalAmount: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.success,
+    },
+
+    // ─── METER READINGS ───
+    meterRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 16,
+      paddingHorizontal: 16,
+    },
+    meterBlock: {
+      flex: 1,
+      alignItems: "center",
+    },
+    meterLabel: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textTertiary,
+      marginBottom: 4,
+    },
+    meterValue: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    meterUnit: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    meterDivider: {
+      width: 1,
+      height: 40,
+      backgroundColor: colors.badgeBg,
+    },
+
+    // ─── MEMBERS ───
+    memberCountBadge: {
+      backgroundColor: colors.infoBg,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+    },
+    memberCountText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.waterColor,
+    },
+    memberRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    memberRowBorder: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    memberAvatar: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      marginRight: 10,
+      backgroundColor: colors.skeleton,
+    },
+    memberAvatarPlaceholder: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
+    },
+    memberAvatarText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    memberInfo: {
+      flex: 1,
+    },
+    memberName: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    memberMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 3,
+    },
+    memberPresenceText: {
+      fontSize: 11,
+      color: colors.textTertiary,
+    },
+    memberWaterCol: {
+      marginRight: 10,
+      alignItems: "flex-end",
+    },
+    memberWaterAmount: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.waterColor,
+    },
+    roleBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    roleBadgePayor: {
+      backgroundColor: colors.successBg,
+    },
+    roleBadgeNon: {
+      backgroundColor: colors.background,
+    },
+    roleBadgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+    },
+    roleBadgeTextPayor: {
+      color: colors.success,
+    },
+    roleBadgeTextNon: {
+      color: colors.textTertiary,
+    },
+
+    // ─── YOUR SHARE ───
+    shareList: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    shareItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    shareItemLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      flex: 1,
+    },
+    shareItemLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    shareItemRight: {
+      alignItems: "flex-end",
+    },
+    shareItemValue: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    shareItemNote: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    waterBreakdownNote: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      marginTop: 2,
+      fontStyle: "italic",
+    },
+    totalDueStrip: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      backgroundColor: colors.accentSurface,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    totalDueLabel: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    totalDueAmount: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: colors.accent,
+    },
+    payNowButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 0,
+      paddingVertical: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    payNowButtonText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    paymentLockedBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      backgroundColor: colors.accentSurface,
+      gap: 12,
+    },
+    paymentLockedText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "#ef6c00",
+    },
+    paymentLockedSubtext: {
+      fontSize: 11,
+      color: "#f57c00",
+      marginTop: 2,
+    },
+
+    // ─── NON-PAYOR ───
+    nonPayorCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.infoBg,
+      borderRadius: 12,
+      padding: 16,
+      marginTop: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    nonPayorText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: "#01579b",
+    },
+    nonPayorSubtext: {
+      fontSize: 12,
+      color: "#0277bd",
+      marginTop: 2,
+    },
+
+    // ─── STATUS CARDS ───
+    statusCard: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 30,
+      marginTop: 20,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    statusIconCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    statusTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    statusSubtext: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 6,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+
+    // ─── ACTION SECTION ───
+    actionsSection: {
+      paddingHorizontal: 16,
+      marginTop: 20,
+      gap: 8,
+    },
+    actionCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    actionIconBg: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    actionCardText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+      flex: 1,
+    },
+
+    // ─── RECEIPT MODAL ───
+    modalHeader: {
+      backgroundColor: colors.accent,
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      paddingTop: 24,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: "white",
+    },
+    receiptContainer: {
+      flex: 1,
+      backgroundColor: colors.background,
+      paddingHorizontal: 16,
+      paddingVertical: 20,
+    },
+    receiptHeader: {
+      backgroundColor: colors.card,
+      paddingVertical: 20,
+      alignItems: "center",
+      marginBottom: 15,
+      borderBottomWidth: 2,
+      borderBottomColor: "#b38604",
+    },
+    receiptTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    receiptRoomName: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.text,
+      marginTop: 5,
+    },
+    receiptSubtitleText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 3,
+    },
+    receiptSection: {
+      backgroundColor: colors.card,
+      paddingHorizontal: 15,
+      paddingVertical: 12,
+      marginBottom: 10,
+      borderRadius: 6,
+    },
+    receiptSectionTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 10,
+      textTransform: "uppercase",
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingBottom: 8,
+    },
+    receiptRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingVertical: 6,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    receiptLabel: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    receiptValue: {
+      fontSize: 12,
+      color: colors.textTertiary,
+    },
+    receiptAmount: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.success,
+    },
+    receiptTotalRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingVertical: 10,
+      marginTop: 8,
+      borderTopWidth: 2,
+      borderTopColor: colors.text,
+    },
+    receiptTotalLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    receiptTotalAmount: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.success,
+    },
+    receiptMemberItem: {
+      flexDirection: "row",
+      backgroundColor: colors.cardAlt,
+      paddingVertical: 10,
+      paddingHorizontal: 10,
+      marginBottom: 8,
+      borderRadius: 4,
+      borderLeftWidth: 3,
+      borderLeftColor: "#b38604",
+    },
+    receiptMemberName: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    receiptMemberDays: {
+      fontSize: 11,
+      color: "#17a2b8",
+      marginTop: 3,
+    },
+    receiptMemberWater: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#2196F3",
+    },
+    receiptMemberStatus: {
+      fontSize: 10,
+      fontWeight: "600",
+      marginTop: 2,
+    },
+    receiptBillPerMemberItem: {
+      flexDirection: "row",
+      backgroundColor: colors.infoBg,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      marginBottom: 10,
+      borderRadius: 6,
+      borderLeftWidth: 4,
+      borderLeftColor: "#2196F3",
+    },
+    receiptBillPerMemberName: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    receiptBillPerMemberSubtext: {
+      fontSize: 10,
+      color: "#2196F3",
+      marginTop: 2,
+      fontWeight: "600",
+    },
+    receiptBillPerMemberBreakdown: {
+      marginBottom: 8,
+      alignItems: "flex-end",
+    },
+    receiptBillPerMemberDetail: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginVertical: 2,
+    },
+    receiptBillPerMemberTotal: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#2196F3",
+      paddingTop: 6,
+      borderTopWidth: 1,
+      borderTopColor: "#2196F3",
+    },
+    receiptYourShare: {
+      backgroundColor: colors.warningBg,
+      borderWidth: 2,
+      borderColor: "#fbc02d",
+      paddingHorizontal: 15,
+      paddingVertical: 12,
+      marginBottom: 10,
+      borderRadius: 6,
+    },
+    receiptPayorNote: {
+      fontSize: 11,
+      color: colors.electricityColor,
+      marginTop: 8,
+      fontWeight: "500",
+    },
+    receiptFooter: {
+      backgroundColor: colors.card,
+      paddingVertical: 15,
+      alignItems: "center",
+      marginTop: 15,
+      marginBottom: 20,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    receiptFooterText: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      textAlign: "center",
+      marginVertical: 3,
+    },
+
+    // ─── PRESENCE MODAL ───
+    presenceModalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 20,
+    },
+    presenceModalContainer: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      maxHeight: "80%",
+      width: "100%",
+      overflow: "hidden",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 10,
+    },
+    presenceModalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      backgroundColor: colors.cardAlt,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    presenceModalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+      flex: 1,
+    },
+    presenceModalCloseBtn: {
+      padding: 4,
+    },
+    presenceModalContent: {
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+    },
+    presenceCalendarHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      marginBottom: 12,
+    },
+    presenceMonthYear: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    presenceWeekDaysContainer: {
+      flexDirection: "row",
+      marginBottom: 8,
+      paddingHorizontal: 0,
+    },
+    presenceWeekDayHeader: {
+      width: "14.285%",
+      alignItems: "center",
+      paddingVertical: 8,
+    },
+    presenceWeekDayText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    presenceCalendarDaysContainer: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      paddingHorizontal: 0,
+      marginBottom: 16,
+      justifyContent: "space-between",
+    },
+    presenceDayCell: {
+      width: "14.285%",
+      aspectRatio: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 2,
+      marginHorizontal: 0,
+      borderRadius: 8,
+      backgroundColor: colors.background,
+      position: "relative",
+    },
+    presenceEmptyCell: {
+      backgroundColor: "transparent",
+    },
+    presenceMarkedCell: {
+      backgroundColor: colors.success,
+    },
+    presenceDayText: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.text,
+    },
+    presenceMarkedDayText: {
+      color: "#fff",
+      fontWeight: "600",
+    },
+    presenceSummary: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 8,
+      marginBottom: 16,
+    },
+    presenceSummaryItem: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    presenceSummaryIcon: {
+      width: 12,
+      height: 12,
+      borderRadius: 2,
+      backgroundColor: colors.success,
+      marginRight: 10,
+    },
+    presenceSummaryText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.text,
+    },
+  });
 
 export default BillsScreen;

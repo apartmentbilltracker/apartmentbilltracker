@@ -1,5 +1,4 @@
-const NotificationLog = require("../model/notificationLog");
-const User = require("../model/user");
+const SupabaseService = require("../db/SupabaseService");
 const sendPushNotification = require("./sendPushNotification");
 
 /**
@@ -17,24 +16,22 @@ const createNotification = async (recipientId, notificationData) => {
       relatedData = {},
     } = notificationData;
 
-    // Create notification log in database
-    const notification = new NotificationLog({
-      recipient: recipientId,
-      notificationType: type,
+    // Create notification log in Supabase
+    const notification = await SupabaseService.createNotification({
+      user_id: recipientId,
+      notification_type: type,
       title,
       message,
-      relatedData,
+      data: relatedData,
+      is_read: false,
     });
 
-    await notification.save();
     console.log(`✅ Notification created for user ${recipientId}:`, title);
 
     // Try to send push notification if user has a push token
     try {
-      const user = await User.findById(recipientId);
+      const user = await SupabaseService.findUserById(recipientId);
       if (user && user.twofactortoken) {
-        // User's push token is stored in twofactortoken field
-        // (or you may need to check where push tokens are stored in your User model)
         const pushTokens = Array.isArray(user.twofactortoken)
           ? user.twofactortoken
           : [user.twofactortoken];
@@ -46,21 +43,28 @@ const createNotification = async (recipientId, notificationData) => {
               body: message,
               data: {
                 notificationType: type,
-                notificationId: notification._id.toString(),
+                notificationId: notification?.id?.toString(),
               },
             });
 
-            if (pushResult) {
-              notification.pushNotificationSent = true;
-              await notification.save();
+            if (pushResult && notification?.id) {
+              await SupabaseService.update(
+                "notification_logs",
+                notification.id,
+                {
+                  push_notification_sent: true,
+                },
+              );
               console.log(`📱 Push notification sent for ${title}`);
             }
           }
         }
       }
     } catch (pushError) {
-      console.log("⚠️  Push notification failed (non-critical):", pushError.message);
-      // Don't fail the whole process if push fails
+      console.log(
+        "⚠️  Push notification failed (non-critical):",
+        pushError.message,
+      );
     }
 
     return notification;

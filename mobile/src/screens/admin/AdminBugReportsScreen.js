@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo} from "react";
 import {
   View,
   Text,
@@ -10,13 +10,27 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
+  Platform,
+  RefreshControl,
 } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { supportService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
+
+const GOLD = "#b38604";
+const BG = "#f5f6fa";
+const TEXT = "#1a1a2e";
+const CARD = "#fff";
+const MUTED = "#6b7280";
+const BORDER = "#e5e7eb";
 
 const AdminBugReportsScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const [bugs, setBugs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedBug, setSelectedBug] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [responseText, setResponseText] = useState("");
@@ -27,12 +41,9 @@ const AdminBugReportsScreen = ({ navigation }) => {
 
   useEffect(() => {
     fetchAllBugReports();
-
-    // Refresh bug reports when screen comes into focus
     const unsubscribe = navigation.addListener("focus", () => {
       fetchAllBugReports();
     });
-
     return unsubscribe;
   }, [navigation]);
 
@@ -49,20 +60,29 @@ const AdminBugReportsScreen = ({ navigation }) => {
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const response = await supportService.getAllBugReports();
+      setBugs(Array.isArray(response) ? response : response?.data || []);
+    } catch (error) {
+      console.error("Error refreshing:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleBugPress = async (bugId) => {
     try {
       const details = await supportService.getBugReportDetails(bugId);
       setSelectedBug(details?.data || details);
       setNewStatus(details?.data?.status || details?.status);
       setModalVisible(true);
-
-      // Mark bug report as read by admin
       try {
         await supportService.markBugReportAsRead(bugId);
-        // Update the bug in the local list
         setBugs(
           bugs.map((b) =>
-            b._id === bugId ? { ...b, isReadByAdmin: true } : b,
+            (b.id || b._id) === bugId ? { ...b, isReadByAdmin: true } : b,
           ),
         );
       } catch (error) {
@@ -78,22 +98,19 @@ const AdminBugReportsScreen = ({ navigation }) => {
       Alert.alert("Validation", "Please enter a response message");
       return;
     }
-
     setSubmitting(true);
     try {
-      await supportService.addBugReportResponse(selectedBug._id, responseText);
-
+      await supportService.addBugReportResponse(
+        selectedBug.id || selectedBug._id,
+        responseText,
+      );
       const updatedBug = {
         ...selectedBug,
         responses: [
           ...(selectedBug.responses || []),
-          {
-            from: "admin",
-            message: responseText,
-            createdAt: new Date(),
-          },
+          { from: "admin", message: responseText, createdAt: new Date() },
         ],
-        isReadByAdmin: false, // Reset read flag so indicator appears for user
+        isReadByAdmin: false,
       };
       setSelectedBug(updatedBug);
       setResponseText("");
@@ -105,13 +122,16 @@ const AdminBugReportsScreen = ({ navigation }) => {
     }
   };
 
-  const handleStatusChange = async (newStatus) => {
+  const handleStatusChange = async (status) => {
     setSubmitting(true);
     try {
-      await supportService.updateBugReportStatus(selectedBug._id, newStatus);
-      const updatedBug = { ...selectedBug, status: newStatus };
+      await supportService.updateBugReportStatus(
+        selectedBug.id || selectedBug._id,
+        status,
+      );
+      const updatedBug = { ...selectedBug, status };
       setSelectedBug(updatedBug);
-      setNewStatus(newStatus);
+      setNewStatus(status);
       Alert.alert("Success", "Bug status updated");
     } catch (error) {
       Alert.alert("Error", "Failed to update status");
@@ -122,47 +142,66 @@ const AdminBugReportsScreen = ({ navigation }) => {
 
   const getSeverityColor = (severity) => {
     switch (severity) {
-      case "critical":
-        return "#c0392b";
-      case "high":
-        return "#e74c3c";
-      case "medium":
-        return "#f39c12";
-      case "low":
-        return "#27ae60";
-      default:
-        return "#95a5a6";
+      case "critical": return "#dc2626";
+      case "high": return "#ef4444";
+      case "medium": return "#f59e0b";
+      case "low": return "#10b981";
+      default: return "#6b7280";
+    }
+  };
+
+  const getSeverityIcon = (severity) => {
+    switch (severity) {
+      case "critical": return "nuclear";
+      case "high": return "flame";
+      case "medium": return "warning";
+      case "low": return "leaf";
+      default: return "help-circle";
     }
   };
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "new":
-        return "#3498db";
-      case "in-review":
-        return "#f39c12";
-      case "acknowledged":
-        return "#9b59b6";
-      case "fixed":
-        return "#27ae60";
-      case "closed":
-        return "#95a5a6";
-      default:
-        return "#95a5a6";
+      case "new": return "#3b82f6";
+      case "in-review": return "#f59e0b";
+      case "acknowledged": return "#8b5cf6";
+      case "fixed": return "#10b981";
+      case "closed": return "#6b7280";
+      default: return "#6b7280";
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case "new": return "sparkles";
+      case "in-review": return "eye";
+      case "acknowledged": return "checkmark-done";
+      case "fixed": return "checkmark-circle";
+      case "closed": return "lock-closed";
+      default: return "help-circle";
     }
   };
 
   const filteredBugs = bugs.filter((b) => {
-    const severityMatch =
-      severityFilter === "all" || b.severity === severityFilter;
+    const severityMatch = severityFilter === "all" || b.severity === severityFilter;
     const statusMatch = statusFilter === "all" || b.status === statusFilter;
     return severityMatch && statusMatch;
   });
 
+  const bugCounts = {
+    total: bugs.length,
+    critical: bugs.filter((b) => b.severity === "critical").length,
+    high: bugs.filter((b) => b.severity === "high").length,
+    open: bugs.filter((b) => b.status === "new" || b.status === "in-review").length,
+  };
+
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#e74c3c" />
+      <View style={styles.loadingWrap}>
+        <View style={styles.loadingIconWrap}>
+          <Ionicons name="bug-outline" size={32} color={GOLD} />
+        </View>
+        <ActivityIndicator size="large" color={GOLD} style={{ marginTop: 16 }} />
         <Text style={styles.loadingText}>Loading bug reports...</Text>
       </View>
     );
@@ -170,347 +209,331 @@ const AdminBugReportsScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Bug Reports</Text>
-          <Text style={styles.headerSubtitle}>Track and resolve issues</Text>
+      {/* Summary Strip */}
+      <View style={styles.summaryStrip}>
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryValue}>{bugCounts.total}</Text>
+          <Text style={styles.summaryLabel}>Total</Text>
         </View>
-        <View style={styles.countBadge}>
-          <MaterialIcons name="bug-report" size={18} color="#fff" />
-          <Text style={styles.countText}>{filteredBugs.length}</Text>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={[styles.summaryValue, { color: "#dc2626" }]}>{bugCounts.critical}</Text>
+          <Text style={styles.summaryLabel}>Critical</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={[styles.summaryValue, { color: "#ef4444" }]}>{bugCounts.high}</Text>
+          <Text style={styles.summaryLabel}>High</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={[styles.summaryValue, { color: "#3b82f6" }]}>{bugCounts.open}</Text>
+          <Text style={styles.summaryLabel}>Open</Text>
         </View>
       </View>
 
-      {/* Severity Filter Tabs */}
+      {/* Severity Filter */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
+        contentContainerStyle={styles.filterRow}
       >
-        <TouchableOpacity
-          style={[
-            styles.filterTab,
-            severityFilter === "all" && styles.filterTabActive,
-          ]}
-          onPress={() => setSeverityFilter("all")}
-        >
-          <MaterialIcons
-            name="list"
-            size={16}
-            color={severityFilter === "all" ? "#fff" : "#666"}
-            style={{ marginRight: 6 }}
-          />
-          <Text
-            style={[
-              styles.filterTabText,
-              severityFilter === "all" && styles.filterTabTextActive,
-            ]}
-          >
-            All
-          </Text>
-        </TouchableOpacity>
-
-        {["critical", "high", "medium", "low"].map((severity) => (
-          <TouchableOpacity
-            key={severity}
-            style={[
-              styles.filterTab,
-              severityFilter === severity && styles.filterTabActive,
-            ]}
-            onPress={() => setSeverityFilter(severity)}
-          >
-            <View
-              style={[
-                styles.severityDot,
-                { backgroundColor: getSeverityColor(severity) },
-              ]}
-            />
-            <Text
-              style={[
-                styles.filterTabText,
-                severityFilter === severity && styles.filterTabTextActive,
-              ]}
+        <Text style={styles.filterLabel}>Severity:</Text>
+        {[
+          { key: "all", label: "All", icon: "list" },
+          { key: "critical", label: "Critical", icon: "nuclear" },
+          { key: "high", label: "High", icon: "flame" },
+          { key: "medium", label: "Medium", icon: "warning" },
+          { key: "low", label: "Low", icon: "leaf" },
+        ].map((tab) => {
+          const active = severityFilter === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.filterChip, active && styles.filterChipActive]}
+              onPress={() => setSeverityFilter(tab.key)}
+              activeOpacity={0.7}
             >
-              {severity.charAt(0).toUpperCase() + severity.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Ionicons
+                name={tab.icon}
+                size={13}
+                color={active ? "#fff" : MUTED}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       {/* Bug Reports List */}
       <FlatList
         data={filteredBugs}
-        keyExtractor={(item) => item._id}
-        scrollEnabled={false}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.bugCard}
-            onPress={() => handleBugPress(item._id)}
-          >
-            <View style={styles.bugHeader}>
-              <View style={styles.bugTitleSection}>
-                <Text style={styles.bugTitle} numberOfLines={2}>
-                  {item.title}
-                </Text>
-                <Text style={styles.bugReporter}>{item.userName}</Text>
-              </View>
-              <View style={styles.bugBadges}>
-                <View
-                  style={[
-                    styles.badge,
-                    { backgroundColor: getSeverityColor(item.severity) + "20" },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.badgeText,
-                      { color: getSeverityColor(item.severity) },
-                    ]}
-                  >
-                    {item.severity.charAt(0).toUpperCase() +
-                      item.severity.slice(1)}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.badge,
-                    { backgroundColor: getStatusColor(item.status) + "20" },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.badgeText,
-                      { color: getStatusColor(item.status) },
-                    ]}
-                  >
-                    {item.status
-                      .split("-")
-                      .map(
-                        (word) => word.charAt(0).toUpperCase() + word.slice(1),
-                      )
-                      .join("-")}
-                  </Text>
-                </View>
-                {!item.isReadByAdmin &&
-                  item.responses &&
-                  item.responses.length > 0 && (
-                    <View style={styles.unreadDotIndicator} />
-                  )}
-              </View>
-            </View>
+        keyExtractor={(item) => item.id || item._id}
+        contentContainerStyle={{ paddingBottom: 20 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[GOLD]} tintColor={GOLD} />
+        }
+        renderItem={({ item }) => {
+          const sevColor = getSeverityColor(item.severity);
+          const statColor = getStatusColor(item.status);
+          const hasUnread = !item.isReadByAdmin && item.responses && item.responses.length > 0;
+          return (
+            <TouchableOpacity
+              style={styles.bugCard}
+              onPress={() => handleBugPress(item.id || item._id)}
+              activeOpacity={0.7}
+            >
+              {/* Left accent bar */}
+              <View style={[styles.cardAccent, { backgroundColor: sevColor }]} />
 
-            <View style={styles.bugMeta}>
-              <Text style={styles.module}>{item.module}</Text>
-              <Text style={styles.responseCount}>
-                {(item.responses || []).length} responses
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
+              <View style={styles.cardBody}>
+                <View style={styles.cardTopRow}>
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <Text style={styles.bugTitle} numberOfLines={2}>{item.title}</Text>
+                    <View style={styles.reporterRow}>
+                      <Ionicons name="person-outline" size={12} color={MUTED} />
+                      <Text style={styles.bugReporter}>{item.userName}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.badgeColumn}>
+                    <View style={[styles.badge, { backgroundColor: sevColor + "15" }]}>
+                      <Ionicons name={getSeverityIcon(item.severity)} size={11} color={sevColor} />
+                      <Text style={[styles.badgeText, { color: sevColor }]}>
+                        {item.severity?.charAt(0).toUpperCase() + item.severity?.slice(1)}
+                      </Text>
+                    </View>
+                    <View style={[styles.badge, { backgroundColor: statColor + "15" }]}>
+                      <Ionicons name={getStatusIcon(item.status)} size={11} color={statColor} />
+                      <Text style={[styles.badgeText, { color: statColor }]}>
+                        {item.status?.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
+                      </Text>
+                    </View>
+                    {hasUnread && <View style={styles.unreadDot} />}
+                  </View>
+                </View>
+
+                <View style={styles.cardSeparator} />
+
+                <View style={styles.cardMetaRow}>
+                  <View style={styles.metaChip}>
+                    <Ionicons name="cube-outline" size={12} color={MUTED} />
+                    <Text style={styles.metaText}>{item.module}</Text>
+                  </View>
+                  <View style={styles.metaChip}>
+                    <Ionicons name="chatbubble-outline" size={12} color={GOLD} />
+                    <Text style={[styles.metaText, { color: GOLD }]}>
+                      {(item.responses || []).length} responses
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} style={{ marginLeft: "auto" }} />
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No bug reports found</Text>
+          <View style={styles.emptyWrap}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="bug-outline" size={40} color={GOLD} />
+            </View>
+            <Text style={styles.emptyTitle}>No Bug Reports</Text>
+            <Text style={styles.emptySub}>No reports match your filters</Text>
+          </View>
         }
       />
 
       {/* Bug Details Modal */}
-      <Modal visible={modalVisible} transparent animationType="slide">
+      <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalCard}>
+            {/* Modal Header */}
             <View style={styles.modalHeader}>
+              <View style={styles.modalIconWrap}>
+                <Ionicons name="bug-outline" size={22} color={GOLD} />
+              </View>
               <Text style={styles.modalTitle}>Bug Report Details</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <MaterialIcons name="close" size={26} color="#333" />
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.modalClose}
+              >
+                <Ionicons name="close" size={22} color={MUTED} />
               </TouchableOpacity>
             </View>
 
             {selectedBug && (
-              <ScrollView style={styles.modalBody}>
-                {/* Bug Info */}
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoLabel}>Title</Text>
-                  <Text style={styles.infoValue}>{selectedBug.title}</Text>
-                </View>
+              <ScrollView
+                style={styles.modalBody}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 30 }}
+              >
+                {/* Bug Title */}
+                <Text style={styles.modalSubject}>{selectedBug.title}</Text>
 
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoLabel}>Reporter</Text>
-                  <Text style={styles.infoValue}>{selectedBug.userName}</Text>
-                  <Text style={styles.infoSubText}>
-                    {selectedBug.userEmail}
-                  </Text>
-                </View>
-
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoLabel}>Module</Text>
-                  <Text style={styles.infoValue}>
-                    {selectedBug.module.charAt(0).toUpperCase() +
-                      selectedBug.module.slice(1)}
-                  </Text>
-                </View>
-
-                <View style={styles.infoRow}>
-                  <View style={styles.infoHalf}>
-                    <Text style={styles.infoLabel}>Severity</Text>
-                    <View
-                      style={[
-                        styles.severityBadge,
-                        {
-                          backgroundColor:
-                            getSeverityColor(selectedBug.severity) + "20",
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.severityText,
-                          {
-                            color: getSeverityColor(selectedBug.severity),
-                          },
-                        ]}
-                      >
-                        {selectedBug.severity.toUpperCase()}
-                      </Text>
+                {/* Info Grid */}
+                <View style={styles.infoGrid}>
+                  <View style={styles.infoCell}>
+                    <View style={[styles.infoCellIcon, { backgroundColor: GOLD + "18" }]}>
+                      <Ionicons name="person-outline" size={16} color={GOLD} />
                     </View>
+                    <Text style={styles.infoCellLabel}>Reporter</Text>
+                    <Text style={styles.infoCellValue} numberOfLines={1}>{selectedBug.userName}</Text>
                   </View>
-
-                  <View style={styles.infoHalf}>
-                    <Text style={styles.infoLabel}>Status</Text>
-                    <View style={styles.statusPicker}>
-                      {[
-                        "new",
-                        "in-review",
-                        "acknowledged",
-                        "fixed",
-                        "closed",
-                      ].map((status) => (
-                        <TouchableOpacity
-                          key={status}
-                          style={[
-                            styles.statusButton,
-                            newStatus === status && styles.statusButtonActive,
-                          ]}
-                          onPress={() => handleStatusChange(status)}
-                        >
-                          <Text
-                            style={[
-                              styles.statusButtonText,
-                              newStatus === status &&
-                                styles.statusButtonTextActive,
-                            ]}
-                          >
-                            {status.split("-")[0].charAt(0).toUpperCase() +
-                              status.split("-")[0].slice(1)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                  <View style={styles.infoCell}>
+                    <View style={[styles.infoCellIcon, { backgroundColor: "#10b981" + "18" }]}>
+                      <Ionicons name="mail-outline" size={16} color="#10b981" />
                     </View>
+                    <Text style={styles.infoCellLabel}>Email</Text>
+                    <Text style={styles.infoCellValue} numberOfLines={1}>{selectedBug.userEmail}</Text>
                   </View>
-                </View>
-
-                {/* Description */}
-                <View style={styles.descriptionSection}>
-                  <Text style={styles.infoLabel}>Description</Text>
-                  <View style={styles.descriptionBox}>
-                    <Text style={styles.descriptionText}>
-                      {selectedBug.description}
+                  <View style={styles.infoCell}>
+                    <View style={[styles.infoCellIcon, { backgroundColor: "#8b5cf6" + "18" }]}>
+                      <Ionicons name="cube-outline" size={16} color="#8b5cf6" />
+                    </View>
+                    <Text style={styles.infoCellLabel}>Module</Text>
+                    <Text style={styles.infoCellValue}>
+                      {selectedBug.module?.charAt(0).toUpperCase() + selectedBug.module?.slice(1)}
+                    </Text>
+                  </View>
+                  <View style={styles.infoCell}>
+                    <View style={[styles.infoCellIcon, { backgroundColor: getSeverityColor(selectedBug.severity) + "18" }]}>
+                      <Ionicons name={getSeverityIcon(selectedBug.severity)} size={16} color={getSeverityColor(selectedBug.severity)} />
+                    </View>
+                    <Text style={styles.infoCellLabel}>Severity</Text>
+                    <Text style={[styles.infoCellValue, { color: getSeverityColor(selectedBug.severity) }]}>
+                      {selectedBug.severity?.toUpperCase()}
                     </Text>
                   </View>
                 </View>
 
-                {/* Responses Timeline */}
-                <View style={styles.responsesSection}>
-                  <Text style={styles.infoLabel}>
-                    Timeline ({(selectedBug.responses || []).length})
-                  </Text>
+                {/* Description */}
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.sectionIconWrap}>
+                      <Ionicons name="document-text-outline" size={16} color={GOLD} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Description</Text>
+                  </View>
+                  <View style={styles.messageBox}>
+                    <Text style={styles.messageText}>{selectedBug.description}</Text>
+                  </View>
+                </View>
+
+                {/* Status Update */}
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.sectionIconWrap}>
+                      <Ionicons name="swap-horizontal-outline" size={16} color={GOLD} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Update Status</Text>
+                  </View>
+                  <View style={styles.statusGrid}>
+                    {["new", "in-review", "acknowledged", "fixed", "closed"].map((status) => {
+                      const active = newStatus === status;
+                      const sCol = getStatusColor(status);
+                      return (
+                        <TouchableOpacity
+                          key={status}
+                          style={[
+                            styles.statusOption,
+                            active && { backgroundColor: sCol, borderColor: sCol },
+                          ]}
+                          onPress={() => handleStatusChange(status)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name={getStatusIcon(status)}
+                            size={16}
+                            color={active ? "#fff" : sCol}
+                          />
+                          <Text style={[styles.statusOptionText, active && { color: colors.textOnAccent }]}>
+                            {status.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Timeline / Responses */}
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.sectionIconWrap}>
+                      <Ionicons name="chatbubbles-outline" size={16} color={GOLD} />
+                    </View>
+                    <Text style={styles.sectionTitle}>
+                      Timeline ({(selectedBug.responses || []).length})
+                    </Text>
+                  </View>
 
                   {/* Original Report */}
-                  <View style={styles.responseItem}>
-                    <View
-                      style={[
-                        styles.responseBadge,
-                        {
-                          backgroundColor: getSeverityColor(
-                            selectedBug.severity,
-                          ),
-                        },
-                      ]}
-                    >
-                      <MaterialIcons name="bug-report" size={16} color="#fff" />
+                  <View style={styles.timelineItem}>
+                    <View style={[styles.timelineDot, { backgroundColor: getSeverityColor(selectedBug.severity) }]}>
+                      <Ionicons name="bug-outline" size={14} color={colors.textOnAccent} />
                     </View>
-                    <View style={styles.responseContent}>
-                      <Text style={styles.responseFrom}>Bug Report</Text>
-                      <Text style={styles.responseText}>
-                        {selectedBug.description}
-                      </Text>
-                      <Text style={styles.responseTime}>
+                    <View style={styles.timelineContent}>
+                      <Text style={styles.timelineFrom}>Bug Report</Text>
+                      <Text style={styles.timelineText} numberOfLines={3}>{selectedBug.description}</Text>
+                      <Text style={styles.timelineTime}>
                         {new Date(selectedBug.createdAt).toLocaleString()}
                       </Text>
                     </View>
                   </View>
 
                   {/* Responses */}
-                  {(selectedBug.responses || []).map((response, index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.messageBubbleWrapper,
-                        response.from === "admin"
-                          ? styles.adminBubbleWrapper
-                          : styles.userBubbleWrapper,
-                      ]}
-                    >
+                  {(selectedBug.responses || []).map((response, index) => {
+                    const isAdmin = response.from === "admin";
+                    return (
                       <View
+                        key={index}
                         style={[
-                          styles.messageBubble,
-                          response.from === "admin"
-                            ? styles.adminBubble
-                            : styles.userBubble,
+                          styles.bubbleRow,
+                          isAdmin ? { justifyContent: "flex-end" } : { justifyContent: "flex-start" },
                         ]}
                       >
-                        <View style={styles.messageHeader}>
-                          <Text
-                            style={[
-                              styles.messageSender,
-                              response.from === "admin"
-                                ? styles.adminSender
-                                : styles.userSender,
-                            ]}
-                          >
-                            {response.from === "admin"
-                              ? "🔧 You (Admin)"
-                              : "👤 " + selectedBug.userName}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.messageTimestamp,
-                              response.from === "admin"
-                                ? { color: "#ccc" }
-                                : { color: "#999" },
-                            ]}
-                          >
-                            {new Date(response.createdAt).toLocaleString()}
+                        <View style={[
+                          styles.bubble,
+                          isAdmin ? styles.adminBubble : styles.userBubble,
+                        ]}>
+                          <View style={styles.bubbleHeader}>
+                            <View style={styles.bubbleSenderRow}>
+                              <Ionicons
+                                name={isAdmin ? "build-outline" : "person-outline"}
+                                size={12}
+                                color={isAdmin ? "#fff" : TEXT}
+                              />
+                              <Text style={[styles.bubbleSender, isAdmin && { color: colors.textOnAccent }]}>
+                                {isAdmin ? "You (Admin)" : selectedBug.userName}
+                              </Text>
+                            </View>
+                            <Text style={[styles.bubbleTime, isAdmin && { color: "rgba(255,255,255,0.7)" }]}>
+                              {new Date(response.createdAt).toLocaleString()}
+                            </Text>
+                          </View>
+                          <Text style={[styles.bubbleText, isAdmin && { color: colors.textOnAccent }]}>
+                            {response.message}
                           </Text>
                         </View>
-                        <Text
-                          style={[
-                            styles.messageTextContent,
-                            response.from === "admin"
-                              ? styles.adminMessageText
-                              : styles.userMessageText,
-                          ]}
-                        >
-                          {response.message}
-                        </Text>
                       </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
 
                 {/* Response Input */}
-                <View style={styles.responseInputSection}>
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.sectionIconWrap}>
+                      <Ionicons name="return-down-forward-outline" size={16} color={GOLD} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Add Response</Text>
+                  </View>
                   <TextInput
-                    style={styles.responseInput}
+                    style={styles.replyInput}
                     placeholder="Type your response here..."
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.placeholder}
                     multiline
                     numberOfLines={4}
                     value={responseText}
@@ -518,21 +541,17 @@ const AdminBugReportsScreen = ({ navigation }) => {
                     editable={!submitting}
                   />
                   <TouchableOpacity
-                    style={[
-                      styles.responseButton,
-                      submitting && styles.responseButtonDisabled,
-                    ]}
+                    style={[styles.sendBtn, submitting && { opacity: 0.6 }]}
                     onPress={handleAddResponse}
                     disabled={submitting}
+                    activeOpacity={0.8}
                   >
                     {submitting ? (
-                      <ActivityIndicator color="#fff" size="small" />
+                      <ActivityIndicator color={colors.textOnAccent} size="small" />
                     ) : (
                       <>
-                        <MaterialIcons name="send" size={18} color="#fff" />
-                        <Text style={styles.responseButtonText}>
-                          Send Response
-                        </Text>
+                        <Ionicons name="send" size={18} color={colors.textOnAccent} />
+                        <Text style={styles.sendBtnText}>Send Response</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -546,382 +565,176 @@ const AdminBugReportsScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f7fa",
+const createStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  loadingWrap: { flex: 1, backgroundColor: colors.background, justifyContent: "center", alignItems: "center" },
+  loadingIconWrap: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: GOLD + "15", justifyContent: "center", alignItems: "center",
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: "#e74c3c",
+  loadingText: { marginTop: 12, color: MUTED, fontSize: 14 },
+
+  /* Summary */
+  summaryStrip: {
+    flexDirection: "row", backgroundColor: CARD, marginHorizontal: 16, marginTop: 12,
+    borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, alignItems: "center",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
+      android: { elevation: 3 },
+    }),
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#fff",
+  summaryItem: { flex: 1, alignItems: "center" },
+  summaryValue: { fontSize: 20, fontWeight: "800", color: GOLD },
+  summaryLabel: { fontSize: 11, color: MUTED, marginTop: 2, fontWeight: "500" },
+  summaryDivider: { width: StyleSheet.hairlineWidth, height: 28, backgroundColor: BORDER },
+
+  /* Filters */
+  filterRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: "center" },
+  filterLabel: { fontSize: 12, fontWeight: "700", color: TEXT, marginRight: 4 },
+  filterChip: {
+    flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 20, backgroundColor: CARD, borderWidth: 1, borderColor: BORDER,
   },
-  bugCount: {
-    fontSize: 14,
-    color: "#fff",
-    backgroundColor: "rgba(255,255,255,0.3)",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  filterScroll: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: "#fff",
-  },
-  filterTab: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#eee",
-    backgroundColor: "#f5f5f5",
-  },
-  filterTabActive: {
-    backgroundColor: "#e74c3c",
-    borderColor: "#e74c3c",
-  },
-  filterTabText: {
-    fontSize: 12,
-    color: "#555",
-    fontWeight: "600",
-  },
-  filterTabTextActive: {
-    color: "#fff",
-  },
-  severityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 5,
-  },
+  filterChipActive: { backgroundColor: GOLD, borderColor: GOLD },
+  filterChipText: { fontSize: 12, color: MUTED, fontWeight: "600" },
+  filterChipTextActive: { color: "#fff" },
+
+  /* Bug Cards */
   bugCard: {
-    margin: 16,
-    marginBottom: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: "#e74c3c",
+    flexDirection: "row", marginHorizontal: 16, marginBottom: 10, borderRadius: 14,
+    backgroundColor: CARD, overflow: "hidden",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
+      android: { elevation: 2 },
+    }),
   },
-  bugHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  bugTitleSection: {
-    flex: 1,
-    marginRight: 12,
-  },
-  bugTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1a202c",
-    marginBottom: 6,
-  },
-  bugReporter: {
-    fontSize: 12,
-    color: "#718096",
-  },
-  bugBadges: {
-    flexDirection: "row",
-    gap: 8,
-    position: "relative",
-  },
+  cardAccent: { width: 4 },
+  cardBody: { flex: 1, paddingHorizontal: 14, paddingVertical: 12 },
+  cardTopRow: { flexDirection: "row", alignItems: "flex-start" },
+  bugTitle: { fontSize: 15, fontWeight: "700", color: TEXT, marginBottom: 4 },
+  reporterRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  bugReporter: { fontSize: 12, color: MUTED },
+  badgeColumn: { alignItems: "flex-end", gap: 4 },
   badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, gap: 4,
   },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: "600",
+  badgeText: { fontSize: 10, fontWeight: "700" },
+  unreadDot: {
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: "#ef4444", borderWidth: 2, borderColor: CARD,
   },
-  unreadDotIndicator: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#e74c3c",
-    borderWidth: 2,
-    borderColor: "#fff",
+  cardSeparator: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginVertical: 10 },
+  cardMetaRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  metaChip: { flexDirection: "row", alignItems: "center", gap: 4 },
+  metaText: { fontSize: 11, color: MUTED, fontWeight: "500" },
+
+  /* Empty */
+  emptyWrap: { alignItems: "center", justifyContent: "center", paddingVertical: 60 },
+  emptyIconWrap: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: GOLD + "15", justifyContent: "center", alignItems: "center", marginBottom: 16,
   },
-  bugMeta: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-  },
-  module: {
-    fontSize: 11,
-    color: "#999",
-    textTransform: "uppercase",
-  },
-  responseCount: {
-    fontSize: 11,
-    color: "#e74c3c",
-    fontWeight: "600",
-  },
-  emptyText: {
-    textAlign: "center",
-    color: "#999",
-    marginTop: 40,
-    fontSize: 14,
-  },
-  loadingText: {
-    marginTop: 12,
-    color: "#666",
-    fontSize: 14,
-  },
+  emptyTitle: { fontSize: 16, fontWeight: "700", color: TEXT },
+  emptySub: { fontSize: 13, color: MUTED, marginTop: 4 },
+
+  /* Modal */
   modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    flex: 1, backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center", alignItems: "center", padding: 16,
   },
-  modalContent: {
-    flex: 1,
-    backgroundColor: "#fff",
-    marginTop: 40,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+  modalCard: {
+    width: "100%", maxHeight: "92%", backgroundColor: CARD, borderRadius: 18, overflow: "hidden",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
+      android: { elevation: 8 },
+    }),
   },
   modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: BORDER,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
+  modalIconWrap: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: GOLD + "15", justifyContent: "center", alignItems: "center", marginRight: 10,
   },
-  modalBody: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+  modalTitle: { flex: 1, fontSize: 17, fontWeight: "700", color: TEXT },
+  modalClose: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: colors.background, justifyContent: "center", alignItems: "center",
   },
-  infoSection: {
-    marginBottom: 16,
+  modalBody: { paddingHorizontal: 16, paddingTop: 10 },
+  modalSubject: { fontSize: 16, fontWeight: "700", color: TEXT, marginBottom: 14, lineHeight: 22 },
+
+  /* Info Grid */
+  infoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 18 },
+  infoCell: { width: "47%", backgroundColor: colors.background, borderRadius: 12, padding: 12, alignItems: "center" },
+  infoCellIcon: {
+    width: 32, height: 32, borderRadius: 16,
+    justifyContent: "center", alignItems: "center", marginBottom: 6,
   },
-  infoLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#999",
-    textTransform: "uppercase",
-    marginBottom: 6,
+  infoCellLabel: { fontSize: 11, color: MUTED, fontWeight: "600" },
+  infoCellValue: { fontSize: 12, color: TEXT, fontWeight: "700", marginTop: 2, textAlign: "center" },
+
+  /* Section */
+  section: { marginBottom: 18 },
+  sectionHeader: { flexDirection: "row", alignItems: "center", marginBottom: 10, gap: 8 },
+  sectionIconWrap: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: GOLD + "15", justifyContent: "center", alignItems: "center",
   },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
+  sectionTitle: { fontSize: 14, fontWeight: "700", color: TEXT },
+  messageBox: {
+    backgroundColor: colors.background, borderRadius: 12, padding: 14,
+    borderLeftWidth: 3, borderLeftColor: GOLD,
   },
-  infoSubText: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 4,
+  messageText: { fontSize: 13, color: colors.text, lineHeight: 20 },
+
+  /* Status Grid */
+  statusGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  statusOption: {
+    width: "47%", paddingVertical: 10, borderRadius: 12,
+    borderWidth: 1.5, borderColor: BORDER, backgroundColor: colors.background,
+    alignItems: "center", justifyContent: "center", gap: 4,
   },
-  infoRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
+  statusOptionText: { fontSize: 11, fontWeight: "700", color: MUTED },
+
+  /* Timeline */
+  timelineItem: { flexDirection: "row", marginBottom: 16 },
+  timelineDot: {
+    width: 30, height: 30, borderRadius: 15,
+    justifyContent: "center", alignItems: "center", marginRight: 12,
   },
-  infoHalf: {
-    flex: 1,
+  timelineContent: { flex: 1 },
+  timelineFrom: { fontSize: 12, fontWeight: "700", color: TEXT, marginBottom: 4 },
+  timelineText: { fontSize: 13, color: MUTED, lineHeight: 19 },
+  timelineTime: { fontSize: 11, color: colors.textTertiary, marginTop: 4 },
+
+  /* Conversation Bubbles */
+  bubbleRow: { flexDirection: "row", marginBottom: 12 },
+  bubble: { maxWidth: "82%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
+  adminBubble: { backgroundColor: GOLD, borderBottomRightRadius: 4 },
+  userBubble: { backgroundColor: colors.background, borderBottomLeftRadius: 4 },
+  bubbleHeader: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 5, gap: 8,
   },
-  severityBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+  bubbleSenderRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  bubbleSender: { fontSize: 11, fontWeight: "700", color: TEXT },
+  bubbleTime: { fontSize: 10, color: MUTED },
+  bubbleText: { fontSize: 13, lineHeight: 19, color: TEXT },
+
+  /* Reply Input */
+  replyInput: {
+    backgroundColor: colors.background, borderWidth: 1, borderColor: BORDER, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12, fontSize: 13, color: TEXT,
+    textAlignVertical: "top", minHeight: 80, marginBottom: 10,
   },
-  severityText: {
-    fontSize: 12,
-    fontWeight: "700",
+  sendBtn: {
+    flexDirection: "row", backgroundColor: GOLD, borderRadius: 12,
+    paddingVertical: 14, justifyContent: "center", alignItems: "center", gap: 8,
   },
-  statusPicker: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    backgroundColor: "#f8f9fa",
-    borderRadius: 8,
-    padding: 4,
-    gap: 4,
-  },
-  statusButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    alignItems: "center",
-    minWidth: "30%",
-  },
-  statusButtonActive: {
-    backgroundColor: "#e74c3c",
-  },
-  statusButtonText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#666",
-  },
-  statusButtonTextActive: {
-    color: "#fff",
-  },
-  descriptionSection: {
-    marginBottom: 16,
-  },
-  descriptionBox: {
-    backgroundColor: "#f8f9fa",
-    borderRadius: 8,
-    padding: 12,
-  },
-  descriptionText: {
-    fontSize: 13,
-    color: "#333",
-    lineHeight: 20,
-  },
-  responsesSection: {
-    marginBottom: 20,
-  },
-  messagesContainer: {
-    marginVertical: 12,
-    paddingVertical: 8,
-  },
-  messageBubbleWrapper: {
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  adminBubbleWrapper: {
-    alignItems: "flex-end",
-  },
-  userBubbleWrapper: {
-    alignItems: "flex-start",
-  },
-  messageBubble: {
-    maxWidth: "85%",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 16,
-  },
-  adminBubble: {
-    backgroundColor: "#0a66c2",
-    borderBottomRightRadius: 4,
-  },
-  userBubble: {
-    backgroundColor: "#e8e8e8",
-    borderBottomLeftRadius: 4,
-  },
-  messageHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
-    gap: 8,
-  },
-  messageSender: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  adminSender: {
-    color: "#fff",
-  },
-  userSender: {
-    color: "#333",
-  },
-  messageTimestamp: {
-    fontSize: 11,
-    color: "#999",
-  },
-  messageTextContent: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  adminMessageText: {
-    color: "#fff",
-  },
-  userMessageText: {
-    color: "#333",
-  },
-  responseItem: {
-    flexDirection: "row",
-    marginBottom: 16,
-  },
-  responseBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#e74c3c",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  responseContent: {
-    flex: 1,
-  },
-  responseFrom: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#1a202c",
-    marginBottom: 4,
-  },
-  responseText: {
-    fontSize: 13,
-    color: "#555",
-    lineHeight: 20,
-  },
-  responseTime: {
-    fontSize: 11,
-    color: "#999",
-    marginTop: 6,
-  },
-  responseInputSection: {
-    marginBottom: 20,
-  },
-  responseInput: {
-    backgroundColor: "#f8f9fa",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    color: "#333",
-    textAlignVertical: "top",
-    marginBottom: 12,
-  },
-  responseButton: {
-    flexDirection: "row",
-    backgroundColor: "#e74c3c",
-    borderRadius: 8,
-    paddingVertical: 12,
-    marginBottom: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  responseButtonDisabled: {
-    opacity: 0.6,
-  },
-  responseButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
+  sendBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });
 
 export default AdminBugReportsScreen;

@@ -128,17 +128,19 @@ if (process.env.NODE_ENV !== "PRODUCTION") {
 }
 
 // Import routes
-const user = require("./controller/user");
-const room = require("./controller/room");
-const billingCycleRoutes = require("./routes/billingCycle");
-const paymentRoutes = require("./controller/payment");
-const paymentProcessingRoutes = require("./controller/paymentProcessing");
-const adminFinancialRoutes = require("./controller/adminFinancial");
-const adminBillingRoutes = require("./controller/adminBilling");
-const adminRemindersRoutes = require("./controller/adminReminders");
-const notificationsRoutes = require("./controller/notifications");
-const announcementRoutes = require("./routes/announcement");
-const supportRoutes = require("./routes/support");
+const user = require("./controller/user-supabase");
+const room = require("./controller/room-supabase");
+const billingCycleRoutes = require("./controller/billingCycle-supabase");
+const paymentRoutes = require("./controller/payment-supabase");
+const announcementRoutes = require("./controller/announcement-supabase");
+const supportRoutes = require("./controller/supportTicket-supabase");
+const bugReportRoutes = require("./controller/bugReport-supabase");
+const paymentProcessingRoutes = require("./controller/paymentProcessing-supabase");
+const adminFinancialRoutes = require("./controller/adminFinancial-supabase");
+const adminBillingRoutes = require("./controller/adminBilling-supabase");
+const adminRemindersRoutes = require("./controller/adminReminders-supabase");
+const notificationsRoutes = require("./controller/notifications-supabase");
+const faqRoutes = require("./controller/faq-supabase");
 
 // 5. Debug Endpoints (Add before routes)
 app.post("/api/v2/debug/upload", (req, res) => {
@@ -250,6 +252,8 @@ app.use("/api/v2/admin/reminders", adminRemindersRoutes);
 app.use("/api/v2/notifications", notificationsRoutes);
 app.use("/api/v2/announcements", announcementRoutes);
 app.use("/api/v2/support", supportRoutes);
+app.use("/api/v2/support", bugReportRoutes);
+app.use("/api/v2/faqs", faqRoutes);
 
 // Logout route - ensures the token cookie is properly removed
 app.get("/api/v2/user/logout", async (req, res, next) => {

@@ -106,20 +106,28 @@ export const memberService = {
     api.delete(`/api/v2/rooms/${roomId}/members/${memberId}`).then(extractData),
   getMembers: (roomId) =>
     api.get(`/api/v2/rooms/${roomId}/members`).then(extractData),
+  getPendingMembers: (roomId) =>
+    api.get(`/api/v2/rooms/${roomId}/members/pending`).then(extractData),
+  approveMember: (roomId, memberId) =>
+    api
+      .post(`/api/v2/rooms/${roomId}/members/${memberId}/approve`)
+      .then(extractData),
+  rejectMember: (roomId, memberId) =>
+    api
+      .post(`/api/v2/rooms/${roomId}/members/${memberId}/reject`)
+      .then(extractData),
 };
 
 // Billing Cycle Services
 export const billingCycleService = {
   createCycle: (roomId, data) =>
-    api
-      .post(`/api/v2/billing-cycles/create`, { ...data, roomId })
-      .then(extractData),
+    api.post(`/api/v2/billing-cycles`, { ...data, roomId }).then(extractData),
   getBillingCycles: (roomId) =>
     api.get(`/api/v2/billing-cycles/room/${roomId}`).then(extractData),
   getBillingCycleById: (cycleId) =>
     api.get(`/api/v2/billing-cycles/${cycleId}`).then(extractData),
   getActiveCycle: (roomId) =>
-    api.get(`/api/v2/billing-cycles/active/${roomId}`).then(extractData),
+    api.get(`/api/v2/billing-cycles/room/${roomId}/active`).then(extractData),
   updateBillingCycle: (cycleId, data) =>
     api.put(`/api/v2/billing-cycles/${cycleId}`, data).then(extractData),
   closeBillingCycle: (cycleId) =>
@@ -244,11 +252,11 @@ export const paymentProcessingService = {
 
 export const announcementService = {
   getRoomAnnouncements: (roomId) =>
-    api.get(`/api/v2/announcements/${roomId}`).then(extractData),
+    api.get(`/api/v2/announcements/room/${roomId}`).then(extractData),
 
   createAnnouncement: (roomId, title, content) =>
     api
-      .post("/api/v2/announcements/create", {
+      .post("/api/v2/announcements", {
         roomId,
         title,
         content,
@@ -387,14 +395,13 @@ export const supportService = {
   // FAQs
   getAllFAQs: (category) =>
     api
-      .get(`/api/v2/support/faqs${category ? `?category=${category}` : ""}`)
+      .get(`/api/v2/faqs${category ? `?category=${category}` : ""}`)
       .then(extractData),
-  getFAQCategories: () =>
-    api.get("/api/v2/support/faq-categories").then(extractData),
+  getFAQCategories: () => api.get("/api/v2/faqs/categories").then(extractData),
   markFAQHelpful: (faqId) =>
-    api.post(`/api/v2/support/faq/${faqId}/helpful`).then(extractData),
+    api.post(`/api/v2/faqs/${faqId}/helpful`).then(extractData),
   markFAQNotHelpful: (faqId) =>
-    api.post(`/api/v2/support/faq/${faqId}/not-helpful`).then(extractData),
+    api.post(`/api/v2/faqs/${faqId}/not-helpful`).then(extractData),
 
   // Admin methods
   getAllTickets: () => api.get("/api/v2/support/all-tickets").then(extractData),
@@ -402,13 +409,11 @@ export const supportService = {
     api
       .put(`/api/v2/support/ticket/${ticketId}/status`, { status })
       .then(extractData),
-  getAdminFAQs: () => api.get("/api/v2/support/admin-faqs").then(extractData),
-  createFAQ: (data) =>
-    api.post("/api/v2/support/create-faq", data).then(extractData),
+  getAdminFAQs: () => api.get("/api/v2/faqs").then(extractData),
+  createFAQ: (data) => api.post("/api/v2/faqs", data).then(extractData),
   updateFAQ: (faqId, data) =>
-    api.put(`/api/v2/support/faq/${faqId}`, data).then(extractData),
-  deleteFAQ: (faqId) =>
-    api.delete(`/api/v2/support/faq/${faqId}`).then(extractData),
+    api.put(`/api/v2/faqs/${faqId}`, data).then(extractData),
+  deleteFAQ: (faqId) => api.delete(`/api/v2/faqs/${faqId}`).then(extractData),
   getAllBugReports: () =>
     api.get("/api/v2/support/all-bug-reports").then(extractData),
   updateBugReportStatus: (reportId, status) =>

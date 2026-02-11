@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,18 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { authService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
+import AuthBubbles from "../../components/AuthBubbles";
 
 const VerifyResetCodeScreen = ({ navigation, route }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { email } = route.params;
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,12 +29,10 @@ const VerifyResetCodeScreen = ({ navigation, route }) => {
       setError("Please enter the 6-digit code");
       return;
     }
-
     if (code.length !== 6) {
       setError("Code must be exactly 6 digits");
       return;
     }
-
     if (!/^\d+$/.test(code)) {
       setError("Code must contain only numbers");
       return;
@@ -36,9 +41,7 @@ const VerifyResetCodeScreen = ({ navigation, route }) => {
     setLoading(true);
     setError("");
     try {
-      // Verify the reset code
       const response = await authService.verifyResetCode(email, code);
-
       if (response.success) {
         Alert.alert("Success", "Code verified! Now set your new password.", [
           {
@@ -51,349 +54,338 @@ const VerifyResetCodeScreen = ({ navigation, route }) => {
         setError(response.message || "Invalid code");
       }
     } catch (err) {
-      console.error("Code verification error:", err);
-      const errorMessage =
+      const msg =
         err.response?.data?.message ||
         err.data?.message ||
         err.message ||
         "Failed to verify code. Please try again.";
-      setError(errorMessage);
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // Cleanup inputs when screen loses focus
   useEffect(() => {
-    const unsubscribe = navigation.addListener("beforeRemove", () => {
+    const unsub = navigation.addListener("beforeRemove", () => {
       setCode("");
       setError("");
     });
-    return unsubscribe;
+    return unsub;
   }, [navigation]);
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.content}>
-        {/* Header */}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
+    >
+      <AuthBubbles />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ─── Back ─── */}
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        </TouchableOpacity>
+
+        {/* ─── Header ─── */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <MaterialIcons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Verify Code</Text>
-        </View>
-
-        {/* Icon */}
-        <View style={styles.iconContainer}>
-          <MaterialIcons name="verified-user" size={60} color="#b38604" />
-        </View>
-
-        {/* Description */}
-        <Text style={styles.description}>
-          Enter the 6-digit code sent to your email: {"\n"}
-          <Text style={styles.email}>{email}</Text>
-        </Text>
-
-        {/* Form */}
-        <View style={styles.form}>
-          {/* Error Message */}
-          {error ? (
-            <View style={styles.errorContainer}>
-              <MaterialIcons name="error" size={16} color="#e74c3c" />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          {/* Code Input */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>6-Digit Code</Text>
-            <View style={styles.codeInput}>
-              <Text
-                style={[
-                  styles.codeText,
-                  code.length === 6 && styles.codeTextFilled,
-                ]}
-              >
-                {code || "000000"}
-              </Text>
-            </View>
-            <Text style={styles.hint}>{code.length}/6 digits entered</Text>
+          <View style={styles.iconGlow}>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={42}
+              color={colors.accent}
+            />
           </View>
+          <Text style={styles.title}>Verify Code</Text>
+          <Text style={styles.subtitle}>
+            Enter the 6-digit code sent to{"\n"}
+            <Text style={{ fontWeight: "700", color: colors.text }}>
+              {email}
+            </Text>
+          </Text>
+        </View>
 
-          {/* Number Pad */}
-          <View style={styles.numberPad}>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-              <TouchableOpacity
-                key={num}
-                style={[
-                  styles.padButton,
-                  code.length >= 6 && styles.padButtonDisabled,
-                ]}
-                onPress={() => {
-                  if (code.length < 6) {
-                    setCode(code + num);
-                    setError("");
-                  }
-                }}
-                activeOpacity={0.7}
-                disabled={code.length >= 6}
-              >
-                <Text style={styles.padButtonText}>{num}</Text>
-              </TouchableOpacity>
-            ))}
+        {/* ─── Error ─── */}
+        {error ? (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle" size={16} color="#ef4444" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
-            {/* Zero Button */}
+        {/* ─── Code display ─── */}
+        <View style={styles.codeDisplay}>
+          <Text
+            style={[
+              styles.codeText,
+              code.length === 6 && styles.codeTextFilled,
+            ]}
+          >
+            {code || "------"}
+          </Text>
+          <Text style={styles.hint}>{code.length}/6 digits entered</Text>
+        </View>
+
+        {/* ─── Number pad ─── */}
+        <View style={styles.numberPad}>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <TouchableOpacity
-              style={[
-                styles.padButton,
-                code.length >= 6 && styles.padButtonDisabled,
-              ]}
+              key={num}
+              style={[styles.padBtn, code.length >= 6 && { opacity: 0.4 }]}
               onPress={() => {
                 if (code.length < 6) {
-                  setCode(code + "0");
+                  setCode(code + num);
                   setError("");
                 }
               }}
               activeOpacity={0.7}
               disabled={code.length >= 6}
             >
-              <Text style={styles.padButtonText}>0</Text>
+              <Text style={styles.padBtnText}>{num}</Text>
             </TouchableOpacity>
-
-            {/* Backspace Button in the pad */}
-            <TouchableOpacity
-              style={[styles.padButton, styles.backspaceButton]}
-              onPress={() => setCode(code.slice(0, -1))}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="backspace" size={18} color="#333" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Verify Button */}
+          ))}
+          {/* empty spacer */}
+          <View style={styles.padBtn} />
           <TouchableOpacity
-            style={[
-              styles.button,
-              styles.primaryButton,
-              loading && styles.buttonDisabled,
-            ]}
-            onPress={handleVerifyCode}
-            disabled={loading || code.length !== 6}
+            style={[styles.padBtn, code.length >= 6 && { opacity: 0.4 }]}
+            onPress={() => {
+              if (code.length < 6) {
+                setCode(code + "0");
+                setError("");
+              }
+            }}
+            activeOpacity={0.7}
+            disabled={code.length >= 6}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Verify Code</Text>
-            )}
+            <Text style={styles.padBtnText}>0</Text>
           </TouchableOpacity>
-
-          {/* Resend Code Link */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Didn't receive the code? </Text>
-            <TouchableOpacity
-              onPress={() => {
-                setCode("");
-                navigation.goBack();
-              }}
-              disabled={loading}
-            >
-              <Text style={styles.linkText}>Try Another Email</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.padBtn}
+            onPress={() => setCode(code.slice(0, -1))}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="backspace-outline" size={22} color={colors.text} />
+          </TouchableOpacity>
         </View>
 
-        {/* Info Box */}
-        <View style={styles.infoBox}>
-          <MaterialIcons name="info" size={20} color="#3498db" />
-          <Text style={styles.infoText}>
+        {/* ─── CTA ─── */}
+        <TouchableOpacity
+          style={[
+            styles.primaryBtn,
+            (loading || code.length !== 6) && { opacity: 0.6 },
+          ]}
+          onPress={handleVerifyCode}
+          disabled={loading || code.length !== 6}
+          activeOpacity={0.85}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.textOnAccent} />
+          ) : (
+            <>
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={18}
+                color={colors.textOnAccent}
+              />
+              <Text style={styles.primaryBtnText}>Verify Code</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        {/* ─── Footer ─── */}
+        <View style={styles.footerRow}>
+          <Text style={styles.footerMuted}>Didn't receive the code? </Text>
+          <TouchableOpacity
+            onPress={() => {
+              setCode("");
+              navigation.goBack();
+            }}
+            disabled={loading}
+          >
+            <Text style={styles.footerLink}>Try Another Email</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ─── Tip ─── */}
+        <View style={styles.tipBox}>
+          <Ionicons
+            name="information-circle-outline"
+            size={18}
+            color={colors.accent}
+          />
+          <Text style={styles.tipText}>
             The code is valid for 15 minutes. Check your spam folder if you
             don't see the email.
           </Text>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  content: {
-    padding: 20,
-    paddingTop: 10,
-    paddingBottom: 40,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 30,
-    position: "relative",
-  },
-  backButton: {
-    position: "absolute",
-    left: -10,
-    padding: 10,
-    zIndex: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#333",
-    textAlign: "center",
-    flex: 1,
-  },
-  iconContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  description: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 30,
-    lineHeight: 24,
-  },
-  email: {
-    fontWeight: "600",
-    color: "#333",
-  },
-  form: {
-    marginBottom: 30,
-  },
-  errorContainer: {
-    backgroundColor: "#fee",
-    borderLeftWidth: 4,
-    borderLeftColor: "#e74c3c",
-    padding: 12,
-    borderRadius: 4,
-    marginBottom: 20,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  errorText: {
-    color: "#c0392b",
-    marginLeft: 10,
-    fontSize: 14,
-    fontWeight: "500",
-    flex: 1,
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
-  },
-  codeInput: {
-    borderWidth: 2,
-    borderColor: "#b38604",
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: "center",
-    backgroundColor: "#f9f9f9",
-    marginBottom: 8,
-  },
-  codeText: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#ccc",
-    letterSpacing: 8,
-  },
-  codeTextFilled: {
-    color: "#b38604",
-  },
-  hint: {
-    fontSize: 12,
-    color: "#999",
-    textAlign: "center",
-  },
-  numberPad: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 6,
-    marginBottom: 16,
-    paddingHorizontal: 10,
-  },
-  padButton: {
-    width: "28%",
-    aspectRatio: 1.2,
-    borderRadius: 6,
-    backgroundColor: "#e8e8e8",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 0.5,
-    borderColor: "#d0d0d0",
-    elevation: 1,
-  },
-  padButtonDisabled: {
-    opacity: 0.5,
-  },
-  padButtonText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-  },
-  backspaceButton: {
-    width: "28%",
-  },
-  button: {
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 10,
-    marginBottom: 16,
-  },
-  primaryButton: {
-    backgroundColor: "#b38604",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 20,
-  },
-  footerText: {
-    fontSize: 14,
-    color: "#666",
-  },
-  linkText: {
-    fontSize: 14,
-    color: "#b38604",
-    fontWeight: "600",
-  },
-  infoBox: {
-    backgroundColor: "#e3f2fd",
-    borderLeftWidth: 4,
-    borderLeftColor: "#3498db",
-    padding: 14,
-    borderRadius: 4,
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  infoText: {
-    fontSize: 13,
-    color: "#1565c0",
-    marginLeft: 10,
-    lineHeight: 20,
-    flex: 1,
-  },
-});
+/* ═══════════════════════ STYLES ═══════════════════════ */
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    scrollContent: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingTop: 52,
+      paddingBottom: 36,
+    },
+
+    backBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 1,
+    },
+
+    header: { alignItems: "center", marginBottom: 24 },
+    iconGlow: {
+      width: 88,
+      height: 88,
+      borderRadius: 24,
+      backgroundColor: colors.card,
+      justifyContent: "center",
+      alignItems: "center",
+      shadowColor: "#b38604",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 12,
+      elevation: 4,
+      marginBottom: 18,
+    },
+    title: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: colors.text,
+      letterSpacing: 0.2,
+      marginBottom: 8,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: "center",
+      lineHeight: 20,
+    },
+
+    errorBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.errorBg,
+      borderWidth: 1,
+      borderColor: colors.error,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      marginBottom: 16,
+      gap: 8,
+    },
+    errorText: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.error,
+      fontWeight: "500",
+    },
+
+    codeDisplay: {
+      alignItems: "center",
+      marginBottom: 20,
+      backgroundColor: colors.card,
+      borderWidth: 2,
+      borderColor: "#b38604",
+      borderRadius: 14,
+      paddingVertical: 16,
+      shadowColor: "#b38604",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    codeText: {
+      fontSize: 32,
+      fontWeight: "800",
+      color: colors.textTertiary,
+      letterSpacing: 10,
+    },
+    codeTextFilled: { color: colors.accent },
+    hint: { fontSize: 11, color: colors.textTertiary, marginTop: 6 },
+
+    numberPad: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      gap: 8,
+      marginBottom: 20,
+      paddingHorizontal: 8,
+    },
+    padBtn: {
+      width: "28%",
+      aspectRatio: 1.3,
+      borderRadius: 14,
+      backgroundColor: colors.card,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 3,
+      elevation: 1,
+    },
+    padBtnText: { fontSize: 20, fontWeight: "700", color: colors.text },
+
+    primaryBtn: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 14,
+      paddingVertical: 15,
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 20,
+      shadowColor: "#b38604",
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 3,
+    },
+    primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+
+    footerRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 24,
+    },
+    footerMuted: { fontSize: 13, color: colors.textSecondary },
+    footerLink: { fontSize: 13, color: colors.accent, fontWeight: "700" },
+
+    tipBox: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: colors.warningBg,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      gap: 10,
+    },
+    tipText: { flex: 1, fontSize: 12, color: colors.warning, lineHeight: 18 },
+  });
 
 export default VerifyResetCodeScreen;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import {
   View,
   Text,
@@ -12,11 +12,15 @@ import {
   Modal,
   TextInput,
 } from "react-native";
-import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { supportService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
 
 const MyTicketsScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { state } = useContext(AuthContext);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,12 +33,9 @@ const MyTicketsScreen = ({ navigation }) => {
 
   useEffect(() => {
     fetchTickets();
-
-    // Refresh tickets when screen comes into focus
     const unsubscribe = navigation.addListener("focus", () => {
       fetchTickets();
     });
-
     return unsubscribe;
   }, [navigation]);
 
@@ -58,17 +59,18 @@ const MyTicketsScreen = ({ navigation }) => {
 
   const handleViewDetails = async (ticket) => {
     try {
-      const response = await supportService.getTicketDetails(ticket._id);
+      const response = await supportService.getTicketDetails(
+        ticket.id || ticket._id,
+      );
       setSelectedTicket(response?.data || response);
       setDetailsVisible(true);
-
-      // Mark ticket as read
       try {
-        await supportService.markTicketAsRead(ticket._id);
-        // Update the ticket in the local list
+        await supportService.markTicketAsRead(ticket.id || ticket._id);
         setTickets(
           tickets.map((t) =>
-            t._id === ticket._id ? { ...t, isReadByUser: true } : t,
+            (t.id || t._id) === (ticket.id || ticket._id)
+              ? { ...t, isReadByUser: true }
+              : t,
           ),
         );
       } catch (error) {
@@ -84,21 +86,23 @@ const MyTicketsScreen = ({ navigation }) => {
       Alert.alert("Validation", "Please enter your message");
       return;
     }
-
     setSubmitting(true);
     try {
-      await supportService.addTicketReply(selectedTicket._id, newReply);
+      await supportService.addTicketReply(
+        selectedTicket.id || selectedTicket._id,
+        newReply,
+      );
       Alert.alert("Success", "Reply added successfully");
       setNewReply("");
-      // Refresh ticket details
       const response = await supportService.getTicketDetails(
-        selectedTicket._id,
+        selectedTicket.id || selectedTicket._id,
       );
       setSelectedTicket(response?.data || response);
-      // Reset read flag so indicator appears for admin
       setTickets(
         tickets.map((t) =>
-          t._id === selectedTicket._id ? { ...t, isReadByAdmin: false } : t,
+          (t.id || t._id) === (selectedTicket.id || selectedTicket._id)
+            ? { ...t, isReadByAdmin: false }
+            : t,
         ),
       );
     } catch (error) {
@@ -108,117 +112,215 @@ const MyTicketsScreen = ({ navigation }) => {
     }
   };
 
-  const getStatusColor = (status) => {
+  /* ─── Helpers ─── */
+  const getStatusConfig = (status) => {
     switch (status) {
       case "open":
-        return "#ff6b6b";
+        return {
+          color: colors.error,
+          bg: colors.errorBg,
+          label: "Open",
+          icon: "radio-button-on",
+        };
       case "in-progress":
-        return "#ffd93d";
+        return {
+          color: colors.warning,
+          bg: colors.warningBg,
+          label: "In Progress",
+          icon: "sync-outline",
+        };
       case "resolved":
-        return "#27ae60";
+        return {
+          color: colors.success,
+          bg: colors.successBg,
+          label: "Resolved",
+          icon: "checkmark-circle",
+        };
       case "closed":
-        return "#95a5a6";
+        return {
+          color: colors.textTertiary,
+          bg: colors.cardAlt,
+          label: "Closed",
+          icon: "lock-closed-outline",
+        };
       default:
-        return "#3498db";
+        return {
+          color: colors.textSecondary,
+          bg: colors.cardAlt,
+          label: status || "Unknown",
+          icon: "help-circle-outline",
+        };
     }
   };
 
-  const getPriorityColor = (priority) => {
+  const getPriorityConfig = (priority) => {
     switch (priority) {
       case "high":
-        return "#e74c3c";
+        return { color: colors.error, label: "High" };
       case "medium":
-        return "#f39c12";
+        return { color: colors.warning, label: "Medium" };
       case "low":
-        return "#27ae60";
+        return { color: colors.success, label: "Low" };
       default:
-        return "#3498db";
+        return { color: colors.textSecondary, label: priority || "Normal" };
     }
+  };
+
+  const getCategoryIcon = (category) => {
+    const c = (category || "").toLowerCase();
+    if (c.includes("billing") || c.includes("payment")) return "card-outline";
+    if (c.includes("technical") || c.includes("bug"))
+      return "construct-outline";
+    if (c.includes("room")) return "home-outline";
+    if (c.includes("account")) return "person-outline";
+    return "help-circle-outline";
+  };
+
+  const formatTimeAgo = (dateStr) => {
+    if (!dateStr) return "";
+    const now = new Date();
+    const d = new Date(dateStr);
+    const diff = Math.floor((now - d) / 1000);
+    if (diff < 60) return "Just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
   };
 
   const getFilteredTickets = () => {
-    if (selectedFilter === "all") {
-      return tickets;
-    }
-    return tickets.filter((ticket) => ticket.status === selectedFilter);
+    if (selectedFilter === "all") return tickets;
+    return tickets.filter((t) => t.status === selectedFilter);
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case "open":
-        return "🔴";
-      case "in-progress":
-        return "🟠";
-      case "resolved":
-        return "✅";
-      case "closed":
-        return "⏹️";
-      default:
-        return "•";
-    }
-  };
+  const filters = [
+    { key: "all", label: "All", icon: "list-outline" },
+    { key: "open", label: "Open", icon: "radio-button-on" },
+    { key: "in-progress", label: "Active", icon: "sync-outline" },
+    { key: "resolved", label: "Resolved", icon: "checkmark-circle-outline" },
+    { key: "closed", label: "Closed", icon: "lock-closed-outline" },
+  ];
 
+  /* ─── Loading ─── */
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0a66c2" />
-        <Text style={styles.loadingText}>Loading your tickets...</Text>
+      <View style={styles.centerContent}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={styles.loadingText}>Loading tickets…</Text>
       </View>
     );
   }
 
+  /* ─── Render Ticket Card ─── */
+  const renderTicket = ({ item }) => {
+    const sc = getStatusConfig(item.status);
+    const pc = getPriorityConfig(item.priority);
+    const hasUnread =
+      !item.isReadByUser && item.replies && item.replies.length > 0;
+
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => handleViewDetails(item)}
+        activeOpacity={0.7}
+      >
+        {/* Left icon */}
+        <View style={[styles.cardIcon, { backgroundColor: sc.bg }]}>
+          <Ionicons
+            name={getCategoryIcon(item.category)}
+            size={18}
+            color={sc.color}
+          />
+        </View>
+
+        {/* Content */}
+        <View style={styles.cardBody}>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {item.subject}
+            </Text>
+            {hasUnread && <View style={styles.unreadDot} />}
+          </View>
+
+          <Text style={styles.cardMessage} numberOfLines={2}>
+            {item.message}
+          </Text>
+
+          <View style={styles.cardMeta}>
+            {/* Status */}
+            <View style={[styles.pill, { backgroundColor: sc.bg }]}>
+              <Ionicons name={sc.icon} size={10} color={sc.color} />
+              <Text style={[styles.pillText, { color: sc.color }]}>
+                {sc.label}
+              </Text>
+            </View>
+
+            {/* Priority */}
+            <View style={styles.metaItem}>
+              <Ionicons name="flag-outline" size={11} color={pc.color} />
+              <Text style={[styles.metaText, { color: pc.color }]}>
+                {pc.label}
+              </Text>
+            </View>
+
+            {/* Replies */}
+            <View style={styles.metaItem}>
+              <Ionicons name="chatbubble-outline" size={11} color={colors.textSecondary} />
+              <Text style={styles.metaText}>{item.replies?.length || 0}</Text>
+            </View>
+          </View>
+        </View>
+
+        <Ionicons
+          name="chevron-forward"
+          size={16}
+          color={colors.textTertiary}
+          style={{ marginTop: 4 }}
+        />
+      </TouchableOpacity>
+    );
+  };
+
+  /* ─── Main ─── */
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>My Support Tickets</Text>
-          <Text style={styles.headerSubtitle}>Track your requests</Text>
-        </View>
-        <View style={styles.ticketCountBadge}>
-          <Text style={styles.ticketCountText}>{tickets.length}</Text>
-        </View>
-      </View>
-
       {/* Filter Tabs */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.filterContainer}
+        contentContainerStyle={styles.filterBar}
+        style={styles.filterScroll}
       >
-        {["all", "open", "in-progress", "resolved", "closed"].map((filter) => {
-          const isSelected = selectedFilter === filter;
+        {filters.map((f) => {
+          const active = selectedFilter === f.key;
           const count =
-            filter === "all"
+            f.key === "all"
               ? tickets.length
-              : tickets.filter((t) => t.status === filter).length;
-          const statusEmoji = filter === "all" ? "📋" : getStatusIcon(filter);
-
+              : tickets.filter((t) => t.status === f.key).length;
           return (
             <TouchableOpacity
-              key={filter}
-              style={[styles.filterTab, isSelected && styles.filterTabActive]}
-              onPress={() => setSelectedFilter(filter)}
+              key={f.key}
+              style={[styles.filterChip, active && styles.filterChipActive]}
+              onPress={() => setSelectedFilter(f.key)}
+              activeOpacity={0.7}
             >
+              <Ionicons
+                name={f.icon}
+                size={13}
+                color={active ? "#fff" : "#64748b"}
+              />
               <Text
-                style={[
-                  styles.filterTabText,
-                  isSelected && styles.filterTabTextActive,
-                ]}
+                style={[styles.filterText, active && styles.filterTextActive]}
               >
-                {statusEmoji}{" "}
-                {filter.charAt(0).toUpperCase() +
-                  filter.slice(1).replace("-", " ")}
+                {f.label}
               </Text>
               <View
-                style={[
-                  styles.filterTabBadge,
-                  isSelected && styles.filterTabBadgeActive,
-                ]}
+                style={[styles.filterCount, active && styles.filterCountActive]}
               >
                 <Text
                   style={[
-                    styles.filterTabBadgeText,
-                    isSelected && styles.filterTabBadgeTextActive,
+                    styles.filterCountText,
+                    active && styles.filterCountTextActive,
                   ]}
                 >
                   {count}
@@ -229,131 +331,68 @@ const MyTicketsScreen = ({ navigation }) => {
         })}
       </ScrollView>
 
+      {/* Empty */}
       {tickets.length === 0 ? (
         <ScrollView
+          contentContainerStyle={styles.emptyWrap}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#b38604"]}
+              tintcolor={colors.accent}
+            />
           }
         >
-          <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons
-              name="inbox-multiple-outline"
-              size={56}
-              color="#ddd"
+          <View style={styles.emptyIconWrap}>
+            <Ionicons
+              name="chatbubbles-outline"
+              size={48}
+              color={colors.textSecondary}
             />
-            <Text style={styles.emptyText}>No support tickets yet</Text>
-            <Text style={styles.emptySubtext}>
-              Your support requests will appear here
-            </Text>
           </View>
+          <Text style={styles.emptyTitle}>No Support Tickets</Text>
+          <Text style={styles.emptyText}>
+            Your support requests will appear here.
+          </Text>
+          <TouchableOpacity style={styles.emptyRefresh} onPress={onRefresh}>
+            <Ionicons name="refresh-outline" size={16} color={colors.accent} />
+            <Text style={styles.emptyRefreshText}>Refresh</Text>
+          </TouchableOpacity>
         </ScrollView>
       ) : (
         <FlatList
           data={getFilteredTickets()}
-          keyExtractor={(item) => item._id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.ticketCard}
-              onPress={() => handleViewDetails(item)}
-              activeOpacity={0.7}
-            >
-              <View
-                style={[
-                  styles.cardLeftBorder,
-                  { borderLeftColor: getStatusColor(item.status) },
-                ]}
-              />
-              <View style={styles.cardContent}>
-                <View style={styles.cardTop}>
-                  <View style={styles.cardTitleSection}>
-                    <Text style={styles.ticketSubject} numberOfLines={2}>
-                      {item.subject}
-                    </Text>
-                    <Text style={styles.ticketMeta}>
-                      <MaterialCommunityIcons
-                        name="tag"
-                        size={12}
-                        color="#999"
-                      />{" "}
-                      {item.category}
-                    </Text>
-                  </View>
-                  <View style={styles.badgeContainer}>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: getStatusColor(item.status) },
-                      ]}
-                    >
-                      <Text style={styles.statusText}>
-                        {item.status === "open"
-                          ? "🔴"
-                          : item.status === "in-progress"
-                            ? "🟠"
-                            : item.status === "resolved"
-                              ? "✅"
-                              : "⏹️"}{" "}
-                        {item.status.charAt(0).toUpperCase() +
-                          item.status.slice(1)}
-                      </Text>
-                    </View>
-                    {!item.isReadByUser &&
-                      item.replies &&
-                      item.replies.length > 0 && (
-                        <View style={styles.unreadDotIndicator} />
-                      )}
-                  </View>
-                </View>
-
-                <Text style={styles.messagePreview} numberOfLines={2}>
-                  {item.message}
-                </Text>
-
-                <View style={styles.cardFooter}>
-                  <View style={styles.footerItem}>
-                    <MaterialCommunityIcons
-                      name="flag"
-                      size={12}
-                      color={getPriorityColor(item.priority)}
-                    />
-                    <Text
-                      style={[
-                        styles.footerText,
-                        { color: getPriorityColor(item.priority) },
-                      ]}
-                    >
-                      {item.priority.toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={styles.footerItem}>
-                    <MaterialCommunityIcons
-                      name="message-reply-text-outline"
-                      size={12}
-                      color="#0a66c2"
-                    />
-                    <Text style={styles.footerText}>
-                      {item.replies?.length || 0} replies
-                    </Text>
-                  </View>
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={18}
-                    color="#ccc"
-                  />
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
+          renderItem={renderTicket}
+          keyExtractor={(item) => item.id || item._id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#b38604"]}
+              tintcolor={colors.accent}
+            />
           }
         />
       )}
 
-      {/* Ticket Details Modal */}
+      {/* ─── Ticket Details Modal ─── */}
       <Modal visible={detailsVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setDetailsVisible(false)}
+        >
+          <View
+            style={styles.modalSheet}
+            onStartShouldSetResponder={() => true}
+          >
+            {/* Drag handle */}
+            <View style={styles.dragHandle} />
+
+            {/* Modal header */}
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Ticket Details</Text>
@@ -362,176 +401,169 @@ const MyTicketsScreen = ({ navigation }) => {
                 </Text>
               </View>
               <TouchableOpacity
+                style={styles.modalCloseBtn}
                 onPress={() => setDetailsVisible(false)}
-                style={styles.closeButton}
               >
-                <MaterialIcons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={18} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             {selectedTicket && (
               <ScrollView
-                style={styles.detailsContainer}
+                style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 30 }}
               >
-                {/* Quick Info Cards */}
-                <View style={styles.infoCardsGrid}>
-                  <View style={styles.infoCard}>
-                    <MaterialCommunityIcons
-                      name="checkbox-marked-circle"
-                      size={20}
-                      color={getStatusColor(selectedTicket.status)}
+                {/* Info pills */}
+                <View style={styles.infoPillRow}>
+                  {(() => {
+                    const sc = getStatusConfig(selectedTicket.status);
+                    return (
+                      <View
+                        style={[styles.infoPill, { backgroundColor: sc.bg }]}
+                      >
+                        <Ionicons name={sc.icon} size={13} color={sc.color} />
+                        <Text
+                          style={[styles.infoPillText, { color: sc.color }]}
+                        >
+                          {sc.label}
+                        </Text>
+                      </View>
+                    );
+                  })()}
+                  {(() => {
+                    const pc = getPriorityConfig(selectedTicket.priority);
+                    return (
+                      <View
+                        style={[
+                          styles.infoPill,
+                          { backgroundColor: colors.cardAlt },
+                        ]}
+                      >
+                        <Ionicons
+                          name="flag-outline"
+                          size={13}
+                          color={pc.color}
+                        />
+                        <Text
+                          style={[styles.infoPillText, { color: pc.color }]}
+                        >
+                          {pc.label} Priority
+                        </Text>
+                      </View>
+                    );
+                  })()}
+                  <View
+                    style={[
+                      styles.infoPill,
+                      { backgroundColor: colors.accentSurface },
+                    ]}
+                  >
+                    <Ionicons
+                      name={getCategoryIcon(selectedTicket.category)}
+                      size={13}
+                      color={colors.accent}
                     />
-                    <Text style={styles.infoCardLabel}>Status</Text>
                     <Text
-                      style={[
-                        styles.infoCardValue,
-                        { color: getStatusColor(selectedTicket.status) },
-                      ]}
+                      style={[styles.infoPillText, { color: colors.accent }]}
                     >
-                      {selectedTicket.status.charAt(0).toUpperCase() +
-                        selectedTicket.status.slice(1)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.infoCard}>
-                    <MaterialCommunityIcons
-                      name="flag"
-                      size={20}
-                      color={getPriorityColor(selectedTicket.priority)}
-                    />
-                    <Text style={styles.infoCardLabel}>Priority</Text>
-                    <Text
-                      style={[
-                        styles.infoCardValue,
-                        { color: getPriorityColor(selectedTicket.priority) },
-                      ]}
-                    >
-                      {selectedTicket.priority.toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.infoCardsGrid}>
-                  <View style={styles.infoCard}>
-                    <MaterialCommunityIcons
-                      name="tag-multiple"
-                      size={20}
-                      color="#f39c12"
-                    />
-                    <Text style={styles.infoCardLabel}>Category</Text>
-                    <Text style={styles.infoCardValue}>
                       {selectedTicket.category}
                     </Text>
                   </View>
-
-                  <View style={styles.infoCard}>
-                    <MaterialCommunityIcons
-                      name="message-reply-text-outline"
-                      size={20}
-                      color="#0a66c2"
-                    />
-                    <Text style={styles.infoCardLabel}>Replies</Text>
-                    <Text style={styles.infoCardValue}>
-                      {selectedTicket.replies?.length || 0}
-                    </Text>
-                  </View>
                 </View>
 
-                {/* Ticket Message */}
+                {/* Original message */}
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>
-                    <MaterialCommunityIcons
-                      name="message-text-outline"
-                      size={16}
-                      color="#0a66c2"
-                    />{" "}
-                    Your Message
-                  </Text>
-                  <View style={styles.messageContent}>
-                    <Text style={styles.messageText}>
+                  <Text style={styles.sectionLabel}>Your Message</Text>
+                  <View style={styles.messageBox}>
+                    <Text style={styles.messageBoxText}>
                       {selectedTicket.message}
                     </Text>
                   </View>
                 </View>
 
-                {/* Conversation Section */}
+                {/* Conversation */}
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>
-                    <MaterialCommunityIcons
-                      name="chat-outline"
-                      size={16}
-                      color="#0a66c2"
-                    />{" "}
+                  <Text style={styles.sectionLabel}>
                     Conversation ({selectedTicket.replies?.length || 0})
                   </Text>
 
                   {selectedTicket.replies &&
                   selectedTicket.replies.length > 0 ? (
-                    <View style={styles.messagesContainer}>
-                      {selectedTicket.replies.map((reply, index) => (
+                    selectedTicket.replies.map((reply, index) => {
+                      const isUser = reply.from === "user";
+                      return (
                         <View
                           key={index}
                           style={[
-                            styles.messageBubbleWrapper,
-                            reply.from === "user"
-                              ? styles.userBubbleWrapper
-                              : styles.adminBubbleWrapper,
+                            styles.bubbleWrap,
+                            isUser ? styles.bubbleRight : styles.bubbleLeft,
                           ]}
                         >
                           <View
                             style={[
-                              styles.messageBubble,
-                              reply.from === "user"
-                                ? styles.userBubble
-                                : styles.adminBubble,
+                              styles.bubble,
+                              isUser ? styles.bubbleUser : styles.bubbleAdmin,
                             ]}
                           >
-                            <View style={styles.messageHeader}>
+                            <View style={styles.bubbleHeader}>
                               <Text
                                 style={[
-                                  styles.messageSender,
-                                  reply.from === "user"
-                                    ? styles.userSender
-                                    : styles.adminSender,
+                                  styles.bubbleSender,
+                                  isUser
+                                    ? { color: colors.textOnAccent }
+                                    : { color: colors.accent },
                                 ]}
                               >
-                                {reply.from === "user"
-                                  ? "👤 You"
-                                  : "🔧 Support Team"}
+                                {isUser ? "You" : "Support Team"}
                               </Text>
-                              <Text style={styles.messageTimestamp}>
-                                {new Date(reply.createdAt).toLocaleString()}
+                              <Text
+                                style={[
+                                  styles.bubbleTime,
+                                  isUser
+                                    ? { color: "rgba(255,255,255,0.7)" }
+                                    : { color: "#94a3b8" },
+                                ]}
+                              >
+                                {formatTimeAgo(reply.createdAt)}
                               </Text>
                             </View>
                             <Text
                               style={[
-                                styles.messageTextContent,
-                                reply.from === "user"
-                                  ? styles.userMessageText
-                                  : styles.adminMessageText,
+                                styles.bubbleText,
+                                isUser
+                                  ? { color: colors.textOnAccent }
+                                  : { color: colors.text },
                               ]}
                             >
                               {reply.message}
                             </Text>
                           </View>
                         </View>
-                      ))}
-                    </View>
+                      );
+                    })
                   ) : (
-                    <Text style={styles.noReplies}>
-                      No replies yet. We'll get back to you soon!
-                    </Text>
+                    <View style={styles.noRepliesWrap}>
+                      <Ionicons
+                        name="chatbubble-ellipses-outline"
+                        size={24}
+                        color={colors.textTertiary}
+                      />
+                      <Text style={styles.noRepliesText}>
+                        No replies yet. We'll get back to you soon!
+                      </Text>
+                    </View>
                   )}
                 </View>
 
-                {/* Add Reply Section */}
+                {/* Reply input */}
                 {selectedTicket.status !== "closed" && (
                   <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Add Your Reply</Text>
+                    <Text style={styles.sectionLabel}>Add Reply</Text>
                     <TextInput
                       style={styles.replyInput}
-                      placeholder="Type your message here..."
+                      placeholder="Type your message…"
+                      placeholderTextColor={colors.placeholder}
                       multiline
                       numberOfLines={4}
                       value={newReply}
@@ -539,24 +571,25 @@ const MyTicketsScreen = ({ navigation }) => {
                       editable={!submitting}
                     />
                     <TouchableOpacity
-                      style={[
-                        styles.submitButton,
-                        submitting && styles.buttonDisabled,
-                      ]}
+                      style={[styles.sendBtn, submitting && { opacity: 0.6 }]}
                       onPress={handleAddReply}
                       disabled={submitting}
+                      activeOpacity={0.8}
                     >
                       {submitting ? (
                         <ActivityIndicator
                           size="small"
-                          color="#fff"
-                          style={{ marginRight: 8 }}
+                          color={colors.textOnAccent}
                         />
                       ) : (
-                        <MaterialIcons name="send" size={18} color="#fff" />
+                        <Ionicons
+                          name="send"
+                          size={16}
+                          color={colors.textOnAccent}
+                        />
                       )}
-                      <Text style={styles.submitButtonText}>
-                        {submitting ? "Sending..." : "Send Reply"}
+                      <Text style={styles.sendBtnText}>
+                        {submitting ? "Sending…" : "Send Reply"}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -564,432 +597,395 @@ const MyTicketsScreen = ({ navigation }) => {
               </ScrollView>
             )}
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f7fa",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#0a66c2",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 12,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: "#e3f2fd",
-    marginTop: 4,
-  },
-  ticketCountBadge: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  ticketCountText: {
-    fontSize: 14,
-    color: "#fff",
-    fontWeight: "700",
-  },
-  filterContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  filterTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    borderRadius: 16,
-    backgroundColor: "#f5f5f5",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderColor: "#eee",
-  },
-  filterTabActive: {
-    backgroundColor: "#0a66c2",
-    borderColor: "#0a66c2",
-  },
-  filterTabText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#555",
-  },
-  filterTabTextActive: {
-    color: "#fff",
-  },
-  filterTabBadge: {
-    backgroundColor: "rgba(0, 0, 0, 0.08)",
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 8,
-    minWidth: 20,
-    alignItems: "center",
-  },
-  filterTabBadgeActive: {
-    backgroundColor: "rgba(255, 255, 255, 0.25)",
-  },
-  filterTabBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#555",
-  },
-  filterTabBadgeTextActive: {
-    color: "#fff",
-  },
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 80,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#999",
-    marginTop: 20,
-  },
-  emptySubtext: {
-    fontSize: 13,
-    color: "#bbb",
-    marginTop: 8,
-  },
-  ticketCard: {
-    marginHorizontal: 16,
-    marginVertical: 16,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    flexDirection: "row",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-    overflow: "hidden",
-  },
-  cardLeftBorder: {
-    width: 4,
-    height: "100%",
-  },
-  cardContent: {
-    flex: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  cardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  cardTitleSection: {
-    flex: 1,
-    marginRight: 12,
-  },
-  badgeContainer: {
-    position: "relative",
-    alignItems: "center",
-  },
-  unreadDotIndicator: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#e74c3c",
-    borderWidth: 2,
-    borderColor: "#fff",
-  },
-  ticketSubject: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#1a202c",
-    marginBottom: 4,
-  },
-  ticketMeta: {
-    fontSize: 11,
-    color: "#666",
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  statusText: {
-    fontSize: 11,
-    color: "#fff",
-    fontWeight: "700",
-  },
-  messagePreview: {
-    fontSize: 12,
-    color: "#666",
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  cardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
-  },
-  footerItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  footerText: {
-    fontSize: 11,
-    color: "#666",
-    fontWeight: "500",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f8f9fa",
-  },
-  loadingText: {
-    marginTop: 12,
-    color: "#666",
-    fontSize: 14,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  modalContent: {
-    flex: 1,
-    backgroundColor: "#fff",
-    marginTop: 40,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1a202c",
-  },
-  modalSubtitle: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 4,
-    fontWeight: "500",
-  },
-  closeButton: {
-    padding: 8,
-  },
-  detailsContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  infoCardsGrid: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  infoCard: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-  },
-  infoCardLabel: {
-    fontSize: 11,
-    color: "#666",
-    fontWeight: "600",
-    marginTop: 8,
-  },
-  infoCardValue: {
-    fontSize: 13,
-    color: "#1a202c",
-    fontWeight: "700",
-    marginTop: 4,
-    textAlign: "center",
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#1a202c",
-    marginBottom: 12,
-  },
-  messageContent: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    padding: 14,
-    borderLeftWidth: 3,
-    borderLeftColor: "#0a66c2",
-  },
-  messageText: {
-    fontSize: 13,
-    color: "#333",
-    lineHeight: 20,
-  },
-  replyBox: {
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderLeftWidth: 3,
-  },
-  messagesContainer: {
-    marginVertical: 12,
-    paddingVertical: 8,
-  },
-  messageBubbleWrapper: {
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  userBubbleWrapper: {
-    alignItems: "flex-end",
-  },
-  adminBubbleWrapper: {
-    alignItems: "flex-start",
-  },
-  messageBubble: {
-    maxWidth: "85%",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 16,
-  },
-  userBubble: {
-    backgroundColor: "#0a66c2",
-    borderBottomRightRadius: 4,
-  },
-  adminBubble: {
-    backgroundColor: "#f0f0f0",
-    borderBottomLeftRadius: 4,
-  },
-  messageHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
-    gap: 8,
-  },
-  messageSender: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  userSender: {
-    color: "#fff",
-  },
-  adminSender: {
-    color: "#0a66c2",
-  },
-  messageTimestamp: {
-    fontSize: 11,
-    color: "#999",
-  },
-  messageTextContent: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  userMessageText: {
-    color: "#fff",
-  },
-  adminMessageText: {
-    color: "#333",
-  },
-  replyFrom: {
-    fontSize: 12,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  replyText: {
-    fontSize: 12,
-    color: "#333",
-    lineHeight: 18,
-    marginBottom: 6,
-  },
-  replyTime: {
-    fontSize: 10,
-    color: "#999",
-  },
-  noReplies: {
-    fontSize: 12,
-    color: "#999",
-    textAlign: "center",
-    paddingVertical: 20,
-  },
-  replyInput: {
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 13,
-    color: "#333",
-    textAlignVertical: "top",
-    marginBottom: 12,
-  },
-  submitButton: {
-    flexDirection: "row",
-    backgroundColor: "#0a66c2",
-    borderRadius: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 10,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: "#666",
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 60,
-  },
-});
+/* ═══════════════════════ STYLES ═══════════════════════ */
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centerContent: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+
+    /* Filters */
+    filterScroll: {
+      backgroundColor: colors.card,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.divider,
+    },
+    filterBar: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      gap: 8,
+    },
+    filterChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 18,
+      backgroundColor: colors.background,
+      gap: 5,
+    },
+    filterChipActive: {
+      backgroundColor: colors.accent,
+    },
+    filterText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    filterTextActive: {
+      color: "#fff",
+    },
+    filterCount: {
+      backgroundColor: "rgba(0,0,0,0.06)",
+      borderRadius: 8,
+      minWidth: 18,
+      height: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 4,
+    },
+    filterCountActive: {
+      backgroundColor: "rgba(255,255,255,0.25)",
+    },
+    filterCountText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.textSecondary,
+    },
+    filterCountTextActive: {
+      color: "#fff",
+    },
+
+    /* Empty */
+    emptyWrap: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 40,
+      paddingTop: 80,
+    },
+    emptyIconWrap: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.inputBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    emptyTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 6,
+    },
+    emptyText: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      textAlign: "center",
+      lineHeight: 19,
+    },
+    emptyRefresh: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 20,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: "#b38604",
+      gap: 6,
+    },
+    emptyRefreshText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+
+    /* List */
+    listContent: {
+      padding: 14,
+      paddingBottom: 24,
+    },
+
+    /* Card */
+    card: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 8,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    cardIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
+      marginTop: 2,
+    },
+    cardBody: {
+      flex: 1,
+    },
+    cardTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 3,
+    },
+    cardTitle: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    unreadDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: "#ef4444",
+      marginLeft: 6,
+    },
+    cardMessage: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 17,
+      marginBottom: 8,
+    },
+    cardMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    pill: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 8,
+      gap: 3,
+    },
+    pillText: {
+      fontSize: 10,
+      fontWeight: "700",
+    },
+    metaItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+    },
+    metaText: {
+      fontSize: 10,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+
+    /* Modal */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 22,
+      borderTopRightRadius: 22,
+      maxHeight: "92%",
+      flex: 1,
+      marginTop: 40,
+    },
+    dragHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.skeleton,
+      alignSelf: "center",
+      marginTop: 10,
+      marginBottom: 6,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderLight,
+    },
+    modalTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    modalSubtitle: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    modalCloseBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+      marginLeft: 10,
+    },
+    modalBody: {
+      flex: 1,
+      paddingHorizontal: 18,
+      paddingTop: 14,
+    },
+
+    /* Info pills */
+    infoPillRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 18,
+    },
+    infoPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
+      gap: 5,
+    },
+    infoPillText: {
+      fontSize: 12,
+      fontWeight: "600",
+    },
+
+    /* Section */
+    section: {
+      marginBottom: 20,
+    },
+    sectionLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 10,
+    },
+
+    /* Message box */
+    messageBox: {
+      backgroundColor: colors.cardAlt,
+      borderRadius: 12,
+      padding: 14,
+      borderLeftWidth: 3,
+      borderLeftColor: "#b38604",
+    },
+    messageBoxText: {
+      fontSize: 13,
+      color: colors.text,
+      lineHeight: 20,
+    },
+
+    /* Bubbles */
+    bubbleWrap: {
+      marginBottom: 12,
+    },
+    bubbleRight: {
+      alignItems: "flex-end",
+    },
+    bubbleLeft: {
+      alignItems: "flex-start",
+    },
+    bubble: {
+      maxWidth: "85%",
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 16,
+    },
+    bubbleUser: {
+      backgroundColor: colors.accent,
+      borderBottomRightRadius: 4,
+    },
+    bubbleAdmin: {
+      backgroundColor: colors.background,
+      borderBottomLeftRadius: 4,
+    },
+    bubbleHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 4,
+      gap: 8,
+    },
+    bubbleSender: {
+      fontSize: 11,
+      fontWeight: "700",
+    },
+    bubbleTime: {
+      fontSize: 10,
+    },
+    bubbleText: {
+      fontSize: 13,
+      lineHeight: 19,
+    },
+    noRepliesWrap: {
+      alignItems: "center",
+      paddingVertical: 24,
+      gap: 8,
+    },
+    noRepliesText: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      textAlign: "center",
+    },
+
+    /* Reply input */
+    replyInput: {
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 13,
+      color: colors.text,
+      textAlignVertical: "top",
+      minHeight: 90,
+      marginBottom: 12,
+    },
+    sendBtn: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 13,
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+    },
+    sendBtnText: {
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: "700",
+    },
+  });
 
 export default MyTicketsScreen;

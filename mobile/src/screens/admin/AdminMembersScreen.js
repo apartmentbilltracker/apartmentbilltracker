@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useMemo} from "react";
 import { useIsFocused } from "@react-navigation/native";
 import {
   View,
@@ -12,12 +12,17 @@ import {
   Alert,
   RefreshControl,
   Image,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { roomService, memberService } from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
+import { useTheme } from "../../theme/ThemeContext";
 
 const AdminMembersScreen = ({ navigation, route }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { state } = useContext(AuthContext);
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -33,6 +38,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
   const [memberName, setMemberName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [isPayer, setIsPayer] = useState(true);
+  const [pendingMembers, setPendingMembers] = useState([]);
 
   useEffect(() => {
     fetchRooms();
@@ -51,9 +57,25 @@ const AdminMembersScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     if (selectedRoom) {
-      setMembers(selectedRoom.members || []);
+      const approvedMembers = (selectedRoom.members || []).filter(
+        (m) => m.status !== "pending",
+      );
+      setMembers(approvedMembers);
+      fetchPendingMembers();
     }
   }, [selectedRoom]);
+
+  const fetchPendingMembers = async () => {
+    if (!selectedRoom) return;
+    try {
+      const roomId = selectedRoom.id || selectedRoom._id;
+      const response = await memberService.getPendingMembers(roomId);
+      setPendingMembers(response.pendingMembers || []);
+    } catch (error) {
+      console.log("Error fetching pending members:", error);
+      setPendingMembers([]);
+    }
+  };
 
   const fetchRooms = async (isRefresh = false) => {
     try {
@@ -66,8 +88,9 @@ const AdminMembersScreen = ({ navigation, route }) => {
 
       // Update selectedRoom with fresh data if it exists
       if (selectedRoom && allRooms.length > 0) {
+        const selectedId = selectedRoom.id || selectedRoom._id;
         const updatedSelectedRoom = allRooms.find(
-          (r) => r._id === selectedRoom._id,
+          (r) => (r.id || r._id) === selectedId,
         );
         if (updatedSelectedRoom) {
           setSelectedRoom(updatedSelectedRoom);
@@ -75,7 +98,9 @@ const AdminMembersScreen = ({ navigation, route }) => {
         }
       } else if (
         !selectedRoom ||
-        !allRooms.some((r) => r._id === selectedRoom?._id)
+        !allRooms.some(
+          (r) => (r.id || r._id) === (selectedRoom?.id || selectedRoom?._id),
+        )
       ) {
         // If no room is selected or previously selected room was removed, pick the first
         if (allRooms.length > 0) setSelectedRoom(allRooms[0]);
@@ -99,7 +124,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
 
     try {
       setAdding(true);
-      await memberService.addMember(selectedRoom._id, {
+      await memberService.addMember(selectedRoom.id || selectedRoom._id, {
         email: memberEmail.trim(),
       });
       await fetchRooms();
@@ -132,7 +157,10 @@ const AdminMembersScreen = ({ navigation, route }) => {
           style: "destructive",
           onPress: async () => {
             try {
-              await memberService.deleteMember(selectedRoom._id, memberId);
+              await memberService.deleteMember(
+                selectedRoom.id || selectedRoom._id,
+                memberId,
+              );
               await fetchRooms();
               Alert.alert("Success", "Member deleted successfully");
             } catch (error) {
@@ -149,12 +177,16 @@ const AdminMembersScreen = ({ navigation, route }) => {
     try {
       // Optimistic update: update UI immediately
       const updatedMembers = (selectedRoom.members || []).map((m) =>
-        m._id === memberId ? { ...m, isPayer: !isCurrentlyPayer } : m,
+        (m.id || m._id) === memberId ? { ...m, isPayer: !isCurrentlyPayer } : m,
       );
       setMembers(updatedMembers);
-      await memberService.updateMember(selectedRoom._id, memberId, {
-        isPayer: !isCurrentlyPayer,
-      });
+      await memberService.updateMember(
+        selectedRoom.id || selectedRoom._id,
+        memberId,
+        {
+          isPayer: !isCurrentlyPayer,
+        },
+      );
       await fetchRooms();
     } catch (error) {
       console.error("Error toggling payor:", error);
@@ -162,6 +194,60 @@ const AdminMembersScreen = ({ navigation, route }) => {
       // revert by re-fetching
       await fetchRooms();
     }
+  };
+
+  const handleApproveMember = async (memberId, memberName) => {
+    if (!selectedRoom) return;
+    Alert.alert(
+      "Approve Member",
+      `Approve ${memberName} to join ${selectedRoom.name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Approve",
+          onPress: async () => {
+            try {
+              await memberService.approveMember(
+                selectedRoom.id || selectedRoom._id,
+                memberId,
+              );
+              Alert.alert("Success", `${memberName} has been approved!`);
+              await fetchRooms();
+              await fetchPendingMembers();
+            } catch (error) {
+              Alert.alert("Error", "Failed to approve member");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleRejectMember = async (memberId, memberName) => {
+    if (!selectedRoom) return;
+    Alert.alert(
+      "Reject Request",
+      `Reject ${memberName}'s request to join ${selectedRoom.name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reject",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await memberService.rejectMember(
+                selectedRoom.id || selectedRoom._id,
+                memberId,
+              );
+              Alert.alert("Done", `${memberName}'s request has been rejected.`);
+              await fetchPendingMembers();
+            } catch (error) {
+              Alert.alert("Error", "Failed to reject request");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const filteredMembers = members.filter((member) =>
@@ -172,64 +258,85 @@ const AdminMembersScreen = ({ navigation, route }) => {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#b38604" />
+      <View style={styles.centerWrap}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={styles.loadingLabel}>Loading members...</Text>
       </View>
     );
   }
 
+  const payerCount = members.filter(
+    (m) => m.isPayer || m.is_payer,
+  ).length;
+
   return (
     <ScrollView
       style={styles.container}
+      contentContainerStyle={{ paddingBottom: 30 }}
+      showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => fetchRooms(true)}
+          tintcolor={colors.accent}
+          colors={["#b38604"]}
         />
       }
     >
       {/* Room Selector */}
-      <View style={styles.roomSelectorContainer}>
-        <Text style={styles.roomSelectorTitle}>Select a Room</Text>
+      <View style={styles.roomSelector}>
+        <Text style={styles.roomSelectorLabel}>Select Room</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.roomSelectorScroll}
+          contentContainerStyle={{ gap: 8 }}
         >
-          {rooms.map((item) => (
-            <TouchableOpacity
-              key={item._id}
-              style={[
-                styles.roomTab,
-                selectedRoom?._id === item._id && styles.roomTabActive,
-              ]}
-              onPress={() => setSelectedRoom(item)}
-            >
-              <Text
-                style={[
-                  styles.roomTabText,
-                  selectedRoom?._id === item._id && styles.roomTabTextActive,
-                ]}
+          {rooms.map((item) => {
+            const active =
+              (selectedRoom?.id || selectedRoom?._id) ===
+              (item.id || item._id);
+            return (
+              <TouchableOpacity
+                key={item.id || item._id}
+                style={[styles.roomChip, active && styles.roomChipActive]}
+                activeOpacity={0.7}
+                onPress={() => setSelectedRoom(item)}
               >
-                {item.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Ionicons
+                  name="home"
+                  size={12}
+                  color={active ? "#fff" : "#999"}
+                />
+                <Text
+                  style={[
+                    styles.roomChipText,
+                    active && styles.roomChipTextActive,
+                  ]}
+                >
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
       {selectedRoom && (
         <>
-          {/* Header Section */}
-          <View style={styles.headerSection}>
-            <View>
-              <Text style={styles.memberCountTitle}>
-                {members.length} Members
+          {/* Summary Strip */}
+          <View style={styles.summaryStrip}>
+            <View style={[styles.stripIconWrap, { backgroundColor: colors.accentSurface }]}>
+              <Ionicons name="people" size={18} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stripTitle}>{selectedRoom.name}</Text>
+              <Text style={styles.stripSubtitle}>
+                {members.length} member{members.length !== 1 ? "s" : ""} · {payerCount} payer{payerCount !== 1 ? "s" : ""}
               </Text>
-              <Text style={styles.roomNameSubtitle}>{selectedRoom.name}</Text>
             </View>
             <TouchableOpacity
-              style={styles.addMemberQuickButton}
+              style={styles.addBtn}
+              activeOpacity={0.7}
               onPress={() => {
                 setShowAddForm(!showAddForm);
                 if (!showAddForm) {
@@ -238,163 +345,358 @@ const AdminMembersScreen = ({ navigation, route }) => {
                 }
               }}
             >
-              <Ionicons name="add" size={24} color="#fff" />
+              <Ionicons
+                name={showAddForm ? "close" : "person-add"}
+                size={16}
+                color={colors.textOnAccent}
+              />
             </TouchableOpacity>
           </View>
 
-          {/* Search Bar */}
+          {/* Search */}
           {members.length > 0 && (
-            <View style={styles.searchContainer}>
-              <Ionicons name="search" size={18} color="#999" />
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={15} color={colors.textTertiary} />
               <TextInput
-                style={styles.searchInputField}
+                style={styles.searchInput}
                 placeholder="Search members..."
+                placeholderTextColor={colors.textTertiary}
                 value={searchTerm}
                 onChangeText={setSearchTerm}
               />
+              {searchTerm.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchTerm("")}>
+                  <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
-          {/* Add Member Form Modal-like */}
+          {/* Add Member Form */}
           {showAddForm && (
             <View style={styles.addFormCard}>
-              <View style={styles.formHeader}>
-                <Text style={styles.formTitle}>Add New Member</Text>
-                <TouchableOpacity onPress={() => setShowAddForm(false)}>
-                  <Ionicons name="close" size={24} color="#333" />
+              <View style={styles.addFormHeader}>
+                <View style={styles.addFormHeaderLeft}>
+                  <View
+                    style={[
+                      styles.addFormIconWrap,
+                      { backgroundColor: colors.accentSurface },
+                    ]}
+                  >
+                    <Ionicons name="person-add" size={16} color={colors.accent} />
+                  </View>
+                  <Text style={styles.addFormTitle}>Add New Member</Text>
+                </View>
+                <TouchableOpacity
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPress={() => setShowAddForm(false)}
+                >
+                  <Ionicons name="close" size={20} color={colors.textTertiary} />
                 </TouchableOpacity>
               </View>
               <TextInput
-                style={styles.formInput}
+                style={styles.addFormInput}
                 placeholder="Enter member email"
+                placeholderTextColor={colors.textTertiary}
                 value={memberEmail}
                 onChangeText={setMemberEmail}
                 keyboardType="email-address"
+                autoCapitalize="none"
                 editable={!adding}
               />
               <TouchableOpacity
-                style={[
-                  styles.formSubmitButton,
-                  adding && styles.buttonDisabled,
-                ]}
+                style={[styles.addFormSubmitBtn, adding && { opacity: 0.6 }]}
+                activeOpacity={0.7}
                 onPress={handleAddMember}
                 disabled={adding}
               >
                 {adding ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={colors.textOnAccent} size="small" />
                 ) : (
-                  <Text style={styles.formSubmitText}>Add Member</Text>
+                  <>
+                    <Ionicons name="checkmark" size={16} color={colors.textOnAccent} />
+                    <Text style={styles.addFormSubmitText}>Add Member</Text>
+                  </>
                 )}
               </TouchableOpacity>
             </View>
           )}
 
-          {/* Members List */}
-          {members.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={48} color="#b38604" />
-              <Text style={styles.emptyText}>No members yet</Text>
-              <TouchableOpacity
-                style={styles.emptyActionButton}
-                onPress={() => setShowAddForm(true)}
-              >
-                <Text style={styles.emptyActionText}>Add First Member</Text>
-              </TouchableOpacity>
-            </View>
-          ) : filteredMembers.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No members matching search</Text>
-            </View>
-          ) : (
-            <View style={styles.membersListContainer}>
-              <FlatList
-                data={filteredMembers}
-                keyExtractor={(item) => item._id}
-                scrollEnabled={false}
-                renderItem={({ item }) => {
-                  const presenceDays = item.presence ? item.presence.length : 0;
-                  return (
-                    <View style={styles.memberCard}>
-                      <View style={styles.memberLeft}>
-                        {item.user?.avatar?.url ? (
-                          <Image
-                            source={{ uri: item.user.avatar.url }}
-                            style={styles.memberAvatar}
-                          />
-                        ) : (
-                          <View style={styles.memberAvatarPlaceholder}>
-                            <Text style={styles.memberAvatarText}>
-                              {(item.user?.name || "U").charAt(0).toUpperCase()}
-                            </Text>
+          {/* Pending Join Requests */}
+          {pendingMembers.length > 0 && (
+            <View style={styles.sectionWrap}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionHeaderLeft}>
+                  <View
+                    style={[
+                      styles.sectionIconWrap,
+                      { backgroundColor: colors.accentSurface },
+                    ]}
+                  >
+                    <Ionicons name="time" size={14} color="#e67e22" />
+                  </View>
+                  <Text style={[styles.sectionTitle, { color: "#e67e22" }]}>
+                    Pending Requests
+                  </Text>
+                </View>
+                <View style={styles.pendingCountBadge}>
+                  <Text style={styles.pendingCountText}>
+                    {pendingMembers.length}
+                  </Text>
+                </View>
+              </View>
+              {pendingMembers.map((item) => {
+                const initial = (
+                  item.user?.name ||
+                  item.name ||
+                  "U"
+                )
+                  .charAt(0)
+                  .toUpperCase();
+                return (
+                  <View key={item.id || item._id} style={styles.pendingCard}>
+                    <View style={styles.pendingLeft}>
+                      {item.user?.avatar?.url ? (
+                        <Image
+                          source={{ uri: item.user.avatar.url }}
+                          style={styles.pendingAvatar}
+                        />
+                      ) : (
+                        <View style={styles.pendingAvatarFallback}>
+                          <Text style={styles.pendingAvatarText}>
+                            {initial}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.pendingName} numberOfLines={1}>
+                          {item.user?.name || item.name || "Unknown"}
+                        </Text>
+                        <Text style={styles.pendingEmail} numberOfLines={1}>
+                          {item.user?.email || item.email || ""}
+                        </Text>
+                        <View style={styles.pendingChipRow}>
+                          <View style={styles.pendingChip}>
+                            <Ionicons
+                              name="hourglass"
+                              size={9}
+                              color="#e67e22"
+                            />
+                            <Text style={styles.pendingChipText}>Pending</Text>
                           </View>
-                        )}
-                        <View style={styles.memberDetails}>
-                          <Text style={styles.memberName}>
-                            {item.user?.name || item.name || "Unknown"}
-                          </Text>
-                          <Text style={styles.memberEmail}>
-                            {item.user?.email || item.email}
-                          </Text>
-                          <View style={styles.memberMetaRow}>
-                            <View
-                              style={[
-                                styles.payorBadge,
-                                item.isPayer
-                                  ? styles.payorBadgeActive
-                                  : styles.payorBadgeInactive,
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.payorBadgeText,
-                                  item.isPayer
-                                    ? styles.payorBadgeTextActive
-                                    : styles.payorBadgeTextInactive,
-                                ]}
-                              >
-                                {item.isPayer ? "Payor" : "Non-payor"}
-                              </Text>
-                            </View>
-                            {presenceDays > 0 && (
-                              <Text style={styles.presenceTag}>
-                                📅 {presenceDays} days
-                              </Text>
-                            )}
+                          <View style={styles.payerInfoChip}>
+                            <Text style={styles.payerInfoChipText}>
+                              {item.isPayer ? "Payor" : "Non-payor"}
+                            </Text>
                           </View>
                         </View>
                       </View>
-                      <View style={styles.memberActions}>
-                        <TouchableOpacity
-                          style={[
-                            styles.actionButton,
-                            item.isPayer
-                              ? styles.actionButtonActive
-                              : styles.actionButtonInactive,
-                          ]}
-                          onPress={() =>
-                            handleTogglePayer(item._id, item.isPayer)
-                          }
-                        >
-                          <Ionicons
-                            name={
-                              item.isPayer
-                                ? "checkmark-circle"
-                                : "ellipse-outline"
+                    </View>
+                    <View style={styles.pendingActions}>
+                      <TouchableOpacity
+                        style={styles.approveBtn}
+                        activeOpacity={0.7}
+                        onPress={() =>
+                          handleApproveMember(
+                            item.id || item._id,
+                            item.user?.name || item.name || "Member",
+                          )
+                        }
+                      >
+                        <Ionicons name="checkmark" size={18} color={colors.textOnAccent} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.rejectBtn}
+                        activeOpacity={0.7}
+                        onPress={() =>
+                          handleRejectMember(
+                            item.id || item._id,
+                            item.user?.name || item.name || "Member",
+                          )
+                        }
+                      >
+                        <Ionicons name="close" size={18} color={colors.textOnAccent} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Members List */}
+          {members.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="people-outline" size={36} color={colors.accent} />
+              </View>
+              <Text style={styles.emptyTitle}>No Members Yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Add the first member to get started.
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyActionBtn}
+                activeOpacity={0.7}
+                onPress={() => setShowAddForm(true)}
+              >
+                <Ionicons name="person-add" size={14} color={colors.textOnAccent} />
+                <Text style={styles.emptyActionText}>Add Member</Text>
+              </TouchableOpacity>
+            </View>
+          ) : filteredMembers.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="search" size={36} color={colors.textSecondary} />
+              </View>
+              <Text style={styles.emptyTitle}>No Results</Text>
+              <Text style={styles.emptySubtitle}>
+                No members match "{searchTerm}"
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.sectionWrap}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionHeaderLeft}>
+                  <View
+                    style={[
+                      styles.sectionIconWrap,
+                      { backgroundColor: colors.successBg },
+                    ]}
+                  >
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={14}
+                      color={colors.success}
+                    />
+                  </View>
+                  <Text style={styles.sectionTitle}>Active Members</Text>
+                </View>
+              </View>
+
+              <FlatList
+                data={filteredMembers}
+                keyExtractor={(item) => item.id || item._id}
+                scrollEnabled={false}
+                renderItem={({ item }) => {
+                  const presenceDays = item.presence
+                    ? item.presence.length
+                    : 0;
+                  const isPayer = item.isPayer || item.is_payer;
+                  const initial = (item.user?.name || item.name || "U")
+                    .charAt(0)
+                    .toUpperCase();
+
+                  return (
+                    <View style={styles.memberCard}>
+                      {/* Top row: avatar + info + actions */}
+                      <View style={styles.memberCardTop}>
+                        <View style={styles.memberCardLeft}>
+                          {item.user?.avatar?.url ? (
+                            <Image
+                              source={{ uri: item.user.avatar.url }}
+                              style={styles.memberAvatar}
+                            />
+                          ) : (
+                            <View style={styles.memberAvatarFallback}>
+                              <Text style={styles.memberAvatarText}>
+                                {initial}
+                              </Text>
+                            </View>
+                          )}
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.memberName} numberOfLines={1}>
+                              {item.user?.name || item.name || "Unknown"}
+                            </Text>
+                            <Text style={styles.memberEmail} numberOfLines={1}>
+                              {item.user?.email || item.email}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.memberCardActions}>
+                          <TouchableOpacity
+                            style={[
+                              styles.payerToggle,
+                              isPayer
+                                ? styles.payerToggleOn
+                                : styles.payerToggleOff,
+                            ]}
+                            activeOpacity={0.7}
+                            onPress={() =>
+                              handleTogglePayer(item.id || item._id, isPayer)
                             }
-                            size={20}
-                            color={item.isPayer ? "#fff" : "#28a745"}
-                          />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.deleteButton}
-                          onPress={() => handleDeleteMember(item._id)}
+                          >
+                            <Ionicons
+                              name={
+                                isPayer
+                                  ? "checkmark-circle"
+                                  : "ellipse-outline"
+                              }
+                              size={16}
+                              color={isPayer ? "#fff" : colors.success}
+                            />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.deleteBtn}
+                            activeOpacity={0.7}
+                            onPress={() =>
+                              handleDeleteMember(item.id || item._id)
+                            }
+                          >
+                            <Ionicons
+                              name="trash-outline"
+                              size={16}
+                              color={colors.error}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Bottom chips */}
+                      <View style={styles.memberChipRow}>
+                        <View
+                          style={[
+                            styles.memberChip,
+                            isPayer
+                              ? { backgroundColor: colors.successBg }
+                              : { backgroundColor: colors.inputBg },
+                          ]}
                         >
                           <Ionicons
-                            name="trash-outline"
-                            size={20}
-                            color="#c62828"
+                            name={isPayer ? "wallet" : "wallet-outline"}
+                            size={11}
+                            color={isPayer ? colors.success : "#999"}
                           />
-                        </TouchableOpacity>
+                          <Text
+                            style={[
+                              styles.memberChipText,
+                              { color: isPayer ? colors.success : "#999" },
+                            ]}
+                          >
+                            {isPayer ? "Payor" : "Non-payor"}
+                          </Text>
+                        </View>
+                        {presenceDays > 0 && (
+                          <View
+                            style={[
+                              styles.memberChip,
+                              { backgroundColor: colors.infoBg },
+                            ]}
+                          >
+                            <Ionicons
+                              name="calendar"
+                              size={11}
+                              color={colors.info}
+                            />
+                            <Text
+                              style={[
+                                styles.memberChipText,
+                                { color: colors.waterColor },
+                              ]}
+                            >
+                              {presenceDays} day{presenceDays !== 1 ? "s" : ""}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                   );
@@ -408,294 +710,423 @@ const AdminMembersScreen = ({ navigation, route }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+const createStyles = (colors) => StyleSheet.create({
+  /* ── Layout ── */
+  container: { flex: 1, backgroundColor: colors.background },
+  centerWrap: {
     flex: 1,
-    backgroundColor: "#f8f8f8",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background,
   },
+  loadingLabel: { fontSize: 13, color: colors.textTertiary, marginTop: 10 },
 
-  // Room Selector
-  roomSelectorContainer: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+  /* ── Room Selector ── */
+  roomSelector: {
+    backgroundColor: colors.card,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e5e5e5",
   },
-  roomSelectorTitle: {
-    fontSize: 14,
+  roomSelectorLabel: {
+    fontSize: 11,
     fontWeight: "600",
-    color: "#666",
+    color: colors.textTertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
     marginBottom: 8,
   },
-  roomSelectorScroll: {
-    flexGrow: 0,
-  },
-  roomTab: {
+  roomChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    marginRight: 8,
-    borderRadius: 20,
-    backgroundColor: "#f0f0f0",
+    borderRadius: 10,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: colors.border,
   },
-  roomTabActive: {
-    backgroundColor: "#b38604",
+  roomChipActive: {
+    backgroundColor: colors.accent,
     borderColor: "#b38604",
   },
-  roomTabText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#666",
-  },
-  roomTabTextActive: {
-    color: "#fff",
-    fontWeight: "600",
-  },
+  roomChipText: { fontSize: 13, fontWeight: "600", color: colors.textTertiary },
+  roomChipTextActive: { color: "#fff" },
 
-  // Header Section
-  headerSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#fff",
+  /* ── Summary Strip ── */
+  summaryStrip: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    backgroundColor: colors.card,
+    marginHorizontal: 14,
+    marginTop: 14,
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+      },
+      android: { elevation: 2 },
+    }),
   },
-  memberCountTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1a1a1a",
-    marginBottom: 2,
+  stripIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  roomNameSubtitle: {
-    fontSize: 12,
-    color: "#999",
-  },
-  addMemberQuickButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#b38604",
+  stripTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  stripSubtitle: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
+  addBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.accent,
     justifyContent: "center",
     alignItems: "center",
   },
 
-  // Search
-  searchContainer: {
-    marginHorizontal: 16,
-    marginVertical: 12,
+  /* ── Search ── */
+  searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 8,
+    gap: 8,
+    marginHorizontal: 14,
+    marginTop: 12,
+    backgroundColor: colors.card,
+    borderRadius: 10,
     paddingHorizontal: 12,
+    paddingVertical: 0,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: colors.border,
   },
-  searchInputField: {
+  searchInput: {
     flex: 1,
-    padding: 10,
     fontSize: 14,
+    color: colors.text,
+    paddingVertical: 10,
+  },
+
+  /* ── Add Form ── */
+  addFormCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    marginHorizontal: 14,
+    marginTop: 12,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: "#b38604",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#b38604",
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+      },
+      android: { elevation: 3 },
+    }),
+  },
+  addFormHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  addFormHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  addFormIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addFormTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
+  addFormInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: colors.text,
+    backgroundColor: colors.cardAlt,
+    marginBottom: 12,
+  },
+  addFormSubmitBtn: {
+    backgroundColor: colors.accent,
+    borderRadius: 10,
+    paddingVertical: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+  },
+  addFormSubmitText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+
+  /* ── Section ── */
+  sectionWrap: { marginHorizontal: 14, marginTop: 16 },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  sectionHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sectionIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sectionTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
+  pendingCountBadge: {
+    backgroundColor: "#e67e22",
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pendingCountText: { color: "#fff", fontSize: 11, fontWeight: "800" },
+
+  /* ── Pending Card ── */
+  pendingCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    borderLeftWidth: 3,
+    borderLeftColor: "#e67e22",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1 },
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  pendingLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  pendingAvatar: { width: 38, height: 38, borderRadius: 19 },
+  pendingAvatarFallback: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.accentSurface,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pendingAvatarText: { fontSize: 15, fontWeight: "700", color: "#e67e22" },
+  pendingName: { fontSize: 14, fontWeight: "600", color: colors.text },
+  pendingEmail: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
+  pendingChipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 6,
+  },
+  pendingChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: colors.accentSurface,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  pendingChipText: { fontSize: 10, fontWeight: "600", color: "#e67e22" },
+  payerInfoChip: {
+    backgroundColor: colors.background,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  payerInfoChipText: { fontSize: 10, fontWeight: "600", color: colors.textTertiary },
+  pendingActions: {
+    flexDirection: "row",
+    gap: 6,
     marginLeft: 8,
   },
-
-  // Add Form
-  addFormCard: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    padding: 14,
-    backgroundColor: "#fff",
+  approveBtn: {
+    width: 34,
+    height: 34,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#b38604",
+    backgroundColor: colors.success,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  formHeader: {
+  rejectBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#e53935",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  /* ── Member Card ── */
+  memberCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1 },
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  memberCardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
   },
-  formTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
-  },
-  formInput: {
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 12,
-    fontSize: 14,
-    backgroundColor: "#f9f9f9",
-  },
-  formSubmitButton: {
-    backgroundColor: "#b38604",
-    paddingVertical: 11,
-    borderRadius: 6,
-    alignItems: "center",
-  },
-  formSubmitText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-
-  // Members List
-  membersListContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  memberCard: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    marginBottom: 10,
+  memberCardLeft: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  memberLeft: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
+    gap: 10,
   },
   memberAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-    backgroundColor: "#b38604",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.inputBg,
   },
-  memberAvatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#b38604",
+  memberAvatarFallback: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.accentSurface,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
   },
-  memberAvatarText: {
-    color: "#fff",
-    fontWeight: "700",
+  memberAvatarText: { fontSize: 15, fontWeight: "700", color: colors.accent },
+  memberName: { fontSize: 14, fontWeight: "600", color: colors.text },
+  memberEmail: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
+  memberCardActions: {
+    flexDirection: "row",
+    gap: 6,
+    marginLeft: 8,
+  },
+  payerToggle: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  payerToggleOn: { backgroundColor: colors.success },
+  payerToggleOff: {
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.success,
+  },
+  deleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.errorBg,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  memberChipRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+  },
+  memberChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  memberChipText: { fontSize: 11, fontWeight: "600" },
+
+  /* ── Empty State ── */
+  emptyCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    marginHorizontal: 14,
+    marginTop: 24,
+    padding: 32,
+    alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1 },
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  emptyIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.accentSurface,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  emptyTitle: {
     fontSize: 16,
-  },
-  memberDetails: {
-    flex: 1,
-  },
-  memberName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 2,
-  },
-  memberEmail: {
-    fontSize: 12,
-    color: "#999",
+    fontWeight: "700",
+    color: colors.text,
     marginBottom: 4,
   },
-  memberMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  payorBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  payorBadgeActive: {
-    backgroundColor: "#e8f5e9",
-    borderColor: "#28a745",
-  },
-  payorBadgeInactive: {
-    backgroundColor: "#f5f5f5",
-    borderColor: "#ddd",
-  },
-  payorBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  payorBadgeTextActive: {
-    color: "#28a745",
-  },
-  payorBadgeTextInactive: {
-    color: "#666",
-  },
-  presenceTag: {
-    fontSize: 11,
-    color: "#0066cc",
-    fontWeight: "500",
-    backgroundColor: "#e3f2fd",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  memberActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  actionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  actionButtonActive: {
-    backgroundColor: "#28a745",
-  },
-  actionButtonInactive: {
-    backgroundColor: "#f0f0f0",
-    borderWidth: 1,
-    borderColor: "#28a745",
-  },
-  deleteButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#ffebee",
-  },
-
-  // Empty State
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 50,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#999",
+  emptySubtitle: {
+    fontSize: 13,
+    color: colors.textTertiary,
     textAlign: "center",
+    lineHeight: 18,
     marginBottom: 16,
   },
-  emptyActionButton: {
-    backgroundColor: "#b38604",
+  emptyActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.accent,
+    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 6,
   },
-  emptyActionText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 13,
-  },
+  emptyActionText: { color: "#fff", fontWeight: "700", fontSize: 13 },
 });
 
 export default AdminMembersScreen;

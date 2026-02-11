@@ -1,4 +1,5 @@
 import React from "react";
+import { View, Text, StyleSheet, Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +17,7 @@ import GCashPaymentScreen from "../screens/client/GCashPaymentScreen";
 import BankTransferPaymentScreen from "../screens/client/BankTransferPaymentScreen";
 import CashPaymentScreen from "../screens/client/CashPaymentScreen";
 import PaymentHistoryScreen from "../screens/client/PaymentHistoryScreen";
+import SettlementScreen from "../screens/client/SettlementScreen";
 import NotificationsInboxScreen from "../screens/NotificationsInboxScreen";
 import AnnouncementsScreen from "../screens/client/AnnouncementsScreen";
 import {
@@ -25,171 +27,167 @@ import {
 } from "../services/apiService";
 import { useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
+import { useTheme } from "../theme/ThemeContext";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const ClientHomeStack = () => (
-  <Stack.Navigator
-    screenOptions={{
-      headerStyle: {
-        backgroundColor: "#f8f9fa",
-      },
-      headerTitleStyle: {
-        fontWeight: "600",
-      },
-    }}
-  >
-    <Stack.Screen
-      name="ClientHome"
-      component={ClientHomeScreen}
-      options={{ title: "Home" }}
-    />
-    <Stack.Screen
-      name="RoomDetails"
-      component={RoomDetailsScreen}
-      options={{ title: "Room Details" }}
-    />
-    <Stack.Screen
-      name="Billing"
-      component={BillingScreen}
-      options={{ title: "Billing Details" }}
-    />
-    <Stack.Screen
-      name="Presence"
-      component={PresenceScreen}
-      options={{ title: "Mark Presence" }}
-    />
-  </Stack.Navigator>
-);
+/** Hook – returns themed stack header options */
+const useHeaderOptions = () => {
+  const { colors } = useTheme();
+  return {
+    headerShown: false,
+    headerStyle: {
+      backgroundColor: colors.headerBg,
+      elevation: 0,
+      shadowOpacity: 0,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    headerTitleStyle: {
+      fontWeight: "700",
+      fontSize: 17,
+      color: colors.headerText,
+    },
+    headerTintColor: colors.accent,
+    headerBackTitleVisible: false,
+  };
+};
 
-const PresenceStack = () => (
-  <Stack.Navigator
-    screenOptions={{
-      headerStyle: {
-        backgroundColor: "#f8f9fa",
-      },
-      headerTitleStyle: {
-        fontWeight: "600",
-      },
-    }}
-  >
-    <Stack.Screen
-      name="PresenceMain"
-      component={PresenceScreen}
-      options={{ title: "Mark Presence" }}
-    />
-    <Stack.Screen
-      name="Billing"
-      component={BillingScreen}
-      options={{ title: "Billing Details" }}
-    />
-  </Stack.Navigator>
-);
+const ClientHomeStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="ClientHome"
+        component={ClientHomeScreen}
+        options={{ title: "Home" }}
+      />
+      <Stack.Screen
+        name="RoomDetails"
+        component={RoomDetailsScreen}
+        options={{ title: "Room Details" }}
+      />
+      <Stack.Screen
+        name="Billing"
+        component={BillingScreen}
+        options={{ title: "Billing Details" }}
+      />
+      <Stack.Screen
+        name="Presence"
+        component={PresenceScreen}
+        options={{ title: "Mark Presence" }}
+      />
+    </Stack.Navigator>
+  );
+};
 
-const BillsStack = () => (
-  <Stack.Navigator
-    screenOptions={{
-      headerStyle: {
-        backgroundColor: "#f8f9fa",
-      },
-      headerTitleStyle: {
-        fontWeight: "600",
-      },
-    }}
-  >
-    <Stack.Screen
-      name="BillsMain"
-      component={BillsScreen}
-      options={{ title: "Bills" }}
-    />
-    <Stack.Screen
-      name="BillingHistory"
-      component={BillingHistoryScreen}
-      options={({ route }) => ({
-        title: `History - ${route.params?.roomName || "Room"}`,
-      })}
-    />
-    <Stack.Screen
-      name="Billing"
-      component={BillingScreen}
-      options={{ title: "Billing Details" }}
-    />
-    <Stack.Screen
-      name="PaymentMethod"
-      component={PaymentMethodScreen}
-      options={{ headerShown: false }}
-    />
-    <Stack.Screen
-      name="GCashPayment"
-      component={GCashPaymentScreen}
-      options={{ headerShown: false }}
-    />
-    <Stack.Screen
-      name="BankTransferPayment"
-      component={BankTransferPaymentScreen}
-      options={{ headerShown: false }}
-    />
-    <Stack.Screen
-      name="CashPayment"
-      component={CashPaymentScreen}
-      options={{ headerShown: false }}
-    />
-    <Stack.Screen
-      name="PaymentHistory"
-      component={PaymentHistoryScreen}
-      options={{ headerShown: false }}
-    />
-  </Stack.Navigator>
-);
+const PresenceStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="PresenceMain"
+        component={PresenceScreen}
+        options={{ title: "Mark Presence" }}
+      />
+      <Stack.Screen
+        name="Billing"
+        component={BillingScreen}
+        options={{ title: "Billing Details" }}
+      />
+    </Stack.Navigator>
+  );
+};
 
-const ProfileStack = () => (
-  <Stack.Navigator
-    screenOptions={{
-      headerStyle: {
-        backgroundColor: "#f8f9fa",
-      },
-      headerTitleStyle: {
-        fontWeight: "600",
-      },
-    }}
-  >
-    <Stack.Screen
-      name="Profile"
-      component={ProfileScreen}
-      options={{ title: "Profile" }}
-    />
-    <Stack.Screen
-      name="MyTickets"
-      component={MyTicketsScreen}
-      options={{ title: "My Support Tickets" }}
-    />
-    <Stack.Screen
-      name="MyBugReports"
-      component={MyBugReportsScreen}
-      options={{ title: "My Bug Reports" }}
-    />
-  </Stack.Navigator>
-);
+const BillsStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="BillsMain"
+        component={BillsScreen}
+        options={{ title: "Bills" }}
+      />
+      <Stack.Screen
+        name="BillingHistory"
+        component={BillingHistoryScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Billing"
+        component={BillingScreen}
+        options={{ title: "Billing Details" }}
+      />
+      <Stack.Screen
+        name="PaymentMethod"
+        component={PaymentMethodScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="GCashPayment"
+        component={GCashPaymentScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="BankTransferPayment"
+        component={BankTransferPaymentScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CashPayment"
+        component={CashPaymentScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PaymentHistory"
+        component={PaymentHistoryScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Settlement"
+        component={SettlementScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
 
-const AnnouncementsStack = () => (
-  <Stack.Navigator
-    screenOptions={{
-      headerStyle: {
-        backgroundColor: "#f8f9fa",
-      },
-      headerTitleStyle: {
-        fontWeight: "600",
-      },
-    }}
-  >
-    <Stack.Screen
-      name="AnnouncementsMain"
-      component={AnnouncementsScreen}
-      options={{ title: "Announcements" }}
-    />
-  </Stack.Navigator>
-);
+const ProfileStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ title: "Profile" }}
+      />
+      <Stack.Screen
+        name="MyTickets"
+        component={MyTicketsScreen}
+        options={{ title: "My Support Tickets" }}
+      />
+      <Stack.Screen
+        name="MyBugReports"
+        component={MyBugReportsScreen}
+        options={{ title: "My Bug Reports" }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const AnnouncementsStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="AnnouncementsMain"
+        component={AnnouncementsScreen}
+        options={{ title: "Announcements" }}
+      />
+    </Stack.Navigator>
+  );
+};
 
 const NotificationsStack = ({ onNotificationsStatusChange }) => (
   <Stack.Navigator
@@ -213,10 +211,11 @@ const NotificationsStack = ({ onNotificationsStatusChange }) => (
 
 const ClientNavigator = () => {
   const { state } = useContext(AuthContext);
+  const { colors } = useTheme();
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [announcementCount, setAnnouncementCount] = React.useState(0);
   const [unreadSupportCount, setUnreadSupportCount] = React.useState(0);
-  const userId = state?.user?._id;
+  const userId = state?.user?.id || state?.user?._id;
   const notificationRefreshRef = React.useRef(null);
   const announcementRefreshRef = React.useRef(null);
 
@@ -261,7 +260,7 @@ const ClientNavigator = () => {
         const announcements = Array.isArray(announcementsResponse)
           ? announcementsResponse
           : announcementsResponse?.data || [];
-        
+
         // Count only unread announcements (where current user is not in readBy array)
         const unreadCount = announcements.filter(
           (announcement) =>
@@ -270,7 +269,7 @@ const ClientNavigator = () => {
               (readUserId) => String(readUserId) === String(userId),
             ),
         ).length;
-        
+
         setAnnouncementCount(unreadCount);
         console.log("Announcement unread count updated:", unreadCount);
       } else {
@@ -285,12 +284,20 @@ const ClientNavigator = () => {
     try {
       const { supportService } = require("../services/apiService");
       const ticketsResponse = await supportService.getUserTickets();
-      const tickets = Array.isArray(ticketsResponse) ? ticketsResponse : ticketsResponse?.data || [];
-      const unreadTickets = tickets.filter(t => !t.isReadByUser && t.replies && t.replies.length > 0).length;
+      const tickets = Array.isArray(ticketsResponse)
+        ? ticketsResponse
+        : ticketsResponse?.data || [];
+      const unreadTickets = tickets.filter(
+        (t) => !t.isReadByUser && t.replies && t.replies.length > 0,
+      ).length;
 
       const bugsResponse = await supportService.getUserBugReports();
-      const bugs = Array.isArray(bugsResponse) ? bugsResponse : bugsResponse?.data || [];
-      const unreadBugs = bugs.filter(b => !b.isReadByUser && b.responses && b.responses.length > 0).length;
+      const bugs = Array.isArray(bugsResponse)
+        ? bugsResponse
+        : bugsResponse?.data || [];
+      const unreadBugs = bugs.filter(
+        (b) => !b.isReadByUser && b.responses && b.responses.length > 0,
+      ).length;
 
       const totalUnread = unreadTickets + unreadBugs;
       setUnreadSupportCount(totalUnread > 0 ? 1 : 0); // Show dot if any unread
@@ -336,10 +343,51 @@ const ClientNavigator = () => {
           } else if (route.name === "ProfileStack") {
             iconName = focused ? "person" : "person-outline";
           }
-          return <Ionicons name={iconName} size={size} color={color} />;
+          return (
+            <View style={{ alignItems: "center", justifyContent: "center" }}>
+              {focused && (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    width: 48,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: colors.accentLight,
+                  }}
+                />
+              )}
+              <Ionicons name={iconName} size={22} color={color} />
+            </View>
+          );
         },
-        tabBarActiveTintColor: "#b38604",
-        tabBarInactiveTintColor: "gray",
+        tabBarActiveTintColor: colors.tabBarActive,
+        tabBarInactiveTintColor: colors.tabBarInactive,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: "600",
+          marginTop: 2,
+        },
+        tabBarStyle: {
+          backgroundColor: colors.tabBarBg,
+          borderTopWidth: 0,
+          elevation: 12,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
+          paddingTop: 4,
+        },
+        tabBarBadgeStyle: {
+          backgroundColor: "#e74c3c",
+          fontSize: 10,
+          fontWeight: "700",
+          minWidth: 18,
+          height: 18,
+          borderRadius: 9,
+          lineHeight: 17,
+          top: -2,
+        },
       })}
     >
       <Tab.Screen
@@ -361,19 +409,11 @@ const ClientNavigator = () => {
         name="AnnouncementsStack"
         component={AnnouncementsStack}
         options={{
-          title: "Announcements",
+          title: "News",
           tabBarBadge: announcementCount > 0 ? announcementCount : null,
-          tabBarBadgeStyle: {
-            backgroundColor: "#ff4444",
-            fontSize: 10,
-            minWidth: 18,
-            height: 18,
-          },
         }}
         listeners={({ navigation }) => ({
           focus: () => {
-            // Refresh announcement count after user views announcements
-            // This will now reflect the actual unread count (should be 0 after viewing)
             fetchAnnouncementCount();
           },
         })}
@@ -382,22 +422,14 @@ const ClientNavigator = () => {
         name="NotificationsStack"
         component={NotificationsStackWrapper}
         options={{
-          title: "Notifications",
+          title: "Alerts",
           tabBarBadge: unreadCount > 0 ? unreadCount : null,
-          tabBarBadgeStyle: {
-            backgroundColor: "#ff4444",
-            fontSize: 10,
-            minWidth: 18,
-            height: 18,
-          },
         }}
         listeners={({ navigation }) => ({
           focus: () => {
-            // Refresh count when focus returns to Notifications tab
             fetchUnreadCount();
           },
           blur: () => {
-            // Also refresh when leaving Notifications tab
             fetchUnreadCount();
           },
         })}
@@ -407,11 +439,14 @@ const ClientNavigator = () => {
         component={ProfileStack}
         options={{
           title: "Profile",
-          tabBarBadge: unreadSupportCount > 0 ? "●" : null,
+          tabBarBadge: unreadSupportCount > 0 ? "" : null,
           tabBarBadgeStyle: {
-            backgroundColor: "transparent",
-            fontSize: 16,
-            color: "#e74c3c",
+            backgroundColor: "#e74c3c",
+            minWidth: 8,
+            height: 8,
+            borderRadius: 4,
+            top: 0,
+            right: 2,
           },
         }}
         listeners={({ navigation }) => ({

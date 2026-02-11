@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,36 @@ import {
   Modal,
   TextInput,
   RefreshControl,
-  FlatList,
+  Platform,
+  ActivityIndicator,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRoute } from "@react-navigation/native";
 import { apiService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
+
+const getBillMeta = (c) => ({
+  rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
+  electricity: {
+    icon: "flash",
+    color: c.electricityColor,
+    bg: c.accentSurface,
+    label: "Electricity",
+  },
+  water: { icon: "water", color: c.waterColor, bg: c.infoBg, label: "Water" },
+  internet: {
+    icon: "wifi",
+    color: c.internetColor,
+    bg: c.purpleBg,
+    label: "Internet",
+  },
+});
 
 const AdminRemindersScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const BILL_META = getBillMeta(colors);
+
   const route = useRoute();
   const { room } = route.params || {};
 
@@ -34,7 +58,7 @@ const AdminRemindersScreen = ({ navigation }) => {
     try {
       setLoading(true);
       const response = await apiService.get(
-        `/api/v2/admin/reminders/overdue/${room?._id}`,
+        `/api/v2/admin/reminders/overdue/${room?.id || room?._id}`,
       );
       setOverduePayments(response.overduePayments || []);
     } catch (error) {
@@ -44,7 +68,7 @@ const AdminRemindersScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [room?._id]);
+  }, [room?.id || room?._id]);
 
   useEffect(() => {
     fetchOverduePayments();
@@ -58,7 +82,7 @@ const AdminRemindersScreen = ({ navigation }) => {
   const fetchReminderHistory = async (member) => {
     try {
       const response = await apiService.get(
-        `/api/v2/admin/reminders/history/${room?._id}/${member.memberId}`,
+        `/api/v2/admin/reminders/history/${room?.id || room?._id}/${member.memberId}`,
       );
       setReminderHistory(response.history);
       setSelectedMember(member);
@@ -72,7 +96,7 @@ const AdminRemindersScreen = ({ navigation }) => {
     try {
       setLoading(true);
       await apiService.post(
-        `/api/v2/admin/reminders/send-reminder/${room?._id}/${member.memberId}`,
+        `/api/v2/admin/reminders/send-reminder/${room?.id || room?._id}/${member.memberId}`,
         {
           customMessage: customMessage || null,
         },
@@ -100,7 +124,7 @@ const AdminRemindersScreen = ({ navigation }) => {
     try {
       setBulkSending(true);
       await apiService.post(
-        `/api/v2/admin/reminders/send-bulk-reminders/${room?._id}`,
+        `/api/v2/admin/reminders/send-bulk-reminders/${room?.id || room?._id}`,
         {
           memberIds: Array.from(selectedMembers),
           customMessage: customMessage || null,
@@ -135,92 +159,139 @@ const AdminRemindersScreen = ({ navigation }) => {
     setSelectedMembers(newSelection);
   };
 
-  const renderMemberCard = (member) => (
-    <View
-      style={[
-        styles.memberCard,
-        selectedMembers.has(member.memberId) && styles.memberCardSelected,
-      ]}
-    >
+  const renderMemberCard = (member) => {
+    const isSelected = selectedMembers.has(member.memberId);
+    const initials = (member.memberName || "?")
+      .split(" ")
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+
+    return (
       <TouchableOpacity
-        style={styles.selectCheckbox}
+        activeOpacity={0.7}
         onPress={() => toggleMemberSelection(member.memberId)}
+        style={[styles.memberCard, isSelected && styles.memberCardSelected]}
       >
-        <View
-          style={[
-            styles.checkbox,
-            selectedMembers.has(member.memberId) && styles.checkboxSelected,
-          ]}
-        >
-          {selectedMembers.has(member.memberId) && (
-            <Text style={styles.checkmark}>✓</Text>
-          )}
-        </View>
-      </TouchableOpacity>
-
-      <View style={styles.memberInfo}>
-        <Text style={styles.memberName}>{member.memberName}</Text>
-        <Text style={styles.memberEmail}>{member.email}</Text>
-
-        <View style={styles.unpaidBillsContainer}>
-          <Text style={styles.unpaidLabel}>Overdue:</Text>
-          <View style={styles.unpaidBills}>
-            {member.unpaidBills?.includes("rent") && (
-              <View style={[styles.unpaidBill, { backgroundColor: "#FFE0E0" }]}>
-                <Text style={styles.unpaidBillText}>Rent</Text>
-              </View>
-            )}
-            {member.unpaidBills?.includes("electricity") && (
-              <View style={[styles.unpaidBill, { backgroundColor: "#FFF3E0" }]}>
-                <Text style={styles.unpaidBillText}>Elec</Text>
-              </View>
-            )}
-            {member.unpaidBills?.includes("water") && (
-              <View style={[styles.unpaidBill, { backgroundColor: "#E0F2F1" }]}>
-                <Text style={styles.unpaidBillText}>Water</Text>
-              </View>
-            )}
-            {member.unpaidBills?.includes("internet") && (
-              <View style={[styles.unpaidBill, { backgroundColor: "#F3E5F5" }]}>
-                <Text style={styles.unpaidBillText}>Net</Text>
-              </View>
-            )}
+        {/* Header row */}
+        <View style={styles.cardTop}>
+          <View style={styles.cardTopLeft}>
+            <View
+              style={[styles.checkbox, isSelected && styles.checkboxSelected]}
+            >
+              {isSelected && (
+                <Ionicons
+                  name="checkmark"
+                  size={13}
+                  color={colors.textOnAccent}
+                />
+              )}
+            </View>
+            <View
+              style={[
+                styles.memberAvatar,
+                {
+                  backgroundColor: isSelected
+                    ? colors.accentSurface
+                    : colors.inputBg,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.avatarText,
+                  { color: isSelected ? colors.accent : colors.textSecondary },
+                ]}
+              >
+                {initials}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.memberName} numberOfLines={1}>
+                {member.memberName}
+              </Text>
+              <Text style={styles.memberEmail} numberOfLines={1}>
+                {member.email}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.cardTopRight}>
+            <Text style={styles.memberAmount}>
+              ₱{(member.totalDue || 0).toFixed(2)}
+            </Text>
+            <View style={styles.overdueBadge}>
+              <Ionicons name="alert-circle" size={10} color={colors.error} />
+              <Text style={styles.overdueText}>
+                {member.daysOverdue}d overdue
+              </Text>
+            </View>
           </View>
         </View>
 
-        <View style={styles.daysOverdueContainer}>
-          <Text style={styles.daysOverdue}>
-            {member.daysOverdue} days overdue
-          </Text>
-          <Text style={styles.amount}>₱{member.totalDue?.toFixed(2)}</Text>
+        {/* Unpaid bills — BILL_META chips */}
+        <View style={styles.unpaidRow}>
+          {(member.unpaidBills || []).map((bill) => {
+            const meta = BILL_META[bill] || {
+              icon: "help-circle",
+              color: colors.textTertiary,
+              bg: colors.inputBg,
+              label: bill,
+            };
+            return (
+              <View
+                key={bill}
+                style={[styles.billChip, { backgroundColor: meta.bg }]}
+              >
+                <Ionicons name={meta.icon} size={11} color={meta.color} />
+                <Text style={[styles.billChipText, { color: meta.color }]}>
+                  {meta.label}
+                </Text>
+              </View>
+            );
+          })}
         </View>
-      </View>
 
-      <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.historyBtn]}
-          onPress={() => fetchReminderHistory(member)}
-        >
-          <Text style={styles.actionBtnText}>📋 History</Text>
-        </TouchableOpacity>
+        {/* Action buttons */}
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={styles.cardActionBtn}
+            activeOpacity={0.7}
+            onPress={() => fetchReminderHistory(member)}
+          >
+            <Ionicons
+              name="time-outline"
+              size={14}
+              color={colors.internetColor}
+            />
+            <Text
+              style={[styles.cardActionText, { color: colors.internetColor }]}
+            >
+              History
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.sendBtn]}
-          onPress={() => {
-            setSelectedMember(member);
-            setCustomMessageModalVisible(true);
-          }}
-        >
-          <Text style={styles.actionBtnText}>📧 Send</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+          <TouchableOpacity
+            style={[styles.cardActionBtn, styles.sendActionBtn]}
+            activeOpacity={0.7}
+            onPress={() => {
+              setSelectedMember(member);
+              setCustomMessageModalVisible(true);
+            }}
+          >
+            <Ionicons name="send" size={13} color={colors.textOnAccent} />
+            <Text style={styles.sendActionText}>Send</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.loadingText}>Loading...</Text>
+      <View style={styles.centerWrap}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={styles.loadingLabel}>Loading reminders...</Text>
       </View>
     );
   }
@@ -230,34 +301,73 @@ const AdminRemindersScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <ScrollView
-        style={styles.scrollContainer}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: hasSelection ? 80 : 24 }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintcolor={colors.accent}
+            colors={["#b38604"]}
+          />
         }
       >
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Payment Reminders</Text>
-          <Text style={styles.headerSubtitle}>
-            {overduePayments.length} overdue payment
-            {overduePayments.length !== 1 ? "s" : ""}
-          </Text>
+        {/* Summary Strip */}
+        <View style={styles.summaryStrip}>
+          <View
+            style={[
+              styles.stripIconWrap,
+              { backgroundColor: colors.accentSurface },
+            ]}
+          >
+            <Ionicons name="notifications" size={18} color={colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.stripTitle}>Payment Reminders</Text>
+            <Text style={styles.stripSubtitle}>
+              {room?.name || "Room"} — {overduePayments.length} overdue
+            </Text>
+          </View>
+          {overduePayments.length > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>
+                {overduePayments.length}
+              </Text>
+            </View>
+          )}
         </View>
 
         {overduePayments.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No overdue payments</Text>
-            <Text style={styles.emptySubtext}>All members are up to date!</Text>
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons
+                name="checkmark-done-circle"
+                size={36}
+                color={colors.success}
+              />
+            </View>
+            <Text style={styles.emptyTitle}>All Clear!</Text>
+            <Text style={styles.emptySubtitle}>
+              No overdue payments found. All members are up to date.
+            </Text>
           </View>
         ) : (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Overdue Members</Text>
+              <View style={styles.sectionLeft}>
+                <Ionicons name="people" size={15} color={colors.accent} />
+                <Text style={styles.sectionTitle}>Overdue Members</Text>
+              </View>
               {hasSelection && (
-                <Text style={styles.selectedCount}>
-                  {selectedMembers.size} selected
-                </Text>
+                <View style={styles.selectionChip}>
+                  <Text style={styles.selectionChipText}>
+                    {selectedMembers.size} selected
+                  </Text>
+                </View>
               )}
             </View>
+
             {overduePayments.map((member) => (
               <View key={`${member.memberId}-${member.daysOverdue}`}>
                 {renderMemberCard(member)}
@@ -265,23 +375,30 @@ const AdminRemindersScreen = ({ navigation }) => {
             ))}
           </View>
         )}
-
-        <View style={styles.spacing} />
       </ScrollView>
 
+      {/* Bulk action bar */}
       {hasSelection && (
-        <View style={styles.bulkActionBar}>
+        <View style={styles.bulkBar}>
           <TouchableOpacity
             style={styles.bulkCancelBtn}
+            activeOpacity={0.7}
             onPress={() => setSelectedMembers(new Set())}
           >
-            <Text style={styles.bulkCancelBtnText}>Clear Selection</Text>
+            <Ionicons
+              name="close-circle-outline"
+              size={16}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.bulkCancelText}>Clear</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.bulkSendBtn}
+            activeOpacity={0.7}
             onPress={() => setCustomMessageModalVisible(true)}
           >
-            <Text style={styles.bulkSendBtnText}>
+            <Ionicons name="send" size={14} color={colors.textOnAccent} />
+            <Text style={styles.bulkSendText}>
               Send to {selectedMembers.size}
             </Text>
           </TouchableOpacity>
@@ -289,59 +406,101 @@ const AdminRemindersScreen = ({ navigation }) => {
       )}
 
       {/* History Modal */}
-      <Modal visible={historyModalVisible} transparent>
+      <Modal
+        visible={historyModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setHistoryModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Reminder History</Text>
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalHeaderLeft}>
+                <View
+                  style={[
+                    styles.modalIconWrap,
+                    { backgroundColor: colors.purpleBg },
+                  ]}
+                >
+                  <Ionicons
+                    name="time"
+                    size={20}
+                    color={colors.internetColor}
+                  />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Reminder History</Text>
+                  <Text style={styles.modalSubtitle}>
+                    {selectedMember?.memberName}
+                  </Text>
+                </View>
+              </View>
               <TouchableOpacity
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 onPress={() => {
                   setHistoryModalVisible(false);
                   setSelectedMember(null);
                 }}
               >
-                <Text style={styles.closeBtn}>✕</Text>
+                <Ionicons name="close" size={22} color={colors.textTertiary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.memberNameInModal}>
-              {selectedMember?.memberName}
-            </Text>
-
             {reminderHistory ? (
-              <View style={styles.historyContent}>
-                <View style={styles.historyItem}>
-                  <Text style={styles.historyLabel}>Total Reminders Sent:</Text>
-                  <Text style={styles.historyValue}>
-                    {reminderHistory.reminderCount || 0}
-                  </Text>
+              <View style={styles.historyCard}>
+                <View style={styles.historyRow}>
+                  <View style={styles.historyIconWrap}>
+                    <Ionicons name="mail" size={16} color={colors.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.historyLabel}>
+                      Total Reminders Sent
+                    </Text>
+                    <Text style={styles.historyValue}>
+                      {reminderHistory.reminderCount || 0}
+                    </Text>
+                  </View>
                 </View>
 
-                {reminderHistory.lastReminderDate ? (
-                  <View style={styles.historyItem}>
-                    <Text style={styles.historyLabel}>Last Reminder Sent:</Text>
-                    <Text style={styles.historyValue}>
-                      {reminderHistory.daysAgo} days ago
-                    </Text>
-                    <Text style={styles.historyDate}>
-                      {new Date(
-                        reminderHistory.lastReminderDate,
-                      ).toLocaleDateString()}
-                    </Text>
+                <View style={styles.historySep} />
+
+                <View style={styles.historyRow}>
+                  <View style={styles.historyIconWrap}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={16}
+                      color={colors.accent}
+                    />
                   </View>
-                ) : (
-                  <View style={styles.historyItem}>
-                    <Text style={styles.historyLabel}>Last Reminder:</Text>
-                    <Text style={styles.historyValue}>Never sent</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.historyLabel}>Last Reminder</Text>
+                    {reminderHistory.lastReminderDate ? (
+                      <>
+                        <Text style={styles.historyValue}>
+                          {reminderHistory.daysAgo} days ago
+                        </Text>
+                        <Text style={styles.historyDate}>
+                          {new Date(
+                            reminderHistory.lastReminderDate,
+                          ).toLocaleDateString()}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.historyValue}>Never sent</Text>
+                    )}
                   </View>
-                )}
+                </View>
               </View>
             ) : (
-              <Text style={styles.loadingText}>Loading history...</Text>
+              <View style={{ alignItems: "center", paddingVertical: 20 }}>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <Text style={styles.loadingLabel}>Loading history...</Text>
+              </View>
             )}
 
             <TouchableOpacity
               style={styles.closeModalBtn}
+              activeOpacity={0.7}
               onPress={() => {
                 setHistoryModalVisible(false);
                 setSelectedMember(null);
@@ -354,38 +513,62 @@ const AdminRemindersScreen = ({ navigation }) => {
       </Modal>
 
       {/* Custom Message Modal */}
-      <Modal visible={customMessageModalVisible} transparent>
+      <Modal
+        visible={customMessageModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCustomMessageModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Send Reminder</Text>
-            {selectedMember ? (
-              <Text style={styles.modalSubtitle}>
-                To: {selectedMember.memberName}
-              </Text>
-            ) : (
-              <Text style={styles.modalSubtitle}>
-                To: {selectedMembers.size} selected members
-              </Text>
-            )}
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalHeaderLeft}>
+                <View
+                  style={[
+                    styles.modalIconWrap,
+                    { backgroundColor: colors.accentSurface },
+                  ]}
+                >
+                  <Ionicons name="send" size={18} color={colors.accent} />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Send Reminder</Text>
+                  <Text style={styles.modalSubtitle}>
+                    {selectedMember
+                      ? `To: ${selectedMember.memberName}`
+                      : `To: ${selectedMembers.size} selected members`}
+                  </Text>
+                </View>
+              </View>
+            </View>
 
             <View style={styles.form}>
               <Text style={styles.formLabel}>Custom Message (Optional)</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 placeholder="Add a custom message to the reminder..."
+                placeholderTextColor={colors.textTertiary}
                 multiline
                 numberOfLines={4}
                 value={customMessage}
                 onChangeText={setCustomMessage}
               />
 
-              <Text style={styles.formHint}>
-                If empty, a default reminder will be sent.
-              </Text>
+              <View style={styles.hintRow}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={13}
+                  color={colors.textTertiary}
+                />
+                <Text style={styles.formHint}>
+                  If empty, a default reminder will be sent.
+                </Text>
+              </View>
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.cancelBtn}
+                  activeOpacity={0.7}
                   onPress={() => {
                     setCustomMessageModalVisible(false);
                     setCustomMessage("");
@@ -398,7 +581,8 @@ const AdminRemindersScreen = ({ navigation }) => {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.confirmBtn}
+                  style={[styles.confirmBtn, bulkSending && { opacity: 0.6 }]}
+                  activeOpacity={0.7}
                   onPress={() => {
                     if (selectedMember) {
                       handleSendReminder(selectedMember);
@@ -410,9 +594,21 @@ const AdminRemindersScreen = ({ navigation }) => {
                   }}
                   disabled={bulkSending}
                 >
-                  <Text style={styles.confirmBtnText}>
-                    {bulkSending ? "Sending..." : "Send Reminder"}
-                  </Text>
+                  {bulkSending ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={colors.textOnAccent}
+                    />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="send"
+                        size={14}
+                        color={colors.textOnAccent}
+                      />
+                      <Text style={styles.confirmBtnText}>Send</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -423,362 +619,426 @@ const AdminRemindersScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F5F5",
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    fontSize: 16,
-    color: "#666",
-  },
-  header: {
-    backgroundColor: "#2E86AB",
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    paddingTop: 40,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#FFF",
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#E0E0E0",
-    marginTop: 4,
-  },
-  emptyContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: "#999",
-  },
-  section: {
-    paddingHorizontal: 12,
-    paddingVertical: 16,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  selectedCount: {
-    fontSize: 12,
-    fontWeight: "600",
-    backgroundColor: "#2E86AB",
-    color: "#FFF",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  memberCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    elevation: 2,
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  memberCardSelected: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#2E86AB",
-    backgroundColor: "#F0F5FA",
-  },
-  selectCheckbox: {
-    marginRight: 12,
-    marginTop: 4,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: "#DDD",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkboxSelected: {
-    backgroundColor: "#2E86AB",
-    borderColor: "#2E86AB",
-  },
-  checkmark: {
-    color: "#FFF",
-    fontWeight: "bold",
-    fontSize: 12,
-  },
-  memberInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  memberName: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  memberEmail: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 2,
-  },
-  unpaidBillsContainer: {
-    marginTop: 8,
-    width: "100%",
-  },
-  unpaidLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#666",
-    marginBottom: 6,
-  },
-  unpaidBills: {
-    flexDirection: "row",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  unpaidBill: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 4,
-  },
-  unpaidBillText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#333",
-  },
-  daysOverdueContainer: {
-    marginTop: 8,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  daysOverdue: {
-    fontSize: 12,
-    color: "#F44336",
-    fontWeight: "600",
-  },
-  amount: {
-    fontSize: 13,
-    fontWeight: "bold",
-    color: "#2E86AB",
-  },
-  actionButtons: {
-    gap: 6,
-    justifyContent: "flex-end",
-  },
-  actionBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  historyBtn: {
-    backgroundColor: "#9C27B0",
-  },
-  sendBtn: {
-    backgroundColor: "#2E86AB",
-  },
-  actionBtnText: {
-    color: "#FFF",
-    fontWeight: "600",
-    fontSize: 11,
-  },
-  bulkActionBar: {
-    flexDirection: "row",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#FFF",
-    borderTopWidth: 1,
-    borderTopColor: "#EEE",
-  },
-  bulkCancelBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 6,
-    backgroundColor: "#E0E0E0",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bulkCancelBtnText: {
-    color: "#333",
-    fontWeight: "600",
-  },
-  bulkSendBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 6,
-    backgroundColor: "#2E86AB",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bulkSendBtnText: {
-    color: "#FFF",
-    fontWeight: "600",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: "#FFF",
-    borderRadius: 16,
-    padding: 20,
-    width: "90%",
-    maxHeight: "85%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  closeBtn: {
-    fontSize: 20,
-    color: "#999",
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: "#999",
-    marginBottom: 16,
-  },
-  memberNameInModal: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#2E86AB",
-    marginBottom: 16,
-  },
-  historyContent: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  historyItem: {
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
-  },
-  historyLabel: {
-    fontSize: 12,
-    color: "#666",
-    fontWeight: "600",
-  },
-  historyValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#2E86AB",
-    marginTop: 4,
-  },
-  historyDate: {
-    fontSize: 11,
-    color: "#999",
-    marginTop: 4,
-  },
-  form: {
-    maxHeight: 400,
-  },
-  formLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#333",
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  textArea: {
-    textAlignVertical: "top",
-    paddingTop: 10,
-  },
-  formHint: {
-    fontSize: 11,
-    color: "#999",
-    marginBottom: 16,
-    fontStyle: "italic",
-  },
-  modalButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 16,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 6,
-    backgroundColor: "#E0E0E0",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cancelBtnText: {
-    color: "#333",
-    fontWeight: "600",
-  },
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 6,
-    backgroundColor: "#2E86AB",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  confirmBtnText: {
-    color: "#FFF",
-    fontWeight: "600",
-  },
-  closeModalBtn: {
-    paddingVertical: 10,
-    borderRadius: 6,
-    backgroundColor: "#F0F0F0",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  closeModalBtnText: {
-    color: "#333",
-    fontWeight: "600",
-  },
-  spacing: {
-    height: 20,
-  },
-});
+const createStyles = (colors) =>
+  StyleSheet.create({
+    /* ── Layout ── */
+    container: { flex: 1, backgroundColor: colors.background },
+    centerWrap: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+    },
+    loadingLabel: { fontSize: 13, color: colors.textTertiary, marginTop: 10 },
+
+    /* ── Summary Strip ── */
+    summaryStrip: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      marginHorizontal: 14,
+      marginTop: 14,
+      borderRadius: 14,
+      padding: 14,
+      gap: 10,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: 2 },
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    stripIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    stripTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+    stripSubtitle: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
+    countBadge: {
+      backgroundColor: "#e53935",
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    countBadgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
+
+    /* ── Empty State ── */
+    emptyCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      marginHorizontal: 14,
+      marginTop: 24,
+      padding: 32,
+      alignItems: "center",
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 1 },
+        },
+        android: { elevation: 1 },
+      }),
+    },
+    emptyIconWrap: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.successBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 14,
+    },
+    emptyTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    emptySubtitle: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+
+    /* ── Section ── */
+    section: { paddingHorizontal: 14, marginTop: 18 },
+    sectionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    sectionLeft: { flexDirection: "row", alignItems: "center", gap: 6 },
+    sectionTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
+    selectionChip: {
+      backgroundColor: colors.accentSurface,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    selectionChipText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+
+    /* ── Member Card ── */
+    memberCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 12,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 1 },
+        },
+        android: { elevation: 1 },
+      }),
+    },
+    memberCardSelected: {
+      borderWidth: 1.5,
+      borderColor: "#b38604",
+      backgroundColor: colors.warningBg,
+    },
+    cardTop: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    cardTopLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+      gap: 10,
+    },
+    cardTopRight: { alignItems: "flex-end", gap: 4 },
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.cardAlt,
+    },
+    checkboxSelected: {
+      backgroundColor: colors.accent,
+      borderColor: "#b38604",
+    },
+    memberAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    avatarText: { fontSize: 13, fontWeight: "700" },
+    memberName: { fontSize: 14, fontWeight: "600", color: colors.text },
+    memberEmail: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
+    memberAmount: { fontSize: 16, fontWeight: "800", color: colors.accent },
+    overdueBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      backgroundColor: colors.errorBg,
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    overdueText: { fontSize: 10, fontWeight: "700", color: "#e53935" },
+
+    /* ── Unpaid Bill Chips ── */
+    unpaidRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 12,
+      marginBottom: 12,
+    },
+    billChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    billChipText: { fontSize: 11, fontWeight: "600" },
+
+    /* ── Card Actions ── */
+    cardActions: {
+      flexDirection: "row",
+      gap: 8,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.divider,
+      paddingTop: 12,
+    },
+    cardActionBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.divider,
+      backgroundColor: colors.cardAlt,
+    },
+    cardActionText: { fontSize: 12, fontWeight: "600" },
+    sendActionBtn: {
+      backgroundColor: colors.accent,
+      borderColor: "#b38604",
+      flex: 1,
+      justifyContent: "center",
+    },
+    sendActionText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+
+    /* ── Bulk Action Bar ── */
+    bulkBar: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      backgroundColor: colors.card,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.08,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: -2 },
+        },
+        android: { elevation: 6 },
+      }),
+    },
+    bulkCancelBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.background,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 6,
+    },
+    bulkCancelText: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+      fontSize: 13,
+    },
+    bulkSendBtn: {
+      flex: 1.4,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.accent,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 6,
+    },
+    bulkSendText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
+
+    /* ── Modals ── */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      padding: 22,
+      width: "90%",
+      maxHeight: "85%",
+    },
+    modalHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    modalHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+    modalIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
+    modalSubtitle: { fontSize: 13, color: colors.textTertiary, marginTop: 1 },
+
+    /* ── History Card ── */
+    historyCard: {
+      backgroundColor: colors.cardAlt,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 16,
+    },
+    historyRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      paddingVertical: 8,
+    },
+    historyIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: 2,
+    },
+    historySep: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.skeleton,
+      marginVertical: 4,
+    },
+    historyLabel: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      fontWeight: "600",
+    },
+    historyValue: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+      marginTop: 2,
+    },
+    historyDate: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
+
+    /* ── Form ── */
+    form: { maxHeight: 400 },
+    formLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginTop: 8,
+      marginBottom: 8,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+      backgroundColor: colors.cardAlt,
+      marginBottom: 8,
+    },
+    textArea: { textAlignVertical: "top", minHeight: 80 },
+    hintRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      marginBottom: 12,
+    },
+    formHint: { fontSize: 11, color: colors.textTertiary, fontStyle: "italic" },
+
+    /* ── Modal Buttons ── */
+    modalButtons: {
+      flexDirection: "row",
+      gap: 12,
+      marginTop: 14,
+    },
+    cancelBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    cancelBtnText: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+      fontSize: 14,
+    },
+    confirmBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.accent,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 6,
+    },
+    confirmBtnText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
+    closeModalBtn: {
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    closeModalBtnText: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+      fontSize: 14,
+    },
+  });
 
 export default AdminRemindersScreen;

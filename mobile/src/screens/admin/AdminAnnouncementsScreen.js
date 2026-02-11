@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useMemo} from "react";
 import {
   View,
   Text,
@@ -13,22 +13,27 @@ import {
   Modal,
   Share,
   Image,
+  Platform,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { announcementService, roomService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
 
 const REACTION_TYPES = [
-  { type: "like", emoji: "👍", label: "Like" },
-  { type: "love", emoji: "❤️", label: "Love" },
-  { type: "haha", emoji: "😂", label: "Haha" },
-  { type: "wow", emoji: "😮", label: "Wow" },
-  { type: "sad", emoji: "😢", label: "Sad" },
-  { type: "angry", emoji: "😠", label: "Angry" },
+  { type: "like", emoji: "\uD83D\uDC4D", label: "Like" },
+  { type: "love", emoji: "\u2764\uFE0F", label: "Love" },
+  { type: "haha", emoji: "\uD83D\uDE02", label: "Haha" },
+  { type: "wow", emoji: "\uD83D\uDE2E", label: "Wow" },
+  { type: "sad", emoji: "\uD83D\uDE22", label: "Sad" },
+  { type: "angry", emoji: "\uD83D\uDE20", label: "Angry" },
 ];
 
 const AdminAnnouncementsScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { state } = useContext(AuthContext);
   const [adminRoom, setAdminRoom] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
@@ -44,19 +49,16 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   const [commentText, setCommentText] = useState("");
   const [userReactions, setUserReactions] = useState({});
 
-  const userId = state?.user?._id;
+  const userId = state?.user?.id || state?.user?._id;
   const userName = state?.user?.name || "Admin";
   const currentUser = state?.user;
 
-  // Fetch room and announcements when screen comes to focus
   useFocusEffect(
     React.useCallback(() => {
       const fetchRoomAndAnnouncements = async () => {
         try {
           setLoading(true);
-          // Get admin's rooms
           const roomsResponse = await roomService.getRooms();
-          console.log("Raw roomsResponse:", roomsResponse);
 
           let rooms = [];
           if (Array.isArray(roomsResponse)) {
@@ -71,46 +73,33 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
               : [roomsResponse.rooms];
           }
 
-          console.log("Parsed rooms:", rooms.length);
-          console.log("Current userId:", userId);
-
-          // Find the room created by this admin
-          const adminRoom = rooms.find((r) => {
-            const isCreatedByAdmin = String(r.createdBy) === String(userId);
-            console.log(
-              "Room:",
-              r.name,
-              "createdBy:",
-              r.createdBy,
-              "isAdmin:",
-              isCreatedByAdmin,
-            );
-            return isCreatedByAdmin;
+          const foundRoom = rooms.find((r) => {
+            const roomCreator = r.created_by || r.createdBy;
+            return String(roomCreator) === String(userId);
           });
 
-          if (adminRoom) {
-            console.log("Found admin room:", adminRoom.name);
-            setAdminRoom(adminRoom);
-            // Fetch announcements for this room
+          if (foundRoom) {
+            setAdminRoom(foundRoom);
             const announcementsResponse =
-              await announcementService.getRoomAnnouncements(adminRoom._id);
-            const announcements = Array.isArray(announcementsResponse)
+              await announcementService.getRoomAnnouncements(
+                foundRoom.id || foundRoom._id,
+              );
+            const annList = Array.isArray(announcementsResponse)
               ? announcementsResponse
-              : announcementsResponse?.data || [];
-            setAnnouncements(announcements);
-            // Extract user reactions
+              : announcementsResponse?.announcements ||
+                announcementsResponse?.data ||
+                [];
+            setAnnouncements(annList);
             const reactions = {};
-            announcements.forEach((ann) => {
+            annList.forEach((ann) => {
               const userReaction = ann.reactions?.find(
                 (r) => String(r.user) === String(userId),
               );
               if (userReaction) {
-                reactions[ann._id] = userReaction.type;
+                reactions[ann.id || ann._id] = userReaction.type;
               }
             });
             setUserReactions(reactions);
-          } else {
-            console.log("No admin room found");
           }
         } catch (error) {
           console.error("Error fetching data:", error);
@@ -127,16 +116,17 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   const fetchAnnouncements = async (roomId) => {
     try {
       const response = await announcementService.getRoomAnnouncements(roomId);
-      const data = Array.isArray(response) ? response : response?.data || [];
+      const data = Array.isArray(response)
+        ? response
+        : response?.announcements || response?.data || [];
       setAnnouncements(data);
-      // Extract user reactions
       const reactions = {};
       data.forEach((ann) => {
         const userReaction = ann.reactions?.find(
           (r) => String(r.user) === String(userId),
         );
         if (userReaction) {
-          reactions[ann._id] = userReaction.type;
+          reactions[ann.id || ann._id] = userReaction.type;
         }
       });
       setUserReactions(reactions);
@@ -149,9 +139,9 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   };
 
   const onRefresh = async () => {
-    if (adminRoom?._id) {
+    if (adminRoom?.id || adminRoom?._id) {
       setRefreshing(true);
-      await fetchAnnouncements(adminRoom._id);
+      await fetchAnnouncements(adminRoom.id || adminRoom._id);
       setRefreshing(false);
     }
   };
@@ -161,22 +151,17 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
-
-    if (!adminRoom?._id) {
+    if (!adminRoom?.id && !adminRoom?._id) {
       Alert.alert("Error", "Room not loaded yet. Please wait.");
       return;
     }
-
+    const roomId = adminRoom.id || adminRoom._id;
     try {
-      await announcementService.createAnnouncement(
-        adminRoom._id,
-        title,
-        content,
-      );
+      await announcementService.createAnnouncement(roomId, title, content);
       setTitle("");
       setContent("");
       setShowCreateModal(false);
-      await fetchAnnouncements(adminRoom._id);
+      await fetchAnnouncements(roomId);
       Alert.alert("Success", "Announcement created");
     } catch (error) {
       console.error("Error creating announcement:", error);
@@ -192,10 +177,11 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
         { text: "Cancel", onPress: () => {} },
         {
           text: "Delete",
+          style: "destructive",
           onPress: async () => {
             try {
               await announcementService.deleteAnnouncement(announcementId);
-              await fetchAnnouncements(adminRoom._id);
+              await fetchAnnouncements(adminRoom.id || adminRoom._id);
               Alert.alert("Success", "Announcement deleted");
             } catch (error) {
               Alert.alert("Error", "Failed to delete announcement");
@@ -211,20 +197,18 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
       Alert.alert("Error", "Please write a comment");
       return;
     }
-
     if (!selectedAnnouncement) {
       Alert.alert("Error", "Announcement not selected");
       return;
     }
-
     try {
       await announcementService.addComment(
-        selectedAnnouncement._id,
+        selectedAnnouncement.id || selectedAnnouncement._id,
         commentText,
       );
       setCommentText("");
       setShowCommentModal(false);
-      await fetchAnnouncements(adminRoom._id);
+      await fetchAnnouncements(adminRoom.id || adminRoom._id);
       Alert.alert("Success", "Comment added");
     } catch (error) {
       Alert.alert("Error", "Failed to add comment");
@@ -236,10 +220,11 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
       { text: "Cancel" },
       {
         text: "Delete",
+        style: "destructive",
         onPress: async () => {
           try {
             await announcementService.deleteComment(announcementId, commentId);
-            await fetchAnnouncements(adminRoom._id);
+            await fetchAnnouncements(adminRoom.id || adminRoom._id);
           } catch (error) {
             Alert.alert("Error", "Failed to delete comment");
           }
@@ -251,7 +236,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   const handleAddReaction = async (announcementId, reactionType) => {
     try {
       await announcementService.addReaction(announcementId, reactionType);
-      await fetchAnnouncements(adminRoom._id);
+      await fetchAnnouncements(adminRoom.id || adminRoom._id);
       setShowReactionPicker({});
     } catch (error) {
       Alert.alert("Error", "Failed to add reaction");
@@ -261,7 +246,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   const handleRemoveReaction = async (announcementId) => {
     try {
       await announcementService.removeReaction(announcementId);
-      await fetchAnnouncements(adminRoom._id);
+      await fetchAnnouncements(adminRoom.id || adminRoom._id);
     } catch (error) {
       Alert.alert("Error", "Failed to remove reaction");
     }
@@ -270,13 +255,13 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   const handleShare = async (announcement) => {
     try {
       await Share.share({
-        message: `${announcement.title}\n\n${announcement.content}`,
+        message: announcement.title + "\n\n" + announcement.content,
         title: announcement.title,
       });
-
-      // Log share in backend
-      await announcementService.shareAnnouncement(announcement._id);
-      await fetchAnnouncements(adminRoom._id);
+      await announcementService.shareAnnouncement(
+        announcement.id || announcement._id,
+      );
+      await fetchAnnouncements(adminRoom.id || adminRoom._id);
     } catch (error) {
       console.error("Error sharing:", error);
     }
@@ -292,29 +277,72 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#b38604" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Room Announcements</Text>
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIconWrap}>
+            <Ionicons name="megaphone-outline" size={20} color={colors.accent} />
+          </View>
+          <View>
+            <Text style={styles.headerTitle}>Announcements</Text>
+            {adminRoom && (
+              <Text style={styles.headerSubtitle}>{adminRoom.name}</Text>
+            )}
+          </View>
+        </View>
         <TouchableOpacity
           onPress={() => setShowCreateModal(true)}
           style={styles.createButton}
         >
-          <MaterialIcons name="add" size={24} color="#fff" />
+          <Ionicons name="add" size={22} color={colors.textOnAccent} />
         </TouchableOpacity>
+      </View>
+
+      {/* Summary Strip */}
+      <View style={styles.summaryStrip}>
+        <View style={styles.summaryItem}>
+          <Ionicons name="document-text-outline" size={16} color={colors.accent} />
+          <Text style={styles.summaryValue}>{announcements.length}</Text>
+          <Text style={styles.summaryLabel}>Posts</Text>
+        </View>
+        <View style={styles.summarySep} />
+        <View style={styles.summaryItem}>
+          <Ionicons name="chatbubble-outline" size={16} color={colors.accent} />
+          <Text style={styles.summaryValue}>
+            {announcements.reduce(
+              (sum, a) => sum + (a.comments?.length || 0),
+              0,
+            )}
+          </Text>
+          <Text style={styles.summaryLabel}>Comments</Text>
+        </View>
+        <View style={styles.summarySep} />
+        <View style={styles.summaryItem}>
+          <Ionicons name="heart-outline" size={16} color={colors.accent} />
+          <Text style={styles.summaryValue}>
+            {announcements.reduce(
+              (sum, a) => sum + (a.reactions?.length || 0),
+              0,
+            )}
+          </Text>
+          <Text style={styles.summaryLabel}>Reactions</Text>
+        </View>
       </View>
 
       <FlatList
         data={announcements}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item) => item.id || item._id}
         renderItem={({ item }) => {
-          const showComments = expandedComments[item._id];
-          const userReaction = userReactions[item._id];
+          const annId = item.id || item._id;
+          const showComments = expandedComments[annId];
+          const userReaction = userReactions[annId];
           const reactionCounts = {};
           const totalReactions = item.reactions?.length || 0;
 
@@ -328,38 +356,49 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
               {/* Post Header */}
               <View style={styles.postHeader}>
                 <View style={styles.creatorInfo}>
-                  {item.createdBy?.avatar?.url ? (
+                  {item.creator?.avatar?.url || item.createdBy?.avatar?.url ? (
                     <Image
-                      source={{ uri: item.createdBy.avatar.url }}
-                      style={styles.avatar}
+                      source={{
+                        uri:
+                          item.creator?.avatar?.url ||
+                          item.createdBy?.avatar?.url,
+                      }}
+                      style={styles.avatarImage}
                     />
                   ) : (
                     <View style={styles.avatar}>
                       <Text style={styles.avatarText}>
-                        {item.creatorName?.[0]?.toUpperCase() || "A"}
+                        {(item.creator?.name ||
+                          item.creatorName)?.[0]?.toUpperCase() || "A"}
                       </Text>
                     </View>
                   )}
                   <View style={styles.creatorDetails}>
-                    <Text style={styles.creatorName}>{item.creatorName}</Text>
+                    <Text style={styles.creatorName}>
+                      {item.creator?.name || item.creatorName}
+                    </Text>
                     <Text style={styles.createdAt}>
-                      {new Date(item.createdAt).toLocaleDateString()}
+                      {new Date(
+                        item.created_at || item.createdAt,
+                      ).toLocaleDateString()}
                     </Text>
                   </View>
                 </View>
-                {String(item.createdBy) === String(userId) && (
+                {String(item.created_by || item.createdBy) ===
+                  String(userId) && (
                   <TouchableOpacity
-                    onPress={() => handleDeleteAnnouncement(item._id)}
+                    onPress={() => handleDeleteAnnouncement(annId)}
+                    style={styles.deleteBtn}
                   >
-                    <MaterialIcons name="more-vert" size={20} color="#666" />
+                    <Ionicons name="trash-outline" size={18} color={colors.error} />
                   </TouchableOpacity>
                 )}
               </View>
 
               {/* Post Title & Content */}
               <View style={styles.postContent}>
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.content}>{item.content}</Text>
+                <Text style={styles.postTitle}>{item.title}</Text>
+                <Text style={styles.postText}>{item.content}</Text>
               </View>
 
               {/* Reactions & Shares Summary */}
@@ -398,11 +437,11 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                     style={styles.actionButton}
                     onPress={() => {
                       if (userReaction) {
-                        handleRemoveReaction(item._id);
+                        handleRemoveReaction(annId);
                       } else {
                         setShowReactionPicker((prev) => ({
                           ...prev,
-                          [item._id]: !prev[item._id],
+                          [annId]: !prev[annId],
                         }));
                       }
                     }}
@@ -410,8 +449,8 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                     <Text style={styles.actionButtonEmoji}>
                       {userReaction
                         ? REACTION_TYPES.find((r) => r.type === userReaction)
-                            ?.emoji || "👍"
-                        : "👍"}
+                            ?.emoji || "\uD83D\uDC4D"
+                        : "\uD83D\uDC4D"}
                     </Text>
                     <Text
                       style={[
@@ -423,15 +462,14 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                     </Text>
                   </TouchableOpacity>
 
-                  {/* Reaction Picker */}
-                  {showReactionPicker[item._id] && (
+                  {showReactionPicker[annId] && (
                     <View style={styles.reactionPickerContainer}>
                       {REACTION_TYPES.map((reaction) => (
                         <TouchableOpacity
                           key={reaction.type}
                           style={styles.reactionOption}
                           onPress={() =>
-                            handleAddReaction(item._id, reaction.type)
+                            handleAddReaction(annId, reaction.type)
                           }
                         >
                           <Text style={styles.reactionOptionEmoji}>
@@ -451,7 +489,11 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                     setShowCommentModal(true);
                   }}
                 >
-                  <MaterialIcons name="comment" size={18} color="#65676b" />
+                  <Ionicons
+                    name="chatbubble-outline"
+                    size={17}
+                    color={colors.textSecondary}
+                  />
                   <Text style={styles.actionButtonText}>Comment</Text>
                 </TouchableOpacity>
 
@@ -460,22 +502,22 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                   style={styles.actionButton}
                   onPress={() => handleShare(item)}
                 >
-                  <MaterialIcons name="share" size={18} color="#65676b" />
+                  <Ionicons
+                    name="share-social-outline"
+                    size={17}
+                    color={colors.textSecondary}
+                  />
                   <Text style={styles.actionButtonText}>Share</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Divider */}
-              <View style={styles.divider} />
-
               {/* Comments Section */}
               {item.comments && item.comments.length > 0 && (
                 <View style={styles.commentsContainer}>
-                  {/* View Comments Toggle */}
                   {!showComments && item.comments.length > 0 && (
                     <TouchableOpacity
                       style={styles.viewCommentsButton}
-                      onPress={() => toggleComments(item._id)}
+                      onPress={() => toggleComments(annId)}
                     >
                       <Text style={styles.viewCommentsText}>
                         View {item.comments.length} comment
@@ -484,47 +526,57 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                     </TouchableOpacity>
                   )}
 
-                  {/* Show Comments */}
                   {showComments && (
                     <View style={styles.commentsList}>
                       {item.comments.map((comment) => (
-                        <View key={comment._id} style={styles.comment}>
+                        <View
+                          key={comment.id || comment._id}
+                          style={styles.comment}
+                        >
                           {comment.user?.avatar?.url ? (
                             <Image
                               source={{ uri: comment.user.avatar.url }}
-                              style={styles.commentAvatar}
+                              style={styles.commentAvatarImg}
                             />
                           ) : (
                             <View style={styles.commentAvatar}>
                               <Text style={styles.commentAvatarText}>
-                                {comment.userName?.[0]?.toUpperCase() || "U"}
+                                {(comment.user_name ||
+                                  comment.userName)?.[0]?.toUpperCase() || "U"}
                               </Text>
                             </View>
                           )}
-                          <View style={styles.commentContent}>
+                          <View style={styles.commentBody}>
                             <View style={styles.commentHeader}>
                               <Text style={styles.commentAuthor}>
-                                {comment.userName}
+                                {comment.user_name || comment.userName}
                               </Text>
                               {String(comment.user) === String(userId) && (
                                 <TouchableOpacity
                                   onPress={() =>
-                                    handleDeleteComment(item._id, comment._id)
+                                    handleDeleteComment(
+                                      annId,
+                                      comment.id || comment._id,
+                                    )
                                   }
                                 >
-                                  <MaterialIcons
+                                  <Ionicons
                                     name="close"
                                     size={14}
-                                    color="#999"
+                                    color={colors.textTertiary}
                                   />
                                 </TouchableOpacity>
                               )}
                             </View>
-                            <Text style={styles.commentText}>
-                              {comment.text}
-                            </Text>
+                            <View style={styles.commentBubble}>
+                              <Text style={styles.commentText}>
+                                {comment.text}
+                              </Text>
+                            </View>
                             <Text style={styles.commentDate}>
-                              {new Date(comment.createdAt).toLocaleDateString()}
+                              {new Date(
+                                comment.created_at || comment.createdAt,
+                              ).toLocaleDateString()}
                             </Text>
                           </View>
                         </View>
@@ -532,17 +584,15 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                     </View>
                   )}
 
-                  {/* Hide Comments Toggle */}
                   {showComments && item.comments.length > 2 && (
                     <TouchableOpacity
                       style={styles.viewCommentsButton}
-                      onPress={() => toggleComments(item._id)}
+                      onPress={() => toggleComments(annId)}
                     >
                       <Text style={styles.viewCommentsText}>Hide comments</Text>
                     </TouchableOpacity>
                   )}
 
-                  {/* Add Comment Button */}
                   <TouchableOpacity
                     style={styles.addCommentPrompt}
                     onPress={() => {
@@ -554,7 +604,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                       {currentUser?.avatar?.url ? (
                         <Image
                           source={{ uri: currentUser.avatar.url }}
-                          style={styles.addCommentAvatar}
+                          style={styles.commentAvatarImg}
                         />
                       ) : (
                         <View style={styles.commentAvatar}>
@@ -571,46 +621,56 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                 </View>
               )}
 
-              {/* No Comments yet - Show comment input */}
               {(!item.comments || item.comments.length === 0) && (
-                <TouchableOpacity
-                  style={styles.addCommentPrompt}
-                  onPress={() => {
-                    setSelectedAnnouncement(item);
-                    setShowCommentModal(true);
-                  }}
-                >
-                  <View style={styles.commentInputAvatar}>
-                    {currentUser?.avatar?.url ? (
-                      <Image
-                        source={{ uri: currentUser.avatar.url }}
-                        style={styles.commentAvatar}
-                      />
-                    ) : (
-                      <View style={styles.commentAvatar}>
-                        <Text style={styles.commentAvatarText}>
-                          {userName[0]?.toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.commentInputPlaceholder}>
-                    Write a comment...
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.commentsContainer}>
+                  <TouchableOpacity
+                    style={styles.addCommentPrompt}
+                    onPress={() => {
+                      setSelectedAnnouncement(item);
+                      setShowCommentModal(true);
+                    }}
+                  >
+                    <View style={styles.commentInputAvatar}>
+                      {currentUser?.avatar?.url ? (
+                        <Image
+                          source={{ uri: currentUser.avatar.url }}
+                          style={styles.commentAvatarImg}
+                        />
+                      ) : (
+                        <View style={styles.commentAvatar}>
+                          <Text style={styles.commentAvatarText}>
+                            {userName[0]?.toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.commentInputPlaceholder}>
+                      Write a comment...
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           );
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="bullhorn" size={48} color="#bbb" />
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="megaphone-outline" size={40} color={colors.accent} />
+            </View>
             <Text style={styles.emptyText}>No announcements yet</Text>
-            <Text style={styles.emptySubtext}>Tap + to create one</Text>
+            <Text style={styles.emptySubtext}>
+              Tap + to create your first announcement
+            </Text>
           </View>
         }
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#b38604"]}
+            tintcolor={colors.accent}
+          />
         }
         contentContainerStyle={styles.listContent}
       />
@@ -619,40 +679,51 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
       <Modal
         visible={showCreateModal}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowCreateModal(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
+            <View style={styles.modalIconHeader}>
+              <View style={styles.modalIconWrap}>
+                <Ionicons name="create-outline" size={24} color={colors.accent} />
+              </View>
+            </View>
+            <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Create Announcement</Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
+              <TouchableOpacity
+                onPress={() => setShowCreateModal(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={22} color={colors.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBody}>
+              <Text style={styles.inputLabel}>Title</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Announcement Title"
                 value={title}
                 onChangeText={setTitle}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.placeholder}
               />
+              <Text style={styles.inputLabel}>Content</Text>
               <TextInput
                 style={[styles.input, styles.contentInput]}
-                placeholder="Announcement Content"
+                placeholder="Write your announcement..."
                 value={content}
                 onChangeText={setContent}
                 multiline
                 numberOfLines={6}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.placeholder}
               />
 
               <TouchableOpacity
                 style={styles.submitButton}
                 onPress={handleCreateAnnouncement}
               >
+                <Ionicons name="send" size={18} color={colors.textOnAccent} />
                 <Text style={styles.submitButtonText}>Create Announcement</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -664,19 +735,32 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
       <Modal
         visible={showCommentModal}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowCommentModal(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
+            <View style={styles.modalIconHeader}>
+              <View style={styles.modalIconWrap}>
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={24}
+                  color={colors.accent}
+                />
+              </View>
+            </View>
+            <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Add Comment</Text>
-              <TouchableOpacity onPress={() => setShowCommentModal(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
+              <TouchableOpacity
+                onPress={() => setShowCommentModal(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={22} color={colors.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBody}>
+              <Text style={styles.inputLabel}>Your Comment</Text>
               <TextInput
                 style={[styles.input, styles.contentInput]}
                 placeholder="Write your comment..."
@@ -684,13 +768,14 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                 onChangeText={setCommentText}
                 multiline
                 numberOfLines={5}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.placeholder}
               />
 
               <TouchableOpacity
                 style={styles.submitButton}
                 onPress={handleAddComment}
               >
+                <Ionicons name="send" size={18} color={colors.textOnAccent} />
                 <Text style={styles.submitButtonText}>Post Comment</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -701,60 +786,140 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.background,
   },
+
+  /* Header */
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e5e5",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: colors.card,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.06,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
+      },
+      android: { elevation: 2 },
+    }),
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#000",
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
-  createButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#0a66c2",
+  headerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(179,134,4,0.12)",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 3,
   },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: colors.textTertiary,
+    marginTop: 1,
+  },
+  createButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.accent,
+    justifyContent: "center",
+    alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#b38604",
+        shadowOpacity: 0.25,
+        shadowOffset: { width: 0, height: 3 },
+        shadowRadius: 6,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+
+  /* Summary Strip */
+  summaryStrip: {
+    flexDirection: "row",
+    backgroundColor: colors.card,
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 4,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.06,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 6,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  summaryItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: colors.textTertiary,
+  },
+  summarySep: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: colors.skeleton,
+    marginVertical: 2,
+  },
+
+  /* Post List */
   listContent: {
-    paddingTop: 12,
-    paddingHorizontal: 0,
-    paddingBottom: 16,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
   postCard: {
-    backgroundColor: "#fff",
-    marginHorizontal: 8,
+    backgroundColor: colors.card,
+    marginHorizontal: 12,
     marginBottom: 12,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 3,
-    elevation: 2,
+    borderRadius: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.07,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 6,
+      },
+      android: { elevation: 2 },
+    }),
     overflow: "hidden",
   },
   postHeader: {
@@ -763,8 +928,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
   creatorInfo: {
     flexDirection: "row",
@@ -776,10 +941,17 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#e4e6eb",
+    backgroundColor: colors.accent,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: colors.inputBg,
   },
   avatarText: {
     color: "#fff",
@@ -792,62 +964,76 @@ const styles = StyleSheet.create({
   creatorName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#000",
+    color: colors.text,
     marginBottom: 2,
   },
   createdAt: {
     fontSize: 12,
-    color: "#65676b",
+    color: colors.textTertiary,
   },
+  deleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(231,76,60,0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  /* Post Content */
   postContent: {
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
   },
-  title: {
+  postTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#000",
-    marginBottom: 8,
+    color: colors.text,
+    marginBottom: 6,
     lineHeight: 20,
   },
-  content: {
+  postText: {
     fontSize: 14,
-    color: "#050505",
+    color: colors.text,
     lineHeight: 20,
   },
+
+  /* Stats Bar */
   statsBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
   },
   reactionStats: {
     flexDirection: "row",
     alignItems: "center",
   },
   reactionEmoji: {
-    marginRight: -6,
+    marginRight: -5,
     fontSize: 15,
   },
   reactionCount: {
     fontSize: 13,
-    color: "#65676b",
-    marginLeft: 4,
+    color: colors.textTertiary,
+    marginLeft: 6,
     fontWeight: "500",
   },
   shareCount: {
     fontSize: 13,
-    color: "#65676b",
+    color: colors.textTertiary,
     fontWeight: "500",
   },
+
+  /* Action Bar */
   actionBar: {
     flexDirection: "row",
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
     justifyContent: "space-around",
   },
   actionButtonGroup: {
@@ -861,94 +1047,95 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 8,
+    gap: 5,
   },
   actionButtonEmoji: {
     fontSize: 18,
-    marginRight: 6,
   },
   actionButtonText: {
     fontSize: 13,
-    color: "#65676b",
+    color: colors.textSecondary,
     fontWeight: "600",
   },
   reacted: {
-    color: "#0a66c2",
+    color: colors.accent,
     fontWeight: "700",
   },
   reactionPickerContainer: {
     position: "absolute",
     bottom: 45,
     left: 0,
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     flexDirection: "row",
-    borderRadius: 20,
+    borderRadius: 24,
     paddingHorizontal: 6,
     paddingVertical: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.18,
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 12,
+      },
+      android: { elevation: 10 },
+    }),
     zIndex: 100,
   },
   reactionOption: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     justifyContent: "center",
     alignItems: "center",
   },
   reactionOptionEmoji: {
-    fontSize: 28,
+    fontSize: 26,
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#f0f0f0",
-  },
+
+  /* Comments */
   commentsContainer: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingBottom: 10,
   },
   viewCommentsButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 0,
+    paddingVertical: 8,
   },
   viewCommentsText: {
     fontSize: 13,
-    color: "#0a66c2",
+    color: colors.accent,
     fontWeight: "600",
   },
   commentsList: {
-    marginBottom: 12,
-    marginTop: 8,
+    marginBottom: 8,
+    marginTop: 6,
   },
   comment: {
     flexDirection: "row",
     marginBottom: 14,
   },
   commentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#e4e6eb",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(179,134,4,0.15)",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
     marginTop: 2,
   },
-  addCommentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#e4e6eb",
-    justifyContent: "center",
-    alignItems: "center",
+  commentAvatarImg: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 10,
+    marginTop: 2,
+    backgroundColor: colors.inputBg,
   },
   commentAvatarText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#0a66c2",
+    color: colors.accent,
   },
-  commentContent: {
+  commentBody: {
     flex: 1,
   },
   commentHeader: {
@@ -958,138 +1145,174 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   commentAuthor: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
-    color: "#000",
+    color: colors.text,
+  },
+  commentBubble: {
+    backgroundColor: colors.background,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
   },
   commentText: {
     fontSize: 13,
-    color: "#050505",
-    backgroundColor: "#e4e6eb",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 16,
+    color: colors.text,
     lineHeight: 18,
   },
   commentDate: {
-    fontSize: 12,
-    color: "#65676b",
-    marginTop: 6,
+    fontSize: 11,
+    color: colors.textTertiary,
+    marginTop: 5,
+    marginLeft: 4,
   },
   addCommentPrompt: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 0,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
-    marginTop: 8,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
+    marginTop: 4,
   },
   commentInputAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#0a66c2",
-    justifyContent: "center",
-    alignItems: "center",
     marginRight: 10,
-  },
-  commentInputAvatarText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#fff",
   },
   commentInputPlaceholder: {
     flex: 1,
     fontSize: 13,
-    color: "#65676b",
+    color: colors.textTertiary,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: "#f0f2f5",
+    backgroundColor: colors.background,
     borderRadius: 18,
     fontWeight: "500",
   },
+
+  /* Empty State */
   emptyContainer: {
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 80,
   },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(179,134,4,0.10)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
   emptyText: {
     fontSize: 17,
-    fontWeight: "600",
-    color: "#65676b",
-    marginTop: 16,
+    fontWeight: "700",
+    color: colors.text,
   },
   emptySubtext: {
     fontSize: 13,
-    color: "#b0b1b5",
+    color: colors.textTertiary,
     marginTop: 6,
   },
+
+  /* Modals */
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "center",
+    paddingHorizontal: 20,
   },
   modalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingTop: 20,
-    maxHeight: "90%",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: -3 },
-    shadowRadius: 8,
-    elevation: 8,
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    paddingBottom: 20,
+    maxHeight: "85%",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.2,
+        shadowOffset: { width: 0, height: 8 },
+        shadowRadius: 20,
+      },
+      android: { elevation: 12 },
+    }),
   },
-  modalHeader: {
+  modalIconHeader: {
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  modalIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(179,134,4,0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 18,
-    marginBottom: 18,
+    paddingHorizontal: 20,
+    marginBottom: 14,
+    marginTop: 8,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#000",
+    color: colors.text,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.background,
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalBody: {
-    paddingHorizontal: 18,
-    paddingBottom: 28,
+    paddingHorizontal: 20,
   },
-  label: {
+  inputLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#000",
-    marginBottom: 8,
+    color: colors.text,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
+    borderColor: colors.border,
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
-    color: "#000",
-    marginBottom: 16,
-    backgroundColor: "#f8f9f9",
+    color: colors.text,
+    marginBottom: 14,
+    backgroundColor: colors.cardAlt,
   },
   contentInput: {
     textAlignVertical: "top",
     minHeight: 100,
   },
   submitButton: {
-    backgroundColor: "#0a66c2",
-    borderRadius: 8,
-    paddingVertical: 12,
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 12,
-    shadowColor: "#0a66c2",
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 3,
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#b38604",
+        shadowOpacity: 0.25,
+        shadowOffset: { width: 0, height: 3 },
+        shadowRadius: 6,
+      },
+      android: { elevation: 3 },
+    }),
   },
   submitButtonText: {
     color: "#fff",

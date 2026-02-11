@@ -2,6 +2,7 @@ import React, { useEffect, useReducer, useCallback } from "react";
 import * as SecureStore from "expo-secure-store";
 import { authService } from "../services/apiService";
 import notificationService from "../services/notificationService";
+import savedAccountsService from "../services/savedAccountsService";
 
 export const AuthContext = React.createContext();
 
@@ -136,6 +137,9 @@ export const AuthProvider = ({ children }) => {
         await SecureStore.setItemAsync("authToken", token);
         dispatch({ type: "SIGN_IN", payload: { token, user } });
 
+        // Save account for quick login
+        await savedAccountsService.saveAccount(user);
+
         // Schedule daily presence reminder notification at 9 AM
         await notificationService.scheduleDailyPresenceReminder(20, 0);
 
@@ -156,6 +160,9 @@ export const AuthProvider = ({ children }) => {
         const { token, user } = data;
         await SecureStore.setItemAsync("authToken", token);
         dispatch({ type: "SIGN_UP", payload: { token, user } });
+
+        // Save account for quick login
+        await savedAccountsService.saveAccount(user);
 
         // Schedule daily presence reminder notification at 9 AM
         await notificationService.scheduleDailyPresenceReminder(9, 0);
@@ -187,12 +194,27 @@ export const AuthProvider = ({ children }) => {
     signInWithGoogle: useCallback(async (googleData) => {
       try {
         const response = await authService.googleLogin(googleData);
-        const { token, user } = response.data;
+        // Handle response structure: response.data may already be extracted
+        const data = response.data || response;
+        const { token, user } = data;
+        if (!token) throw new Error("No token received from server");
         await SecureStore.setItemAsync("authToken", token);
         dispatch({ type: "SIGN_IN", payload: { token, user } });
+
+        // Save account for quick login
+        await savedAccountsService.saveAccount(user);
+
+        // Schedule daily presence reminder
+        await notificationService.scheduleDailyPresenceReminder(20, 0);
+
         return { success: true };
       } catch (error) {
-        const message = error.response?.data?.message || "Google login failed";
+        console.error("Google login error:", error);
+        const message =
+          error.data?.message ||
+          error.response?.data?.message ||
+          error.message ||
+          "Google login failed";
         dispatch({ type: "SET_ERROR", payload: message });
         return { success: false, error: message };
       }
@@ -201,13 +223,26 @@ export const AuthProvider = ({ children }) => {
     signInWithFacebook: useCallback(async (facebookData) => {
       try {
         const response = await authService.facebookLogin(facebookData);
-        const { token, user } = response.data;
+        const data = response.data || response;
+        const { token, user } = data;
+        if (!token) throw new Error("No token received from server");
         await SecureStore.setItemAsync("authToken", token);
         dispatch({ type: "SIGN_IN", payload: { token, user } });
+
+        // Save account for quick login
+        await savedAccountsService.saveAccount(user);
+
+        // Schedule daily presence reminder
+        await notificationService.scheduleDailyPresenceReminder(20, 0);
+
         return { success: true };
       } catch (error) {
+        console.error("Facebook login error:", error);
         const message =
-          error.response?.data?.message || "Facebook login failed";
+          error.data?.message ||
+          error.response?.data?.message ||
+          error.message ||
+          "Facebook login failed";
         dispatch({ type: "SET_ERROR", payload: message });
         return { success: false, error: message };
       }

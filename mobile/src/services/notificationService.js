@@ -89,9 +89,9 @@ export const scheduleDailyPresenceReminder = async (hour = 9, minute = 0) => {
         priority: "high",
       },
       trigger: {
-        // Use seconds trigger with daily repeat (API infers type automatically)
+        type: "timeInterval",
         seconds: secondsUntil,
-        repeats: true, // This creates a repeating notification every 24 hours
+        repeats: true,
       },
     });
 
@@ -124,7 +124,9 @@ export const scheduleTestNotification = async (delaySeconds = 5) => {
         },
       },
       trigger: {
+        type: "timeInterval",
         seconds: delaySeconds,
+        repeats: false,
       },
     });
 

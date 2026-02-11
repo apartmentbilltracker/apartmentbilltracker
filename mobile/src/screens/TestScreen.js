@@ -1,8 +1,12 @@
-import React, { useContext } from "react";
+import React, { useContext, useMemo} from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { AuthContext } from "../context/AuthContext";
+import { useTheme } from "../theme/ThemeContext";
 
 export default function TestScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const authContext = useContext(AuthContext);
 
   return (
@@ -22,23 +26,23 @@ export default function TestScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     padding: 20,
   },
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#d32f2f",
+    color: colors.error,
     marginBottom: 20,
   },
   text: {
     fontSize: 16,
-    color: "#333",
+    color: colors.text,
     marginBottom: 10,
     textAlign: "center",
   },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo} from "react";
 import {
   View,
   Text,
@@ -11,10 +11,14 @@ import {
   Share,
 } from "react-native";
 import { roomService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
 
 const WATER_RATE = 5; // ₱5 per day
 
 const AdminReportsScreen = () => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [members, setMembers] = useState([]);
@@ -27,7 +31,7 @@ const AdminReportsScreen = () => {
 
   useEffect(() => {
     if (selectedRoom) {
-      fetchRoomDetails(selectedRoom._id);
+      fetchRoomDetails(selectedRoom.id || selectedRoom._id);
     }
   }, [selectedRoom]);
 
@@ -131,7 +135,7 @@ const AdminReportsScreen = () => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#b38604" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -143,20 +147,22 @@ const AdminReportsScreen = () => {
         <Text style={styles.sectionTitle}>Select Room</Text>
         <FlatList
           data={rooms}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item) => item.id || item._id}
           scrollEnabled={false}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[
                 styles.roomOption,
-                selectedRoom?._id === item._id && styles.roomOptionActive,
+                (selectedRoom?.id || selectedRoom?._id) ===
+                  (item.id || item._id) && styles.roomOptionActive,
               ]}
               onPress={() => setSelectedRoom(item)}
             >
               <Text
                 style={[
                   styles.roomOptionText,
-                  selectedRoom?._id === item._id && styles.roomOptionTextActive,
+                  (selectedRoom?.id || selectedRoom?._id) ===
+                    (item.id || item._id) && styles.roomOptionTextActive,
                 ]}
               >
                 {item.name}
@@ -208,7 +214,7 @@ const AdminReportsScreen = () => {
             </View>
             <View style={[styles.statCard, styles.totalCard]}>
               <Text style={styles.statLabel}>Total</Text>
-              <Text style={[styles.statValue, { color: "#28a745" }]}>
+              <Text style={[styles.statValue, { color: colors.success }]}>
                 ₱{stats.totalBilling.toFixed(2)}
               </Text>
             </View>
@@ -222,7 +228,7 @@ const AdminReportsScreen = () => {
             ) : (
               <FlatList
                 data={members}
-                keyExtractor={(item) => item._id}
+                keyExtractor={(item) => item.id || item._id}
                 scrollEnabled={false}
                 renderItem={({ item }) => {
                   const presenceDays = item.presence ? item.presence.length : 0;
@@ -276,23 +282,23 @@ const AdminReportsScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.background,
   },
   section: {
     padding: 16,
     marginBottom: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
   },
   exportSection: {
     padding: 12,
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     marginBottom: 8,
   },
   exportButton: {
-    backgroundColor: "#28a745",
+    backgroundColor: colors.success,
     borderRadius: 6,
     padding: 14,
     alignItems: "center",
@@ -305,7 +311,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
+    color: colors.text,
     marginBottom: 12,
   },
   roomOption: {
@@ -313,18 +319,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginBottom: 8,
     borderWidth: 2,
-    borderColor: "#e0e0e0",
+    borderColor: colors.border,
   },
   roomOptionActive: {
     borderColor: "#b38604",
-    backgroundColor: "#fffbf0",
+    backgroundColor: colors.accentSurface,
   },
   roomOptionText: {
     fontSize: 14,
-    color: "#666",
+    color: colors.textSecondary,
   },
   roomOptionTextActive: {
-    color: "#b38604",
+    color: colors.accent,
     fontWeight: "600",
   },
   statsContainer: {
@@ -332,11 +338,11 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
     padding: 8,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.background,
   },
   statCard: {
     width: "48%",
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
@@ -349,20 +355,20 @@ const styles = StyleSheet.create({
   },
   totalCard: {
     borderWidth: 2,
-    borderColor: "#28a745",
+    borderColor: colors.success,
   },
   statLabel: {
     fontSize: 11,
-    color: "#666",
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   statValue: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#333",
+    color: colors.text,
   },
   memberCard: {
-    backgroundColor: "#f9f9f9",
+    backgroundColor: colors.inputBg,
     borderRadius: 6,
     padding: 12,
     marginBottom: 8,
@@ -378,11 +384,11 @@ const styles = StyleSheet.create({
   memberName: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
+    color: colors.text,
     flex: 1,
   },
   percentBadge: {
-    backgroundColor: "#0066cc",
+    backgroundColor: colors.info,
     color: "#fff",
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -400,22 +406,22 @@ const styles = StyleSheet.create({
   },
   memberStatLabel: {
     fontSize: 11,
-    color: "#999",
+    color: colors.textTertiary,
     marginBottom: 2,
   },
   memberStatValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
+    color: colors.text,
   },
   memberEmail: {
     fontSize: 12,
-    color: "#999",
+    color: colors.textTertiary,
     marginTop: 4,
   },
   noDataText: {
     fontSize: 14,
-    color: "#999",
+    color: colors.textTertiary,
     textAlign: "center",
     paddingVertical: 20,
   },

@@ -1,24 +1,26 @@
 import React, { useState, useEffect, useContext, useRef, useMemo } from "react";
-import { useIsFocused, useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
   Alert,
   RefreshControl,
 } from "react-native";
-import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { presenceService, roomService } from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
+import { useTheme } from "../../theme/ThemeContext";
 
 const PresenceScreen = () => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { state } = useContext(AuthContext);
-  const userId = state?.user?._id; // MUST be defined before useMemo
-  const isFocused = useIsFocused();
+  const userId = state?.user?.id || state?.user?._id;
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,119 +38,45 @@ const PresenceScreen = () => {
     (selectedRoom?.billing?.start && selectedRoom?.billing?.end),
   );
 
-  // Check if current user has paid all their bills - MEMOIZED to ensure re-render
   const userPaidStatus = useMemo(() => {
-    if (!selectedRoom || !userId) {
-      console.log("🔍 useMemo skipped - selectedRoom or userId missing");
-      return false;
-    }
-
-    console.log("🔍🔍 useMemo RECALCULATING payment status for user:", userId);
-    console.log("   Current selectedRoom ID:", selectedRoom._id);
-    console.log(
-      "   memberPayments:",
-      JSON.stringify(
-        selectedRoom.memberPayments?.map((mp) => ({
-          memberName: mp.memberName,
-          member: mp.member,
-          rentStatus: mp.rentStatus,
-          electricityStatus: mp.electricityStatus,
-          waterStatus: mp.waterStatus,
-        })),
-      ),
-    );
-
+    if (!selectedRoom || !userId) return false;
     const userPayment = selectedRoom.memberPayments?.find(
       (mp) => String(mp.member) === String(userId),
     );
-
-    console.log("   User payment found:", userPayment ? "YES" : "NO");
-
-    if (!userPayment) {
-      console.log("   Result: false (user payment not found)");
-      return false;
-    }
-
-    const allPaid =
+    if (!userPayment) return false;
+    return (
       userPayment.rentStatus === "paid" &&
       userPayment.electricityStatus === "paid" &&
-      userPayment.waterStatus === "paid";
-
-    console.log(
-      "   Status check - Rent:",
-      userPayment.rentStatus,
-      "| Electricity:",
-      userPayment.electricityStatus,
-      "| Water:",
-      userPayment.waterStatus,
-      "| RESULT:",
-      allPaid ? "PAID ✅" : "NOT PAID ❌",
+      userPayment.waterStatus === "paid"
     );
-
-    return allPaid;
   }, [selectedRoom, userId, selectedRoom?.memberPayments?.length]);
 
   // Individual user can mark presence only if they have NOT paid for this cycle
   const canMarkPresence = hasActiveCycle && !userPaidStatus;
 
   const [markedDates, setMarkedDates] = useState([]);
+  const markedDatesSet = useMemo(() => new Set(markedDates), [markedDates]);
   const [rangeStartDate, setRangeStartDate] = useState(null);
   const [markingMultiple, setMarkingMultiple] = useState(false);
   const [isMarkingInProgress, setIsMarkingInProgress] = useState(false); // Prevent duplicate requests
 
-  // Guaranteed refresh using useFocusEffect - runs every time screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      console.log(
-        "🔄🔄 PresenceScreen - useFocusEffect TRIGGERED (guaranteed fresh data)",
-      );
-      const forceRefresh = async () => {
+      const refresh = async () => {
         try {
-          // Wait for backend to process any pending payments
-          console.log("⏳ Waiting 2 seconds for backend to process payment...");
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-
-          console.log("📡 Fetching fresh rooms from backend NOW...");
           const response = await roomService.getClientRooms();
           const data = response.data || response;
           const fetchedRooms = data.rooms || data || [];
-
-          console.log("✅ Fresh rooms fetched! Count:", fetchedRooms.length);
-          if (fetchedRooms.length > 0) {
-            console.log("   Room ID:", fetchedRooms[0]._id);
-            console.log(
-              "   memberPayments:",
-              JSON.stringify(
-                fetchedRooms[0].memberPayments.map((mp) => ({
-                  memberName: mp.memberName,
-                  rentStatus: mp.rentStatus,
-                  electricityStatus: mp.electricityStatus,
-                  waterStatus: mp.waterStatus,
-                })),
-              ),
-            );
-          }
-
-          console.log("📌 Updating state with fresh rooms...");
           setRooms(fetchedRooms);
           if (fetchedRooms.length > 0) {
-            console.log("📌 Setting selectedRoom to first room");
             setSelectedRoom(fetchedRooms[0]);
-            // IMPORTANT: Reload marked dates after room selection updates
             await loadMarkedDates();
           }
         } catch (error) {
-          console.error("❌ Error in useFocusEffect:", error);
+          console.error("Error refreshing rooms:", error);
         }
       };
-
-      forceRefresh();
-
-      // Cleanup if needed
-      return () => {
-        // Runs when component loses focus
-        console.log("🔄🔄 PresenceScreen - Lost focus, cleanup");
-      };
+      refresh();
     }, []),
   );
 
@@ -157,40 +85,17 @@ const PresenceScreen = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedRoom && selectedRoom._id) {
-      console.log("🎯 selectedRoom changed, logging state:");
-      console.log("   Room ID:", selectedRoom._id);
-      console.log(
-        "   memberPayments:",
-        JSON.stringify(
-          selectedRoom.memberPayments?.map((mp) => ({
-            memberName: mp.memberName,
-            rentStatus: mp.rentStatus,
-            electricityStatus: mp.electricityStatus,
-            waterStatus: mp.waterStatus,
-          })),
-        ),
-      );
-      console.log("   userPaidStatus will be recalculated:", userPaidStatus);
-      console.log(
-        "   canMarkPresence will be:",
-        hasActiveCycle && !userPaidStatus,
-      );
-
-      // Load marked dates for calendar
+    if (selectedRoom && (selectedRoom.id || selectedRoom._id)) {
       loadMarkedDates();
     }
-  }, [selectedRoom?._id, userPaidStatus]);
+  }, [selectedRoom?.id || selectedRoom?._id]);
 
   const fetchRooms = async (skipAutoSelect = false) => {
     try {
       setLoading(true);
       const response = await roomService.getClientRooms();
-      console.log("Presence Screen - getClientRooms response:", response);
-      // Handle response structure from fetch API: response = { data, status }
       const data = response.data || response;
       const fetchedRooms = data.rooms || data || [];
-      console.log("Presence Screen - fetched rooms:", fetchedRooms);
 
       // Backend already filters to show only rooms user is part of (via $or query with memberPayments)
       // So use all returned rooms without additional filtering
@@ -218,26 +123,24 @@ const PresenceScreen = () => {
 
     try {
       // Fetch full room data directly to get presence (list endpoint excludes presence)
-      const roomResponse = await roomService.getRoomById(selectedRoom._id);
+      const roomResponse = await roomService.getRoomById(
+        selectedRoom.id || selectedRoom._id,
+      );
       const roomData = roomResponse.data || roomResponse;
       const room = roomData.room || roomData;
 
-      console.log("Presence Screen - Room data with members:", room.members);
-
       // Find current user's member record in the room
       const currentUserMember = room.members?.find(
-        (m) => String(m.user?._id || m.user) === String(userId),
+        (m) => String(m.user?.id || m.user?._id || m.user) === String(userId),
       );
 
       if (currentUserMember && Array.isArray(currentUserMember.presence)) {
-        console.log("Loaded presence dates:", currentUserMember.presence);
         // Normalize presence dates to YYYY-MM-DD local format
         const normalized = currentUserMember.presence
           .map((d) => formatToYMD(d))
           .filter(Boolean);
         setMarkedDates(normalized);
       } else {
-        console.log("No presence data found for user:", userId);
         setMarkedDates([]);
       }
     } catch (error) {
@@ -286,7 +189,7 @@ const PresenceScreen = () => {
     setMarkedDates(updatedDates);
     if (selectedRoom && selectedRoom.members) {
       const updatedMembers = selectedRoom.members.map((m) => {
-        if (String(m.user?._id || m.user) === String(userId)) {
+        if (String(m.user?.id || m.user?._id || m.user) === String(userId)) {
           return { ...m, presence: updatedDates };
         }
         return m;
@@ -312,15 +215,14 @@ const PresenceScreen = () => {
 
       try {
         console.log("📤 Sending presence update:", updatedDates);
-        await presenceService.markPresence(selectedRoom._id, {
-          presenceDates: updatedDates,
-        });
+        await presenceService.markPresence(
+          selectedRoom.id || selectedRoom._id,
+          {
+            presenceDates: updatedDates,
+          },
+        );
 
         pendingUpdatesRef.current.clear();
-        console.log("✅ Presence update succeeded");
-
-        // Reload from backend to ensure sync (but don't override optimistic update yet)
-        await loadMarkedDates();
       } catch (error) {
         // Revert optimistic update on error
         console.error("❌ Error marking presence:", error);
@@ -328,7 +230,9 @@ const PresenceScreen = () => {
         setMarkedDates(prevMarked);
         if (selectedRoom && selectedRoom.members) {
           const revertedMembers = selectedRoom.members.map((m) => {
-            if (String(m.user?._id || m.user) === String(userId)) {
+            if (
+              String(m.user?.id || m.user?._id || m.user) === String(userId)
+            ) {
               return { ...m, presence: prevMarked };
             }
             return m;
@@ -385,7 +289,7 @@ const PresenceScreen = () => {
 
       console.log("Marking all month dates:", datesToAdd.length, "dates");
 
-      await presenceService.markPresence(selectedRoom._id, {
+      await presenceService.markPresence(selectedRoom.id || selectedRoom._id, {
         presenceDates: updatedDates,
       });
 
@@ -394,7 +298,7 @@ const PresenceScreen = () => {
       // Sync to local selectedRoom member
       if (selectedRoom && selectedRoom.members) {
         const updatedMembers = selectedRoom.members.map((m) => {
-          if (String(m.user?._id || m.user) === String(userId)) {
+          if (String(m.user?.id || m.user?._id || m.user) === String(userId)) {
             return { ...m, presence: updatedDates };
           }
           return m;
@@ -449,7 +353,7 @@ const PresenceScreen = () => {
 
       console.log("Marking workdays:", datesToAdd.length, "dates");
 
-      await presenceService.markPresence(selectedRoom._id, {
+      await presenceService.markPresence(selectedRoom.id || selectedRoom._id, {
         presenceDates: updatedDates,
       });
 
@@ -458,7 +362,7 @@ const PresenceScreen = () => {
       // Sync to local selectedRoom member
       if (selectedRoom && selectedRoom.members) {
         const updatedMembers = selectedRoom.members.map((m) => {
-          if (String(m.user?._id || m.user) === String(userId)) {
+          if (String(m.user?.id || m.user?._id || m.user) === String(userId)) {
             return { ...m, presence: updatedDates };
           }
           return m;
@@ -516,7 +420,7 @@ const PresenceScreen = () => {
 
       console.log("Marking date range:", datesToAdd.length, "dates");
 
-      await presenceService.markPresence(selectedRoom._id, {
+      await presenceService.markPresence(selectedRoom.id || selectedRoom._id, {
         presenceDates: updatedDates,
       });
 
@@ -525,7 +429,7 @@ const PresenceScreen = () => {
       // Sync to local selectedRoom member
       if (selectedRoom && selectedRoom.members) {
         const updatedMembers = selectedRoom.members.map((m) => {
-          if (String(m.user?._id || m.user) === String(userId)) {
+          if (String(m.user?.id || m.user?._id || m.user) === String(userId)) {
             return { ...m, presence: updatedDates };
           }
           return m;
@@ -587,7 +491,7 @@ const PresenceScreen = () => {
   const isDateMarked = (date) => {
     if (!date) return false;
     const dateStr = formatToYMD(date);
-    return markedDates.includes(dateStr);
+    return markedDatesSet.has(dateStr);
   };
 
   const isToday = (date) => {
@@ -631,10 +535,7 @@ const PresenceScreen = () => {
     return hasActiveCycle && isDateInBillingRange(date) && !isFutureDate(date);
   };
 
-  const calendarDays = useMemo(
-    () => generateCalendarDays(),
-    [currentMonth, markedDates],
-  );
+  const calendarDays = useMemo(() => generateCalendarDays(), [currentMonth]);
   const monthName = currentMonth.toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
@@ -643,7 +544,7 @@ const PresenceScreen = () => {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#b38604" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -656,95 +557,143 @@ const PresenceScreen = () => {
       }
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
+      {/* ─── HEADER ─── */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mark Attendance</Text>
-        <Text style={styles.headerSubtitle}>Track your daily presence</Text>
-      </View>
-
-      {/* Room Selector */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Select Room</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {rooms.map((room) => (
-            <TouchableOpacity
-              key={room._id}
-              style={[
-                styles.roomSelector,
-                selectedRoom?._id === room._id && styles.roomSelectorActive,
-              ]}
-              onPress={() => setSelectedRoom(room)}
-            >
-              <Text
-                style={[
-                  styles.roomSelectorText,
-                  selectedRoom?._id === room._id &&
-                    styles.roomSelectorTextActive,
-                ]}
-              >
-                {room.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {!selectedRoom && rooms.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.emptyCard}>
-            <MaterialIcons name="info-outline" size={48} color="#b38604" />
-            <Text style={styles.emptyText}>Select a Room</Text>
-            <Text style={styles.emptySubtext}>
-              Choose a room from above to mark attendance
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIcon}>
+            <Ionicons name="calendar" size={22} color={colors.accent} />
+          </View>
+          <View>
+            <Text style={styles.headerTitle}>Attendance</Text>
+            <Text style={styles.headerSub}>Track your daily presence</Text>
+          </View>
+        </View>
+        {selectedRoom && (
+          <View style={styles.headerBadge}>
+            <Text style={styles.headerBadgeText}>
+              {markedDates.length} days
             </Text>
           </View>
+        )}
+      </View>
+
+      {/* ─── ROOM PILLS ─── */}
+      {rooms.length > 0 && (
+        <View style={styles.roomPillsWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.roomPillsRow}
+          >
+            {rooms.map((room) => {
+              const active =
+                (selectedRoom?.id || selectedRoom?._id) ===
+                (room.id || room._id);
+              return (
+                <TouchableOpacity
+                  key={room.id || room._id}
+                  style={[styles.roomPill, active && styles.roomPillActive]}
+                  onPress={() => setSelectedRoom(room)}
+                >
+                  <Ionicons
+                    name="home-outline"
+                    size={14}
+                    color={active ? "#fff" : "#666"}
+                  />
+                  <Text
+                    style={[
+                      styles.roomPillText,
+                      active && styles.roomPillTextActive,
+                    ]}
+                  >
+                    {room.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
       )}
 
+      {/* Select room prompt */}
+      {!selectedRoom && rooms.length > 0 && (
+        <View style={styles.emptyCard}>
+          <View
+            style={[
+              styles.emptyIconWrap,
+              { backgroundColor: colors.accentLight },
+            ]}
+          >
+            <Ionicons name="home-outline" size={36} color={colors.accent} />
+          </View>
+          <Text style={styles.emptyTitle}>Select a Room</Text>
+          <Text style={styles.emptySub}>
+            Choose a room above to mark attendance
+          </Text>
+        </View>
+      )}
+
+      {/* ─── MAIN CONTENT ─── */}
       {selectedRoom && canMarkPresence ? (
         <>
-          {/* Quick Actions */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
+          {/* Billing Period Strip */}
+          {selectedRoom?.billing?.start && selectedRoom?.billing?.end && (
+            <View style={styles.billingStrip}>
+              <Ionicons
+                name="time-outline"
+                size={14}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.billingStripText}>
+                Billing Period:{" "}
+                {new Date(selectedRoom.billing.start).toLocaleDateString(
+                  "en-US",
+                  { month: "short", day: "numeric" },
+                )}
+                {" – "}
+                {new Date(selectedRoom.billing.end).toLocaleDateString(
+                  "en-US",
+                  { month: "short", day: "numeric", year: "numeric" },
+                )}
+              </Text>
+            </View>
+          )}
 
-            {/* Primary Action */}
+          {/* ─── QUICK ACTIONS ─── */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Quick Actions</Text>
             <TouchableOpacity
               style={[
-                styles.markButton,
-                (marking || markingMultiple) && styles.buttonDisabled,
+                styles.primaryBtn,
+                (marking || markingMultiple) && { opacity: 0.6 },
               ]}
-              onPress={() => {
-                markTodayPresence();
-              }}
+              onPress={markTodayPresence}
               disabled={marking || markingMultiple || !hasActiveCycle}
             >
               {marking || markingMultiple ? (
-                <ActivityIndicator color="#fff" size={18} />
+                <ActivityIndicator color={colors.textOnAccent} size={18} />
               ) : (
                 <>
                   <Ionicons
                     name="checkmark-circle"
                     size={20}
-                    color="#fff"
-                    style={{ marginRight: 8 }}
+                    color={colors.textOnAccent}
                   />
-                  <Text style={styles.markButtonText}>
+                  <Text style={styles.primaryBtnText}>
                     Mark Today's Presence
                   </Text>
                 </>
               )}
             </TouchableOpacity>
 
-            {/* Bulk Actions */}
-            <Text style={styles.bulkActionLabel}>Bulk Mark</Text>
-            <View style={styles.bulkActionsContainer}>
+            <View style={styles.bulkRow}>
               <TouchableOpacity
-                style={[styles.bulkButton, styles.bulkButtonPrimary]}
+                style={styles.bulkBtn}
                 onPress={() => {
                   if (!hasActiveCycle) {
                     Alert.alert(
-                      "No active billing cycle or billing period",
-                      "Unable to mark presence because there is no active billing cycle or billing period. Please contact your admin.",
+                      "No Active Cycle",
+                      "No active billing cycle or billing period. Contact your admin.",
                     );
                     return;
                   }
@@ -752,22 +701,21 @@ const PresenceScreen = () => {
                 }}
                 disabled={markingMultiple || !hasActiveCycle}
               >
-                <MaterialIcons
-                  name="calendar-today"
-                  size={18}
-                  color="#fff"
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={styles.bulkButtonText}>All Month</Text>
+                <View
+                  style={[styles.bulkIcon, { backgroundColor: colors.infoBg }]}
+                >
+                  <Ionicons name="calendar" size={16} color={colors.info} />
+                </View>
+                <Text style={styles.bulkBtnText}>All Month</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.bulkButton, styles.bulkButtonSecondary]}
+                style={styles.bulkBtn}
                 onPress={() => {
                   if (!hasActiveCycle) {
                     Alert.alert(
-                      "No active billing cycle or billing period",
-                      "Unable to mark presence because there is no active billing cycle or billing period. Please contact your admin.",
+                      "No Active Cycle",
+                      "No active billing cycle or billing period. Contact your admin.",
                     );
                     return;
                   }
@@ -775,41 +723,45 @@ const PresenceScreen = () => {
                 }}
                 disabled={markingMultiple || !hasActiveCycle}
               >
-                <MaterialIcons
-                  name="work"
-                  size={18}
-                  color="#666"
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={styles.bulkButtonTextSecondary}>Workdays</Text>
+                <View
+                  style={[
+                    styles.bulkIcon,
+                    { backgroundColor: colors.successBg },
+                  ]}
+                >
+                  <Ionicons name="briefcase" size={16} color={colors.success} />
+                </View>
+                <Text style={styles.bulkBtnText}>Workdays</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Range Selection Helper Text */}
-            <View style={styles.rangeHelperContainer}>
-              <MaterialIcons name="info" size={16} color="#17a2b8" />
-              <Text style={styles.rangeHelperText}>
-                Tap a date to toggle presence. Long-press to start a range, then
-                tap another date to complete the range.
+            <View style={styles.tipRow}>
+              <Ionicons
+                name="information-circle"
+                size={14}
+                color={colors.info}
+              />
+              <Text style={styles.tipText}>
+                Tap a date to toggle • Long-press to start a range selection
               </Text>
             </View>
-
-            {/* No active billing cycle notice */}
-            {!hasActiveCycle && (
-              <View style={styles.noCycleBanner}>
-                <MaterialIcons name="error-outline" size={16} color="#856404" />
-                <Text style={styles.noCycleText}>
-                  No active billing cycle or billing period. Attendance marking
-                  is disabled. Please contact your admin.
-                </Text>
-              </View>
-            )}
           </View>
 
-          {/* Calendar */}
-          <View style={styles.section}>
-            <View style={styles.calendarHeader}>
+          {/* No cycle banner */}
+          {!hasActiveCycle && (
+            <View style={styles.warnBanner}>
+              <Ionicons name="warning" size={16} color="#856404" />
+              <Text style={styles.warnText}>
+                No active billing cycle. Attendance marking is disabled.
+              </Text>
+            </View>
+          )}
+
+          {/* ─── CALENDAR ─── */}
+          <View style={styles.card}>
+            <View style={styles.calendarNav}>
               <TouchableOpacity
+                style={styles.navBtn}
                 onPress={() =>
                   setCurrentMonth(
                     new Date(
@@ -819,12 +771,11 @@ const PresenceScreen = () => {
                   )
                 }
               >
-                <Ionicons name="chevron-back" size={24} color="#b38604" />
+                <Ionicons name="chevron-back" size={20} color={colors.accent} />
               </TouchableOpacity>
-
-              <Text style={styles.monthYear}>{monthName}</Text>
-
+              <Text style={styles.monthLabel}>{monthName}</Text>
               <TouchableOpacity
+                style={styles.navBtn}
                 onPress={() =>
                   setCurrentMonth(
                     new Date(
@@ -834,105 +785,87 @@ const PresenceScreen = () => {
                   )
                 }
               >
-                <Ionicons name="chevron-forward" size={24} color="#b38604" />
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.accent}
+                />
               </TouchableOpacity>
             </View>
 
-            {/* Calendar Days Header */}
-            <View style={styles.weekDaysContainer}>
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                <View key={day} style={styles.weekDayHeader}>
-                  <Text style={styles.weekDayText}>{day}</Text>
+            {/* Week headers */}
+            <View style={styles.weekRow}>
+              {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                <View key={i} style={styles.weekCell}>
+                  <Text
+                    style={[
+                      styles.weekText,
+                      (i === 0 || i === 6) && { color: colors.textSecondary },
+                    ]}
+                  >
+                    {d}
+                  </Text>
                 </View>
               ))}
             </View>
 
-            {/* Calendar Days Grid */}
-            <View style={styles.calendarDaysContainer}>
+            {/* Day grid */}
+            <View style={styles.dayGrid}>
               {calendarDays.map((date, index) => {
-                const isMarkable = date && isDateMarkable(date);
-                const isFuture = date && isFutureDate(date);
-                const dateYMD = date ? formatToYMD(date) : null;
+                if (!date) return <View key={index} style={styles.dayCell} />;
+
+                const markable = isDateMarkable(date);
+                const marked = isDateMarked(date);
+                const todayFlag = isToday(date);
+                const dateYMD = formatToYMD(date);
                 const isRangeStart =
-                  date && rangeStartDate && dateYMD === rangeStartDate;
-
-                const handleDatePress = () => {
-                  if (!isMarkable) return;
-
-                  if (rangeStartDate) {
-                    // Complete the range
-                    markDateRange(new Date(rangeStartDate), date);
-                  } else {
-                    // Toggle single date presence
-                    markPresence(date);
-                  }
-                };
+                  rangeStartDate && dateYMD === rangeStartDate;
 
                 return (
                   <TouchableOpacity
                     key={index}
                     style={[
                       styles.dayCell,
-                      !date && styles.emptyCell,
-                      date && isToday(date) && styles.todayCell,
-                      date && isDateMarked(date) && styles.markedCell,
-                      !isMarkable && styles.disabledCell,
-                      isRangeStart && styles.rangeStartCell,
+                      todayFlag && styles.todayCell,
+                      marked && styles.markedCell,
+                      isRangeStart && styles.rangeCell,
+                      !markable && styles.dimCell,
                     ]}
-                    onPress={handleDatePress}
-                    disabled={!isMarkable}
-                    onLongPress={() => {
-                      if (isMarkable) {
-                        // Long press toggles range start/clear
-                        if (!rangeStartDate) {
-                          setRangeStartDate(dateYMD);
-                        } else {
-                          setRangeStartDate(null);
-                        }
+                    onPress={() => {
+                      if (!markable) return;
+                      if (rangeStartDate) {
+                        markDateRange(new Date(rangeStartDate), date);
+                      } else {
+                        markPresence(date);
                       }
                     }}
+                    onLongPress={() => {
+                      if (markable)
+                        setRangeStartDate(rangeStartDate ? null : dateYMD);
+                    }}
+                    disabled={!markable}
+                    activeOpacity={0.6}
                   >
-                    {date && (
-                      <>
-                        <Text
-                          style={[
-                            styles.dayNumber,
-                            isToday(date) && styles.todayNumber,
-                            isDateMarked(date) && styles.markedNumber,
-                            !isMarkable && styles.disabledText,
-                            isRangeStart && styles.rangeStartText,
-                          ]}
-                        >
-                          {date.getDate()}
-                        </Text>
-                        {isRangeStart && (
-                          <View style={styles.rangeStartIndicator}>
-                            <MaterialIcons name="flag" size={10} color="#fff" />
-                          </View>
-                        )}
-                        {isFuture && (
-                          <Text
-                            style={{
-                              fontSize: 8,
-                              color: "#999",
-                              marginTop: 2,
-                            }}
-                          >
-                            Future
-                          </Text>
-                        )}
-                        {date && !isDateInBillingRange(date) && !isFuture && (
-                          <Text
-                            style={{
-                              fontSize: 7,
-                              color: "#999",
-                              marginTop: 2,
-                            }}
-                          >
-                            Out Range
-                          </Text>
-                        )}
-                      </>
+                    <Text
+                      style={[
+                        styles.dayNum,
+                        todayFlag && styles.todayNum,
+                        marked && styles.markedNum,
+                        !markable && styles.dimText,
+                        isRangeStart && { color: "#856404" },
+                      ]}
+                    >
+                      {date.getDate()}
+                    </Text>
+                    {marked && <View style={styles.markDot} />}
+                    {isRangeStart && (
+                      <View style={styles.rangeDot}>
+                        <Ionicons
+                          name="flag"
+                          size={8}
+                          color={colors.textOnAccent}
+                        />
+                      </View>
                     )}
                   </TouchableOpacity>
                 );
@@ -940,401 +873,539 @@ const PresenceScreen = () => {
             </View>
 
             {/* Legend */}
-            <View style={styles.legend}>
+            <View style={styles.legendRow}>
               <View style={styles.legendItem}>
-                <View style={styles.legendToday} />
-                <Text style={styles.legendText}>Today</Text>
+                <View
+                  style={[
+                    styles.legendDot,
+                    {
+                      borderColor: "#1565c0",
+                      borderWidth: 2,
+                      backgroundColor: colors.infoBg,
+                    },
+                  ]}
+                />
+                <Text style={styles.legendLabel}>Today</Text>
               </View>
               <View style={styles.legendItem}>
-                <View style={styles.legendMarked} />
-                <Text style={styles.legendText}>Marked</Text>
+                <View
+                  style={[styles.legendDot, { backgroundColor: "#28a745" }]}
+                />
+                <Text style={styles.legendLabel}>Marked</Text>
               </View>
               <View style={styles.legendItem}>
-                <View style={styles.legendDisabled} />
-                <Text style={styles.legendText}>Unavailable</Text>
+                <View
+                  style={[styles.legendDot, { backgroundColor: "#ffc107" }]}
+                />
+                <Text style={styles.legendLabel}>Range</Text>
               </View>
               <View style={styles.legendItem}>
-                <View style={styles.legendRange} />
-                <Text style={styles.legendText}>Range</Text>
+                <View
+                  style={[
+                    styles.legendDot,
+                    { backgroundColor: colors.skeleton },
+                  ]}
+                />
+                <Text style={styles.legendLabel}>Disabled</Text>
               </View>
             </View>
           </View>
 
-          {/* Stats */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Attendance Summary</Text>
-            <View style={styles.statsContainer}>
-              <View style={styles.statCard}>
-                <MaterialIcons name="check-circle" size={28} color="#28a745" />
-                <Text style={styles.statValue}>{markedDates.length}</Text>
+          {/* ─── STATS ─── */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Attendance Summary</Text>
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <View
+                  style={[
+                    styles.statIconWrap,
+                    { backgroundColor: colors.successBg },
+                  ]}
+                >
+                  <Ionicons
+                    name="checkmark-done"
+                    size={20}
+                    color={colors.success}
+                  />
+                </View>
+                <Text style={styles.statNum}>{markedDates.length}</Text>
                 <Text style={styles.statLabel}>Days Marked</Text>
               </View>
-              <View style={styles.statCard}>
-                <Ionicons name="water" size={28} color="#2196F3" />
-                <Text style={styles.statValue}>
-                  ₱{(markedDates.length * 5).toFixed(2)}
+              <View style={styles.statBox}>
+                <View
+                  style={[
+                    styles.statIconWrap,
+                    { backgroundColor: colors.infoBg },
+                  ]}
+                >
+                  <Ionicons name="water" size={20} color={colors.info} />
+                </View>
+                <Text style={styles.statNum}>
+                  ₱{(markedDates.length * 5).toFixed(0)}
                 </Text>
-                <Text style={styles.statLabel}>Water Bill</Text>
+                <Text style={styles.statLabel}>Est. Water Bill</Text>
               </View>
             </View>
           </View>
         </>
       ) : selectedRoom && userPaidStatus ? (
-        <View style={styles.emptyState}>
-          <MaterialIcons name="hourglass-empty" size={48} color="#b38604" />
-          <Text style={styles.emptyText}>Already Paid All Bills</Text>
-          <Text style={styles.emptySubtext}>
-            You have already paid all your bills for this billing period
+        <View style={styles.emptyCard}>
+          <View
+            style={[
+              styles.emptyIconWrap,
+              { backgroundColor: colors.successBg },
+            ]}
+          >
+            <Ionicons
+              name="checkmark-circle"
+              size={36}
+              color={colors.success}
+            />
+          </View>
+          <Text style={styles.emptyTitle}>All Bills Paid</Text>
+          <Text style={styles.emptySub}>
+            You have paid all your bills for this billing period. Attendance
+            marking is locked.
           </Text>
         </View>
-      ) : (
-        <View style={styles.emptyState}>
-          <MaterialIcons name="hourglass-empty" size={48} color="#b38604" />
-          <Text style={styles.emptyText}>No Active Billing Cycle</Text>
-          <Text style={styles.emptySubtext}>
-            Waiting for admin to set billing details for this billing period
+      ) : selectedRoom ? (
+        <View style={styles.emptyCard}>
+          <View
+            style={[
+              styles.emptyIconWrap,
+              { backgroundColor: colors.warningBg },
+            ]}
+          >
+            <Ionicons name="time" size={36} color={colors.accent} />
+          </View>
+          <Text style={styles.emptyTitle}>No Active Billing Cycle</Text>
+          <Text style={styles.emptySub}>
+            Waiting for admin to set billing details for this billing period.
           </Text>
         </View>
-      )}
+      ) : null}
 
       {rooms.length === 0 && (
-        <View style={styles.emptyState}>
-          <MaterialIcons name="inbox" size={48} color="#ccc" />
-          <Text style={styles.emptyText}>No Rooms Joined</Text>
-          <Text style={styles.emptySubtext}>
-            Join a room from Home to mark attendance
+        <View style={styles.emptyCard}>
+          <View
+            style={[styles.emptyIconWrap, { backgroundColor: colors.inputBg }]}
+          >
+            <Ionicons
+              name="home-outline"
+              size={36}
+              color={colors.textTertiary}
+            />
+          </View>
+          <Text style={styles.emptyTitle}>No Rooms Joined</Text>
+          <Text style={styles.emptySub}>
+            Join a room from Home to start marking attendance.
           </Text>
         </View>
       )}
 
-      <View style={{ height: 20 }} />
+      <View style={{ height: 30 }} />
     </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 20,
-    backgroundColor: "#f8f9fa",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#333",
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "#666",
-    marginTop: 4,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#333",
-    marginBottom: 12,
-  },
-  roomSelector: {
-    backgroundColor: "#f5f5f5",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 10,
-    borderWidth: 2,
-    borderColor: "#e0e0e0",
-  },
-  roomSelectorActive: {
-    backgroundColor: "#b38604",
-    borderColor: "#b38604",
-  },
-  roomSelectorText: {
-    color: "#333",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  roomSelectorTextActive: {
-    color: "#fff",
-  },
-  markButton: {
-    backgroundColor: "#b38604",
-    borderRadius: 10,
-    paddingVertical: 14,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  markButtonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  calendarHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  monthYear: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#333",
-  },
-  weekDaysContainer: {
-    flexDirection: "row",
-    marginBottom: 8,
-  },
-  weekDayHeader: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  weekDayText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
-  },
-  calendarDaysContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  dayCell: {
-    width: "14.28%",
-    aspectRatio: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-    borderRadius: 8,
-    backgroundColor: "#f9f9f9",
-    position: "relative",
-  },
-  emptyCell: {
-    backgroundColor: "transparent",
-  },
-  todayCell: {
-    backgroundColor: "#e8f4f8",
-    borderWidth: 2,
-    borderColor: "#17a2b8",
-  },
-  markedCell: {
-    backgroundColor: "#d4edda",
-    borderWidth: 2,
-    borderColor: "#28a745",
-  },
-  disabledCell: {
-    opacity: 0.5,
-    backgroundColor: "#f0f0f0",
-  },
-  disabledText: {
-    color: "#999",
-  },
-  dayNumber: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
-  todayNumber: {
-    color: "#17a2b8",
-  },
-  markedNumber: {
-    color: "#28a745",
-  },
-  rangeStartCell: {
-    backgroundColor: "#fff3cd",
-    borderWidth: 2,
-    borderColor: "#ffc107",
-  },
-  rangeStartText: {
-    color: "#856404",
-  },
-  rangeStartIndicator: {
-    position: "absolute",
-    top: 2,
-    left: 2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#ffc107",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bulkActionLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  bulkActionsContainer: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 12,
-  },
-  bulkButton: {
-    flex: 1,
-    flexDirection: "row",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bulkButtonPrimary: {
-    backgroundColor: "#17a2b8",
-  },
-  bulkButtonSecondary: {
-    backgroundColor: "#e8f5e9",
-    borderWidth: 1,
-    borderColor: "#28a745",
-  },
-  bulkButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 12,
-  },
-  bulkButtonTextSecondary: {
-    color: "#666",
-    fontWeight: "600",
-    fontSize: 12,
-  },
-  rangeHelperContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#e1f5fe",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 8,
-  },
-  rangeHelperText: {
-    flex: 1,
-    fontSize: 11,
-    color: "#01579b",
-    fontWeight: "500",
-  },
-  noCycleBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff3cd",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 12,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: "#ffeeba",
-  },
-  noCycleText: {
-    flex: 1,
-    fontSize: 12,
-    color: "#856404",
-    fontWeight: "600",
-  },
-  legend: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 20,
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  legendToday: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#17a2b8",
-  },
-  legendMarked: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#28a745",
-  },
-  legendDisabled: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#f0f0f0",
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  legendRange: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#ffc107",
-  },
-  legendText: {
-    fontSize: 12,
-    color: "#666",
-  },
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    alignItems: "center",
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#333",
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "#666",
-    marginTop: 4,
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 60,
-    marginTop: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#333",
-    marginTop: 12,
-  },
-  emptySubtext: {
-    fontSize: 13,
-    color: "#666",
-    marginTop: 4,
-    paddingHorizontal: 20,
-    textAlign: "center",
-  },
-});
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+    },
+
+    /* ─── Header ─── */
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 14,
+      backgroundColor: colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
+    headerLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    headerIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: "#fdf6e3",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    headerSub: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 1,
+    },
+    headerBadge: {
+      backgroundColor: colors.successBg,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    headerBadgeText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#28a745",
+    },
+
+    /* ─── Room Pills ─── */
+    roomPillsWrap: {
+      backgroundColor: colors.card,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
+    roomPillsRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    roomPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    roomPillActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    roomPillText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    roomPillTextActive: {
+      color: colors.textOnAccent,
+    },
+
+    /* ─── Billing Strip ─── */
+    billingStrip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginHorizontal: 16,
+      marginTop: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      backgroundColor: colors.card,
+      borderRadius: 10,
+      borderLeftWidth: 3,
+      borderLeftColor: "#b38604",
+    },
+    billingStripText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: "500",
+    },
+
+    /* ─── Cards ─── */
+    card: {
+      marginHorizontal: 16,
+      marginTop: 14,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+    },
+    cardTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 14,
+    },
+
+    /* ─── Primary Button ─── */
+    primaryBtn: {
+      backgroundColor: "#b38604",
+      borderRadius: 12,
+      paddingVertical: 14,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+    },
+    primaryBtnText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 15,
+    },
+
+    /* ─── Bulk Actions ─── */
+    bulkRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 12,
+    },
+    bulkBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+    },
+    bulkIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    bulkBtnText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+    },
+
+    /* ─── Tip & Warning ─── */
+    tipRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      backgroundColor: colors.infoBg,
+      borderRadius: 8,
+    },
+    tipText: {
+      flex: 1,
+      fontSize: 11,
+      color: "#1565c0",
+      fontWeight: "500",
+    },
+    warnBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginHorizontal: 16,
+      marginTop: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      backgroundColor: "#fff8e1",
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: "#ffe082",
+    },
+    warnText: {
+      flex: 1,
+      fontSize: 12,
+      color: "#856404",
+      fontWeight: "600",
+    },
+
+    /* ─── Calendar ─── */
+    calendarNav: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 14,
+    },
+    navBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "#fdf6e3",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    monthLabel: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    weekRow: {
+      flexDirection: "row",
+      marginBottom: 6,
+    },
+    weekCell: {
+      flex: 1,
+      alignItems: "center",
+      paddingVertical: 6,
+    },
+    weekText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+    dayGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+    },
+    dayCell: {
+      width: "14.28%",
+      aspectRatio: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 4,
+      borderRadius: 10,
+      position: "relative",
+    },
+    todayCell: {
+      backgroundColor: colors.infoBg,
+      borderWidth: 2,
+      borderColor: "#1565c0",
+    },
+    markedCell: {
+      backgroundColor: colors.successBg,
+    },
+    rangeCell: {
+      backgroundColor: "#fff8e1",
+      borderWidth: 2,
+      borderColor: "#ffc107",
+    },
+    dimCell: {
+      opacity: 0.3,
+    },
+    dayNum: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    todayNum: {
+      color: "#1565c0",
+      fontWeight: "700",
+    },
+    markedNum: {
+      color: "#28a745",
+      fontWeight: "700",
+    },
+    dimText: {
+      color: colors.textTertiary,
+    },
+    markDot: {
+      position: "absolute",
+      bottom: 4,
+      width: 5,
+      height: 5,
+      borderRadius: 3,
+      backgroundColor: "#28a745",
+    },
+    rangeDot: {
+      position: "absolute",
+      top: 2,
+      left: 4,
+      width: 14,
+      height: 14,
+      borderRadius: 7,
+      backgroundColor: "#ffc107",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    /* ─── Legend ─── */
+    legendRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 16,
+      marginTop: 14,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+    },
+    legendItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    legendDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    legendLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+    },
+
+    /* ─── Stats ─── */
+    statsRow: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    statBox: {
+      flex: 1,
+      alignItems: "center",
+      backgroundColor: colors.cardAlt,
+      borderRadius: 12,
+      paddingVertical: 16,
+    },
+    statIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    statNum: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    statLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+
+    /* ─── Empty States ─── */
+    emptyCard: {
+      marginHorizontal: 16,
+      marginTop: 30,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 30,
+      alignItems: "center",
+    },
+    emptyIconWrap: {
+      width: 64,
+      height: 64,
+      borderRadius: 20,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 14,
+    },
+    emptyTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+      marginTop: 4,
+    },
+    emptySub: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 6,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+  });
 
 export default PresenceScreen;

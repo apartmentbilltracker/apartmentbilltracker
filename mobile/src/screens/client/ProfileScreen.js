@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,12 +11,22 @@ import {
   Image,
   Alert,
 } from "react-native";
-import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../../context/AuthContext";
 import { roomService, supportService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
+
+const THEME_OPTIONS = [
+  { key: "light", label: "Light", icon: "sunny" },
+  { key: "dark", label: "Dark", icon: "moon" },
+  { key: "system", label: "System", icon: "phone-portrait-outline" },
+];
 
 const ProfileScreen = ({ navigation }) => {
+  const { colors, preference, setTheme } = useTheme();
+  const styles = createStyles(colors);
+
   const { state, refreshUser, signOut, switchView, updateUserProfile } =
     useContext(AuthContext);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -24,21 +34,30 @@ const ProfileScreen = ({ navigation }) => {
   const [editName, setEditName] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [payorStatus, setPayorStatus] = useState("Non-Payor");
-  
+  const [payorStatus, setPayorStatus] = useState(null);
+
   // Support Service States
   const [supportModalVisible, setSupportModalVisible] = useState(false);
   const [faqModalVisible, setFAQModalVisible] = useState(false);
   const [bugModalVisible, setBugModalVisible] = useState(false);
-  const [supportTicketForm, setSupportTicketForm] = useState({ subject: "", message: "", category: "general" });
-  const [bugReportForm, setBugReportForm] = useState({ title: "", description: "", severity: "medium", module: "general" });
+  const [supportTicketForm, setSupportTicketForm] = useState({
+    subject: "",
+    message: "",
+    category: "general",
+  });
+  const [bugReportForm, setBugReportForm] = useState({
+    title: "",
+    description: "",
+    severity: "medium",
+    module: "general",
+  });
   const [faqs, setFAQs] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [unreadTickets, setUnreadTickets] = useState(0);
   const [unreadBugReports, setUnreadBugReports] = useState(0);
 
   const user = state.user || {};
-  const userId = user._id;
+  const userId = user.id || user._id;
 
   // Handle role as either array or string
   const isAdmin = Array.isArray(user.role)
@@ -67,14 +86,16 @@ const ProfileScreen = ({ navigation }) => {
         // Find user in room members and get isPayer status
         const joinedRoom = rooms.find((r) => {
           const isMember = r.members?.some(
-            (m) => String(m.user?._id || m.user) === String(userId),
+            (m) =>
+              String(m.user?.id || m.user?._id || m.user) === String(userId),
           );
           return isMember;
         });
 
         if (joinedRoom) {
           const userMember = joinedRoom.members.find(
-            (m) => String(m.user?._id || m.user) === String(userId),
+            (m) =>
+              String(m.user?.id || m.user?._id || m.user) === String(userId),
           );
           if (userMember) {
             setPayorStatus(userMember.isPayer ? "Payor" : "Non-Payor");
@@ -94,13 +115,21 @@ const ProfileScreen = ({ navigation }) => {
     const fetchUnreadCounts = async () => {
       try {
         const ticketsResponse = await supportService.getUserTickets();
-        const tickets = Array.isArray(ticketsResponse) ? ticketsResponse : ticketsResponse?.data || [];
-        const unreadTicketCount = tickets.filter(t => !t.isReadByUser && t.replies && t.replies.length > 0).length;
+        const tickets = Array.isArray(ticketsResponse)
+          ? ticketsResponse
+          : ticketsResponse?.data || [];
+        const unreadTicketCount = tickets.filter(
+          (t) => !t.isReadByUser && t.replies && t.replies.length > 0,
+        ).length;
         setUnreadTickets(unreadTicketCount);
 
         const bugsResponse = await supportService.getUserBugReports();
-        const bugs = Array.isArray(bugsResponse) ? bugsResponse : bugsResponse?.data || [];
-        const unreadBugCount = bugs.filter(b => !b.isReadByUser && b.responses && b.responses.length > 0).length;
+        const bugs = Array.isArray(bugsResponse)
+          ? bugsResponse
+          : bugsResponse?.data || [];
+        const unreadBugCount = bugs.filter(
+          (b) => !b.isReadByUser && b.responses && b.responses.length > 0,
+        ).length;
         setUnreadBugReports(unreadBugCount);
       } catch (error) {
         console.error("Error fetching unread counts:", error);
@@ -126,7 +155,7 @@ const ProfileScreen = ({ navigation }) => {
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -193,7 +222,10 @@ const ProfileScreen = ({ navigation }) => {
 
   // Support Service Handlers
   const handleContactSupport = async () => {
-    if (!supportTicketForm.subject.trim() || !supportTicketForm.message.trim()) {
+    if (
+      !supportTicketForm.subject.trim() ||
+      !supportTicketForm.message.trim()
+    ) {
       Alert.alert("Validation", "Please fill in all fields");
       return;
     }
@@ -237,7 +269,12 @@ const ProfileScreen = ({ navigation }) => {
       await supportService.createBugReport(bugReportForm);
       Alert.alert("Success", "Bug report submitted successfully!");
       setBugModalVisible(false);
-      setBugReportForm({ title: "", description: "", severity: "medium", module: "general" });
+      setBugReportForm({
+        title: "",
+        description: "",
+        severity: "medium",
+        module: "general",
+      });
     } catch (error) {
       console.error("Error creating bug report:", error);
       Alert.alert("Error", "Failed to submit bug report");
@@ -254,268 +291,361 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.profileHeader}>
-        <View style={styles.avatarContainer}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* ─── PROFILE HEADER ─── */}
+      <View style={styles.headerBg}>
+        <View style={styles.avatarWrap}>
           {user.avatar?.url ? (
             <Image
               source={getAvatarSource()}
-              style={styles.avatarImage}
+              style={styles.avatarImg}
               defaultSource={require("../../assets/default-avatar.png")}
             />
           ) : (
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarLetter}>
                 {(user.name || "U").charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
+          <TouchableOpacity
+            style={styles.editAvatarBtn}
+            onPress={handleEditPress}
+          >
+            <Ionicons name="pencil" size={14} color={colors.textOnAccent} />
+          </TouchableOpacity>
         </View>
         <Text style={styles.userName}>{user.name || "User"}</Text>
         <Text style={styles.userEmail}>{user.email || "N/A"}</Text>
+        {payorStatus && (
+          <View
+            style={[
+              styles.statusChip,
+              payorStatus === "Payor"
+                ? { backgroundColor: colors.successBg }
+                : { backgroundColor: colors.inputBg },
+            ]}
+          >
+            <Ionicons
+              name={payorStatus === "Payor" ? "checkmark-circle" : "person"}
+              size={14}
+              color={payorStatus === "Payor" ? colors.success : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.statusChipText,
+                payorStatus === "Payor"
+                  ? { color: colors.success }
+                  : { color: colors.textSecondary },
+              ]}
+            >
+              {payorStatus}
+            </Text>
+          </View>
+        )}
+      </View>
 
+      {/* ─── ACCOUNT INFO ─── */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Account Information</Text>
+        <View style={styles.infoRow}>
+          <View style={styles.infoLeft}>
+            <View
+              style={[styles.infoIcon, { backgroundColor: colors.accentLight }]}
+            >
+              <Ionicons name="person" size={16} color={colors.accent} />
+            </View>
+            <Text style={styles.infoLabel}>Name</Text>
+          </View>
+          <Text style={styles.infoValue}>{user.name || "N/A"}</Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.infoRow}>
+          <View style={styles.infoLeft}>
+            <View style={[styles.infoIcon, { backgroundColor: colors.infoBg }]}>
+              <Ionicons name="mail" size={16} color={colors.info} />
+            </View>
+            <Text style={styles.infoLabel}>Email</Text>
+          </View>
+          <Text style={styles.infoValue} numberOfLines={1}>
+            {user.email || "N/A"}
+          </Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.infoRow}>
+          <View style={styles.infoLeft}>
+            <View
+              style={[styles.infoIcon, { backgroundColor: colors.successBg }]}
+            >
+              <Ionicons
+                name="shield-checkmark"
+                size={16}
+                color={colors.success}
+              />
+            </View>
+            <Text style={styles.infoLabel}>Status</Text>
+          </View>
+          <Text style={styles.infoValue}>{payorStatus || "No Room"}</Text>
+        </View>
+      </View>
+
+      {/* ─── CUSTOMER SERVICE ─── */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Customer Service</Text>
         <TouchableOpacity
-          style={styles.editButton}
-          onPress={handleEditPress}
-          disabled={isUpdating}
+          style={styles.menuRow}
+          onPress={() => setSupportModalVisible(true)}
+          activeOpacity={0.6}
         >
-          <MaterialIcons name="edit" size={18} color="#fff" />
-          <Text style={styles.editButtonText}>Edit Profile</Text>
+          <View style={[styles.menuIcon, { backgroundColor: colors.infoBg }]}>
+            <Ionicons name="headset" size={18} color={colors.info} />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuTitle}>Contact Support</Text>
+            <Text style={styles.menuSub}>Get help from our team</Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={handleFAQPress}
+          activeOpacity={0.6}
+        >
+          <View
+            style={[styles.menuIcon, { backgroundColor: colors.successBg }]}
+          >
+            <Ionicons name="help-circle" size={18} color={colors.success} />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuTitle}>FAQs</Text>
+            <Text style={styles.menuSub}>Answers to common questions</Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={() => setBugModalVisible(true)}
+          activeOpacity={0.6}
+        >
+          <View style={[styles.menuIcon, { backgroundColor: colors.errorBg }]}>
+            <Ionicons name="bug" size={18} color={colors.error} />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuTitle}>Report Issue</Text>
+            <Text style={styles.menuSub}>Report a problem or bug</Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Customer Service</Text>
-        <View style={styles.serviceContainer}>
-          <TouchableOpacity 
-            style={[styles.serviceButton, { borderBottomWidth: 1, borderBottomColor: "#f0f0f0" }]}
-            onPress={() => setSupportModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.serviceIconContainer}>
-              <MaterialIcons name="headset-mic" size={26} color="#0a66c2" />
-            </View>
-            <View style={styles.serviceButtonContent}>
-              <Text style={styles.serviceButtonTitle}>Contact Support</Text>
-              <Text style={styles.serviceButtonDesc}>
-                Get help from our support team
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color="#cbd5e0" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.serviceButton, { borderBottomWidth: 1, borderBottomColor: "#f0f0f0" }]}
-            onPress={handleFAQPress}
-            activeOpacity={0.7}
-          >
-            <View style={styles.serviceIconContainer}>
-              <MaterialIcons name="help" size={26} color="#27ae60" />
-            </View>
-            <View style={styles.serviceButtonContent}>
-              <Text style={styles.serviceButtonTitle}>FAQs</Text>
-              <Text style={styles.serviceButtonDesc}>
-                Find answers to common questions
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color="#cbd5e0" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.serviceButton, { borderBottomWidth: 0 }]}
-            onPress={() => setBugModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.serviceIconContainer}>
-              <MaterialIcons name="bug-report" size={26} color="#e74c3c" />
-            </View>
-            <View style={styles.serviceButtonContent}>
-              <Text style={styles.serviceButtonTitle}>Report Issue</Text>
-              <Text style={styles.serviceButtonDesc}>
-                Report a problem or bug
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color="#cbd5e0" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Track My Requests</Text>
-        <View style={styles.trackingContainer}>
-          <TouchableOpacity
-            style={[styles.trackingButton, { borderLeftColor: "#0a66c2" }]}
-            onPress={() => navigation.navigate("MyTickets")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.trackingIconContainer}>
-              <MaterialIcons name="confirmation-number" size={26} color="#0a66c2" />
-            </View>
-            <View style={styles.trackingButtonContent}>
-              <View style={styles.titleWithDot}>
-                <Text style={styles.trackingButtonTitle}>My Support Tickets</Text>
-                {unreadTickets > 0 && <View style={styles.unreadDotSmall} />}
-              </View>
-              <Text style={styles.trackingButtonDesc}>
-                View and track your support requests
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color="#cbd5e0" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.trackingButton, { borderLeftColor: "#e74c3c" }]}
-            onPress={() => navigation.navigate("MyBugReports")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.trackingIconContainer}>
-              <MaterialIcons name="bug-report" size={26} color="#e74c3c" />
-            </View>
-            <View style={styles.trackingButtonContent}>
-              <View style={styles.titleWithDot}>
-                <Text style={styles.trackingButtonTitle}>My Bug Reports</Text>
-                {unreadBugReports > 0 && <View style={styles.unreadDotSmall} />}
-              </View>
-              <Text style={styles.trackingButtonDesc}>
-                Track issues you've reported
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color="#cbd5e0" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account Information</Text>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Name</Text>
-          <Text style={styles.infoValue}>{user.name || "N/A"}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Email</Text>
-          <Text style={styles.infoValue}>{user.email || "N/A"}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Status</Text>
-          <View style={styles.roleContainer}>
-            <Text style={styles.infoValue}>{payorStatus}</Text>
-            {payorStatus === "Payor" && (
-              <View style={styles.payorBadge}>
-                <MaterialIcons name="check-circle" size={12} color="#fff" />
-              </View>
-            )}
+      {/* ─── TRACK REQUESTS ─── */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Track My Requests</Text>
+        <TouchableOpacity
+          style={styles.trackRow}
+          onPress={() => navigation.navigate("MyTickets")}
+          activeOpacity={0.6}
+        >
+          <View
+            style={[styles.trackStrip, { backgroundColor: colors.waterColor }]}
+          />
+          <View style={[styles.menuIcon, { backgroundColor: colors.infoBg }]}>
+            <Ionicons name="ticket" size={18} color={colors.info} />
           </View>
+          <View style={styles.menuContent}>
+            <View style={styles.menuTitleRow}>
+              <Text style={styles.menuTitle}>My Support Tickets</Text>
+              {unreadTickets > 0 && <View style={styles.unreadDot} />}
+            </View>
+            <Text style={styles.menuSub}>View and track your requests</Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.trackRow}
+          onPress={() => navigation.navigate("MyBugReports")}
+          activeOpacity={0.6}
+        >
+          <View style={[styles.trackStrip, { backgroundColor: "#e53935" }]} />
+          <View style={[styles.menuIcon, { backgroundColor: colors.errorBg }]}>
+            <Ionicons name="bug" size={18} color={colors.error} />
+          </View>
+          <View style={styles.menuContent}>
+            <View style={styles.menuTitleRow}>
+              <Text style={styles.menuTitle}>My Bug Reports</Text>
+              {unreadBugReports > 0 && <View style={styles.unreadDot} />}
+            </View>
+            <Text style={styles.menuSub}>Track issues you've reported</Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* ─── APPEARANCE ─── */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Appearance</Text>
+        <View style={styles.themeRow}>
+          {THEME_OPTIONS.map((opt) => {
+            const active = preference === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.themeOption, active && styles.themeOptionActive]}
+                onPress={() => setTheme(opt.key)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={opt.icon}
+                  size={20}
+                  color={active ? colors.accent : colors.textTertiary}
+                />
+                <Text
+                  style={[
+                    styles.themeOptionLabel,
+                    active && styles.themeOptionLabelActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
+      {/* ─── ADMIN PANEL ─── */}
       {isAdmin && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Admin Panel</Text>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Admin Panel</Text>
           <TouchableOpacity
-            style={styles.adminButton}
+            style={styles.adminBtn}
             onPress={handleAdminButtonPress}
           >
-            <MaterialIcons
-              name="admin-panel-settings"
-              size={20}
-              color="#fff"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.adminButtonText}>Go to Admin Dashboard</Text>
+            <Ionicons name="settings" size={18} color={colors.textOnAccent} />
+            <Text style={styles.adminBtnText}>Go to Admin Dashboard</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      <View style={styles.section}>
+      {/* ─── LOGOUT ─── */}
+      <View style={styles.logoutWrap}>
         <TouchableOpacity
-          style={[styles.logoutButton, isLoggingOut && styles.buttonDisabled]}
+          style={[styles.logoutBtn, isLoggingOut && { opacity: 0.6 }]}
           onPress={handleLogout}
           disabled={isLoggingOut}
         >
           {isLoggingOut ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.error} />
           ) : (
-            <Text style={styles.logoutButtonText}>Logout</Text>
+            <>
+              <Ionicons name="log-out-outline" size={18} color={colors.error} />
+              <Text style={styles.logoutBtnText}>Logout</Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* Edit Profile Modal */}
+      <View style={{ height: 30 }} />
+
+      {/* ─── EDIT PROFILE MODAL ─── */}
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent
         visible={editModalVisible}
         onRequestClose={() => !isUpdating && setEditModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Profile</Text>
               <TouchableOpacity
+                style={styles.modalClose}
                 onPress={() => !isUpdating && setEditModalVisible(false)}
                 disabled={isUpdating}
               >
-                <MaterialIcons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            {/* Avatar Preview */}
             <View style={styles.modalAvatarSection}>
               {selectedImage?.uri ? (
                 <Image
                   source={{ uri: selectedImage.uri }}
-                  style={styles.modalAvatarImage}
+                  style={styles.modalAvatarImg}
                 />
               ) : user.avatar?.url ? (
                 <Image
                   source={getAvatarSource()}
-                  style={styles.modalAvatarImage}
+                  style={styles.modalAvatarImg}
                 />
               ) : (
-                <View style={styles.modalAvatar}>
-                  <Text style={styles.modalAvatarText}>
+                <View style={styles.modalAvatarFallback}>
+                  <Text style={styles.modalAvatarLetter}>
                     {editName.charAt(0).toUpperCase() || "U"}
                   </Text>
                 </View>
               )}
               <TouchableOpacity
-                style={styles.changAvatarButton}
+                style={styles.changeAvatarBtn}
                 onPress={pickImage}
                 disabled={isUpdating}
               >
-                <MaterialIcons name="photo-camera" size={18} color="#fff" />
-                <Text style={styles.changeAvatarText}>Change Avatar</Text>
+                <Ionicons name="camera" size={16} color={colors.accent} />
+                <Text style={styles.changeAvatarText}>Change Photo</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Name Input */}
-            <View style={styles.formSection}>
+            <View style={styles.formGroup}>
               <Text style={styles.formLabel}>Name</Text>
               <TextInput
-                style={styles.nameInput}
+                style={styles.formInput}
                 placeholder="Enter your name"
                 value={editName}
                 onChangeText={setEditName}
                 editable={!isUpdating}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textTertiary}
               />
             </View>
 
-            {/* Save Button */}
             <TouchableOpacity
-              style={[
-                styles.saveButton,
-                isUpdating && styles.saveButtonDisabled,
-              ]}
+              style={[styles.saveBtn, isUpdating && { opacity: 0.6 }]}
               onPress={handleSaveProfile}
               disabled={isUpdating}
             >
               {isUpdating ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.textOnAccent} />
               ) : (
                 <>
-                  <MaterialIcons name="save" size={18} color="#fff" />
-                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                  <Ionicons
+                    name="checkmark"
+                    size={18}
+                    color={colors.textOnAccent}
+                  />
+                  <Text style={styles.saveBtnText}>Save Changes</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -523,7 +653,7 @@ const ProfileScreen = ({ navigation }) => {
         </View>
       </Modal>
 
-      {/* Support Ticket Modal */}
+      {/* ─── SUPPORT TICKET MODAL ─── */}
       <Modal
         visible={supportModalVisible}
         transparent
@@ -531,70 +661,93 @@ const ProfileScreen = ({ navigation }) => {
         onRequestClose={() => !isSubmitting && setSupportModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Contact Support</Text>
               <TouchableOpacity
+                style={styles.modalClose}
                 onPress={() => !isSubmitting && setSupportModalVisible(false)}
                 disabled={isSubmitting}
               >
-                <MaterialIcons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalBody}>
-              <Text style={styles.label}>Category</Text>
-              <View style={styles.pickerContainer}>
-                {["general", "billing", "payment", "technical", "other"].map(cat => (
-                  <TouchableOpacity
-                    key={cat}
-                    onPress={() => setSupportTicketForm({ ...supportTicketForm, category: cat })}
-                    style={[
-                      styles.categoryOption,
-                      supportTicketForm.category === cat && styles.categoryOptionActive
-                    ]}
-                  >
-                    <Text style={supportTicketForm.category === cat ? styles.categoryTextActive : styles.categoryText}>
-                      {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.formLabel}>Category</Text>
+              <View style={styles.chipRow}>
+                {["general", "billing", "payment", "technical", "other"].map(
+                  (cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      onPress={() =>
+                        setSupportTicketForm({
+                          ...supportTicketForm,
+                          category: cat,
+                        })
+                      }
+                      style={[
+                        styles.chip,
+                        supportTicketForm.category === cat && styles.chipActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          supportTicketForm.category === cat &&
+                            styles.chipTextActive,
+                        ]}
+                      >
+                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ),
+                )}
               </View>
 
-              <Text style={styles.label}>Subject</Text>
+              <Text style={styles.formLabel}>Subject</Text>
               <TextInput
-                style={styles.input}
+                style={styles.formInput}
                 placeholder="Enter subject"
                 value={supportTicketForm.subject}
-                onChangeText={(text) => setSupportTicketForm({ ...supportTicketForm, subject: text })}
-                placeholderTextColor="#999"
+                onChangeText={(text) =>
+                  setSupportTicketForm({ ...supportTicketForm, subject: text })
+                }
+                placeholderTextColor={colors.textTertiary}
               />
 
-              <Text style={styles.label}>Message</Text>
+              <Text style={styles.formLabel}>Message</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.formInput, styles.textArea]}
                 placeholder="Describe your issue..."
                 value={supportTicketForm.message}
-                onChangeText={(text) => setSupportTicketForm({ ...supportTicketForm, message: text })}
+                onChangeText={(text) =>
+                  setSupportTicketForm({ ...supportTicketForm, message: text })
+                }
                 multiline
                 numberOfLines={6}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textTertiary}
               />
 
               <TouchableOpacity
-                style={[styles.submitButton, isSubmitting && styles.buttonDisabled]}
+                style={[styles.submitBtn, isSubmitting && { opacity: 0.6 }]}
                 onPress={handleContactSupport}
                 disabled={isSubmitting}
               >
-                <Text style={styles.submitButtonText}>
+                <Text style={styles.submitBtnText}>
                   {isSubmitting ? "Submitting..." : "Submit Ticket"}
                 </Text>
               </TouchableOpacity>
+              <View style={{ height: 20 }} />
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* FAQ Modal */}
+      {/* ─── FAQ MODAL ─── */}
       <Modal
         visible={faqModalVisible}
         transparent
@@ -602,30 +755,58 @@ const ProfileScreen = ({ navigation }) => {
         onRequestClose={() => setFAQModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Frequently Asked Questions</Text>
-              <TouchableOpacity onPress={() => setFAQModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
+              <Text style={styles.modalTitle}>FAQs</Text>
+              <TouchableOpacity
+                style={styles.modalClose}
+                onPress={() => setFAQModalVisible(false)}
+              >
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+            >
               {faqs.length > 0 ? (
-                faqs.map((faq) => (
-                  <View key={faq._id} style={styles.faqItem}>
-                    <Text style={styles.faqQuestion}>{faq.question}</Text>
+                faqs.map((faq, idx) => (
+                  <View
+                    key={faq.id || faq._id}
+                    style={[
+                      styles.faqItem,
+                      idx === faqs.length - 1 && { borderBottomWidth: 0 },
+                    ]}
+                  >
+                    <View style={styles.faqQRow}>
+                      <Ionicons
+                        name="help-circle"
+                        size={16}
+                        color={colors.accent}
+                      />
+                      <Text style={styles.faqQuestion}>{faq.question}</Text>
+                    </View>
                     <Text style={styles.faqAnswer}>{faq.answer}</Text>
                   </View>
                 ))
               ) : (
-                <Text style={styles.noDataText}>No FAQs available</Text>
+                <View style={styles.emptyFaq}>
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={40}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.emptyFaqText}>No FAQs available</Text>
+                </View>
               )}
+              <View style={{ height: 20 }} />
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* Bug Report Modal */}
+      {/* ─── BUG REPORT MODAL ─── */}
       <Modal
         visible={bugModalVisible}
         transparent
@@ -633,82 +814,125 @@ const ProfileScreen = ({ navigation }) => {
         onRequestClose={() => !isSubmitting && setBugModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Report Issue</Text>
               <TouchableOpacity
+                style={styles.modalClose}
                 onPress={() => !isSubmitting && setBugModalVisible(false)}
                 disabled={isSubmitting}
               >
-                <MaterialIcons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalBody}>
-              <Text style={styles.label}>Module</Text>
-              <View style={styles.pickerContainer}>
-                {["general", "billing", "payment", "announcements", "profile"].map(mod => (
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.formLabel}>Module</Text>
+              <View style={styles.chipRow}>
+                {[
+                  "general",
+                  "billing",
+                  "payment",
+                  "announcements",
+                  "profile",
+                ].map((mod) => (
                   <TouchableOpacity
                     key={mod}
-                    onPress={() => setBugReportForm({ ...bugReportForm, module: mod })}
+                    onPress={() =>
+                      setBugReportForm({ ...bugReportForm, module: mod })
+                    }
                     style={[
-                      styles.categoryOption,
-                      bugReportForm.module === mod && styles.categoryOptionActive
+                      styles.chip,
+                      bugReportForm.module === mod && styles.chipActive,
                     ]}
                   >
-                    <Text style={bugReportForm.module === mod ? styles.categoryTextActive : styles.categoryText}>
+                    <Text
+                      style={[
+                        styles.chipText,
+                        bugReportForm.module === mod && styles.chipTextActive,
+                      ]}
+                    >
                       {mod.charAt(0).toUpperCase() + mod.slice(1)}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.label}>Severity</Text>
-              <View style={styles.pickerContainer}>
-                {["low", "medium", "high", "critical"].map(sev => (
-                  <TouchableOpacity
-                    key={sev}
-                    onPress={() => setBugReportForm({ ...bugReportForm, severity: sev })}
-                    style={[
-                      styles.categoryOption,
-                      bugReportForm.severity === sev && styles.categoryOptionActive
-                    ]}
-                  >
-                    <Text style={bugReportForm.severity === sev ? styles.categoryTextActive : styles.categoryText}>
-                      {sev.charAt(0).toUpperCase() + sev.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <Text style={styles.formLabel}>Severity</Text>
+              <View style={styles.chipRow}>
+                {["low", "medium", "high", "critical"].map((sev) => {
+                  const sevColors = {
+                    low: colors.success,
+                    medium: "#ffc107",
+                    high: "#ff9800",
+                    critical: "#e53935",
+                  };
+                  return (
+                    <TouchableOpacity
+                      key={sev}
+                      onPress={() =>
+                        setBugReportForm({ ...bugReportForm, severity: sev })
+                      }
+                      style={[
+                        styles.chip,
+                        bugReportForm.severity === sev && {
+                          backgroundColor: sevColors[sev],
+                          borderColor: sevColors[sev],
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          bugReportForm.severity === sev && {
+                            color: colors.textOnAccent,
+                          },
+                        ]}
+                      >
+                        {sev.charAt(0).toUpperCase() + sev.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              <Text style={styles.label}>Title</Text>
+              <Text style={styles.formLabel}>Title</Text>
               <TextInput
-                style={styles.input}
+                style={styles.formInput}
                 placeholder="Brief description of the bug"
                 value={bugReportForm.title}
-                onChangeText={(text) => setBugReportForm({ ...bugReportForm, title: text })}
-                placeholderTextColor="#999"
+                onChangeText={(text) =>
+                  setBugReportForm({ ...bugReportForm, title: text })
+                }
+                placeholderTextColor={colors.textTertiary}
               />
 
-              <Text style={styles.label}>Description</Text>
+              <Text style={styles.formLabel}>Description</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.formInput, styles.textArea]}
                 placeholder="Detailed explanation of the issue..."
                 value={bugReportForm.description}
-                onChangeText={(text) => setBugReportForm({ ...bugReportForm, description: text })}
+                onChangeText={(text) =>
+                  setBugReportForm({ ...bugReportForm, description: text })
+                }
                 multiline
                 numberOfLines={6}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textTertiary}
               />
 
               <TouchableOpacity
-                style={[styles.submitButton, isSubmitting && styles.buttonDisabled]}
+                style={[styles.submitBtn, isSubmitting && { opacity: 0.6 }]}
                 onPress={handleReportIssue}
                 disabled={isSubmitting}
               >
-                <Text style={styles.submitButtonText}>
+                <Text style={styles.submitBtnText}>
                   {isSubmitting ? "Submitting..." : "Submit Report"}
                 </Text>
               </TouchableOpacity>
+              <View style={{ height: 20 }} />
             </ScrollView>
           </View>
         </View>
@@ -717,415 +941,464 @@ const ProfileScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  profileHeader: {
-    alignItems: "center",
-    paddingVertical: 30,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-  },
-  avatarContainer: {
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#b38604",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#f0f0f0",
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#333",
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: "#888",
-    marginBottom: 16,
-  },
-  editButton: {
-    flexDirection: "row",
-    backgroundColor: "#ff6b35",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    alignItems: "center",
-    gap: 8,
-  },
-  editButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  section: {
-    padding: 16,
-    marginBottom: 16,
-    backgroundColor: "#fff",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 16,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  roleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  adminBadge: {
-    backgroundColor: "#ff6b35",
-    borderRadius: 10,
-    padding: 4,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  payorBadge: {
-    backgroundColor: "#27ae60",
-    borderRadius: 10,
-    padding: 4,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: "#888",
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
-  logoutButton: {
-    backgroundColor: "#ff6b6b",
-    borderRadius: 8,
-    padding: 14,
-    alignItems: "center",
-  },
-  logoutButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  adminButton: {
-    backgroundColor: "#ff6b35",
-    borderRadius: 8,
-    padding: 14,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  adminButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  adminHelpText: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 8,
-    fontStyle: "italic",
-    textAlign: "center",
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 30,
-    maxHeight: "90%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-  },
-  modalAvatarSection: {
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  modalAvatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#b38604",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  modalAvatarImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#f0f0f0",
-    marginBottom: 12,
-  },
-  modalAvatarText: {
-    fontSize: 40,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  changAvatarButton: {
-    flexDirection: "row",
-    backgroundColor: "#ff6b35",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    alignItems: "center",
-    gap: 8,
-  },
-  changeAvatarText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  formSection: {
-    marginBottom: 20,
-  },
-  formLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
-  },
-  nameInput: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: "#333",
-    backgroundColor: "#f9f9f9",
-  },
-  saveButton: {
-    flexDirection: "row",
-    backgroundColor: "#ff6b35",
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  serviceContainer: {
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e4e6eb",
-  },
-  serviceButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-    backgroundColor: "#fafbfc",
-    transition: "all 0.2s",
-  },
-  serviceIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: "#f3f7fc",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  serviceButtonContent: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  serviceButtonTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1a202c",
-    marginBottom: 4,
-  },
-  serviceButtonDesc: {
-    fontSize: 12,
-    color: "#718096",
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  trackingContainer: {
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e4e6eb",
-  },
-  trackingButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-    backgroundColor: "#fafbfc",
-    borderLeftWidth: 4,
-  },
-  trackingIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: "#f3f7fc",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  trackingButtonContent: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  trackingButtonTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1a202c",
-    marginBottom: 4,
-  },
-  titleWithDot: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  unreadDotSmall: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#e74c3c",
-  },
-  trackingButtonDesc: {
-    fontSize: 12,
-    color: "#718096",
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
-    marginTop: 12,
-  },
-  pickerContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
-  },
-  categoryOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    backgroundColor: "#f0f0f0",
-  },
-  categoryOptionActive: {
-    backgroundColor: "#0a66c2",
-    borderColor: "#0a66c2",
-  },
-  categoryText: {
-    fontSize: 12,
-    fontWeight:"600",
-    color: "#666",
-  },
-  categoryTextActive: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: "#333",
-    marginBottom: 12,
-    backgroundColor: "#f8f9fa",
-  },
-  textArea: {
-    textAlignVertical: "top",
-    height: 120,
-  },
-  faqItem: {
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-  },
-  faqQuestion: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#0a66c2",
-    marginBottom: 8,
-  },
-  faqAnswer: {
-    fontSize: 13,
-    color: "#666",
-    lineHeight: 20,
-  },
-  noDataText: {
-    fontSize: 14,
-    color: "#999",
-    fontStyle: "italic",
-    textAlign: "center",
-    marginTop: 20,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-});
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+
+    /* ─── Header ─── */
+    headerBg: {
+      alignItems: "center",
+      paddingTop: 30,
+      paddingBottom: 24,
+      backgroundColor: colors.card,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+    },
+    avatarWrap: {
+      position: "relative",
+      marginBottom: 14,
+    },
+    avatarImg: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      backgroundColor: colors.inputBg,
+      borderWidth: 3,
+      borderColor: "#fdf6e3",
+    },
+    avatarFallback: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 3,
+      borderColor: "#fdf6e3",
+    },
+    avatarLetter: {
+      fontSize: 34,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    editAvatarBtn: {
+      position: "absolute",
+      bottom: 0,
+      right: -2,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 2,
+      borderColor: "#fff",
+    },
+    userName: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 2,
+    },
+    userEmail: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginBottom: 10,
+    },
+    statusChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    statusChipText: {
+      fontSize: 12,
+      fontWeight: "600",
+    },
+
+    /* ─── Cards ─── */
+    card: {
+      marginHorizontal: 16,
+      marginTop: 14,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+    },
+    cardTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 14,
+    },
+
+    /* ─── Info Rows ─── */
+    infoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 10,
+    },
+    infoLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    infoIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    infoLabel: {
+      fontSize: 14,
+      color: colors.textTertiary,
+    },
+    infoValue: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+      maxWidth: 180,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.inputBg,
+    },
+
+    /* ─── Menu Rows ─── */
+    menuRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+    },
+    menuIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    menuContent: {
+      flex: 1,
+      marginLeft: 12,
+    },
+    menuTitle: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    menuTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    menuSub: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 1,
+    },
+
+    /* ─── Track Rows ─── */
+    trackRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+      position: "relative",
+    },
+    trackStrip: {
+      position: "absolute",
+      left: -16,
+      top: 10,
+      bottom: 10,
+      width: 3,
+      borderRadius: 2,
+    },
+    unreadDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: "#e53935",
+    },
+
+    /* ─── Admin ─── */
+    adminBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: colors.text,
+      borderRadius: 12,
+      paddingVertical: 14,
+    },
+    adminBtnText: {
+      color: colors.background,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+
+    /* ─── Logout ─── */
+    logoutWrap: {
+      marginHorizontal: 16,
+      marginTop: 14,
+    },
+    logoutBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      paddingVertical: 14,
+      borderWidth: 1,
+      borderColor: "#fce4ec",
+    },
+    logoutBtnText: {
+      color: "#e53935",
+      fontSize: 15,
+      fontWeight: "600",
+    },
+
+    /* ─── Modals ─── */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingHorizontal: 20,
+      paddingBottom: 30,
+      maxHeight: "90%",
+    },
+    modalHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.skeleton,
+      alignSelf: "center",
+      marginTop: 10,
+      marginBottom: 12,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 18,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    modalClose: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalBody: {
+      maxHeight: 500,
+    },
+    modalAvatarSection: {
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    modalAvatarImg: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: colors.inputBg,
+      marginBottom: 12,
+      borderWidth: 3,
+      borderColor: "#fdf6e3",
+    },
+    modalAvatarFallback: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+      borderWidth: 3,
+      borderColor: "#fdf6e3",
+    },
+    modalAvatarLetter: {
+      fontSize: 38,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    changeAvatarBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: 20,
+      backgroundColor: colors.accentSurface,
+    },
+    changeAvatarText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+
+    /* ─── Form ─── */
+    formGroup: {
+      marginBottom: 18,
+    },
+    formLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 8,
+      marginTop: 4,
+    },
+    formInput: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+      backgroundColor: colors.cardAlt,
+    },
+    textArea: {
+      textAlignVertical: "top",
+      height: 120,
+      marginBottom: 12,
+    },
+    saveBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+    },
+    saveBtnText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "600",
+    },
+
+    /* ─── Chips ─── */
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 14,
+    },
+    chip: {
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.cardAlt,
+    },
+    chipActive: {
+      backgroundColor: colors.text,
+      borderColor: colors.text,
+    },
+    chipText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    chipTextActive: {
+      color: colors.background,
+    },
+
+    /* ─── Submit ─── */
+    submitBtn: {
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      marginTop: 4,
+    },
+    submitBtnText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "600",
+    },
+
+    /* ─── FAQ ─── */
+    faqItem: {
+      paddingBottom: 14,
+      marginBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    faqQRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+      marginBottom: 6,
+    },
+    faqQuestion: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    faqAnswer: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 20,
+      paddingLeft: 24,
+    },
+    emptyFaq: {
+      alignItems: "center",
+      paddingVertical: 40,
+    },
+    emptyFaqText: {
+      fontSize: 14,
+      color: colors.textTertiary,
+      marginTop: 10,
+    },
+
+    /* ─── Theme Toggle ─── */
+    themeRow: {
+      flexDirection: "row",
+      gap: 10,
+      paddingHorizontal: 12,
+      paddingBottom: 14,
+    },
+    themeOption: {
+      flex: 1,
+      alignItems: "center",
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.inputBg,
+      borderWidth: 1.5,
+      borderColor: "transparent",
+      gap: 4,
+    },
+    themeOptionActive: {
+      borderColor: colors.accent,
+      backgroundColor: colors.accentSurface,
+    },
+    themeOptionLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+    themeOptionLabelActive: {
+      color: colors.accent,
+    },
+  });
 
 export default ProfileScreen;

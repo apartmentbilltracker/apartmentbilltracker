@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo} from "react";
 import {
   View,
   Text,
@@ -10,8 +10,12 @@ import {
   Alert,
 } from "react-native";
 import { roomService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
 
 const AdminAttendanceScreen = () => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [members, setMembers] = useState([]);
@@ -27,7 +31,7 @@ const AdminAttendanceScreen = () => {
 
   useEffect(() => {
     if (selectedRoom) {
-      fetchRoomDetails(selectedRoom._id);
+      fetchRoomDetails(selectedRoom.id || selectedRoom._id);
     }
   }, [selectedRoom]);
 
@@ -108,7 +112,7 @@ const AdminAttendanceScreen = () => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#b38604" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -120,20 +124,22 @@ const AdminAttendanceScreen = () => {
         <Text style={styles.sectionTitle}>Select Room</Text>
         <FlatList
           data={rooms}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item) => item.id || item._id}
           scrollEnabled={false}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[
                 styles.roomOption,
-                selectedRoom?._id === item._id && styles.roomOptionActive,
+                (selectedRoom?.id || selectedRoom?._id) ===
+                  (item.id || item._id) && styles.roomOptionActive,
               ]}
               onPress={() => setSelectedRoom(item)}
             >
               <Text
                 style={[
                   styles.roomOptionText,
-                  selectedRoom?._id === item._id && styles.roomOptionTextActive,
+                  (selectedRoom?.id || selectedRoom?._id) ===
+                    (item.id || item._id) && styles.roomOptionTextActive,
                 ]}
               >
                 {item.name}
@@ -169,7 +175,7 @@ const AdminAttendanceScreen = () => {
               <Text style={styles.sectionTitle}>Attendance Summary</Text>
               <FlatList
                 data={members}
-                keyExtractor={(item) => item._id}
+                keyExtractor={(item) => item.id || item._id}
                 scrollEnabled={false}
                 renderItem={({ item }) => {
                   const daysInMonth = getDaysInMonth(selectedMonth);
@@ -181,7 +187,7 @@ const AdminAttendanceScreen = () => {
                   );
 
                   return (
-                    <View key={item._id} style={styles.memberCard}>
+                    <View key={item.id || item._id} style={styles.memberCard}>
                       <View style={styles.memberHeader}>
                         <View style={styles.memberInfo}>
                           <Text style={styles.memberName}>
@@ -276,20 +282,20 @@ const AdminAttendanceScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.background,
   },
   section: {
     padding: 16,
     marginBottom: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
+    color: colors.text,
     marginBottom: 12,
   },
   roomOption: {
@@ -297,18 +303,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginBottom: 8,
     borderWidth: 2,
-    borderColor: "#e0e0e0",
+    borderColor: colors.border,
   },
   roomOptionActive: {
     borderColor: "#b38604",
-    backgroundColor: "#fffbf0",
+    backgroundColor: colors.accentSurface,
   },
   roomOptionText: {
     fontSize: 14,
-    color: "#666",
+    color: colors.textSecondary,
   },
   roomOptionTextActive: {
-    color: "#b38604",
+    color: colors.accent,
     fontWeight: "600",
   },
   monthSection: {
@@ -316,31 +322,31 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     padding: 12,
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     marginBottom: 8,
   },
   monthButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: colors.inputBg,
     borderRadius: 4,
   },
   monthButtonText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#333",
+    color: colors.text,
   },
   monthTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#333",
+    color: colors.text,
     textAlign: "center",
     flex: 1,
   },
   memberCard: {
     marginBottom: 16,
     borderRadius: 8,
-    backgroundColor: "#f9f9f9",
+    backgroundColor: colors.inputBg,
     borderLeftWidth: 4,
     borderLeftColor: "#b38604",
     padding: 12,
@@ -357,11 +363,11 @@ const styles = StyleSheet.create({
   memberName: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
+    color: colors.text,
   },
   memberEmail: {
     fontSize: 12,
-    color: "#999",
+    color: colors.textTertiary,
     marginTop: 2,
   },
   attendanceBadge: {
@@ -372,15 +378,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   attendanceGood: {
-    backgroundColor: "#d4edda",
+    backgroundColor: colors.successBg,
   },
   attendanceWarning: {
-    backgroundColor: "#fff3cd",
+    backgroundColor: colors.warningBg,
   },
   attendanceText: {
     fontWeight: "700",
     fontSize: 12,
-    color: "#333",
+    color: colors.text,
   },
   statsRow: {
     flexDirection: "row",
@@ -389,20 +395,20 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    backgroundColor: "#e8f4f8",
+    backgroundColor: colors.infoBg,
     borderRadius: 6,
     padding: 8,
     alignItems: "center",
   },
   statLabel: {
     fontSize: 11,
-    color: "#666",
+    color: colors.textSecondary,
     marginBottom: 2,
   },
   statValue: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#333",
+    color: colors.text,
   },
   daysGrid: {
     flexDirection: "row",
@@ -418,22 +424,22 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   dayPresent: {
-    backgroundColor: "#28a745",
+    backgroundColor: colors.success,
   },
   dayAbsent: {
-    backgroundColor: "#e0e0e0",
+    backgroundColor: colors.skeleton,
   },
   dayCellText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#999",
+    color: colors.textTertiary,
   },
   dayPresentText: {
     color: "#fff",
   },
   noDataText: {
     fontSize: 14,
-    color: "#999",
+    color: colors.textTertiary,
     textAlign: "center",
     paddingVertical: 20,
   },

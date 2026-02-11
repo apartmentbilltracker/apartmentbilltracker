@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from "react";
+import React, { useContext, useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,13 +10,24 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
-import { MaterialIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../../context/AuthContext";
 import { supportService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
+
+const THEME_OPTIONS = [
+  { key: "light", label: "Light", icon: "sunny" },
+  { key: "dark", label: "Dark", icon: "moon" },
+  { key: "system", label: "System", icon: "phone-portrait-outline" },
+];
 
 const AdminProfileScreen = ({ navigation }) => {
+  const { colors, preference, setTheme } = useTheme();
+  const styles = createStyles(colors);
+
   const { state, signOut, updateUserProfile, switchView } =
     useContext(AuthContext);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -25,6 +36,18 @@ const AdminProfileScreen = ({ navigation }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [unreadTickets, setUnreadTickets] = useState(0);
   const [unreadBugReports, setUnreadBugReports] = useState(0);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+      await signOut();
+    } catch (error) {
+      Alert.alert("Error", "Failed to logout. Please try again.");
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   const user = state.user || {};
 
@@ -37,7 +60,7 @@ const AdminProfileScreen = ({ navigation }) => {
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -45,14 +68,13 @@ const AdminProfileScreen = ({ navigation }) => {
 
       if (!result.canceled) {
         const asset = result.assets[0];
-        // Convert image to base64
         const response = await fetch(asset.uri);
         const blob = await response.blob();
         const reader = new FileReader();
         reader.onload = () => {
           setSelectedImage({
             uri: asset.uri,
-            base64: reader.result.split(",")[1], // Remove data:image/... prefix
+            base64: reader.result.split(",")[1],
           });
         };
         reader.readAsDataURL(blob);
@@ -102,20 +124,28 @@ const AdminProfileScreen = ({ navigation }) => {
     const fetchUnreadCounts = async () => {
       try {
         const ticketsResponse = await supportService.getAllTickets();
-        const tickets = Array.isArray(ticketsResponse) ? ticketsResponse : ticketsResponse?.data || [];
-        const unreadTicketCount = tickets.filter(t => !t.isReadByAdmin && t.replies && t.replies.length > 0).length;
+        const tickets = Array.isArray(ticketsResponse)
+          ? ticketsResponse
+          : ticketsResponse?.data || [];
+        const unreadTicketCount = tickets.filter(
+          (t) => !t.isReadByAdmin && t.replies && t.replies.length > 0,
+        ).length;
         setUnreadTickets(unreadTicketCount);
 
         const bugsResponse = await supportService.getAllBugReports();
-        const bugs = Array.isArray(bugsResponse) ? bugsResponse : bugsResponse?.data || [];
-        const unreadBugCount = bugs.filter(b => !b.isReadByAdmin && b.responses && b.responses.length > 0).length;
+        const bugs = Array.isArray(bugsResponse)
+          ? bugsResponse
+          : bugsResponse?.data || [];
+        const unreadBugCount = bugs.filter(
+          (b) => !b.isReadByAdmin && b.responses && b.responses.length > 0,
+        ).length;
         setUnreadBugReports(unreadBugCount);
       } catch (error) {
         console.error("Error fetching unread counts:", error);
       }
     };
 
-    const unsubscribe = navigation.addListener('focus', () => {
+    const unsubscribe = navigation.addListener("focus", () => {
       fetchUnreadCounts();
     });
 
@@ -125,7 +155,8 @@ const AdminProfileScreen = ({ navigation }) => {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.profileHeader}>
+      {/* Profile Header Card */}
+      <View style={styles.profileCard}>
         <View style={styles.avatarContainer}>
           {user.avatar?.url ? (
             <Image
@@ -140,6 +171,13 @@ const AdminProfileScreen = ({ navigation }) => {
               </Text>
             </View>
           )}
+          <TouchableOpacity
+            style={styles.editAvatarBtn}
+            onPress={handleEditPress}
+            disabled={isUpdating}
+          >
+            <Ionicons name="camera-outline" size={14} color={colors.textOnAccent} />
+          </TouchableOpacity>
         </View>
         <Text style={styles.userName}>{user.name || "Admin"}</Text>
         <Text style={styles.userEmail}>{user.email || "N/A"}</Text>
@@ -149,13 +187,19 @@ const AdminProfileScreen = ({ navigation }) => {
           onPress={handleEditPress}
           disabled={isUpdating}
         >
-          <MaterialIcons name="edit" size={18} color="#fff" />
+          <Ionicons name="create-outline" size={16} color={colors.textOnAccent} />
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Account Information */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account Information</Text>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionIconWrap}>
+            <Ionicons name="person-outline" size={16} color={colors.accent} />
+          </View>
+          <Text style={styles.sectionTitle}>Account Information</Text>
+        </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Name</Text>
           <Text style={styles.infoValue}>{user.name || "N/A"}</Text>
@@ -164,39 +208,63 @@ const AdminProfileScreen = ({ navigation }) => {
           <Text style={styles.infoLabel}>Email</Text>
           <Text style={styles.infoValue}>{user.email || "N/A"}</Text>
         </View>
-        <View style={styles.infoRow}>
+        <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
           <Text style={styles.infoLabel}>Role</Text>
-          <Text style={styles.infoValue}>{user.role || "Admin"}</Text>
+          <View style={styles.roleBadge}>
+            <Text style={styles.roleBadgeText}>{user.role || "Admin"}</Text>
+          </View>
         </View>
       </View>
 
+      {/* App Version */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>App Version</Text>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionIconWrap}>
+            <Ionicons
+              name="information-circle-outline"
+              size={16}
+              color={colors.accent}
+            />
+          </View>
+          <Text style={styles.sectionTitle}>App Version</Text>
+        </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Version</Text>
           <Text style={styles.infoValue}>1.0.0</Text>
         </View>
-        <View style={styles.infoRow}>
+        <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
           <Text style={styles.infoLabel}>Build</Text>
           <Text style={styles.infoValue}>1</Text>
         </View>
       </View>
 
+      {/* Support Management */}
       <View style={styles.section}>
-        <View style={styles.titleWithDot}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionIconWrap}>
+            <Ionicons name="headset-outline" size={16} color={colors.accent} />
+          </View>
           <Text style={styles.sectionTitle}>Support Management</Text>
-          {unreadTickets > 0 || unreadBugReports > 0 && <View style={styles.unreadDotSmall} />}
+          {(unreadTickets > 0 || unreadBugReports > 0) && (
+            <View style={styles.unreadDot} />
+          )}
         </View>
+
         <TouchableOpacity
-          style={[styles.managementButton, { borderLeftColor: "#0a66c2" }]}
+          style={styles.managementButton}
           onPress={() => navigation.navigate("SupportTickets")}
           activeOpacity={0.7}
         >
-          <View style={styles.managementIconContainer}>
-            <FontAwesome name="ticket" size={24} color="#0a66c2" />
+          <View
+            style={[
+              styles.mgmtIconWrap,
+              { backgroundColor: "rgba(10,102,194,0.10)" },
+            ]}
+          >
+            <Ionicons name="ticket-outline" size={20} color={colors.info} />
           </View>
           <View style={styles.managementButtonContent}>
-            <View style={styles.titleWithDot}>
+            <View style={styles.titleRow}>
               <Text style={styles.managementButtonTitle}>Support Tickets</Text>
               {unreadTickets > 0 && <View style={styles.unreadDotSmall} />}
             </View>
@@ -204,19 +272,24 @@ const AdminProfileScreen = ({ navigation }) => {
               Manage client support requests
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.managementButton, { borderLeftColor: "#e74c3c" }]}
+          style={styles.managementButton}
           onPress={() => navigation.navigate("BugReports")}
           activeOpacity={0.7}
         >
-          <View style={styles.managementIconContainer}>
-            <Ionicons name="bug" size={24} color="#e74c3c" />
+          <View
+            style={[
+              styles.mgmtIconWrap,
+              { backgroundColor: "rgba(231,76,60,0.10)" },
+            ]}
+          >
+            <Ionicons name="bug-outline" size={20} color={colors.error} />
           </View>
           <View style={styles.managementButtonContent}>
-            <View style={styles.titleWithDot}>
+            <View style={styles.titleRow}>
               <Text style={styles.managementButtonTitle}>Bug Reports</Text>
               {unreadBugReports > 0 && <View style={styles.unreadDotSmall} />}
             </View>
@@ -224,19 +297,21 @@ const AdminProfileScreen = ({ navigation }) => {
               Review and fix reported issues
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[
-            styles.managementButton,
-            { borderLeftColor: "#27ae60", borderBottomWidth: 0 },
-          ]}
+          style={[styles.managementButton, { borderBottomWidth: 0 }]}
           onPress={() => navigation.navigate("ManageFAQs")}
           activeOpacity={0.7}
         >
-          <View style={styles.managementIconContainer}>
-            <Ionicons name="help" size={24} color="#27ae60" />
+          <View
+            style={[
+              styles.mgmtIconWrap,
+              { backgroundColor: "rgba(39,174,96,0.10)" },
+            ]}
+          >
+            <Ionicons name="help-circle-outline" size={20} color="#27ae60" />
           </View>
           <View style={styles.managementButtonContent}>
             <Text style={styles.managementButtonTitle}>Manage FAQs</Text>
@@ -244,48 +319,111 @@ const AdminProfileScreen = ({ navigation }) => {
               Create and edit frequently asked questions
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
+      {/* ─── Appearance ─── */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <View style={styles.themeRow}>
+          {THEME_OPTIONS.map((opt) => {
+            const active = preference === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.themeOption, active && styles.themeOptionActive]}
+                onPress={() => setTheme(opt.key)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={opt.icon}
+                  size={20}
+                  color={active ? colors.accent : colors.textTertiary}
+                />
+                <Text
+                  style={[
+                    styles.themeOptionLabel,
+                    active && styles.themeOptionLabelActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Switch View & Logout */}
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.clientViewButton}
           onPress={() => switchView("client")}
+          activeOpacity={0.8}
         >
-          <Text style={styles.clientViewIcon}>👋</Text>
+          <View style={styles.clientViewIconWrap}>
+            <Ionicons name="swap-horizontal-outline" size={22} color={colors.textOnAccent} />
+          </View>
           <View style={styles.clientViewContent}>
             <Text style={styles.clientViewTitle}>Switch to Client View</Text>
             <Text style={styles.clientViewSubtitle}>
               Browse as a regular user
             </Text>
           </View>
-          <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color="rgba(255,255,255,0.6)"
+          />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
+      <View style={styles.logoutSection}>
+        <TouchableOpacity
+          style={[
+            styles.logoutButton,
+            loggingOut && styles.logoutButtonDisabled,
+          ]}
+          onPress={handleLogout}
+          disabled={loggingOut}
+        >
+          {loggingOut ? (
+            <View style={styles.logoutLoading}>
+              <ActivityIndicator size="small" color={colors.error} />
+              <Text style={styles.logoutButtonText}>Logging out...</Text>
+            </View>
+          ) : (
+            <View style={styles.logoutLoading}>
+              <Ionicons name="log-out-outline" size={20} color={colors.error} />
+              <Text style={styles.logoutButtonText}>Logout</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
       {/* Edit Profile Modal */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         visible={editModalVisible}
         onRequestClose={() => !isUpdating && setEditModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
+            <View style={styles.modalIconHeader}>
+              <View style={styles.modalIconWrap}>
+                <Ionicons name="person-outline" size={24} color={colors.accent} />
+              </View>
+            </View>
+            <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Edit Profile</Text>
               <TouchableOpacity
                 onPress={() => !isUpdating && setEditModalVisible(false)}
                 disabled={isUpdating}
+                style={styles.modalCloseBtn}
               >
-                <MaterialIcons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={22} color={colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -309,11 +447,11 @@ const AdminProfileScreen = ({ navigation }) => {
                 </View>
               )}
               <TouchableOpacity
-                style={styles.changAvatarButton}
+                style={styles.changeAvatarButton}
                 onPress={pickImage}
                 disabled={isUpdating}
               >
-                <MaterialIcons name="photo-camera" size={18} color="#fff" />
+                <Ionicons name="camera-outline" size={16} color={colors.textOnAccent} />
                 <Text style={styles.changeAvatarText}>Change Avatar</Text>
               </TouchableOpacity>
             </View>
@@ -327,7 +465,7 @@ const AdminProfileScreen = ({ navigation }) => {
                 value={editName}
                 onChangeText={setEditName}
                 editable={!isUpdating}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.placeholder}
               />
             </View>
 
@@ -341,10 +479,10 @@ const AdminProfileScreen = ({ navigation }) => {
               disabled={isUpdating}
             >
               {isUpdating ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.textOnAccent} />
               ) : (
                 <>
-                  <MaterialIcons name="save" size={18} color="#fff" />
+                  <Ionicons name="checkmark" size={18} color={colors.textOnAccent} />
                   <Text style={styles.saveButtonText}>Save Changes</Text>
                 </>
               )}
@@ -356,274 +494,486 @@ const AdminProfileScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  profileHeader: {
-    alignItems: "center",
-    paddingVertical: 30,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-  },
-  avatarContainer: {
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#b38604",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#f0f0f0",
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#333",
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: "#888",
-    marginBottom: 16,
-  },
-  editButton: {
-    flexDirection: "row",
-    backgroundColor: "#ff6b35",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    alignItems: "center",
-    gap: 8,
-  },
-  editButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  section: {
-    padding: 16,
-    marginBottom: 16,
-    backgroundColor: "#fff",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 16,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: "#888",
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
-  clientViewButton: {
-    backgroundColor: "#b38604",
-    borderRadius: 10,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  clientViewIcon: {
-    fontSize: 28,
-    marginRight: 12,
-  },
-  clientViewContent: {
-    flex: 1,
-  },
-  clientViewTitle: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  clientViewSubtitle: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 12,
-  },
-  logoutButton: {
-    backgroundColor: "#ff6b6b",
-    borderRadius: 8,
-    padding: 14,
-    alignItems: "center",
-  },
-  logoutButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 30,
-    maxHeight: "90%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-  },
-  modalAvatarSection: {
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  modalAvatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#b38604",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  modalAvatarImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#f0f0f0",
-    marginBottom: 12,
-  },
-  modalAvatarText: {
-    fontSize: 40,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  changAvatarButton: {
-    flexDirection: "row",
-    backgroundColor: "#ff6b35",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    alignItems: "center",
-    gap: 8,
-  },
-  changeAvatarText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  formSection: {
-    marginBottom: 20,
-  },
-  formLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
-  },
-  nameInput: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: "#333",
-    backgroundColor: "#f9f9f9",
-  },
-  saveButton: {
-    flexDirection: "row",
-    backgroundColor: "#ff6b35",
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  managementButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-    backgroundColor: "#fafbfc",
-    borderLeftWidth: 4,
-  },
-  managementIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: "#f3f7fc",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  managementButtonContent: {
-    flex: 1,
-  },
-  managementButtonTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#333",
-    marginBottom: 2,
-  },
-  managementButtonDesc: {
-    fontSize: 12,
-    color: "#888",
-    lineHeight: 16,
-  },
-  titleWithDot: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  unreadDotSmall: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#e74c3c",
-  },
-});
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+
+    /* Profile Header Card */
+    profileCard: {
+      alignItems: "center",
+      paddingVertical: 28,
+      paddingHorizontal: 16,
+      marginHorizontal: 12,
+      marginTop: 12,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.07,
+          shadowOffset: { width: 0, height: 2 },
+          shadowRadius: 8,
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    avatarContainer: {
+      marginBottom: 14,
+      position: "relative",
+    },
+    avatar: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 3,
+      borderColor: "rgba(179,134,4,0.18)",
+    },
+    avatarImage: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      backgroundColor: colors.inputBg,
+      borderWidth: 3,
+      borderColor: "rgba(179,134,4,0.18)",
+    },
+    avatarText: {
+      fontSize: 34,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    editAvatarBtn: {
+      position: "absolute",
+      bottom: 2,
+      right: 2,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 2,
+      borderColor: "#fff",
+    },
+    userName: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    userEmail: {
+      fontSize: 14,
+      color: colors.textTertiary,
+      marginBottom: 16,
+    },
+    editButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 10,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      alignItems: "center",
+      gap: 6,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#b38604",
+          shadowOpacity: 0.2,
+          shadowOffset: { width: 0, height: 2 },
+          shadowRadius: 4,
+        },
+        android: { elevation: 3 },
+      }),
+    },
+    editButtonText: {
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: "600",
+    },
+
+    /* Sections */
+    section: {
+      marginHorizontal: 12,
+      marginTop: 12,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.05,
+          shadowOffset: { width: 0, height: 2 },
+          shadowRadius: 6,
+        },
+        android: { elevation: 1 },
+      }),
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 12,
+      gap: 8,
+    },
+    sectionIconWrap: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: "rgba(179,134,4,0.12)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      flex: 1,
+    },
+    infoRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderLight,
+    },
+    infoLabel: {
+      fontSize: 14,
+      color: colors.textTertiary,
+    },
+    infoValue: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    roleBadge: {
+      backgroundColor: "rgba(179,134,4,0.12)",
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 8,
+    },
+    roleBadgeText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.accent,
+      textTransform: "capitalize",
+    },
+
+    /* Support Management */
+    managementButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderLight,
+    },
+    mgmtIconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    managementButtonContent: {
+      flex: 1,
+    },
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    managementButtonTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 2,
+    },
+    managementButtonDesc: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      lineHeight: 16,
+    },
+    unreadDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: "#e74c3c",
+    },
+    unreadDotSmall: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: "#e74c3c",
+    },
+
+    /* Client View Switch */
+    clientViewButton: {
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      padding: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      ...Platform.select({
+        ios: {
+          shadowColor: "#b38604",
+          shadowOpacity: 0.2,
+          shadowOffset: { width: 0, height: 2 },
+          shadowRadius: 6,
+        },
+        android: { elevation: 3 },
+      }),
+    },
+    clientViewIconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    clientViewContent: {
+      flex: 1,
+    },
+    clientViewTitle: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+      marginBottom: 2,
+    },
+    clientViewSubtitle: {
+      color: "rgba(255,255,255,0.7)",
+      fontSize: 12,
+    },
+
+    /* Logout */
+    logoutSection: {
+      marginHorizontal: 12,
+      marginTop: 12,
+      marginBottom: 32,
+    },
+    logoutButton: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "rgba(231,76,60,0.2)",
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.04,
+          shadowOffset: { width: 0, height: 1 },
+          shadowRadius: 3,
+        },
+        android: { elevation: 1 },
+      }),
+    },
+    logoutButtonDisabled: {
+      opacity: 0.7,
+    },
+    logoutLoading: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    logoutButtonText: {
+      color: "#e74c3c",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+
+    /* Modal */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.45)",
+      justifyContent: "center",
+      paddingHorizontal: 20,
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      paddingBottom: 24,
+      maxHeight: "90%",
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.2,
+          shadowOffset: { width: 0, height: 8 },
+          shadowRadius: 20,
+        },
+        android: { elevation: 12 },
+      }),
+    },
+    modalIconHeader: {
+      alignItems: "center",
+      marginTop: 20,
+      marginBottom: 4,
+    },
+    modalIconWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: "rgba(179,134,4,0.12)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      marginBottom: 16,
+      marginTop: 8,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    modalCloseBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalAvatarSection: {
+      alignItems: "center",
+      marginBottom: 20,
+      paddingHorizontal: 20,
+    },
+    modalAvatar: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+      borderWidth: 3,
+      borderColor: "rgba(179,134,4,0.18)",
+    },
+    modalAvatarImage: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: colors.inputBg,
+      marginBottom: 12,
+      borderWidth: 3,
+      borderColor: "rgba(179,134,4,0.18)",
+    },
+    modalAvatarText: {
+      fontSize: 38,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    changeAvatarButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      alignItems: "center",
+      gap: 6,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#b38604",
+          shadowOpacity: 0.2,
+          shadowOffset: { width: 0, height: 2 },
+          shadowRadius: 4,
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    changeAvatarText: {
+      color: "#fff",
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    formSection: {
+      marginBottom: 18,
+      paddingHorizontal: 20,
+    },
+    formLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 6,
+    },
+    nameInput: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+      backgroundColor: colors.cardAlt,
+    },
+    saveButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginHorizontal: 20,
+      gap: 8,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#b38604",
+          shadowOpacity: 0.25,
+          shadowOffset: { width: 0, height: 3 },
+          shadowRadius: 6,
+        },
+        android: { elevation: 3 },
+      }),
+    },
+    saveButtonDisabled: {
+      opacity: 0.6,
+    },
+    saveButtonText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+
+    /* ─── Theme Toggle ─── */
+    themeRow: {
+      flexDirection: "row",
+      gap: 10,
+      paddingHorizontal: 12,
+      paddingBottom: 14,
+    },
+    themeOption: {
+      flex: 1,
+      alignItems: "center",
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.inputBg,
+      borderWidth: 1.5,
+      borderColor: "transparent",
+      gap: 4,
+    },
+    themeOptionActive: {
+      borderColor: colors.accent,
+      backgroundColor: colors.accentSurface,
+    },
+    themeOptionLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+    themeOptionLabelActive: {
+      color: colors.accent,
+    },
+  });
 
 export default AdminProfileScreen;

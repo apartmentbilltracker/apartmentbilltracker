@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,16 +6,42 @@ import {
   StyleSheet,
   RefreshControl,
   TouchableOpacity,
-  Dimensions,
+  ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native";
 import { useRoute, useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { apiService, roomService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
 
-const { width } = Dimensions.get("window");
+const getBillMeta = (c) => ({
+  rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
+  electricity: {
+    icon: "flash",
+    color: c.electricityColor,
+    bg: c.accentSurface,
+    label: "Electricity",
+  },
+  water: { icon: "water", color: c.waterColor, bg: c.infoBg, label: "Water" },
+  internet: {
+    icon: "wifi",
+    color: c.internetColor,
+    bg: c.purpleBg,
+    label: "Wi-Fi",
+  },
+});
+
+const pct = (collected, expected) => {
+  if (!expected) return 0;
+  return Math.min(Math.round((collected / expected) * 100), 100);
+};
 
 const AdminFinancialDashboardScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const BILL_META = getBillMeta(colors);
+
   const route = useRoute();
   const isFocused = useIsFocused();
   const { room } = route.params || {};
@@ -30,29 +56,29 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
     try {
       setLoading(true);
 
-      // Refetch latest room data to get updated currentCycleId
       let latestRoom = room;
       try {
-        const roomResponse = await roomService.getRoomDetails(room?._id);
+        const roomResponse = await roomService.getRoomDetails(
+          room?.id || room?._id,
+        );
         latestRoom = roomResponse.room || roomResponse.data?.room || room;
       } catch (err) {
         console.log("Warning: Could not refetch room data:", err);
       }
 
-      // First check if the current cycle is closed
       let cycleIsClosed = false;
       if (latestRoom?.currentCycleId) {
         try {
           const cycleResponse = await apiService.get(
             `/api/v2/billing-cycles/${latestRoom.currentCycleId}`,
           );
-          cycleIsClosed = cycleResponse?.data?.status === "completed";
+          const cycleData =
+            cycleResponse?.billingCycle || cycleResponse?.data || cycleResponse;
+          cycleIsClosed =
+            cycleData?.status === "completed" || cycleData?.status === "closed";
           setIsCycleClosed(cycleIsClosed);
 
           if (cycleIsClosed) {
-            console.log(
-              "🔄 [FINANCIAL DASHBOARD] Billing cycle is closed - resetting view",
-            );
             setDashboard(null);
             setTrends([]);
             return;
@@ -61,27 +87,21 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
           console.log("Error checking cycle status:", err);
         }
       } else {
-        // No active cycle
-        console.log("ℹ️ [FINANCIAL DASHBOARD] No active cycle found");
         setDashboard(null);
         setTrends([]);
         setIsCycleClosed(true);
         return;
       }
 
-      // Fetch dashboard data only if cycle is not closed
       if (!cycleIsClosed) {
         const response = await apiService.get(
-          `/api/v2/admin/financial/dashboard/${latestRoom?._id}`,
+          `/api/v2/admin/financial/dashboard/${latestRoom?.id || latestRoom?._id}`,
         );
-
         setDashboard(response.dashboard);
 
-        // Fetch trends
         const trendsResponse = await apiService.get(
-          `/api/v2/admin/financial/trends/${latestRoom?._id}`,
+          `/api/v2/admin/financial/trends/${latestRoom?.id || latestRoom?._id}`,
         );
-
         setTrends(trendsResponse.trends || []);
       }
     } catch (error) {
@@ -91,20 +111,14 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [room?._id, room]);
+  }, [room?.id, room?._id, room]);
 
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // Check if cycle is closed when screen is focused
   useEffect(() => {
-    if (isFocused) {
-      console.log(
-        "🔄 [FINANCIAL DASHBOARD] Screen focused - checking for closed cycle",
-      );
-      fetchDashboardData();
-    }
+    if (isFocused) fetchDashboardData();
   }, [isFocused, fetchDashboardData]);
 
   const onRefresh = useCallback(() => {
@@ -112,80 +126,90 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
+  // ─── Loading ───
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={styles.centerWrap}>
+        <ActivityIndicator size="large" color={colors.accent} />
         <Text style={styles.loadingText}>Loading financial data...</Text>
       </View>
     );
   }
 
+  // ─── Cycle Closed ───
   if (isCycleClosed) {
     return (
       <ScrollView
         style={styles.container}
+        contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintcolor={colors.accent}
+            colors={["#b38604"]}
+          />
         }
       >
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Financial Dashboard</Text>
-          <Text style={styles.headerSubtitle}>{room?.name}</Text>
+        {/* Summary strip (room name) */}
+        <View style={styles.summaryStrip}>
+          <View
+            style={[styles.summaryIconWrap, { backgroundColor: colors.infoBg }]}
+          >
+            <Ionicons name="home" size={16} color={colors.info} />
+          </View>
+          <Text style={styles.summaryRoomName} numberOfLines={1}>
+            {room?.name || "Room"}
+          </Text>
         </View>
 
-        <View style={styles.emptyStateContainer}>
-          <View style={styles.emptyStateIcon}>
-            <Ionicons name="checkmark-circle" size={80} color="#4CAF50" />
+        <View style={styles.closedWrap}>
+          <View style={styles.closedIcon}>
+            <Ionicons name="checkmark-done-circle" size={52} color={colors.success} />
           </View>
-
-          <Text style={styles.emptyStateTitle}>Billing Cycle Completed</Text>
-          <Text style={styles.emptyStateSubtitle}>
+          <Text style={styles.closedTitle}>Billing Cycle Completed</Text>
+          <Text style={styles.closedSubtitle}>
             The billing cycle has been successfully closed
           </Text>
 
           <View style={styles.completionCard}>
-            <View style={styles.completionItem}>
-              <View style={styles.completionCheckmark}>
-                <Ionicons name="checkmark" size={20} color="#fff" />
-              </View>
-              <View style={styles.completionText}>
-                <Text style={styles.completionLabel}>All bills collected</Text>
-                <Text style={styles.completionDetail}>
-                  Payments processed and recorded
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.completionDivider} />
-
-            <View style={styles.completionItem}>
-              <View style={styles.completionCheckmark}>
-                <Ionicons name="checkmark" size={20} color="#fff" />
-              </View>
-              <View style={styles.completionText}>
-                <Text style={styles.completionLabel}>Data archived</Text>
-                <Text style={styles.completionDetail}>
-                  Historical records saved
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.completionDivider} />
-
-            <View style={styles.completionItem}>
-              <View style={styles.completionCheckmark}>
-                <Ionicons name="checkmark" size={20} color="#fff" />
-              </View>
-              <View style={styles.completionText}>
-                <Text style={styles.completionLabel}>Ready for next cycle</Text>
-                <Text style={styles.completionDetail}>
-                  Create a new billing cycle to continue
-                </Text>
-              </View>
-            </View>
+            {[
+              {
+                icon: "card",
+                label: "All bills collected",
+                detail: "Payments processed and recorded",
+              },
+              {
+                icon: "archive",
+                label: "Data archived",
+                detail: "Historical records saved",
+              },
+              {
+                icon: "add-circle",
+                label: "Ready for next cycle",
+                detail: "Create a new billing cycle to continue",
+              },
+            ].map((item, i) => (
+              <React.Fragment key={item.label}>
+                {i > 0 && <View style={styles.completionDivider} />}
+                <View style={styles.completionItem}>
+                  <View style={styles.completionCheckWrap}>
+                    <Ionicons
+                      name="checkmark"
+                      size={16}
+                      color={colors.textOnAccent}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.completionLabel}>{item.label}</Text>
+                    <Text style={styles.completionDetail}>{item.detail}</Text>
+                  </View>
+                </View>
+              </React.Fragment>
+            ))}
           </View>
 
-          <Text style={styles.emptyStateMessage}>
+          <Text style={styles.closedNote}>
             Amounts have been reset for the new cycle
           </Text>
         </View>
@@ -193,615 +217,862 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
     );
   }
 
+  // ─── Active Dashboard ───
+  const collectionRate = dashboard?.collectionRate || 0;
+  const rateColor =
+    collectionRate >= 80
+      ? colors.success
+      : collectionRate >= 50
+        ? colors.electricityColor
+        : "#c62828";
+
   return (
     <ScrollView
       style={styles.container}
+      contentContainerStyle={{ paddingBottom: 32 }}
+      showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintcolor={colors.accent}
+          colors={["#b38604"]}
+        />
       }
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Financial Dashboard</Text>
-        <Text style={styles.headerSubtitle}>{dashboard?.roomName}</Text>
+      {/* ── Summary Strip ── */}
+      <View style={styles.summaryStrip}>
+        <View
+          style={[styles.summaryIconWrap, { backgroundColor: colors.infoBg }]}
+        >
+          <Ionicons name="home" size={16} color={colors.info} />
+        </View>
+        <Text style={styles.summaryRoomName} numberOfLines={1}>
+          {dashboard?.roomName || room?.name || "Room"}
+        </Text>
+        <View style={[styles.rateBadge, { backgroundColor: rateColor + "18" }]}>
+          <Text style={[styles.rateBadgeText, { color: rateColor }]}>
+            {collectionRate}%
+          </Text>
+        </View>
       </View>
 
-      {/* KPI Cards */}
-      <View style={styles.kpiContainer}>
+      {/* ── KPI Cards ── */}
+      <View style={styles.kpiGrid}>
         {/* Total Billed */}
-        <View style={[styles.kpiCard, styles.kpiPrimary]}>
+        <View style={styles.kpiCard}>
+          <View
+            style={[
+              styles.kpiIconWrap,
+              { backgroundColor: colors.accentSurface },
+            ]}
+          >
+            <Ionicons name="receipt" size={18} color={colors.accent} />
+          </View>
           <Text style={styles.kpiLabel}>Total Billed</Text>
           <Text style={styles.kpiValue}>
-            ₱{(dashboard?.totalBilled || 0).toFixed(2)}
+            ₱
+            {(dashboard?.totalBilled || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            })}
           </Text>
-          <Text style={styles.kpiSubtext}>All cycles</Text>
         </View>
 
-        {/* Total Collected */}
-        <View style={[styles.kpiCard, styles.kpiSuccess]}>
+        {/* Collected */}
+        <View style={styles.kpiCard}>
+          <View
+            style={[styles.kpiIconWrap, { backgroundColor: colors.successBg }]}
+          >
+            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+          </View>
           <Text style={styles.kpiLabel}>Collected</Text>
-          <Text style={styles.kpiValue}>
-            ₱{(dashboard?.totalCollected || 0).toFixed(2)}
+          <Text style={[styles.kpiValue, { color: colors.success }]}>
+            ₱
+            {(dashboard?.totalCollected || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            })}
           </Text>
-          <Text style={styles.kpiSubtext}>Payments received</Text>
         </View>
-      </View>
 
-      <View style={styles.kpiContainer}>
         {/* Outstanding */}
-        <View style={[styles.kpiCard, styles.kpiWarning]}>
+        <View style={styles.kpiCard}>
+          <View
+            style={[styles.kpiIconWrap, { backgroundColor: colors.warningBg }]}
+          >
+            <Ionicons
+              name="alert-circle"
+              size={18}
+              color={colors.electricityColor}
+            />
+          </View>
           <Text style={styles.kpiLabel}>Outstanding</Text>
-          <Text style={styles.kpiValue}>
-            ₱{(dashboard?.outstanding || 0).toFixed(2)}
+          <Text style={[styles.kpiValue, { color: colors.electricityColor }]}>
+            ₱
+            {(dashboard?.outstanding || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            })}
           </Text>
-          <Text style={styles.kpiSubtext}>Pending payment</Text>
         </View>
 
         {/* Collection Rate */}
-        <View style={[styles.kpiCard, styles.kpiInfo]}>
-          <Text style={styles.kpiLabel}>Collection Rate</Text>
-          <Text style={styles.kpiValue}>{dashboard?.collectionRate}%</Text>
-          <Text style={styles.kpiSubtext}>Payment completion</Text>
+        <View style={styles.kpiCard}>
+          <View
+            style={[styles.kpiIconWrap, { backgroundColor: rateColor + "18" }]}
+          >
+            <Ionicons name="trending-up" size={18} color={rateColor} />
+          </View>
+          <Text style={styles.kpiLabel}>Rate</Text>
+          <Text style={[styles.kpiValue, { color: rateColor }]}>
+            {collectionRate}%
+          </Text>
         </View>
       </View>
 
-      {/* Members Summary */}
+      {/* ── Members Summary ── */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Room Members</Text>
-        <View style={styles.membersGrid}>
-          <View style={styles.memberCard}>
-            <Text style={styles.memberValue}>{dashboard?.payerCount}</Text>
-            <Text style={styles.memberLabel}>Payers</Text>
-          </View>
-          <View style={styles.memberCard}>
-            <Text style={styles.memberValue}>{dashboard?.nonPayerCount}</Text>
-            <Text style={styles.memberLabel}>Non-Payers</Text>
-          </View>
-          <View style={styles.memberCard}>
-            <Text style={styles.memberValue}>{dashboard?.totalMembers}</Text>
-            <Text style={styles.memberLabel}>Total</Text>
-          </View>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="people" size={16} color={colors.accent} />
+          <Text style={styles.sectionTitle}>Room Members</Text>
         </View>
-      </View>
-
-      {/* Active Cycle Details */}
-      {dashboard?.activeCycleId && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Active Billing Cycle</Text>
-          <View style={styles.cycleCard}>
-            <Text style={styles.cycleLabel}>Period</Text>
-            <Text style={styles.cycleValue}>
-              {new Date(dashboard?.activeCycleStart).toLocaleDateString()} -{" "}
-              {new Date(dashboard?.activeCycleEnd).toLocaleDateString()}
-            </Text>
-
-            <View style={styles.breakdownRow}>
-              <View style={styles.breakdownItem}>
-                <Text style={styles.breakdownLabel}>Rent</Text>
-                <Text style={styles.breakdownValue}>
-                  ₱
-                  {(dashboard?.paymentBreakdown?.rent?.expected || 0).toFixed(
-                    2,
-                  )}
-                </Text>
+        <View style={styles.membersRow}>
+          {[
+            {
+              value: dashboard?.payerCount,
+              label: "Payers",
+              color: colors.success,
+              bg: colors.successBg,
+              icon: "checkmark-circle",
+            },
+            {
+              value: dashboard?.nonPayerCount,
+              label: "Non-Payers",
+              color: colors.error,
+              bg: colors.errorBg,
+              icon: "close-circle",
+            },
+            {
+              value: dashboard?.totalMembers,
+              label: "Total",
+              color: colors.waterColor,
+              bg: colors.infoBg,
+              icon: "people",
+            },
+          ].map((m) => (
+            <View key={m.label} style={styles.memberCard}>
+              <View style={[styles.memberIconWrap, { backgroundColor: m.bg }]}>
+                <Ionicons name={m.icon} size={16} color={m.color} />
               </View>
-              <View style={styles.breakdownItem}>
-                <Text style={styles.breakdownLabel}>Electricity</Text>
-                <Text style={styles.breakdownValue}>
-                  ₱
-                  {(
-                    dashboard?.paymentBreakdown?.electricity?.expected || 0
-                  ).toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.breakdownItem}>
-                <Text style={styles.breakdownLabel}>Water</Text>
-                <Text style={styles.breakdownValue}>
-                  ₱
-                  {(dashboard?.paymentBreakdown?.water?.expected || 0).toFixed(
-                    2,
-                  )}
-                </Text>
-              </View>
-              <View style={styles.breakdownItem}>
-                <Text style={styles.breakdownLabel}>Internet</Text>
-                <Text style={styles.breakdownValue}>
-                  ₱
-                  {(
-                    dashboard?.paymentBreakdown?.internet?.expected || 0
-                  ).toFixed(2)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Payment Status Bars */}
-            <View style={styles.statusSection}>
-              {/* Rent Status */}
-              <View style={styles.statusItem}>
-                <View style={styles.statusHeader}>
-                  <Text style={styles.statusLabel}>Rent</Text>
-                  <Text style={styles.statusPercentage}>
-                    {(
-                      ((dashboard?.paymentBreakdown?.rent?.collected || 0) /
-                        (dashboard?.paymentBreakdown?.rent?.expected || 1)) *
-                        100 || 0
-                    ).toFixed(0)}
-                    %
-                  </Text>
-                </View>
-                <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        width: `${((dashboard?.paymentBreakdown?.rent?.collected || 0) / (dashboard?.paymentBreakdown?.rent?.expected || 1)) * 100 || 0}%`,
-                        backgroundColor: "#4CAF50",
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-
-              {/* Electricity Status */}
-              <View style={styles.statusItem}>
-                <View style={styles.statusHeader}>
-                  <Text style={styles.statusLabel}>Electricity</Text>
-                  <Text style={styles.statusPercentage}>
-                    {(
-                      ((dashboard?.paymentBreakdown?.electricity?.collected ||
-                        0) /
-                        (dashboard?.paymentBreakdown?.electricity?.expected ||
-                          1)) *
-                        100 || 0
-                    ).toFixed(0)}
-                    %
-                  </Text>
-                </View>
-                <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        width: `${((dashboard?.paymentBreakdown?.electricity?.collected || 0) / (dashboard?.paymentBreakdown?.electricity?.expected || 1)) * 100 || 0}%`,
-                        backgroundColor: "#2196F3",
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-
-              {/* Water Status */}
-              <View style={styles.statusItem}>
-                <View style={styles.statusHeader}>
-                  <Text style={styles.statusLabel}>Water</Text>
-                  <Text style={styles.statusPercentage}>
-                    {(
-                      ((dashboard?.paymentBreakdown?.water?.collected || 0) /
-                        (dashboard?.paymentBreakdown?.water?.expected || 1)) *
-                        100 || 0
-                    ).toFixed(0)}
-                    %
-                  </Text>
-                </View>
-                <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        width: `${((dashboard?.paymentBreakdown?.water?.collected || 0) / (dashboard?.paymentBreakdown?.water?.expected || 1)) * 100 || 0}%`,
-                        backgroundColor: "#FF9800",
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-
-              {/* Internet Status */}
-              <View style={styles.statusItem}>
-                <View style={styles.statusHeader}>
-                  <Text style={styles.statusLabel}>Internet</Text>
-                  <Text style={styles.statusPercentage}>
-                    {(
-                      ((dashboard?.paymentBreakdown?.internet?.collected || 0) /
-                        (dashboard?.paymentBreakdown?.internet?.expected ||
-                          1)) *
-                        100 || 0
-                    ).toFixed(0)}
-                    %
-                  </Text>
-                </View>
-                <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        width: `${((dashboard?.paymentBreakdown?.internet?.collected || 0) / (dashboard?.paymentBreakdown?.internet?.expected || 1)) * 100 || 0}%`,
-                        backgroundColor: "#9C27B0",
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Billing Trends */}
-      {trends.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Billing History</Text>
-          {trends.map((cycle) => (
-            <View key={cycle._id || cycle.cycleNumber} style={styles.trendCard}>
-              <View style={styles.trendHeader}>
-                <Text style={styles.trendTitle}>
-                  Cycle #{cycle.cycleNumber}
-                </Text>
-                <Text
-                  style={[
-                    styles.trendStatus,
-                    {
-                      color:
-                        cycle.status === "active"
-                          ? "#4CAF50"
-                          : cycle.status === "completed"
-                            ? "#2196F3"
-                            : "#999",
-                    },
-                  ]}
-                >
-                  {cycle.status}
-                </Text>
-              </View>
-              <Text style={styles.trendDate}>
-                {new Date(cycle.startDate).toLocaleDateString()} -{" "}
-                {new Date(cycle.endDate).toLocaleDateString()}
+              <Text style={[styles.memberValue, { color: m.color }]}>
+                {m.value ?? 0}
               </Text>
-              <View style={styles.trendAmount}>
-                <Text style={styles.trendLabel}>Total Billed:</Text>
-                <Text style={styles.trendValue}>
-                  ₱{cycle.totalBilled.toFixed(2)}
-                </Text>
-              </View>
+              <Text style={styles.memberLabel}>{m.label}</Text>
             </View>
           ))}
         </View>
-      )}
-
-      {/* Actions */}
-      <View style={styles.actionSection}>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate("BillingDetails", { room })}
-        >
-          <Text style={styles.actionBtnText}>View Collection Status</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate("PaymentVerification", { room })}
-        >
-          <Text style={styles.actionBtnText}>Verify Payments</Text>
-        </TouchableOpacity>
       </View>
 
-      <View style={styles.spacing} />
+      {/* ── Active Cycle Details ── */}
+      {dashboard?.activeCycleId && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="calendar" size={16} color={colors.accent} />
+            <Text style={styles.sectionTitle}>Active Billing Cycle</Text>
+          </View>
+
+          <View style={styles.cycleCard}>
+            {/* Period */}
+            <View style={styles.cyclePeriodRow}>
+              <Ionicons
+                name="time-outline"
+                size={14}
+                color={colors.textTertiary}
+              />
+              <Text style={styles.cyclePeriodText}>
+                {new Date(dashboard?.activeCycleStart).toLocaleDateString()} –{" "}
+                {new Date(dashboard?.activeCycleEnd).toLocaleDateString()}
+              </Text>
+            </View>
+
+            {/* Bill Breakdown Grid */}
+            <View style={styles.breakdownGrid}>
+              {Object.entries(BILL_META).map(([key, meta]) => {
+                const expected =
+                  dashboard?.paymentBreakdown?.[key]?.expected || 0;
+                return (
+                  <View key={key} style={styles.breakdownChip}>
+                    <View
+                      style={[
+                        styles.breakdownChipIcon,
+                        { backgroundColor: meta.bg },
+                      ]}
+                    >
+                      <Ionicons name={meta.icon} size={14} color={meta.color} />
+                    </View>
+                    <View>
+                      <Text style={styles.breakdownChipLabel}>
+                        {meta.label}
+                      </Text>
+                      <Text style={styles.breakdownChipValue}>
+                        ₱{expected.toFixed(0)}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Progress Bars */}
+            <View style={styles.progressSection}>
+              <Text style={styles.progressSectionLabel}>
+                Collection Progress
+              </Text>
+              {Object.entries(BILL_META).map(([key, meta]) => {
+                const collected =
+                  dashboard?.paymentBreakdown?.[key]?.collected || 0;
+                const expected =
+                  dashboard?.paymentBreakdown?.[key]?.expected || 0;
+                const p = pct(collected, expected);
+                return (
+                  <View key={key} style={styles.progressItem}>
+                    <View style={styles.progressHeader}>
+                      <View style={styles.progressLabelRow}>
+                        <Ionicons
+                          name={meta.icon}
+                          size={12}
+                          color={meta.color}
+                        />
+                        <Text style={styles.progressLabel}>{meta.label}</Text>
+                      </View>
+                      <Text style={[styles.progressPct, { color: meta.color }]}>
+                        {p}%
+                      </Text>
+                    </View>
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${p}%`,
+                            backgroundColor: meta.color,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* ── Billing History ── */}
+      {trends.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="bar-chart" size={16} color={colors.accent} />
+            <Text style={styles.sectionTitle}>Billing History</Text>
+          </View>
+          {trends.map((cycle) => {
+            const isActive = cycle.status === "active";
+            return (
+              <View
+                key={cycle.id || cycle._id || cycle.cycleNumber}
+                style={styles.trendCard}
+              >
+                <View style={styles.trendTop}>
+                  <View style={styles.trendLeft}>
+                    <View
+                      style={[
+                        styles.trendIconWrap,
+                        {
+                          backgroundColor: isActive ? colors.successBg : colors.infoBg,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={isActive ? "pulse" : "checkmark-done"}
+                        size={16}
+                        color={isActive ? colors.success : colors.waterColor}
+                      />
+                    </View>
+                    <View>
+                      <Text style={styles.trendTitle}>
+                        Cycle #{cycle.cycleNumber}
+                      </Text>
+                      <View style={styles.trendDateRow}>
+                        <Ionicons
+                          name="calendar-outline"
+                          size={11}
+                          color={colors.textTertiary}
+                        />
+                        <Text style={styles.trendDate}>
+                          {new Date(cycle.startDate).toLocaleDateString()} –{" "}
+                          {new Date(cycle.endDate).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View
+                    style={[
+                      styles.trendStatusBadge,
+                      {
+                        backgroundColor: isActive ? colors.successBg : colors.infoBg,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.trendStatusText,
+                        {
+                          color: isActive ? colors.success : colors.waterColor,
+                        },
+                      ]}
+                    >
+                      {cycle.status}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.trendAmountRow}>
+                  <Text style={styles.trendAmountLabel}>Total Billed</Text>
+                  <Text style={styles.trendAmountValue}>
+                    ₱{(cycle.totalBilled || 0).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* ── Quick Actions ── */}
+      <View style={styles.actionsSection}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="flash" size={16} color={colors.accent} />
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+        </View>
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.actionCard}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate("BillingDetails", { room })}
+          >
+            <View
+              style={[
+                styles.actionIconWrap,
+                { backgroundColor: colors.infoBg },
+              ]}
+            >
+              <Ionicons name="list" size={20} color={colors.info} />
+            </View>
+            <Text style={styles.actionLabel}>Collection Status</Text>
+            <Ionicons
+              name="chevron-forward"
+              size={14}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionCard}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate("PaymentVerification", { room })}
+          >
+            <View
+              style={[
+                styles.actionIconWrap,
+                { backgroundColor: colors.successBg },
+              ]}
+            >
+              <Ionicons name="checkmark-done" size={20} color={colors.success} />
+            </View>
+            <Text style={styles.actionLabel}>Verify Payments</Text>
+            <Ionicons
+              name="chevron-forward"
+              size={14}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
     </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F5F5",
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    fontSize: 16,
-    color: "#666",
-  },
-  emptyStateContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 40,
-  },
-  emptyStateIcon: {
-    marginBottom: 24,
-  },
-  emptyStateTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1a1a1a",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  emptyStateSubtitle: {
-    fontSize: 14,
-    color: "#999",
-    marginBottom: 32,
-    textAlign: "center",
-  },
-  completionCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    paddingVertical: 20,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-    width: "100%",
-  },
-  completionItem: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    alignItems: "center",
-    gap: 16,
-  },
-  completionCheckmark: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#4CAF50",
-    justifyContent: "center",
-    alignItems: "center",
-    flexShrink: 0,
-  },
-  completionText: {
-    flex: 1,
-  },
-  completionLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1a1a1a",
-  },
-  completionDetail: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 2,
-  },
-  completionDivider: {
-    height: 1,
-    backgroundColor: "#f0f0f0",
-    marginVertical: 8,
-  },
-  emptyStateMessage: {
-    fontSize: 13,
-    color: "#999",
-    textAlign: "center",
-    marginTop: 12,
-  },
-  header: {
-    backgroundColor: "#2E86AB",
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    paddingTop: 40,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#FFF",
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#E0E0E0",
-    marginTop: 4,
-  },
-  kpiContainer: {
-    flexDirection: "row",
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  kpiCard: {
-    flex: 1,
-    borderRadius: 12,
-    padding: 16,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  kpiPrimary: {
-    backgroundColor: "#2E86AB",
-  },
-  kpiSuccess: {
-    backgroundColor: "#4CAF50",
-  },
-  kpiWarning: {
-    backgroundColor: "#FF9800",
-  },
-  kpiInfo: {
-    backgroundColor: "#2196F3",
-  },
-  kpiLabel: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.8)",
-    marginBottom: 8,
-    fontWeight: "500",
-  },
-  kpiValue: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#FFF",
-    marginBottom: 4,
-  },
-  kpiSubtext: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.7)",
-  },
-  section: {
-    paddingHorizontal: 12,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 12,
-  },
-  membersGrid: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  memberCard: {
-    flex: 1,
-    backgroundColor: "#FFF",
-    borderRadius: 8,
-    padding: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  memberValue: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#2E86AB",
-  },
-  memberLabel: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 4,
-  },
-  cycleCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    padding: 16,
-    elevation: 2,
-  },
-  cycleLabel: {
-    fontSize: 12,
-    color: "#999",
-    marginBottom: 4,
-  },
-  cycleValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 16,
-  },
-  breakdownRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: "#EEE",
-    marginBottom: 16,
-  },
-  breakdownItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  breakdownLabel: {
-    fontSize: 11,
-    color: "#999",
-    marginBottom: 4,
-  },
-  breakdownValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#333",
-  },
-  statusSection: {
-    gap: 12,
-  },
-  statusItem: {
-    gap: 6,
-  },
-  statusHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  statusLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#333",
-  },
-  statusPercentage: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: "#EEE",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 3,
-  },
-  trendCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  trendHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  trendTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
-  trendStatus: {
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "capitalize",
-  },
-  trendDate: {
-    fontSize: 12,
-    color: "#999",
-    marginBottom: 8,
-  },
-  trendAmount: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  trendLabel: {
-    fontSize: 12,
-    color: "#666",
-  },
-  trendValue: {
-    fontSize: 13,
-    fontWeight: "bold",
-    color: "#2E86AB",
-  },
-  actionSection: {
-    paddingHorizontal: 12,
-    paddingVertical: 16,
-    gap: 8,
-  },
-  actionBtn: {
-    backgroundColor: "#2E86AB",
-    borderRadius: 8,
-    paddingVertical: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  actionBtnText: {
-    color: "#FFF",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  spacing: {
-    height: 20,
-  },
-});
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centerWrap: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+    },
+    loadingText: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 12,
+    },
+
+    // ── Summary Strip ──
+    summaryStrip: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: "#e8e8e8",
+      gap: 10,
+    },
+    summaryIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    summaryRoomName: {
+      flex: 1,
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    rateBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 8,
+    },
+    rateBadgeText: {
+      fontSize: 12,
+      fontWeight: "700",
+    },
+
+    // ── KPI Grid ──
+    kpiGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      paddingHorizontal: 12,
+      paddingTop: 14,
+      gap: 8,
+    },
+    kpiCard: {
+      width: "48%",
+      flexGrow: 1,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 14,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 6,
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    kpiIconWrap: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    kpiLabel: {
+      fontSize: 11,
+      fontWeight: "500",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+      marginBottom: 2,
+    },
+    kpiValue: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.text,
+    },
+
+    // ── Section ──
+    section: {
+      paddingHorizontal: 16,
+      paddingTop: 20,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 12,
+    },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+
+    // ── Members ──
+    membersRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    memberCard: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 14,
+      alignItems: "center",
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.04,
+          shadowRadius: 4,
+        },
+        android: { elevation: 1 },
+      }),
+    },
+    memberIconWrap: {
+      width: 30,
+      height: 30,
+      borderRadius: 8,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+    memberValue: {
+      fontSize: 22,
+      fontWeight: "800",
+    },
+    memberLabel: {
+      fontSize: 10,
+      fontWeight: "500",
+      color: colors.textTertiary,
+      marginTop: 2,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+    },
+
+    // ── Cycle Card ──
+    cycleCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 6,
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    cyclePeriodRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 14,
+    },
+    cyclePeriodText: {
+      fontSize: 13,
+      fontWeight: "500",
+      color: colors.textTertiary,
+    },
+
+    // Breakdown Grid
+    breakdownGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 16,
+    },
+    breakdownChip: {
+      width: "47%",
+      flexGrow: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 10,
+      padding: 10,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    breakdownChipIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    breakdownChipLabel: {
+      fontSize: 10,
+      fontWeight: "500",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+    },
+    breakdownChipValue: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.text,
+      marginTop: 1,
+    },
+
+    // Progress
+    progressSection: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderLight,
+      paddingTop: 14,
+      gap: 12,
+    },
+    progressSectionLabel: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 2,
+    },
+    progressItem: {
+      gap: 5,
+    },
+    progressHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    progressLabelRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    progressLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    progressPct: {
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    progressTrack: {
+      height: 6,
+      backgroundColor: colors.inputBg,
+      borderRadius: 3,
+      overflow: "hidden",
+    },
+    progressFill: {
+      height: "100%",
+      borderRadius: 3,
+    },
+
+    // ── Trends ──
+    trendCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 8,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.04,
+          shadowRadius: 4,
+        },
+        android: { elevation: 1 },
+      }),
+    },
+    trendTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    trendLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      flex: 1,
+    },
+    trendIconWrap: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    trendTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    trendDateRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 2,
+    },
+    trendDate: {
+      fontSize: 11,
+      color: colors.textTertiary,
+    },
+    trendStatusBadge: {
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 8,
+    },
+    trendStatusText: {
+      fontSize: 10,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    trendAmountRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginTop: 12,
+      paddingTop: 10,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderLight,
+    },
+    trendAmountLabel: {
+      fontSize: 12,
+      fontWeight: "500",
+      color: colors.textTertiary,
+    },
+    trendAmountValue: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.accent,
+    },
+
+    // ── Actions ──
+    actionsSection: {
+      paddingHorizontal: 16,
+      paddingTop: 20,
+    },
+    actionsRow: {
+      gap: 8,
+    },
+    actionCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 14,
+      gap: 12,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.04,
+          shadowRadius: 4,
+        },
+        android: { elevation: 1 },
+      }),
+    },
+    actionIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    actionLabel: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+
+    // ── Closed State ──
+    closedWrap: {
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingVertical: 36,
+    },
+    closedIcon: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.successBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 18,
+    },
+    closedTitle: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 6,
+    },
+    closedSubtitle: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      textAlign: "center",
+      marginBottom: 28,
+      lineHeight: 18,
+    },
+    completionCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      paddingVertical: 16,
+      width: "100%",
+      marginBottom: 20,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 6,
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    completionItem: {
+      flexDirection: "row",
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      alignItems: "center",
+      gap: 14,
+    },
+    completionCheckWrap: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.success,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    completionLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    completionDetail: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 1,
+    },
+    completionDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.skeleton,
+      marginHorizontal: 18,
+      marginVertical: 4,
+    },
+    closedNote: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      textAlign: "center",
+    },
+  });
 
 export default AdminFinancialDashboardScreen;

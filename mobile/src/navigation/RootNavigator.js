@@ -1,11 +1,20 @@
-import React, { useContext } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AuthContext } from "../context/AuthContext";
 import LoginScreen from "../screens/auth/LoginScreen";
 import RegisterScreen from "../screens/auth/RegisterScreen";
+import RegisterStep1Screen from "../screens/auth/RegisterStep1Screen";
+import RegisterStep2Screen from "../screens/auth/RegisterStep2Screen";
+import RegisterStep3Screen from "../screens/auth/RegisterStep3Screen";
+import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
+import VerifyResetCodeScreen from "../screens/auth/VerifyResetCodeScreen";
+import ResetPasswordScreen from "../screens/auth/ResetPasswordScreen";
 import ClientNavigator from "./ClientNavigator";
 import AdminNavigator from "./AdminNavigator";
 import SplashScreen from "../screens/SplashScreen";
+import OnboardingScreen, {
+  checkOnboardingComplete,
+} from "../screens/OnboardingScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -30,11 +39,22 @@ const AuthStack = () => (
         animationEnabled: false,
       }}
     />
+    <Stack.Screen name="RegisterStep1" component={RegisterStep1Screen} />
+    <Stack.Screen name="RegisterStep2" component={RegisterStep2Screen} />
+    <Stack.Screen name="RegisterStep3" component={RegisterStep3Screen} />
+    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    <Stack.Screen name="VerifyResetCode" component={VerifyResetCodeScreen} />
+    <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
   </Stack.Navigator>
 );
 
 const RootNavigator = () => {
   const authContext = useContext(AuthContext);
+  const [onboardingDone, setOnboardingDone] = useState(null);
+
+  useEffect(() => {
+    checkOnboardingComplete().then((done) => setOnboardingDone(done));
+  }, []);
 
   // Handle undefined or null authContext
   if (!authContext) {
@@ -46,9 +66,14 @@ const RootNavigator = () => {
   console.log("RootNavigator: userToken =", authContext.state?.userToken);
   console.log("RootNavigator: user =", authContext.state?.user);
 
-  if (authContext.isLoading) {
+  if (authContext.isLoading || onboardingDone === null) {
     console.log("RootNavigator: Still loading, showing splash");
     return <SplashScreen />;
+  }
+
+  // Show onboarding on first-ever launch
+  if (!onboardingDone) {
+    return <OnboardingScreen onComplete={() => setOnboardingDone(true)} />;
   }
 
   const isSignedIn = authContext.state?.userToken != null;

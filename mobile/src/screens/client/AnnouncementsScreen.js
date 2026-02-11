@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useMemo} from "react";
 import {
   View,
   Text,
@@ -15,9 +15,10 @@ import {
   Image,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { announcementService, roomService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
 
 const REACTION_TYPES = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -29,6 +30,9 @@ const REACTION_TYPES = [
 ];
 
 const AnnouncementsScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { state } = useContext(AuthContext);
   const [userJoinedRoom, setUserJoinedRoom] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
@@ -44,11 +48,10 @@ const AnnouncementsScreen = ({ navigation }) => {
   const [commentText, setCommentText] = useState("");
   const [userReactions, setUserReactions] = useState({});
 
-  const userId = state?.user?._id;
+  const userId = state?.user?.id || state?.user?._id;
   const userName = state?.user?.name || "User";
   const currentUser = state?.user;
 
-  // Fetch room and announcements when screen comes to focus
   useFocusEffect(
     React.useCallback(() => {
       let isMounted = true;
@@ -73,7 +76,8 @@ const AnnouncementsScreen = ({ navigation }) => {
 
           const joined = rooms.find((r) => {
             const isMember = r.members?.some(
-              (m) => String(m.user?._id || m.user) === String(userId),
+              (m) =>
+                String(m.user?.id || m.user?._id || m.user) === String(userId),
             );
             return isMember;
           });
@@ -82,7 +86,7 @@ const AnnouncementsScreen = ({ navigation }) => {
 
           if (joined) {
             setUserJoinedRoom(joined);
-            await fetchAnnouncements(joined._id);
+            await fetchAnnouncements(joined.id || joined._id);
           }
         } catch (error) {
           console.error("Error fetching data:", error);
@@ -104,26 +108,28 @@ const AnnouncementsScreen = ({ navigation }) => {
   const fetchAnnouncements = async (roomId) => {
     try {
       const response = await announcementService.getRoomAnnouncements(roomId);
-      const data = Array.isArray(response) ? response : response?.data || [];
+      const data = Array.isArray(response)
+        ? response
+        : response?.announcements || response?.data || [];
       setAnnouncements(data);
 
-      // Mark all as read
       for (const announcement of data) {
         try {
-          await announcementService.markAsRead(announcement._id);
+          await announcementService.markAsRead(
+            announcement.id || announcement._id,
+          );
         } catch (error) {
           console.error("Error marking as read:", error);
         }
       }
 
-      // Load user reactions
       const reactions = {};
       for (const announcement of data) {
         const userReaction = announcement.reactions?.find(
-          (r) => String(r.user?._id || r.user) === String(userId),
+          (r) => String(r.user?.id || r.user?._id || r.user) === String(userId),
         );
         if (userReaction) {
-          reactions[announcement._id] = userReaction.type;
+          reactions[announcement.id || announcement._id] = userReaction.type;
         }
       }
       setUserReactions(reactions);
@@ -136,7 +142,7 @@ const AnnouncementsScreen = ({ navigation }) => {
   const onRefresh = async () => {
     if (userJoinedRoom) {
       setRefreshing(true);
-      await fetchAnnouncements(userJoinedRoom._id);
+      await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
       setRefreshing(false);
     }
   };
@@ -149,14 +155,14 @@ const AnnouncementsScreen = ({ navigation }) => {
 
     try {
       await announcementService.createAnnouncement(
-        userJoinedRoom._id,
+        userJoinedRoom.id || userJoinedRoom._id,
         title,
         content,
       );
       setTitle("");
       setContent("");
       setShowCreateModal(false);
-      await fetchAnnouncements(userJoinedRoom._id);
+      await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
       Alert.alert("Success", "Announcement created");
     } catch (error) {
       console.error("Error creating announcement:", error);
@@ -172,12 +178,12 @@ const AnnouncementsScreen = ({ navigation }) => {
 
     try {
       await announcementService.addComment(
-        selectedAnnouncement._id,
+        selectedAnnouncement.id || selectedAnnouncement._id,
         commentText,
       );
       setCommentText("");
       setShowCommentModal(false);
-      await fetchAnnouncements(userJoinedRoom._id);
+      await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
       Alert.alert("Success", "Comment added");
     } catch (error) {
       console.error("Error adding comment:", error);
@@ -196,7 +202,7 @@ const AnnouncementsScreen = ({ navigation }) => {
           onPress: async () => {
             try {
               await announcementService.deleteAnnouncement(announcementId);
-              await fetchAnnouncements(userJoinedRoom._id);
+              await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
               Alert.alert("Success", "Announcement deleted");
             } catch (error) {
               Alert.alert("Error", "Failed to delete announcement");
@@ -215,7 +221,7 @@ const AnnouncementsScreen = ({ navigation }) => {
         onPress: async () => {
           try {
             await announcementService.deleteComment(announcementId, commentId);
-            await fetchAnnouncements(userJoinedRoom._id);
+            await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
           } catch (error) {
             Alert.alert("Error", "Failed to delete comment");
           }
@@ -227,7 +233,7 @@ const AnnouncementsScreen = ({ navigation }) => {
   const handleAddReaction = async (announcementId, reactionType) => {
     try {
       await announcementService.addReaction(announcementId, reactionType);
-      await fetchAnnouncements(userJoinedRoom._id);
+      await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
       setShowReactionPicker({});
     } catch (error) {
       Alert.alert("Error", "Failed to add reaction");
@@ -237,7 +243,7 @@ const AnnouncementsScreen = ({ navigation }) => {
   const handleRemoveReaction = async (announcementId) => {
     try {
       await announcementService.removeReaction(announcementId);
-      await fetchAnnouncements(userJoinedRoom._id);
+      await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
     } catch (error) {
       Alert.alert("Error", "Failed to remove reaction");
     }
@@ -250,9 +256,10 @@ const AnnouncementsScreen = ({ navigation }) => {
         title: announcement.title,
       });
 
-      // Log share in backend
-      await announcementService.shareAnnouncement(announcement._id);
-      await fetchAnnouncements(userJoinedRoom._id);
+      await announcementService.shareAnnouncement(
+        announcement.id || announcement._id,
+      );
+      await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
     } catch (error) {
       console.error("Error sharing:", error);
     }
@@ -265,33 +272,59 @@ const AnnouncementsScreen = ({ navigation }) => {
     }));
   };
 
-  const isAdmin =
-    userJoinedRoom && String(userJoinedRoom.createdBy) === String(userId);
+  const formatTimeAgo = (date) => {
+    if (!date) return "";
+    const now = new Date();
+    const d = new Date(date);
+    const diffMs = now - d;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHrs = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
 
+  const isAdmin =
+    userJoinedRoom &&
+    String(userJoinedRoom.created_by || userJoinedRoom.createdBy) ===
+      String(userId);
+
+  // ── Loading ──
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#b38604" />
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={styles.loadingText}>Loading announcements…</Text>
       </View>
     );
   }
 
+  // ── No room ──
   if (!userJoinedRoom) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.emptyText}>You haven't joined a room yet</Text>
+      <View style={styles.centered}>
+        <Ionicons name="megaphone-outline" size={56} color={colors.skeleton} />
+        <Text style={styles.emptyTitle}>No Room Yet</Text>
+        <Text style={styles.emptySubtitle}>
+          Join a room to see announcements
+        </Text>
       </View>
     );
   }
 
+  // ── Main ──
   return (
     <View style={styles.container}>
       <FlatList
         data={announcements}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item) => item.id || item._id}
         renderItem={({ item }) => {
-          const showComments = expandedComments[item._id];
-          const userReaction = userReactions[item._id];
+          const annId = item.id || item._id;
+          const showComments = expandedComments[annId];
+          const userReaction = userReactions[annId];
           const reactionCounts = {};
           const totalReactions = item.reactions?.length || 0;
 
@@ -300,91 +333,120 @@ const AnnouncementsScreen = ({ navigation }) => {
               (reactionCounts[reaction.type] || 0) + 1;
           });
 
+          const isOwner =
+            String(item.created_by || item.createdBy) === String(userId);
+          const commentCount = item.comments?.length || 0;
+          const shareCount = item.shares?.length || 0;
+
           return (
-            <View style={styles.postCard}>
-              {/* Post Header */}
-              <View style={styles.postHeader}>
-                <View style={styles.creatorInfo}>
-                  {item.createdBy?.avatar?.url ? (
-                    <Image
-                      source={{ uri: item.createdBy.avatar.url }}
-                      style={styles.avatar}
+            <View style={styles.card}>
+              {/* ── Header ── */}
+              <View style={styles.cardHeader}>
+                {item.creator?.avatar?.url || item.createdBy?.avatar?.url ? (
+                  <Image
+                    source={{
+                      uri:
+                        item.creator?.avatar?.url ||
+                        item.createdBy?.avatar?.url,
+                    }}
+                    style={styles.avatar}
+                  />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarFallback]}>
+                    <Text style={styles.avatarLetter}>
+                      {(item.creator?.name ||
+                        item.creatorName)?.[0]?.toUpperCase() || "A"}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.headerMeta}>
+                  <Text style={styles.authorName}>
+                    {item.creator?.name || item.creatorName}
+                  </Text>
+                  <View style={styles.timeBadgeRow}>
+                    <Ionicons
+                      name="time-outline"
+                      size={11}
+                      color={colors.textTertiary}
+                      style={{ marginRight: 3 }}
                     />
-                  ) : (
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>
-                        {item.creatorName?.[0]?.toUpperCase() || "A"}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={styles.creatorDetails}>
-                    <Text style={styles.creatorName}>{item.creatorName}</Text>
-                    <Text style={styles.createdAt}>
-                      {new Date(item.createdAt).toLocaleDateString()}
+                    <Text style={styles.timeText}>
+                      {formatTimeAgo(item.created_at || item.createdAt)}
                     </Text>
                   </View>
                 </View>
-                {String(item.createdBy) === String(userId) && (
+
+                {isOwner && (
                   <TouchableOpacity
-                    onPress={() => handleDeleteAnnouncement(item._id)}
+                    style={styles.moreBtn}
+                    onPress={() => handleDeleteAnnouncement(annId)}
                   >
-                    <MaterialIcons name="more-vert" size={20} color="#666" />
+                    <Ionicons name="trash-outline" size={16} color={colors.error} />
                   </TouchableOpacity>
                 )}
               </View>
 
-              {/* Post Title & Content */}
-              <View style={styles.postContent}>
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.content}>{item.content}</Text>
+              {/* ── Body ── */}
+              <View style={styles.cardBody}>
+                <Text style={styles.postTitle}>{item.title}</Text>
+                <Text style={styles.postContent}>{item.content}</Text>
               </View>
 
-              {/* Reactions & Shares Summary */}
-              {(totalReactions > 0 || (item.shares?.length || 0) > 0) && (
+              {/* ── Stats bar ── */}
+              {(totalReactions > 0 || commentCount > 0 || shareCount > 0) && (
                 <View style={styles.statsBar}>
                   {totalReactions > 0 && (
-                    <View style={styles.reactionStats}>
+                    <View style={styles.statGroup}>
                       {Object.entries(reactionCounts)
                         .slice(0, 3)
                         .map(([type]) => {
-                          const reaction = REACTION_TYPES.find(
-                            (r) => r.type === type,
+                          const r = REACTION_TYPES.find(
+                            (rt) => rt.type === type,
                           );
                           return (
-                            <Text key={type} style={styles.reactionEmoji}>
-                              {reaction?.emoji}
+                            <Text key={type} style={styles.statEmoji}>
+                              {r?.emoji}
                             </Text>
                           );
                         })}
-                      <Text style={styles.reactionCount}>{totalReactions}</Text>
+                      <Text style={styles.statText}>{totalReactions}</Text>
                     </View>
                   )}
-                  {(item.shares?.length || 0) > 0 && (
-                    <Text style={styles.shareCount}>
-                      {item.shares.length} shares
-                    </Text>
-                  )}
+                  <View style={styles.statGroup}>
+                    {commentCount > 0 && (
+                      <Text style={styles.statText}>
+                        {commentCount} comment{commentCount > 1 ? "s" : ""}
+                      </Text>
+                    )}
+                    {shareCount > 0 && (
+                      <Text style={styles.statText}>
+                        {" · "}
+                        {shareCount} share{shareCount > 1 ? "s" : ""}
+                      </Text>
+                    )}
+                  </View>
                 </View>
               )}
 
-              {/* Action Buttons */}
+              {/* ── Action bar ── */}
               <View style={styles.actionBar}>
-                {/* React Button */}
-                <View style={styles.actionButtonGroup}>
+                {/* React */}
+                <View style={{ flex: 1, position: "relative" }}>
                   <TouchableOpacity
-                    style={styles.actionButton}
+                    style={styles.actionBtn}
                     onPress={() => {
                       if (userReaction) {
-                        handleRemoveReaction(item._id);
+                        handleRemoveReaction(annId);
                       } else {
                         setShowReactionPicker((prev) => ({
                           ...prev,
-                          [item._id]: !prev[item._id],
+                          [annId]: !prev[annId],
                         }));
                       }
                     }}
                   >
-                    <Text style={styles.actionButtonEmoji}>
+                    <Text style={styles.actionEmoji}>
                       {userReaction
                         ? REACTION_TYPES.find((r) => r.type === userReaction)
                             ?.emoji || "👍"
@@ -392,26 +454,25 @@ const AnnouncementsScreen = ({ navigation }) => {
                     </Text>
                     <Text
                       style={[
-                        styles.actionButtonText,
-                        userReaction && styles.reacted,
+                        styles.actionLabel,
+                        userReaction && styles.actionLabelActive,
                       ]}
                     >
-                      {userReaction ? "Unlike" : "Like"}
+                      {userReaction ? "Liked" : "Like"}
                     </Text>
                   </TouchableOpacity>
 
-                  {/* Reaction Picker */}
-                  {showReactionPicker[item._id] && (
-                    <View style={styles.reactionPickerContainer}>
+                  {showReactionPicker[annId] && (
+                    <View style={styles.reactionPicker}>
                       {REACTION_TYPES.map((reaction) => (
                         <TouchableOpacity
                           key={reaction.type}
-                          style={styles.reactionOption}
+                          style={styles.reactionPickerItem}
                           onPress={() =>
-                            handleAddReaction(item._id, reaction.type)
+                            handleAddReaction(annId, reaction.type)
                           }
                         >
-                          <Text style={styles.reactionOptionEmoji}>
+                          <Text style={styles.reactionPickerEmoji}>
                             {reaction.emoji}
                           </Text>
                         </TouchableOpacity>
@@ -420,178 +481,183 @@ const AnnouncementsScreen = ({ navigation }) => {
                   )}
                 </View>
 
-                {/* Comment Button */}
+                {/* Comment */}
                 <TouchableOpacity
-                  style={styles.actionButton}
+                  style={styles.actionBtn}
                   onPress={() => {
                     setSelectedAnnouncement(item);
                     setShowCommentModal(true);
                   }}
                 >
-                  <MaterialIcons name="comment" size={18} color="#65676b" />
-                  <Text style={styles.actionButtonText}>Comment</Text>
+                  <Ionicons name="chatbubble-outline" size={16} color={colors.textSecondary} />
+                  <Text style={styles.actionLabel}>Comment</Text>
                 </TouchableOpacity>
 
-                {/* Share Button */}
+                {/* Share */}
                 <TouchableOpacity
-                  style={styles.actionButton}
+                  style={styles.actionBtn}
                   onPress={() => handleShare(item)}
                 >
-                  <MaterialIcons name="share" size={18} color="#65676b" />
-                  <Text style={styles.actionButtonText}>Share</Text>
+                  <Ionicons
+                    name="share-social-outline"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.actionLabel}>Share</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Divider */}
-              <View style={styles.divider} />
-
-              {/* Comments Section */}
-              {item.comments && item.comments.length > 0 && (
-                <View style={styles.commentsContainer}>
-                  {/* View Comments Toggle */}
-                  {!showComments && item.comments.length > 0 && (
+              {/* ── Comments ── */}
+              {commentCount > 0 && (
+                <View style={styles.commentsSection}>
+                  {!showComments && (
                     <TouchableOpacity
-                      style={styles.viewCommentsButton}
-                      onPress={() => toggleComments(item._id)}
+                      style={styles.viewCommentsBtn}
+                      onPress={() => toggleComments(annId)}
                     >
+                      <Ionicons
+                        name="chatbubbles-outline"
+                        size={14}
+                        color={colors.accent}
+                      />
                       <Text style={styles.viewCommentsText}>
-                        View {item.comments.length} comment
-                        {item.comments.length > 1 ? "s" : ""}
+                        View {commentCount} comment
+                        {commentCount > 1 ? "s" : ""}
                       </Text>
                     </TouchableOpacity>
                   )}
 
-                  {/* Show Comments */}
                   {showComments && (
-                    <View style={styles.commentsList}>
+                    <>
                       {item.comments.map((comment) => (
-                        <View key={comment._id} style={styles.comment}>
+                        <View
+                          key={comment.id || comment._id}
+                          style={styles.commentRow}
+                        >
                           {comment.user?.avatar?.url ? (
                             <Image
                               source={{ uri: comment.user.avatar.url }}
                               style={styles.commentAvatar}
                             />
                           ) : (
-                            <View style={styles.commentAvatar}>
-                              <Text style={styles.commentAvatarText}>
-                                {comment.userName?.[0]?.toUpperCase() || "U"}
+                            <View
+                              style={[
+                                styles.commentAvatar,
+                                styles.commentAvatarFallback,
+                              ]}
+                            >
+                              <Text style={styles.commentAvatarLetter}>
+                                {(comment.user_name ||
+                                  comment.userName)?.[0]?.toUpperCase() || "U"}
                               </Text>
                             </View>
                           )}
-                          <View style={styles.commentContent}>
-                            <View style={styles.commentHeader}>
+
+                          <View style={styles.commentBubble}>
+                            <View style={styles.commentBubbleHeader}>
                               <Text style={styles.commentAuthor}>
-                                {comment.userName}
+                                {comment.user_name || comment.userName}
                               </Text>
                               {String(comment.user) === String(userId) && (
                                 <TouchableOpacity
                                   onPress={() =>
-                                    handleDeleteComment(item._id, comment._id)
+                                    handleDeleteComment(
+                                      annId,
+                                      comment.id || comment._id,
+                                    )
                                   }
+                                  hitSlop={{
+                                    top: 8,
+                                    bottom: 8,
+                                    left: 8,
+                                    right: 8,
+                                  }}
                                 >
-                                  <MaterialIcons
+                                  <Ionicons
                                     name="close"
-                                    size={14}
-                                    color="#999"
+                                    size={13}
+                                    color={colors.textTertiary}
                                   />
                                 </TouchableOpacity>
                               )}
                             </View>
-                            <Text style={styles.commentText}>
+                            <Text style={styles.commentBody}>
                               {comment.text}
                             </Text>
-                            <Text style={styles.commentDate}>
-                              {new Date(comment.createdAt).toLocaleDateString()}
+                            <Text style={styles.commentTime}>
+                              {formatTimeAgo(
+                                comment.created_at || comment.createdAt,
+                              )}
                             </Text>
                           </View>
                         </View>
                       ))}
-                    </View>
-                  )}
 
-                  {/* Hide Comments Toggle */}
-                  {showComments && item.comments.length > 2 && (
-                    <TouchableOpacity
-                      style={styles.viewCommentsButton}
-                      onPress={() => toggleComments(item._id)}
-                    >
-                      <Text style={styles.viewCommentsText}>Hide comments</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {/* Add Comment Button */}
-                  <TouchableOpacity
-                    style={styles.addCommentPrompt}
-                    onPress={() => {
-                      setSelectedAnnouncement(item);
-                      setShowCommentModal(true);
-                    }}
-                  >
-                    <View style={styles.commentInputAvatar}>
-                      {currentUser?.avatar?.url ? (
-                        <Image
-                          source={{ uri: currentUser.avatar.url }}
-                          style={styles.addCommentAvatar}
-                        />
-                      ) : (
-                        <View style={styles.commentAvatar}>
-                          <Text style={styles.commentAvatarText}>
-                            {userName?.[0]?.toUpperCase() || "U"}
+                      {commentCount > 2 && (
+                        <TouchableOpacity
+                          style={styles.viewCommentsBtn}
+                          onPress={() => toggleComments(annId)}
+                        >
+                          <Text style={styles.viewCommentsText}>
+                            Hide comments
                           </Text>
-                        </View>
+                        </TouchableOpacity>
                       )}
-                    </View>
-                    <Text style={styles.commentInputPlaceholder}>
-                      Write a comment...
-                    </Text>
-                  </TouchableOpacity>
+                    </>
+                  )}
                 </View>
               )}
 
-              {/* No Comments yet - Show comment input */}
-              {(!item.comments || item.comments.length === 0) && (
-                <TouchableOpacity
-                  style={styles.addCommentPrompt}
-                  onPress={() => {
-                    setSelectedAnnouncement(item);
-                    setShowCommentModal(true);
-                  }}
-                >
-                  <View style={styles.commentInputAvatar}>
-                    {currentUser?.avatar?.url ? (
-                      <Image
-                        source={{ uri: currentUser.avatar.url }}
-                        style={styles.commentAvatar}
-                      />
-                    ) : (
-                      <View style={styles.commentAvatar}>
-                        <Text style={styles.commentAvatarText}>
-                          {userName[0]?.toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
+              {/* ── Write comment prompt ── */}
+              <TouchableOpacity
+                style={styles.writeCommentBar}
+                onPress={() => {
+                  setSelectedAnnouncement(item);
+                  setShowCommentModal(true);
+                }}
+              >
+                {currentUser?.avatar?.url ? (
+                  <Image
+                    source={{ uri: currentUser.avatar.url }}
+                    style={styles.miniAvatar}
+                  />
+                ) : (
+                  <View style={[styles.miniAvatar, styles.miniAvatarFallback]}>
+                    <Text style={styles.miniAvatarLetter}>
+                      {userName?.[0]?.toUpperCase() || "U"}
+                    </Text>
                   </View>
-                  <Text style={styles.commentInputPlaceholder}>
-                    Write a comment...
+                )}
+                <View style={styles.writeCommentPill}>
+                  <Text style={styles.writeCommentPlaceholder}>
+                    Write a comment…
                   </Text>
-                </TouchableOpacity>
-              )}
+                </View>
+              </TouchableOpacity>
             </View>
           );
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <MaterialIcons name="info-outline" size={48} color="#bbb" />
-            <Text style={styles.emptyText}>No announcements yet</Text>
+            <Ionicons name="megaphone-outline" size={52} color={colors.skeleton} />
+            <Text style={styles.emptyTitle}>No Announcements</Text>
+            <Text style={styles.emptySubtitle}>
+              Nothing posted yet. Check back later!
+            </Text>
           </View>
         }
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#b38604"]}
+            tintcolor={colors.accent}
+          />
         }
         contentContainerStyle={styles.listContent}
       />
 
-      {/* Create Announcement Modal */}
+      {/* ── Create Announcement Modal ── */}
       <Modal
         visible={showCreateModal}
         transparent
@@ -599,44 +665,57 @@ const AnnouncementsScreen = ({ navigation }) => {
         onRequestClose={() => setShowCreateModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Announcement</Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
+          <View style={styles.modalSheet}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>New Announcement</Text>
+              <TouchableOpacity
+                onPress={() => setShowCreateModal(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBody}>
+              <Text style={styles.inputLabel}>Title</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Announcement Title"
+                placeholder="Give it a title"
                 value={title}
                 onChangeText={setTitle}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textTertiary}
               />
+
+              <Text style={styles.inputLabel}>Content</Text>
               <TextInput
-                style={[styles.input, styles.contentInput]}
-                placeholder="Announcement Content"
+                style={[styles.input, styles.textArea]}
+                placeholder="What do you want to announce?"
                 value={content}
                 onChangeText={setContent}
                 multiline
                 numberOfLines={6}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textTertiary}
               />
 
               <TouchableOpacity
-                style={styles.submitButton}
+                style={styles.submitBtn}
                 onPress={handleCreateAnnouncement}
               >
-                <Text style={styles.submitButtonText}>Create Announcement</Text>
+                <Ionicons
+                  name="megaphone-outline"
+                  size={18}
+                  color={colors.textOnAccent}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.submitBtnText}>Post Announcement</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* Add Comment Modal */}
+      {/* ── Comment Modal ── */}
       <Modal
         visible={showCommentModal}
         transparent
@@ -644,30 +723,41 @@ const AnnouncementsScreen = ({ navigation }) => {
         onRequestClose={() => setShowCommentModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.smallModal}>
-            <View style={styles.modalHeader}>
+          <View style={styles.modalSheetSmall}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Add Comment</Text>
-              <TouchableOpacity onPress={() => setShowCommentModal(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
+              <TouchableOpacity
+                onPress={() => setShowCommentModal(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.modalBody}>
               <TextInput
-                style={[styles.input, styles.contentInput]}
-                placeholder="Write your comment..."
+                style={[styles.input, styles.textArea]}
+                placeholder="Write your comment…"
                 value={commentText}
                 onChangeText={setCommentText}
                 multiline
                 numberOfLines={4}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textTertiary}
+                autoFocus
               />
 
               <TouchableOpacity
-                style={styles.submitButton}
+                style={styles.submitBtn}
                 onPress={handleAddComment}
               >
-                <Text style={styles.submitButtonText}>Post Comment</Text>
+                <Ionicons
+                  name="send"
+                  size={16}
+                  color={colors.textOnAccent}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.submitBtnText}>Post Comment</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -677,369 +767,395 @@ const AnnouncementsScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+/* ── Styles ── */
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f0f2f5",
+    backgroundColor: colors.background,
   },
-  centerContainer: {
+  centered: {
     flex: 1,
+    backgroundColor: colors.background,
     justifyContent: "center",
     alignItems: "center",
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e4e6eb",
-    elevation: 2,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#000",
-  },
-  createButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#b38604",
-    justifyContent: "center",
-    alignItems: "center",
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: colors.textTertiary,
   },
   listContent: {
-    padding: 8,
-    paddingBottom: 20,
+    padding: 14,
+    paddingBottom: 24,
   },
-  postCard: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    marginBottom: 8,
-    overflow: "hidden",
-    elevation: 1,
+
+  /* Card */
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    marginBottom: 14,
     shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+    overflow: "hidden",
   },
-  postHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  creatorInfo: {
+
+  /* Header */
+  cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#e4e6eb",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+  },
+  avatarFallback: {
+    backgroundColor: colors.accent,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 10,
-    borderColor: "#e4e6eb",
-    borderWidth: 1,
   },
-  avatarText: {
+  avatarLetter: {
     color: "#fff",
     fontWeight: "700",
     fontSize: 16,
   },
-  creatorDetails: {
+  headerMeta: {
     flex: 1,
+    marginLeft: 10,
   },
-  creatorName: {
+  authorName: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#000",
+    fontWeight: "700",
+    color: colors.text,
   },
-  createdAt: {
-    fontSize: 11,
-    color: "#65676b",
+  timeBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 2,
   },
-  postContent: {
-    paddingHorizontal: 12,
+  timeText: {
+    fontSize: 11,
+    color: colors.textTertiary,
+  },
+  moreBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.errorBg,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  /* Body */
+  cardBody: {
+    paddingHorizontal: 14,
     paddingBottom: 12,
   },
-  title: {
+  postTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#000",
+    fontWeight: "700",
+    color: colors.text,
     marginBottom: 6,
   },
-  content: {
+  postContent: {
     fontSize: 14,
-    color: "#050505",
-    lineHeight: 20,
+    color: colors.text,
+    lineHeight: 21,
   },
+
+  /* Stats */
   statsBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#e4e6eb",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e4e6eb",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
   },
-  reactionStats: {
+  statGroup: {
     flexDirection: "row",
     alignItems: "center",
   },
-  reactionEmoji: {
-    marginRight: -6,
+  statEmoji: {
     fontSize: 14,
+    marginRight: -4,
   },
-  reactionCount: {
+  statText: {
     fontSize: 12,
-    color: "#65676b",
-    marginLeft: 12,
+    color: colors.textTertiary,
+    marginLeft: 8,
   },
-  shareCount: {
-    fontSize: 12,
-    color: "#65676b",
-  },
+
+  /* Actions */
   actionBar: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 6,
-    backgroundColor: "#fff",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+    paddingVertical: 2,
   },
-  actionButtonGroup: {
-    flex: 1,
-    position: "relative",
-  },
-  actionButton: {
+  actionBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    gap: 4,
+    paddingVertical: 10,
+    gap: 5,
   },
-  actionButtonEmoji: {
-    fontSize: 18,
-    marginRight: 6,
+  actionEmoji: {
+    fontSize: 16,
   },
-  actionButtonText: {
-    fontSize: 13,
-    color: "#65676b",
-    fontWeight: "500",
-  },
-  reacted: {
-    color: "#b38604",
+  actionLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
     fontWeight: "600",
   },
-  reactionPickerContainer: {
+  actionLabelActive: {
+    color: colors.accent,
+  },
+
+  /* Reaction Picker */
+  reactionPicker: {
     position: "absolute",
-    bottom: 50,
-    left: 0,
+    bottom: 46,
+    left: 4,
     flexDirection: "row",
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderRadius: 24,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    elevation: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    elevation: 8,
     shadowColor: "#000",
     shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: -2 },
+    shadowRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.divider,
   },
-  reactionOption: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
+  reactionPickerItem: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  reactionOptionEmoji: {
+  reactionPickerEmoji: {
     fontSize: 24,
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#e4e6eb",
+
+  /* Comments */
+  commentsSection: {
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    paddingBottom: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
   },
-  commentsContainer: {
-    paddingHorizontal: 12,
+  viewCommentsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
-  },
-  viewCommentsButton: {
-    paddingVertical: 8,
+    gap: 5,
   },
   viewCommentsText: {
     fontSize: 12,
-    color: "#65676b",
-    fontWeight: "500",
+    color: colors.accent,
+    fontWeight: "600",
   },
-  commentsList: {
-    marginVertical: 8,
-  },
-  comment: {
+  commentRow: {
     flexDirection: "row",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   commentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#e4e6eb",
-    justifyContent: "center",
-    alignItems: "center",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     marginRight: 8,
-    marginTop: 4,
+    marginTop: 2,
   },
-  addCommentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#e4e6eb",
+  commentAvatarFallback: {
+    backgroundColor: colors.skeleton,
     justifyContent: "center",
     alignItems: "center",
   },
-  commentAvatarText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#65676b",
+  commentAvatarLetter: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.textSecondary,
   },
-  commentContent: {
+  commentBubble: {
     flex: 1,
-    backgroundColor: "#f0f2f5",
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  commentHeader: {
+  commentBubbleHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 2,
+    marginBottom: 3,
   },
   commentAuthor: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#000",
+    fontWeight: "700",
+    color: colors.text,
   },
-  commentText: {
-    fontSize: 12,
-    color: "#050505",
-    lineHeight: 16,
+  commentBody: {
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 18,
     marginBottom: 4,
   },
-  commentDate: {
-    fontSize: 11,
-    color: "#65676b",
+  commentTime: {
+    fontSize: 10,
+    color: colors.textTertiary,
   },
-  addCommentPrompt: {
+
+  /* Write comment bar */
+  writeCommentBar: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#e4e6eb",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
   },
-  commentInputAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#b38604",
+  miniAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 8,
+  },
+  miniAvatarFallback: {
+    backgroundColor: colors.accent,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 10,
   },
-  commentInputAvatarText: {
+  miniAvatarLetter: {
     color: "#fff",
-    fontWeight: "600",
-    fontSize: 12,
+    fontWeight: "700",
+    fontSize: 11,
   },
-  commentInputPlaceholder: {
+  writeCommentPill: {
     flex: 1,
-    fontSize: 13,
-    color: "#65676b",
-    backgroundColor: "#f0f2f5",
-    borderRadius: 16,
-    paddingHorizontal: 12,
+    backgroundColor: colors.background,
+    borderRadius: 18,
+    paddingHorizontal: 14,
     paddingVertical: 8,
   },
+  writeCommentPlaceholder: {
+    fontSize: 13,
+    color: colors.textTertiary,
+  },
+
+  /* Empty state */
   emptyContainer: {
-    justifyContent: "center",
     alignItems: "center",
     paddingVertical: 60,
   },
-  emptyText: {
-    fontSize: 14,
-    color: "#999",
-    marginTop: 10,
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text,
+    marginTop: 14,
   },
+  emptySubtitle: {
+    fontSize: 13,
+    color: colors.textTertiary,
+    marginTop: 4,
+  },
+
+  /* Modals */
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "flex-end",
   },
-  modalContent: {
-    backgroundColor: "#fff",
+  modalSheet: {
+    backgroundColor: colors.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingTop: 16,
     maxHeight: "80%",
   },
-  smallModal: {
-    backgroundColor: "#fff",
+  modalSheetSmall: {
+    backgroundColor: colors.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingTop: 16,
-    maxHeight: "60%",
+    maxHeight: "55%",
   },
-  modalHeader: {
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.skeleton,
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  modalHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: 18,
+    paddingBottom: 12,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 17,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.background,
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalBody: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 18,
+    paddingBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textTertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: "#333",
-    marginBottom: 12,
-    backgroundColor: "#f8f9fa",
-  },
-  contentInput: {
-    textAlignVertical: "top",
-  },
-  submitButton: {
-    backgroundColor: "#b38604",
-    borderRadius: 8,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  submitButtonText: {
-    color: "#fff",
     fontSize: 14,
-    fontWeight: "600",
+    color: colors.text,
+    marginBottom: 14,
+    backgroundColor: colors.cardAlt,
+  },
+  textArea: {
+    textAlignVertical: "top",
+    minHeight: 100,
+  },
+  submitBtn: {
+    flexDirection: "row",
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  submitBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
 

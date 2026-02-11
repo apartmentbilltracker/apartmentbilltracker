@@ -1,7 +1,7 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, AuthContext } from "./src/context/AuthContext";
 import LoginScreen from "./src/screens/auth/LoginScreen";
@@ -23,11 +23,21 @@ import BankTransferPaymentScreen from "./src/screens/client/BankTransferPaymentS
 import CashPaymentScreen from "./src/screens/client/CashPaymentScreen";
 import notificationService from "./src/services/notificationService";
 import updateService from "./src/services/updateService";
+import OnboardingScreen, {
+  checkOnboardingComplete,
+} from "./src/screens/OnboardingScreen";
+import { ThemeProvider, useTheme } from "./src/theme/ThemeContext";
 
 const Stack = createNativeStackNavigator();
 
 function RootNavigator() {
   const authContext = React.useContext(AuthContext);
+  const [onboardingDone, setOnboardingDone] = React.useState(null);
+
+  // Check onboarding status on mount
+  React.useEffect(() => {
+    checkOnboardingComplete().then((done) => setOnboardingDone(done));
+  }, []);
 
   console.log("RootNavigator rendering...");
   console.log("authContext:", !!authContext);
@@ -43,8 +53,14 @@ function RootNavigator() {
     );
   }
 
-  if (authContext.isLoading) {
+  // Show splash while auth is loading OR onboarding status is being checked
+  if (authContext.isLoading || onboardingDone === null) {
     return <SplashScreen />;
+  }
+
+  // Show onboarding on first-ever launch
+  if (!onboardingDone) {
+    return <OnboardingScreen onComplete={() => setOnboardingDone(true)} />;
   }
 
   const isSignedIn = authContext.state?.userToken != null;
@@ -150,12 +166,42 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <NavigationContainer>
-          <RootNavigator />
-        </NavigationContainer>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ThemedNavigation />
+        </AuthProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
+  );
+}
+
+/** Reads theme inside ThemeProvider and passes navTheme to NavigationContainer */
+function ThemedNavigation() {
+  const { isDark, colors } = useTheme();
+
+  const navTheme = React.useMemo(
+    () => ({
+      dark: isDark,
+      colors: {
+        primary: colors.accent,
+        background: colors.background,
+        card: colors.headerBg,
+        text: colors.text,
+        border: colors.border,
+        notification: colors.error,
+      },
+    }),
+    [isDark, colors],
+  );
+
+  return (
+    <NavigationContainer theme={navTheme}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={colors.headerBg}
+      />
+      <RootNavigator />
+    </NavigationContainer>
   );
 }
 

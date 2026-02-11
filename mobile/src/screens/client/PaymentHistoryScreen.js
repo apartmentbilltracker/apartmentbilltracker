@@ -1,17 +1,21 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
 } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { apiService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
 
 const PaymentHistoryScreen = ({ navigation, route }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { roomId, roomName } = route.params;
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +27,11 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
       setError("");
       const response = await apiService.getTransactions(roomId);
       if (response.success) {
-        setPayments(response.transactions || []);
+        // Filter out cancelled/deleted transactions on the client side too
+        const valid = (response.transactions || []).filter(
+          (t) => t.status !== "cancelled" && t.status !== "deleted",
+        );
+        setPayments(valid);
       } else {
         setError("No transactions found");
       }
@@ -54,345 +62,569 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
     });
   };
 
-  const getBillTypeColor = (type) => {
+  const formatTime = (date) => {
+    if (!date) return "";
+    return new Date(date).toLocaleTimeString("en-PH", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  /* ─── Bill helpers ─── */
+  const getBillIcon = (type) => {
     switch (type) {
       case "rent":
-        return "#d32f2f";
+        return "home-outline";
       case "electricity":
-        return "#fbc02d";
+        return "flash-outline";
       case "water":
-        return "#0288d1";
-      case "total":
-        return "#388e3c";
+        return "water-outline";
+      case "internet":
+        return "wifi-outline";
       default:
-        return "#666";
+        return "receipt-outline";
     }
   };
 
-  const getBillTypeLabel = (type) => {
+  const getBillLabel = (type) => {
     const labels = {
       rent: "Rent",
       electricity: "Electricity",
       water: "Water",
-      total: "Total",
+      internet: "Internet",
+      total: "Total Bill",
     };
-    return labels[type] || type;
+    return (
+      labels[type] ||
+      (type ? type.charAt(0).toUpperCase() + type.slice(1) : "Payment")
+    );
   };
 
+  const getMethodIcon = (method) => {
+    switch (method) {
+      case "gcash":
+        return "phone-portrait-outline";
+      case "bank_transfer":
+        return "business-outline";
+      case "cash":
+        return "cash-outline";
+      default:
+        return "card-outline";
+    }
+  };
+
+  const formatMethod = (method) => {
+    if (!method) return "Cash";
+    return method
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  };
+
+  const getStatusConfig = (status) => {
+    switch (status) {
+      case "verified":
+      case "completed":
+        return {
+          color: colors.success,
+          bg: colors.successBg,
+          label: "Verified",
+          icon: "checkmark-circle",
+        };
+      case "pending":
+        return {
+          color: colors.warning,
+          bg: colors.warningBg,
+          label: "Pending",
+          icon: "time-outline",
+        };
+      case "rejected":
+        return {
+          color: colors.error,
+          bg: colors.errorBg,
+          label: "Rejected",
+          icon: "close-circle",
+        };
+      default:
+        return {
+          color: colors.textTertiary,
+          bg: colors.cardAlt,
+          label: status
+            ? status.charAt(0).toUpperCase() + status.slice(1)
+            : "Unknown",
+          icon: "help-circle-outline",
+        };
+    }
+  };
+
+  /* ─── Summary ─── */
+  const totalPaid = payments
+    .filter((p) => p.status === "verified" || p.status === "completed")
+    .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const totalPending = payments
+    .filter((p) => p.status === "pending")
+    .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+
+  /* ─── Reference helper ─── */
+  const getReference = (payment) => {
+    return (
+      payment.reference ||
+      payment.gcash?.referenceNumber ||
+      payment.bankTransfer?.referenceNumber ||
+      payment.cash?.receiptNumber ||
+      null
+    );
+  };
+
+  /* ─── Loading State ─── */
   if (loading) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity
+            style={styles.backBtn}
             onPress={() => navigation.goBack()}
-            style={styles.backButton}
           >
-            <MaterialIcons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Payment History</Text>
-          <View style={styles.backButton} />
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Payment History</Text>
+          </View>
+          <View style={{ width: 36 }} />
         </View>
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#b38604" />
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={styles.loadingText}>Loading transactions…</Text>
         </View>
       </View>
     );
   }
 
+  /* ─── Render Payment Card ─── */
+  const renderPayment = ({ item: payment }) => {
+    const sc = getStatusConfig(payment.status);
+    const ref = getReference(payment);
+
+    return (
+      <View style={styles.card}>
+        {/* Top Row */}
+        <View style={styles.cardTop}>
+          <View style={styles.billIconWrap}>
+            <Ionicons
+              name={getBillIcon(payment.billType)}
+              size={18}
+              color={colors.accent}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.billLabel}>
+              {getBillLabel(payment.billType)}
+            </Text>
+            <View style={styles.metaRow}>
+              <Ionicons
+                name={getMethodIcon(payment.paymentMethod)}
+                size={12}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.metaText}>
+                {formatMethod(payment.paymentMethod)}
+              </Text>
+              <Text style={styles.metaDot}>·</Text>
+              <Text style={styles.metaText}>
+                {formatDate(payment.transactionDate)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.amountWrap}>
+            <Text style={styles.amount}>
+              ₱{(parseFloat(payment.amount) || 0).toFixed(2)}
+            </Text>
+            <View style={[styles.statusPill, { backgroundColor: sc.bg }]}>
+              <Ionicons name={sc.icon} size={11} color={sc.color} />
+              <Text style={[styles.statusText, { color: sc.color }]}>
+                {sc.label}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Reference / Details */}
+        {ref && (
+          <View style={styles.refRow}>
+            <Ionicons name="document-text-outline" size={13} color={colors.textSecondary} />
+            <Text style={styles.refLabel}>Ref:</Text>
+            <Text style={styles.refValue} numberOfLines={1}>
+              {ref}
+            </Text>
+          </View>
+        )}
+
+        {payment.bankTransfer?.bankName && (
+          <View style={styles.refRow}>
+            <Ionicons name="business-outline" size={13} color={colors.textSecondary} />
+            <Text style={styles.refLabel}>Bank:</Text>
+            <Text style={styles.refValue}>{payment.bankTransfer.bankName}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  /* ─── Main Render ─── */
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
+          style={styles.backBtn}
           onPress={() => navigation.goBack()}
-          style={styles.backButton}
         >
-          <MaterialIcons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={20} color={colors.text} />
         </TouchableOpacity>
-        <View>
-          <Text style={styles.title}>Payment History</Text>
-          <Text style={styles.subtitle}>{roomName}</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Payment History</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>
+            {roomName}
+          </Text>
         </View>
-        <View style={styles.backButton} />
+        <View style={styles.headerRight}>
+          <Text style={styles.countBadge}>
+            {payments.length} {payments.length === 1 ? "record" : "records"}
+          </Text>
+        </View>
       </View>
 
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+      {/* Summary Strip */}
+      {payments.length > 0 && (
+        <View style={styles.summaryStrip}>
+          <View style={styles.summaryItem}>
+            <View style={[styles.summaryDot, { backgroundColor: "#22c55e" }]} />
+            <Text style={styles.summaryLabel}>Verified</Text>
+            <Text style={[styles.summaryValue, { color: "#22c55e" }]}>
+              ₱{totalPaid.toFixed(2)}
+            </Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <View style={[styles.summaryDot, { backgroundColor: "#f59e0b" }]} />
+            <Text style={styles.summaryLabel}>Pending</Text>
+            <Text style={[styles.summaryValue, { color: "#f59e0b" }]}>
+              ₱{totalPending.toFixed(2)}
+            </Text>
+          </View>
         </View>
       )}
 
+      {/* Error */}
+      {error ? (
+        <View style={styles.errorBar}>
+          <Ionicons name="alert-circle-outline" size={16} color="#ef4444" />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
+
+      {/* List / Empty */}
       {payments.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <MaterialIcons name="payment" size={60} color="#ddd" />
-          <Text style={styles.emptyText}>No payment history yet</Text>
-          <Text style={styles.emptySubtext}>
-            Payments will appear here when marked as paid
+          <View style={styles.emptyIconWrap}>
+            <Ionicons
+              name="receipt-outline"
+              size={48}
+              color={colors.textSecondary}
+            />
+          </View>
+          <Text style={styles.emptyTitle}>No Payments Yet</Text>
+          <Text style={styles.emptyText}>
+            Completed payments will appear here.
           </Text>
+          <TouchableOpacity
+            style={styles.emptyRefresh}
+            onPress={fetchPaymentHistory}
+          >
+            <Ionicons name="refresh-outline" size={16} color={colors.accent} />
+            <Text style={styles.emptyRefreshText}>Refresh</Text>
+          </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView
-          style={styles.content}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+        <FlatList
+          data={payments}
+          renderItem={renderPayment}
+          keyExtractor={(item, i) => item.id || item._id || String(i)}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.listContainer}>
-            {payments.map((payment, index) => (
-              <View key={payment._id || index} style={styles.paymentCard}>
-                {/* Card Header */}
-                <View style={styles.cardHeader}>
-                  <View style={styles.cardTitleContainer}>
-                    <View
-                      style={[
-                        styles.billTypeIcon,
-                        {
-                          backgroundColor: getBillTypeColor(payment.billType),
-                        },
-                      ]}
-                    >
-                      <MaterialIcons
-                        name={
-                          payment.billType === "rent"
-                            ? "home"
-                            : payment.billType === "electricity"
-                              ? "flash-on"
-                              : payment.billType === "water"
-                                ? "opacity"
-                                : "receipt-long"
-                        }
-                        size={20}
-                        color="#fff"
-                      />
-                    </View>
-                    <View style={styles.cardTitle}>
-                      <Text style={styles.billType}>
-                        {getBillTypeLabel(payment.billType)}
-                      </Text>
-                      <Text style={styles.paidBy}>
-                        Status:{" "}
-                        {payment.status.charAt(0).toUpperCase() +
-                          payment.status.slice(1)}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={styles.amount}>
-                    ₱{payment.amount.toFixed(2)}
-                  </Text>
-                </View>
-
-                {/* Card Details */}
-                <View style={styles.cardDetails}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Payment Method:</Text>
-                    <Text style={styles.detailValue}>
-                      {payment.paymentMethod
-                        .split("_")
-                        .map(
-                          (word) =>
-                            word.charAt(0).toUpperCase() + word.slice(1),
-                        )
-                        .join(" ")}
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Date:</Text>
-                    <Text style={styles.detailValue}>
-                      {formatDate(payment.transactionDate)}
-                    </Text>
-                  </View>
-
-                  {payment.gcash?.referenceNumber && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Reference:</Text>
-                      <Text style={styles.detailValue}>
-                        {payment.gcash.referenceNumber}
-                      </Text>
-                    </View>
-                  )}
-
-                  {payment.bankTransfer?.referenceNumber && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Reference:</Text>
-                      <Text style={styles.detailValue}>
-                        {payment.bankTransfer.referenceNumber}
-                      </Text>
-                    </View>
-                  )}
-
-                  {payment.bankTransfer?.bankName && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Bank:</Text>
-                      <Text style={styles.detailValue}>
-                        {payment.bankTransfer.bankName}
-                      </Text>
-                    </View>
-                  )}
-
-                  {payment.cash?.receiptNumber && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Receipt #:</Text>
-                      <Text style={styles.detailValue}>
-                        {payment.cash.receiptNumber}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#b38604"]}
+              tintcolor={colors.accent}
+            />
+          }
+        />
       )}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#fff",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  subtitle: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 4,
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorContainer: {
-    backgroundColor: "#ffebee",
-    borderLeftWidth: 4,
-    borderLeftColor: "#d32f2f",
-    padding: 12,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 4,
-  },
-  errorText: {
-    color: "#d32f2f",
-    fontSize: 14,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  listContainer: {
-    gap: 12,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 32,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#999",
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: "#bbb",
-    marginTop: 8,
-    textAlign: "center",
-  },
-  paymentCard: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-    paddingBottom: 12,
-  },
-  cardTitleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  billTypeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  cardTitle: {
-    flex: 1,
-  },
-  billType: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-  },
-  paidBy: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 4,
-  },
-  amount: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#b38604",
-  },
-  cardDetails: {
-    gap: 8,
-  },
-  detailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  detailLabel: {
-    fontSize: 13,
-    color: "#666",
-    fontWeight: "500",
-  },
-  detailValue: {
-    fontSize: 13,
-    color: "#333",
-    textAlign: "right",
-    flex: 1,
-    marginLeft: 8,
-  },
-});
+/* ═══════════════════════ STYLES ═══════════════════════ */
+const createStyles = (colors) =>
+  StyleSheet.create({
+    /* Layout */
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centerContent: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+
+    /* Header */
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.divider,
+    },
+    backBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerCenter: {
+      flex: 1,
+      alignItems: "center",
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    headerSubtitle: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    headerRight: {
+      width: 60,
+      alignItems: "flex-end",
+    },
+    countBadge: {
+      fontSize: 11,
+      color: colors.accent,
+      fontWeight: "600",
+    },
+
+    /* Summary */
+    summaryStrip: {
+      flexDirection: "row",
+      backgroundColor: colors.card,
+      marginHorizontal: 14,
+      marginTop: 14,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      elevation: 1,
+    },
+    summaryItem: {
+      flex: 1,
+      alignItems: "center",
+    },
+    summaryDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginBottom: 6,
+    },
+    summaryLabel: {
+      fontSize: 10,
+      fontWeight: "600",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+      marginBottom: 2,
+    },
+    summaryValue: {
+      fontSize: 16,
+      fontWeight: "800",
+    },
+    summaryDivider: {
+      width: StyleSheet.hairlineWidth,
+      backgroundColor: colors.skeleton,
+      marginHorizontal: 12,
+    },
+
+    /* Error */
+    errorBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.errorBg,
+      borderRadius: 10,
+      marginHorizontal: 14,
+      marginTop: 10,
+      padding: 10,
+      gap: 8,
+    },
+    errorText: {
+      color: colors.error,
+      fontSize: 13,
+      fontWeight: "500",
+    },
+
+    /* Empty */
+    emptyContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 40,
+    },
+    emptyIconWrap: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.inputBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    emptyTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 6,
+    },
+    emptyText: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      textAlign: "center",
+      lineHeight: 19,
+    },
+    emptyRefresh: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 20,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: "#b38604",
+      gap: 6,
+    },
+    emptyRefreshText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+
+    /* List */
+    listContent: {
+      padding: 14,
+      paddingBottom: 24,
+    },
+
+    /* Card */
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 10,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    cardTop: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    billIconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: colors.warningBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
+    },
+    billLabel: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    metaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 3,
+      gap: 4,
+    },
+    metaText: {
+      fontSize: 11,
+      color: colors.textTertiary,
+    },
+    metaDot: {
+      fontSize: 11,
+      color: colors.textTertiary,
+    },
+    amountWrap: {
+      alignItems: "flex-end",
+    },
+    amount: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.accent,
+    },
+    statusPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 8,
+      marginTop: 4,
+      gap: 3,
+    },
+    statusText: {
+      fontSize: 10,
+      fontWeight: "700",
+    },
+
+    /* Reference row */
+    refRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 10,
+      paddingTop: 10,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderLight,
+      gap: 6,
+    },
+    refLabel: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      fontWeight: "500",
+    },
+    refValue: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      flex: 1,
+    },
+  });
 
 export default PaymentHistoryScreen;

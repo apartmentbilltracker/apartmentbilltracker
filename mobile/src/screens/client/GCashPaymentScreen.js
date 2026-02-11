@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo} from "react";
 import {
   View,
   Text,
@@ -10,11 +10,17 @@ import {
   Image,
   TextInput,
 } from "react-native";
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
+import { File, Paths } from "expo-file-system";
+import * as MediaLibrary from "expo-media-library";
 import apiService from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
 
 const GCashPaymentScreen = ({ navigation, route }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { roomId, roomName, amount, billType } = route.params;
   const [loading, setLoading] = useState(true);
   const [qrData, setQrData] = useState(null);
@@ -24,6 +30,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const [mobileNumber, setMobileNumber] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState(false);
 
   useEffect(() => {
     initiateGCashPayment();
@@ -68,6 +75,42 @@ const GCashPaymentScreen = ({ navigation, route }) => {
     );
   };
 
+  const handleDownloadQR = async () => {
+    try {
+      setDownloadLoading(true);
+
+      // Request gallery permission
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please allow access to your photo gallery to save the QR code.",
+        );
+        return;
+      }
+
+      const asset = Image.resolveAssetSource(
+        require("../../assets/gcash-qr.png"),
+      );
+
+      const destFile = new File(Paths.cache, "gcash-qr-" + Date.now() + ".png");
+
+      // Fetch the asset and write to cache
+      const response = await fetch(asset.uri);
+      const arrayBuffer = await response.arrayBuffer();
+      destFile.create();
+      destFile.write(new Uint8Array(arrayBuffer));
+
+      // Save to gallery
+      await MediaLibrary.saveToLibraryAsync(destFile.uri);
+      Alert.alert("Saved!", "QR code has been saved to your gallery.");
+    } catch (error) {
+      Alert.alert("Error", "Failed to save QR code. Please try again.");
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
   // Cancel pending transaction if user leaves before completing payment
   useEffect(() => {
     return () => {
@@ -96,7 +139,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       if (response.success) {
         setQrData(response.qrData);
         setReferenceNumber(response.transaction.referenceNumber);
-        setTransactionId(response.transaction._id);
+        setTransactionId(response.transaction.id || response.transaction._id);
         setStep("qr");
       }
     } catch (error) {
@@ -162,8 +205,16 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#0066FF" />
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={{ marginTop: 12, fontSize: 14, color: colors.textTertiary }}>
+          Preparing payment…
+        </Text>
       </View>
     );
   }
@@ -173,7 +224,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <MaterialIcons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.title}>GCash Payment</Text>
@@ -186,14 +237,20 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         {step === "qr" && (
           <>
             {/* Amount Card */}
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Amount to Send</Text>
+            <View style={styles.amountCard}>
+              <Text style={styles.amountLabel}>Amount to Send</Text>
               <Text style={styles.amountValue}>₱{amount.toFixed(2)}</Text>
+              <Text style={styles.billTypeText}>
+                {billType.charAt(0).toUpperCase() + billType.slice(1)} Bill
+              </Text>
             </View>
 
             {/* QR Code Section */}
             <View style={styles.qrCard}>
-              <Text style={styles.sectionTitle}>Step 1: Scan QR Code</Text>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepBadgeText}>Step 1</Text>
+              </View>
+              <Text style={styles.sectionTitle}>Scan QR Code</Text>
               <View style={styles.qrContainer}>
                 {qrData ? (
                   <Image
@@ -202,14 +259,33 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                   />
                 ) : (
                   <View style={styles.qrPlaceholder}>
-                    <MaterialCommunityIcons
-                      name="qrcode"
-                      size={80}
-                      color="#ddd"
-                    />
+                    <Ionicons name="qr-code-outline" size={72} color={colors.skeleton} />
                   </View>
                 )}
               </View>
+              {qrData && (
+                <TouchableOpacity
+                  style={styles.downloadButton}
+                  onPress={handleDownloadQR}
+                  disabled={downloadLoading}
+                  activeOpacity={0.7}
+                >
+                  {downloadLoading ? (
+                    <ActivityIndicator size="small" color={colors.textOnAccent} />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="download-outline"
+                        size={18}
+                        color={colors.textOnAccent}
+                      />
+                      <Text style={styles.downloadButtonText}>
+                        Save QR Code
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
               <Text style={styles.qrHint}>
                 Open your GCash app and scan this code
               </Text>
@@ -217,7 +293,10 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
             {/* Reference Number Section */}
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Step 2: Reference Number</Text>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepBadgeText}>Step 2</Text>
+              </View>
+              <Text style={styles.sectionTitle}>Reference Number</Text>
               <View style={styles.referenceBox}>
                 <Text style={styles.referenceLabel}>Reference Number</Text>
                 <View style={styles.referenceContent}>
@@ -226,11 +305,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                     onPress={() => copyToClipboard(referenceNumber)}
                     style={styles.copyButton}
                   >
-                    <MaterialCommunityIcons
-                      name="content-copy"
-                      size={18}
-                      color="#0066FF"
-                    />
+                    <Ionicons name="copy-outline" size={18} color={colors.accent} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -241,43 +316,57 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
             {/* Instructions */}
             <View style={styles.instructionsCard}>
-              <Text style={styles.instructionsTitle}>Instructions:</Text>
+              <View style={styles.instructionsHeader}>
+                <Ionicons name="list-outline" size={16} color={colors.accent} />
+                <Text style={styles.instructionsTitle}>Instructions</Text>
+              </View>
               <View style={styles.instructionItem}>
-                <Text style={styles.instructionNumber}>1</Text>
+                <View style={styles.instructionDot}>
+                  <Text style={styles.instructionNumber}>1</Text>
+                </View>
                 <Text style={styles.instructionText}>Open your GCash App</Text>
               </View>
               <View style={styles.instructionItem}>
-                <Text style={styles.instructionNumber}>2</Text>
+                <View style={styles.instructionDot}>
+                  <Text style={styles.instructionNumber}>2</Text>
+                </View>
                 <Text style={styles.instructionText}>
                   Scan the QR code above or manually send ₱{amount.toFixed(2)}
                 </Text>
               </View>
               <View style={styles.instructionItem}>
-                <Text style={styles.instructionNumber}>3</Text>
+                <View style={styles.instructionDot}>
+                  <Text style={styles.instructionNumber}>3</Text>
+                </View>
                 <Text style={styles.instructionText}>
                   Use reference number: {referenceNumber}
                 </Text>
               </View>
               <View style={styles.instructionItem}>
-                <Text style={styles.instructionNumber}>4</Text>
+                <View style={styles.instructionDot}>
+                  <Text style={styles.instructionNumber}>4</Text>
+                </View>
                 <Text style={styles.instructionText}>Complete the payment</Text>
               </View>
             </View>
 
             {/* Verification Section */}
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Step 3: Verify Payment</Text>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepBadgeText}>Step 3</Text>
+              </View>
+              <Text style={styles.sectionTitle}>Verify Payment</Text>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Your GCash Mobile Number</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter your mobile number"
+                  placeholder="09XX XXX XXXX"
                   value={mobileNumber}
                   onChangeText={setMobileNumber}
                   keyboardType="phone-pad"
                   editable={!verifyLoading}
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textTertiary}
                 />
               </View>
 
@@ -287,11 +376,19 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                 disabled={verifyLoading}
               >
                 {verifyLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={colors.textOnAccent} />
                 ) : (
-                  <Text style={styles.verifyButtonText}>
-                    Verify Payment Sent
-                  </Text>
+                  <>
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={18}
+                      color={colors.textOnAccent}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.verifyButtonText}>
+                      Verify Payment Sent
+                    </Text>
+                  </>
                 )}
               </TouchableOpacity>
 
@@ -304,36 +401,35 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
         {step === "success" && (
           <View style={styles.successContainer}>
-            <View style={styles.successIcon}>
-              <MaterialCommunityIcons
-                name="check-circle"
-                size={80}
-                color="#43a047"
-              />
+            <View style={styles.successIconCircle}>
+              <Ionicons name="checkmark-circle" size={56} color="#43a047" />
             </View>
 
             <Text style={styles.successTitle}>Payment Recorded!</Text>
+            <Text style={styles.successSubtitle}>
+              Awaiting admin verification
+            </Text>
 
             <View style={styles.successCard}>
               <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Amount:</Text>
+                <Text style={styles.successLabel}>Amount</Text>
                 <Text style={styles.successValue}>₱{amount.toFixed(2)}</Text>
               </View>
               <View style={styles.divider} />
               <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Reference:</Text>
+                <Text style={styles.successLabel}>Reference</Text>
                 <Text style={styles.successValue}>{referenceNumber}</Text>
               </View>
               <View style={styles.divider} />
               <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Bill Type:</Text>
+                <Text style={styles.successLabel}>Bill Type</Text>
                 <Text style={styles.successValue}>
                   {billType.charAt(0).toUpperCase() + billType.slice(1)}
                 </Text>
               </View>
               <View style={styles.divider} />
               <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Room:</Text>
+                <Text style={styles.successLabel}>Room</Text>
                 <Text style={styles.successValue}>{roomName}</Text>
               </View>
             </View>
@@ -345,7 +441,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                   navigation.navigate("PaymentHistory", { refresh: true })
                 }
               >
-                <MaterialIcons name="history" size={20} color="#0066FF" />
+                <Ionicons name="time-outline" size={18} color={colors.accent} />
                 <Text style={styles.historyButtonText}>View History</Text>
               </TouchableOpacity>
 
@@ -353,7 +449,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                 style={styles.billsButton}
                 onPress={() => navigation.navigate("Bills", { refresh: true })}
               >
-                <MaterialIcons name="receipt" size={20} color="#fff" />
+                <Ionicons name="receipt-outline" size={18} color={colors.textOnAccent} />
                 <Text style={styles.billsButtonText}>Back to Bills</Text>
               </TouchableOpacity>
             </View>
@@ -366,24 +462,26 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#fff",
-    paddingHorizontal: 16,
+    backgroundColor: colors.card,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.background,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -392,67 +490,120 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 17,
+    fontWeight: "700",
+    color: colors.text,
   },
   subtitle: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 4,
+    fontSize: 11,
+    color: colors.textTertiary,
+    marginTop: 2,
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 14,
   },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
+
+  /* Amount Card */
+  amountCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    marginBottom: 14,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#b38604",
+    shadowColor: "#b38604",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  cardLabel: {
-    fontSize: 13,
-    color: "#999",
-    marginBottom: 8,
+  amountLabel: {
+    fontSize: 11,
+    color: colors.textTertiary,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   amountValue: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#0066FF",
+    fontSize: 34,
+    fontWeight: "800",
+    color: colors.accent,
+    marginTop: 6,
+  },
+  billTypeText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 6,
+    fontWeight: "500",
+  },
+
+  /* Step Badge */
+  stepBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.warningBg,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  stepBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
+  /* Cards */
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
     marginBottom: 12,
   },
+
+  /* QR Section */
   qrCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: 14,
     padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
+    marginBottom: 14,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   qrContainer: {
     width: 200,
     height: 200,
-    borderWidth: 2,
-    borderColor: "#f0f0f0",
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.divider,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
-    backgroundColor: "#fafafa",
+    backgroundColor: colors.cardAlt,
+    overflow: "hidden",
   },
   qrImage: {
     width: 200,
     height: 200,
-    borderRadius: 8,
   },
   qrPlaceholder: {
     width: 200,
@@ -460,21 +611,42 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  downloadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accent,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 8,
+  },
+  downloadButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
   qrHint: {
     fontSize: 12,
-    color: "#999",
+    color: colors.textTertiary,
     textAlign: "center",
   },
+
+  /* Reference */
   referenceBox: {
-    backgroundColor: "#f5f5f5",
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 14,
     marginBottom: 8,
   },
   referenceLabel: {
-    fontSize: 12,
-    color: "#999",
-    marginBottom: 8,
+    fontSize: 11,
+    color: colors.textTertiary,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    marginBottom: 6,
   },
   referenceContent: {
     flexDirection: "row",
@@ -485,125 +657,155 @@ const styles = StyleSheet.create({
   referenceNumber: {
     flex: 1,
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#0066FF",
+    fontWeight: "700",
+    color: colors.text,
     letterSpacing: 1,
   },
   copyButton: {
-    padding: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.warningBg,
+    justifyContent: "center",
+    alignItems: "center",
   },
   referenceHint: {
-    fontSize: 12,
-    color: "#999",
+    fontSize: 11,
+    color: colors.textTertiary,
   },
+
+  /* Instructions */
   instructionsCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: 14,
     padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  instructionsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 14,
   },
   instructionsTitle: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
+    fontWeight: "700",
+    color: colors.text,
   },
   instructionItem: {
     flexDirection: "row",
     marginBottom: 12,
     alignItems: "flex-start",
   },
-  instructionNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#0066FF",
-    color: "#fff",
-    textAlign: "center",
-    textAlignVertical: "center",
-    fontWeight: "bold",
+  instructionDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.accent,
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 12,
+  },
+  instructionNumber: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   instructionText: {
     flex: 1,
     fontSize: 13,
-    color: "#666",
+    color: colors.text,
+    lineHeight: 19,
     paddingTop: 3,
   },
+
+  /* Form */
   formGroup: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
+    color: colors.textTertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 14,
-    color: "#333",
+    color: colors.text,
+    backgroundColor: colors.cardAlt,
   },
   verifyButton: {
-    backgroundColor: "#0066FF",
-    borderRadius: 8,
-    paddingVertical: 12,
+    flexDirection: "row",
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: "center",
+    justifyContent: "center",
     marginBottom: 8,
   },
   verifyButtonText: {
     color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "700",
   },
   verifyHint: {
-    fontSize: 12,
-    color: "#999",
+    fontSize: 11,
+    color: colors.textTertiary,
     textAlign: "center",
+    marginTop: 4,
   },
   disabled: {
     opacity: 0.6,
   },
-  cancelButton: {
-    backgroundColor: "#d32f2f",
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  cancelButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
+
+  /* Success */
   successContainer: {
     alignItems: "center",
-    paddingVertical: 20,
+    paddingVertical: 30,
   },
-  successIcon: {
-    marginBottom: 20,
+  successIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.successBg,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
   },
   successTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#43a047",
-    marginBottom: 20,
+    fontSize: 20,
+    fontWeight: "800",
+    color: colors.text,
+    marginBottom: 4,
+  },
+  successSubtitle: {
+    fontSize: 13,
+    color: colors.textTertiary,
+    marginBottom: 24,
   },
   successCard: {
     width: "100%",
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: 14,
     padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   successRow: {
     flexDirection: "row",
@@ -612,17 +814,17 @@ const styles = StyleSheet.create({
   },
   successLabel: {
     fontSize: 13,
-    color: "#999",
+    color: colors.textTertiary,
   },
   successValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
   },
   divider: {
-    height: 1,
-    backgroundColor: "#f0f0f0",
-    marginVertical: 8,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.skeleton,
+    marginVertical: 4,
   },
   successButtons: {
     width: "100%",
@@ -632,29 +834,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#0066FF",
-    borderRadius: 8,
-    paddingVertical: 12,
-    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 13,
+    gap: 6,
   },
   historyButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#0066FF",
+    color: colors.accent,
   },
   billsButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0066FF",
-    borderRadius: 8,
-    paddingVertical: 12,
-    gap: 8,
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingVertical: 13,
+    gap: 6,
   },
   billsButtonText: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#fff",
   },
 });

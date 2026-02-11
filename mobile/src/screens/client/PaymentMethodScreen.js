@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo} from "react";
 import {
   View,
   Text,
@@ -9,9 +9,13 @@ import {
   Modal,
   Image,
 } from "react-native";
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../theme/ThemeContext";
 
 const PaymentMethodScreen = ({ navigation, route }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { roomId, roomName, amount, billType } = route.params;
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -29,7 +33,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       id: "bank_transfer",
       name: "Bank Transfer",
       description: "BDO, BPI, Metrobank, etc.",
-      icon: "bank",
+      icon: "business-outline",
       color: "#1e88e5",
       details: "Direct bank-to-bank transfer",
     },
@@ -37,7 +41,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       id: "cash",
       name: "Cash",
       description: "Pay in person",
-      icon: "cash",
+      icon: "cash-outline",
       color: "#43a047",
       details: "Hand-to-hand cash payment",
     },
@@ -82,7 +86,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <MaterialIcons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.title}>Payment Method</Text>
@@ -119,11 +123,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
               {method.image ? (
                 <Image source={method.image} style={styles.methodImage} />
               ) : (
-                <MaterialCommunityIcons
-                  name={method.icon}
-                  size={28}
-                  color={method.color}
-                />
+                <Ionicons name={method.icon} size={26} color={method.color} />
               )}
             </View>
 
@@ -133,19 +133,21 @@ const PaymentMethodScreen = ({ navigation, route }) => {
               <Text style={styles.methodDetails}>{method.details}</Text>
             </View>
 
-            <MaterialIcons name="chevron-right" size={24} color="#b38604" />
+            <Ionicons name="chevron-forward" size={20} color={colors.accent} />
           </TouchableOpacity>
         ))}
 
         <View style={styles.infoCard}>
-          <MaterialIcons name="info" size={20} color="#0066FF" />
+          <View style={styles.infoIconCircle}>
+            <Ionicons name="information-circle" size={18} color={colors.accent} />
+          </View>
           <Text style={styles.infoText}>
             Choose your preferred payment method. Your payment will be recorded
             and settlements will be updated automatically.
           </Text>
         </View>
 
-        <View style={{ height: 20 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
 
       {/* Confirmation Modal */}
@@ -157,8 +159,15 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <View style={styles.dragHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Confirm Payment Method</Text>
+              <TouchableOpacity
+                onPress={() => setShowConfirm(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
             </View>
 
             {selectedMethod && (
@@ -205,6 +214,12 @@ const PaymentMethodScreen = ({ navigation, route }) => {
                 style={styles.confirmButton}
                 onPress={handleProceed}
               >
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={18}
+                  color={colors.textOnAccent}
+                  style={{ marginRight: 6 }}
+                />
                 <Text style={styles.confirmButtonText}>Proceed</Text>
               </TouchableOpacity>
             </View>
@@ -215,24 +230,26 @@ const PaymentMethodScreen = ({ navigation, route }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#fff",
-    paddingHorizontal: 16,
+    backgroundColor: colors.card,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.background,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -241,142 +258,178 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 17,
+    fontWeight: "700",
+    color: colors.text,
   },
   subtitle: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 4,
+    fontSize: 11,
+    color: colors.textTertiary,
+    marginTop: 2,
   },
   amountCard: {
-    backgroundColor: "#fff",
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 20,
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    marginHorizontal: 14,
+    marginTop: 14,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    borderRadius: 14,
     alignItems: "center",
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: "#b38604",
-    shadowColor: "#000",
+    shadowColor: "#b38604",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
   },
   amountLabel: {
-    fontSize: 13,
-    color: "#999",
-    fontWeight: "500",
+    fontSize: 11,
+    color: colors.textTertiary,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   amountValue: {
-    fontSize: 36,
-    fontWeight: "bold",
-    color: "#b38604",
-    marginTop: 8,
+    fontSize: 34,
+    fontWeight: "800",
+    color: colors.accent,
+    marginTop: 6,
   },
   billTypeText: {
-    fontSize: 13,
-    color: "#666",
-    marginTop: 8,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 6,
+    fontWeight: "500",
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 14,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
+    color: colors.textTertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 10,
+    marginTop: 4,
   },
   methodCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
     elevation: 2,
   },
   methodIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 16,
+    marginRight: 14,
   },
   methodImage: {
-    width: 40,
-    height: 40,
+    width: 34,
+    height: 34,
     resizeMode: "contain",
   },
   methodContent: {
     flex: 1,
   },
   methodName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
   },
   methodDescription: {
-    fontSize: 13,
-    color: "#999",
-    marginTop: 4,
+    fontSize: 12,
+    color: colors.textTertiary,
+    marginTop: 3,
   },
   methodDetails: {
-    fontSize: 12,
-    color: "#bbb",
-    marginTop: 4,
+    fontSize: 11,
+    color: colors.textTertiary,
+    marginTop: 3,
   },
   infoCard: {
     flexDirection: "row",
-    backgroundColor: "#e3f2fd",
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 16,
-    gap: 12,
+    backgroundColor: colors.warningBg,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 14,
+    gap: 10,
+    alignItems: "flex-start",
+  },
+  infoIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.accentSurface,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 1,
   },
   infoText: {
     flex: 1,
-    fontSize: 13,
-    color: "#0066FF",
-    fontWeight: "500",
+    fontSize: 12,
+    color: colors.accent,
+    lineHeight: 18,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 20,
+    paddingHorizontal: 18,
+    paddingBottom: 24,
     maxHeight: "80%",
   },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.skeleton,
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 6,
+  },
   modalHeader: {
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 18,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 17,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.background,
+    justifyContent: "center",
+    alignItems: "center",
   },
   confirmationDetails: {
-    backgroundColor: "#f9f9f9",
-    borderRadius: 8,
+    backgroundColor: colors.background,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 20,
   },
@@ -387,19 +440,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   confirmLabel: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: 13,
+    color: colors.textTertiary,
     fontWeight: "500",
   },
   confirmValue: {
     fontSize: 14,
-    color: "#333",
-    fontWeight: "600",
+    color: colors.text,
+    fontWeight: "700",
   },
   divider: {
-    height: 1,
-    backgroundColor: "#e0e0e0",
-    marginVertical: 8,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.badgeBg,
+    marginVertical: 4,
   },
   modalButtons: {
     flexDirection: "row",
@@ -407,28 +460,30 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 13,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#ddd",
-    backgroundColor: "#fff",
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     alignItems: "center",
   },
   cancelButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#666",
+    color: colors.textSecondary,
   },
   confirmButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: "#b38604",
+    flexDirection: "row",
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: colors.accent,
     alignItems: "center",
+    justifyContent: "center",
   },
   confirmButtonText: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#fff",
   },
 });

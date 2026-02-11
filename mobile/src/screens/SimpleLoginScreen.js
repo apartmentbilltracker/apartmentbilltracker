@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
+import { useTheme } from "../theme/ThemeContext";
   View,
   Text,
   TextInput,
@@ -8,6 +9,9 @@ import {
 } from "react-native";
 
 export default function SimpleLoginScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
 
@@ -19,7 +23,7 @@ export default function SimpleLoginScreen() {
       <TextInput
         style={styles.input}
         placeholder="Email"
-        placeholderTextColor="#999"
+        placeholderTextColor={colors.placeholder}
         value={email}
         onChangeText={setEmail}
       />
@@ -27,7 +31,7 @@ export default function SimpleLoginScreen() {
       <TextInput
         style={styles.input}
         placeholder="Password"
-        placeholderTextColor="#999"
+        placeholderTextColor={colors.placeholder}
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -47,36 +51,36 @@ export default function SimpleLoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
     justifyContent: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
   },
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#d32f2f",
+    color: colors.error,
     marginBottom: 8,
     textAlign: "center",
   },
   subtitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
+    color: colors.text,
     marginBottom: 30,
     textAlign: "center",
   },
   input: {
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: colors.border,
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
     fontSize: 16,
-    backgroundColor: "#f9f9f9",
-    color: "#333",
+    backgroundColor: colors.inputBg,
+    color: colors.text,
   },
   button: {
     backgroundColor: "#b38604",
@@ -97,7 +101,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
-    color: "#666",
+    color: colors.textSecondary,
   },
   linkText: {
     fontSize: 14,

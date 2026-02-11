@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
-import { useIsFocused } from "@react-navigation/native";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import {
   View,
   Text,
@@ -12,27 +11,20 @@ import {
   RefreshControl,
   Image,
 } from "react-native";
-import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { roomService } from "../../services/apiService";
+import { useTheme } from "../../theme/ThemeContext";
 
-const colors = {
-  primary: "#b38604",
-  dark: "#1a1a1a",
-  lightGray: "#f5f5f5",
-  border: "#e0e0e0",
-  success: "#27ae60",
-  danger: "#e74c3c",
-};
-
-const WATER_BILL_PER_DAY = 5; // ₱5 per day
+const WATER_BILL_PER_DAY = 5;
 
 const RoomDetailsScreen = ({ route, navigation }) => {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+
   const { roomId } = route.params;
   const { state } = useContext(AuthContext);
-  const isFocused = useIsFocused();
   const [room, setRoom] = useState(null);
-  const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -58,16 +50,6 @@ const RoomDetailsScreen = ({ route, navigation }) => {
       const room = roomData.room || roomData;
       console.log("RoomDetailsScreen - room members:", room?.members);
       setRoom(room);
-
-      // Billing is included in room data
-      setBilling({
-        billing: room.billing,
-        members: room.members,
-      });
-      console.log("RoomDetailsScreen - billing set to:", {
-        billing: room.billing,
-        members: room.members,
-      });
     } catch (error) {
       console.error("Error fetching room details:", error.message);
       console.error("Error details:", error);
@@ -112,19 +94,29 @@ const RoomDetailsScreen = ({ route, navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   if (!room) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Room not found</Text>
+      <View style={styles.center}>
+        <Ionicons
+          name="alert-circle-outline"
+          size={48}
+          color={colors.textSecondary}
+        />
+        <Text style={styles.errText}>Room not found</Text>
       </View>
     );
   }
+
+  const billing = {
+    billing: room.billing,
+    members: room.members,
+  };
 
   return (
     <ScrollView
@@ -132,613 +124,704 @@ const RoomDetailsScreen = ({ route, navigation }) => {
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
+      showsVerticalScrollIndicator={false}
     >
-      {/* Room Header */}
-      <View style={styles.headerCard}>
-        <View style={styles.headerContent}>
-          <Text style={styles.roomName}>{room.name}</Text>
-          <View style={styles.roomMeta}>
-            <Ionicons name="location" size={16} color={colors.primary} />
-            <Text style={styles.roomCode}>Code: {room.code}</Text>
+      {/* ─── HEADER ─── */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View style={styles.headerIcon}>
+            <Ionicons name="home" size={22} color={colors.accent} />
           </View>
+          <TouchableOpacity style={styles.shareBtn} onPress={handleShareRoom}>
+            <Ionicons name="share-outline" size={18} color={colors.accent} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.shareButton} onPress={handleShareRoom}>
-          <MaterialIcons name="share" size={20} color="white" />
-        </TouchableOpacity>
+        <Text style={styles.roomName}>{room.name}</Text>
+        <View style={styles.codePill}>
+          <Ionicons name="key-outline" size={13} color={colors.accent} />
+          <Text style={styles.codeText}>Code: {room.code}</Text>
+        </View>
       </View>
 
-      {/* Room Description */}
+      {/* ─── DESCRIPTION ─── */}
       {room.description && (
         <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <MaterialIcons
-              name="info-outline"
-              size={24}
-              color={colors.primary}
+          <View style={styles.cardTitleRow}>
+            <Ionicons
+              name="information-circle-outline"
+              size={18}
+              color={colors.accent}
             />
             <Text style={styles.cardTitle}>About</Text>
           </View>
-
-          <Text style={styles.description}>{room.description}</Text>
+          <Text style={styles.descText}>{room.description}</Text>
         </View>
       )}
 
-      {/* Gallery */}
-      <View style={styles.card}>
-        {/* Amenities Section */}
-        <View style={styles.amenitiesSection}>
-          <Text style={styles.subSectionTitle}>🏠 Amenities</Text>
-          <View style={styles.amenitiesGrid}>
-            <View style={styles.amenityItem}>
-              <View style={styles.amenityIcon}>
-                <MaterialIcons name="wifi" size={24} color={colors.primary} />
-              </View>
-              <Text style={styles.amenityLabel}>WiFi</Text>
-            </View>
-            <View style={styles.amenityItem}>
-              <View style={styles.amenityIcon}>
-                <MaterialIcons
-                  name="kitchen"
-                  size={24}
-                  color={colors.primary}
-                />
-              </View>
-              <Text style={styles.amenityLabel}>Kitchen</Text>
-            </View>
-            <View style={styles.amenityItem}>
-              <View style={styles.amenityIcon}>
-                <MaterialIcons
-                  name="bathtub"
-                  size={24}
-                  color={colors.primary}
-                />
-              </View>
-              <Text style={styles.amenityLabel}>Bathroom</Text>
-            </View>
-            <View style={styles.amenityItem}>
-              <View style={styles.amenityIcon}>
-                <MaterialIcons
-                  name="king-bed"
-                  size={24}
-                  color={colors.primary}
-                />
-              </View>
-              <Text style={styles.amenityLabel}>Bedroom</Text>
-            </View>
-            <View style={styles.amenityItem}>
-              <View style={styles.amenityIcon}>
-                <MaterialIcons
-                  name="water-damage"
-                  size={24}
-                  color={colors.primary}
-                />
-              </View>
-              <Text style={styles.amenityLabel}>Hot Water</Text>
-            </View>
-            <View style={styles.amenityItem}>
-              <View style={styles.amenityIcon}>
-                <MaterialIcons name="groups" size={24} color={colors.primary} />
-              </View>
-              <Text style={styles.amenityLabel}>Common Area</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* House Rules Section */}
-        <View style={styles.rulesSection}>
-          <Text style={styles.subSectionTitle}>📋 House Rules</Text>
-          <View style={styles.rulesList}>
-            <View style={styles.ruleItem}>
-              <MaterialIcons
-                name="check-circle"
-                size={18}
-                color={colors.success}
-                style={styles.ruleIcon}
-              />
-              <Text style={styles.ruleText}>Quiet hours: 10 PM - 7 AM</Text>
-            </View>
-            <View style={styles.ruleItem}>
-              <MaterialIcons
-                name="check-circle"
-                size={18}
-                color={colors.success}
-                style={styles.ruleIcon}
-              />
-              <Text style={styles.ruleText}>
-                Keep common areas clean at all times
-              </Text>
-            </View>
-            <View style={styles.ruleItem}>
-              <MaterialIcons
-                name="check-circle"
-                size={18}
-                color={colors.success}
-                style={styles.ruleIcon}
-              />
-              <Text style={styles.ruleText}>
-                Guests must be informed in advance
-              </Text>
-            </View>
-            <View style={styles.ruleItem}>
-              <MaterialIcons
-                name="check-circle"
-                size={18}
-                color={colors.success}
-                style={styles.ruleIcon}
-              />
-              <Text style={styles.ruleText}>
-                Share responsibility for utilities
-              </Text>
-            </View>
-            <View style={styles.ruleItem}>
-              <MaterialIcons
-                name="check-circle"
-                size={18}
-                color={colors.success}
-                style={styles.ruleIcon}
-              />
-              <Text style={styles.ruleText}>No smoking inside the room</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Billing Summary */}
+      {/* ─── BILLING SUMMARY ─── */}
       {billing?.billing?.start && billing?.billing?.end ? (
         <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <MaterialIcons name="receipt" size={24} color={colors.primary} />
+          <View style={styles.cardTitleRow}>
+            <Ionicons name="receipt-outline" size={18} color={colors.accent} />
             <Text style={styles.cardTitle}>Billing Summary</Text>
           </View>
 
-          <View style={styles.billingGrid}>
-            <View style={styles.billingItem}>
-              <Text style={styles.billingLabel}>Period</Text>
-              <Text style={styles.billingValue}>
-                {formatDate(billing?.billing?.start)} -{" "}
-                {formatDate(billing?.billing?.end)}
-              </Text>
-            </View>
-            <View style={styles.billingItem}>
-              <Text style={styles.billingLabel}>Total Rent</Text>
-              <Text style={styles.billingValue}>
-                ₱{billing?.billing?.rent || "0"}
-              </Text>
-            </View>
-            <View style={styles.billingItem}>
-              <Text style={styles.billingLabel}>Total Electricity</Text>
-              <Text style={styles.billingValue}>
-                ₱{billing?.billing?.electricity || "0"}
-              </Text>
-            </View>
-            <View style={styles.billingItem}>
-              <Text style={styles.billingLabel}>Total Internet</Text>
-              <Text style={styles.billingValue}>
-                ₱{billing?.billing?.internet || "0"}
-              </Text>
-            </View>
-            <View style={styles.billingItem}>
-              <Text style={styles.billingLabel}>Total Water</Text>
-              <Text style={[styles.billingValue, { color: "#2196F3" }]}>
-                ₱{calculateTotalWaterBill().toFixed(2)}
-              </Text>
-            </View>
-            <View style={styles.billingItem}>
-              <Text style={[styles.billingLabel, { fontWeight: "700" }]}>
-                Grand Total
-              </Text>
-              <Text
-                style={[
-                  styles.billingValue,
-                  { color: colors.success, fontWeight: "700" },
-                ]}
-              >
+          {/* Period strip */}
+          <View style={styles.periodStrip}>
+            <Ionicons
+              name="calendar-outline"
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.periodText}>
+              {formatDate(billing.billing.start)} —{" "}
+              {formatDate(billing.billing.end)}
+            </Text>
+          </View>
+
+          {/* Bill rows */}
+          {[
+            {
+              label: "Rent",
+              icon: "home",
+              color: "#e65100",
+              value: billing.billing.rent,
+            },
+            {
+              label: "Electricity",
+              icon: "flash",
+              color: colors.electricityColor,
+              value: billing.billing.electricity,
+            },
+            {
+              label: "Water",
+              icon: "water",
+              color: colors.waterColor,
+              value: calculateTotalWaterBill(),
+            },
+            {
+              label: "Internet",
+              icon: "wifi",
+              color: colors.internetColor,
+              value: billing.billing.internet,
+            },
+          ].map((item, idx) => (
+            <View key={idx} style={styles.billRow}>
+              <View style={styles.billRowLeft}>
+                <View
+                  style={[styles.billDot, { backgroundColor: item.color }]}
+                />
+                <Ionicons name={item.icon} size={16} color={item.color} />
+                <Text style={styles.billLabel}>{item.label}</Text>
+              </View>
+              <Text style={styles.billValue}>
                 ₱
-                {(
-                  parseFloat(billing?.billing?.rent || 0) +
-                  parseFloat(billing?.billing?.electricity || 0) +
-                  calculateTotalWaterBill() +
-                  parseFloat(billing?.billing?.internet || 0)
-                ).toFixed(2)}
+                {parseFloat(item.value || 0).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </Text>
             </View>
+          ))}
+
+          {/* Grand total */}
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Grand Total</Text>
+            <Text style={styles.totalValue}>
+              ₱
+              {(
+                parseFloat(billing.billing.rent || 0) +
+                parseFloat(billing.billing.electricity || 0) +
+                calculateTotalWaterBill() +
+                parseFloat(billing.billing.internet || 0)
+              ).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </Text>
           </View>
 
           <TouchableOpacity
-            style={styles.viewDetailsButton}
-            onPress={() => navigation.navigate("Billing", { roomId: room._id })}
+            style={styles.detailsBtn}
+            onPress={() =>
+              navigation.navigate("Billing", { roomId: room.id || room._id })
+            }
+            activeOpacity={0.7}
           >
-            <Text style={styles.viewDetailsButtonText}>
-              View Full Billing Details
-            </Text>
-            <MaterialIcons
-              name="arrow-forward"
-              size={18}
-              color={colors.primary}
+            <Ionicons
+              name="document-text-outline"
+              size={16}
+              color={colors.accent}
             />
+            <Text style={styles.detailsBtnText}>View Full Billing Details</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.accent} />
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <MaterialIcons name="receipt" size={24} color={colors.primary} />
+          <View style={styles.cardTitleRow}>
+            <Ionicons name="receipt-outline" size={18} color={colors.accent} />
             <Text style={styles.cardTitle}>Billing Summary</Text>
           </View>
-          <Text style={styles.emptyText}>No Active Billing Cycle</Text>
+          <View style={styles.emptyState}>
+            <Ionicons
+              name="time-outline"
+              size={32}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.emptyText}>No Active Billing Cycle</Text>
+          </View>
         </View>
       )}
 
-      {/* Members */}
+      {/* ─── MEMBERS ─── */}
       <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <MaterialIcons name="group" size={24} color={colors.primary} />
-          <Text style={styles.cardTitle}>
-            Members ({room.members?.length || 0})
-          </Text>
+        <View style={styles.cardTitleRow}>
+          <Ionicons name="people" size={18} color={colors.accent} />
+          <Text style={styles.cardTitle}>Members</Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>
+              {room.members?.length || 0}
+            </Text>
+          </View>
         </View>
 
         {room.members && room.members.length > 0 ? (
-          <View>
-            {room.members.map((member, index) => (
-              <View key={index}>
-                <View style={styles.memberItem}>
-                  <View style={styles.memberInfo}>
-                    {member.user?.avatar?.url ? (
-                      <Image
-                        source={{ uri: member.user.avatar.url }}
-                        style={styles.memberAvatarImage}
-                      />
-                    ) : (
-                      <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>
-                          {(member.user?.name || "U").charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                    <View style={{ marginLeft: 12, flex: 1 }}>
-                      <Text style={styles.memberName}>
-                        {member.user?.name || "Unknown"}
+          room.members.map((member, index) => (
+            <View key={index}>
+              <View style={styles.memberRow}>
+                <View style={styles.memberLeft}>
+                  {member.user?.avatar?.url ? (
+                    <Image
+                      source={{ uri: member.user.avatar.url }}
+                      style={styles.memberAvatar}
+                    />
+                  ) : (
+                    <View style={styles.memberAvatarFallback}>
+                      <Text style={styles.memberAvatarLetter}>
+                        {(member.user?.name || "U").charAt(0).toUpperCase()}
                       </Text>
-                      {/* <Text style={styles.memberEmail}>
-                        {member.user?.email || "N/A"}
-                      </Text> */}
-                    </View>
-                  </View>
-                  {member.isPayer && (
-                    <View style={styles.payorBadge}>
-                      <Text style={styles.payorBadgeText}>Payor</Text>
                     </View>
                   )}
-                  {!member.isPayer && (
-                    <View style={styles.nonPayorBadge}>
-                      <Text style={styles.nonPayorBadgeText}>Non-Payor</Text>
-                    </View>
-                  )}
+                  <Text style={styles.memberName}>
+                    {member.user?.name || "Unknown"}
+                  </Text>
                 </View>
-                {index < room.members.length - 1 && (
-                  <View style={styles.separator} />
-                )}
+                <View
+                  style={[
+                    styles.rolePill,
+                    member.isPayer
+                      ? { backgroundColor: colors.successBg }
+                      : { backgroundColor: colors.inputBg },
+                  ]}
+                >
+                  <Ionicons
+                    name={member.isPayer ? "checkmark-circle" : "person"}
+                    size={12}
+                    color={member.isPayer ? colors.success : colors.textTertiary}
+                  />
+                  <Text
+                    style={[
+                      styles.rolePillText,
+                      member.isPayer
+                        ? { color: colors.success }
+                        : { color: colors.textTertiary },
+                    ]}
+                  >
+                    {member.isPayer ? "Payor" : "Non-Payor"}
+                  </Text>
+                </View>
               </View>
-            ))}
-          </View>
+              {index < room.members.length - 1 && (
+                <View style={styles.divider} />
+              )}
+            </View>
+          ))
         ) : (
-          <Text style={styles.emptyText}>No members yet</Text>
+          <View style={styles.emptyState}>
+            <Ionicons
+              name="person-add-outline"
+              size={32}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.emptyText}>No members yet</Text>
+          </View>
         )}
       </View>
 
-      {/* Quick Actions */}
-      <View style={styles.actionsCard}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.primaryAction]}
-          onPress={() => navigation.navigate("Presence", { roomId: room._id })}
-        >
-          <MaterialIcons name="calendar-today" size={20} color="white" />
-          <Text style={styles.actionButtonText}>Mark Presence</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.secondaryAction]}
-          onPress={() => navigation.navigate("Billing", { roomId: room._id })}
-        >
-          <MaterialIcons name="receipt" size={20} color={colors.primary} />
-          <Text style={[styles.actionButtonText, { color: colors.primary }]}>
-            View Billing
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Created Info */}
-      <View style={styles.infoCard}>
-        <View style={styles.infoItem}>
-          <MaterialIcons name="info" size={16} color="#999" />
-          <Text style={styles.infoText}>
-            Created on {formatDate(room.createdAt)}
-          </Text>
+      {/* ─── AMENITIES ─── */}
+      <View style={styles.card}>
+        <View style={styles.cardTitleRow}>
+          <Ionicons name="sparkles" size={18} color={colors.accent} />
+          <Text style={styles.cardTitle}>Amenities</Text>
+        </View>
+        <View style={styles.amenitiesGrid}>
+          {[
+            {
+              icon: "wifi",
+              label: "WiFi",
+              bg: colors.infoBg,
+              color: colors.waterColor,
+            },
+            {
+              icon: "restaurant",
+              label: "Kitchen",
+              bg: colors.warningBg,
+              color: "#e65100",
+            },
+            {
+              icon: "water",
+              label: "Bathroom",
+              bg: colors.infoBg,
+              color: colors.waterColor,
+            },
+            {
+              icon: "bed",
+              label: "Bedroom",
+              bg: colors.errorBg,
+              color: colors.error,
+            },
+            {
+              icon: "flame",
+              label: "Hot Water",
+              bg: colors.accentSurface,
+              color: colors.electricityColor,
+            },
+            {
+              icon: "people",
+              label: "Common Area",
+              bg: colors.successBg,
+              color: colors.success,
+            },
+          ].map((item, idx) => (
+            <View key={idx} style={styles.amenityItem}>
+              <View style={[styles.amenityIcon, { backgroundColor: item.bg }]}>
+                <Ionicons name={item.icon} size={20} color={item.color} />
+              </View>
+              <Text style={styles.amenityLabel}>{item.label}</Text>
+            </View>
+          ))}
         </View>
       </View>
+
+      {/* ─── HOUSE RULES ─── */}
+      <View style={styles.card}>
+        <View style={styles.cardTitleRow}>
+          <Ionicons name="clipboard-outline" size={18} color={colors.accent} />
+          <Text style={styles.cardTitle}>House Rules</Text>
+        </View>
+        {[
+          "Quiet hours: 10 PM – 7 AM",
+          "Keep common areas clean at all times",
+          "Guests must be informed in advance",
+          "Share responsibility for utilities",
+          "No smoking inside the room",
+        ].map((rule, idx) => (
+          <View key={idx} style={styles.ruleRow}>
+            <View style={styles.ruleCheck}>
+              <Ionicons
+                name="checkmark"
+                size={12}
+                color={colors.textOnAccent}
+              />
+            </View>
+            <Text style={styles.ruleText}>{rule}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* ─── QUICK ACTIONS ─── */}
+      <View style={styles.actionsRow}>
+        <TouchableOpacity
+          style={styles.actionPrimary}
+          onPress={() =>
+            navigation.navigate("Presence", { roomId: room.id || room._id })
+          }
+          activeOpacity={0.7}
+        >
+          <Ionicons name="calendar" size={18} color={colors.textOnAccent} />
+          <Text style={styles.actionPrimaryText}>Mark Presence</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionOutline}
+          onPress={() =>
+            navigation.navigate("Billing", { roomId: room.id || room._id })
+          }
+          activeOpacity={0.7}
+        >
+          <Ionicons name="receipt-outline" size={18} color={colors.accent} />
+          <Text style={styles.actionOutlineText}>View Billing</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ─── FOOTER INFO ─── */}
+      <View style={styles.footerInfo}>
+        <Ionicons name="time-outline" size={13} color={colors.textTertiary} />
+        <Text style={styles.footerText}>
+          Created {formatDate(room.created_at || room.createdAt)}
+        </Text>
+      </View>
+
+      <View style={{ height: 30 }} />
     </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.lightGray,
-    padding: 12,
-  },
-  headerCard: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  headerContent: {
-    flex: 1,
-  },
-  roomName: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "white",
-    marginBottom: 8,
-  },
-  roomMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  roomCode: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.9)",
-  },
-  shareButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  card: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.dark,
-    marginLeft: 8,
-  },
-  description: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "justify",
-    lineHeight: 20,
-  },
-  billingGrid: {
-    marginBottom: 12,
-  },
-  billingItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  billingLabel: {
-    fontSize: 13,
-    color: "#999",
-    fontWeight: "500",
-  },
-  billingValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.dark,
-  },
-  viewDetailsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.lightGray,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
-  },
-  viewDetailsButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.primary,
-  },
-  memberItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  memberInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.lightGray,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarText: {
-    color: colors.primary,
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  memberAvatarImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.lightGray,
-  },
-  memberName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.dark,
-  },
-  memberEmail: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 2,
-  },
-  payorBadge: {
-    backgroundColor: colors.success,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  payorBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "white",
-  },
-  nonPayorBadge: {
-    backgroundColor: "#e0e0e0",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  nonPayorBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#666",
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  emptyText: {
-    textAlign: "center",
-    color: "#999",
-    marginVertical: 12,
-  },
-  actionsCard: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 12,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  primaryAction: {
-    backgroundColor: colors.primary,
-  },
-  secondaryAction: {
-    backgroundColor: "white",
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  actionButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "white",
-  },
-  infoCard: {
-    backgroundColor: colors.lightGray,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
-  },
-  infoItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  infoText: {
-    fontSize: 12,
-    color: "#666",
-  },
-  errorText: {
-    fontSize: 16,
-    color: colors.danger,
-    textAlign: "center",
-  },
-  amenitiesSection: {
-    marginBottom: 16,
-  },
-  subSectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.dark,
-    marginBottom: 12,
-  },
-  amenitiesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  amenityItem: {
-    width: "31%",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  amenityIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: colors.lightGray,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  amenityLabel: {
-    fontSize: 11,
-    color: "#666",
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  rulesSection: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 12,
-  },
-  rulesList: {
-    gap: 8,
-    paddingLeft: 8,
-  },
-  ruleItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  ruleIcon: {
-    marginRight: 10,
-    marginTop: 2,
-  },
-  ruleText: {
-    fontSize: 12,
-    color: "#666",
-    flex: 1,
-    lineHeight: 16,
-  },
-});
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    center: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+    },
+    errText: {
+      fontSize: 15,
+      color: colors.textTertiary,
+      marginTop: 10,
+    },
+
+    /* ─── Header ─── */
+    header: {
+      backgroundColor: colors.card,
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 20,
+      borderBottomLeftRadius: 20,
+      borderBottomRightRadius: 20,
+      marginBottom: 6,
+    },
+    headerTop: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 14,
+    },
+    headerIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    shareBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    roomName: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 8,
+    },
+    codePill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      alignSelf: "flex-start",
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 14,
+      backgroundColor: colors.accentSurface,
+    },
+    codeText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+
+    /* ─── Cards ─── */
+    card: {
+      marginHorizontal: 16,
+      marginTop: 14,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+    },
+    cardTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 14,
+    },
+    cardTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      flex: 1,
+    },
+
+    /* ─── Description ─── */
+    descText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      lineHeight: 21,
+    },
+
+    /* ─── Billing ─── */
+    periodStrip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 8,
+      marginBottom: 12,
+    },
+    periodText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: "500",
+    },
+    billRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    billRowLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    billDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    billLabel: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    billValue: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    totalRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 12,
+      marginTop: 4,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    totalLabel: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    totalValue: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.success,
+    },
+    detailsBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: 11,
+      backgroundColor: colors.accentSurface,
+      borderRadius: 10,
+      marginTop: 10,
+    },
+    detailsBtnText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+
+    /* ─── Members ─── */
+    countBadge: {
+      backgroundColor: colors.inputBg,
+      paddingHorizontal: 9,
+      paddingVertical: 2,
+      borderRadius: 10,
+    },
+    countBadgeText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.textSecondary,
+    },
+    memberRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 10,
+    },
+    memberLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      flex: 1,
+    },
+    memberAvatar: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.inputBg,
+    },
+    memberAvatarFallback: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    memberAvatarLetter: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    memberName: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    rolePill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    rolePillText: {
+      fontSize: 11,
+      fontWeight: "600",
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.inputBg,
+    },
+
+    /* ─── Amenities ─── */
+    amenitiesGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    amenityItem: {
+      width: "30%",
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    amenityIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+    amenityLabel: {
+      fontSize: 11,
+      fontWeight: "500",
+      color: colors.textSecondary,
+      textAlign: "center",
+    },
+
+    /* ─── House Rules ─── */
+    ruleRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 10,
+      marginBottom: 10,
+    },
+    ruleCheck: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: colors.success,
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: 1,
+    },
+    ruleText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      flex: 1,
+      lineHeight: 18,
+    },
+
+    /* ─── Quick Actions ─── */
+    actionsRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginHorizontal: 16,
+      marginTop: 14,
+    },
+    actionPrimary: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+    },
+    actionPrimaryText: {
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    actionOutline: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      paddingVertical: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    actionOutlineText: {
+      color: colors.accent,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+
+    /* ─── Footer ─── */
+    footerInfo: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      marginTop: 16,
+    },
+    footerText: {
+      fontSize: 12,
+      color: colors.textTertiary,
+    },
+
+    /* ─── Empty State ─── */
+    emptyState: {
+      alignItems: "center",
+      paddingVertical: 20,
+    },
+    emptyText: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 8,
+    },
+  });
 
 export default RoomDetailsScreen;
