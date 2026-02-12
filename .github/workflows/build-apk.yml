@@ -1,0 +1,131 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger from GitHub Actions
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Install dependencies (mobile)
+        working-directory: ./mobile
+        run: npm install
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Build APK with EAS
+        working-directory: ./mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_NO_VCS: true
+        run: |
+          echo "Building APK..."
+          eas build --platform android --profile preview --non-interactive --wait > build_output.txt 2>&1
+          cat build_output.txt
+
+          # Extract build ID from output
+          BUILD_ID=$(grep -oP 'Build ID: \K[\w\-]+' build_output.txt | head -1)
+          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
+
+          # Also try to extract direct URL if available
+          APK_URL=$(grep -oP 'https://[^\s]+\.apk' build_output.txt | head -1)
+          echo "APK_URL=$APK_URL" >> $GITHUB_ENV
+
+      - name: Download APK
+        working-directory: ./mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          echo "Build ID: ${{ env.BUILD_ID }}"
+          echo "APK URL from build output: ${{ env.APK_URL }}"
+
+          # If we have a direct URL, use it
+          if [ ! -z "${{ env.APK_URL }}" ]; then
+            echo "Downloading APK from direct URL..."
+            curl -L -o ./app.apk "${{ env.APK_URL }}"
+          else
+            # Otherwise use build ID to download
+            echo "Using EAS CLI to download APK..."
+            if [ ! -z "${{ env.BUILD_ID }}" ]; then
+              eas build:download --id "${{ env.BUILD_ID }}" --path ./app.apk --non-interactive
+            else
+              echo "ERROR: Could not determine build ID or APK URL"
+              exit 1
+            fi
+          fi
+
+          # Verify APK was downloaded
+          if [ -f "./app.apk" ]; then
+            SIZE=$(ls -lh ./app.apk | awk '{print $5}')
+            echo "✅ APK downloaded successfully - Size: $SIZE"
+          else
+            echo "❌ APK download failed"
+            exit 1
+          fi
+
+      - name: Create Release and Upload APK
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: ./mobile/app.apk
+          tag_name: release-${{ github.run_number }}-${{ github.run_id }}
+          release_name: "APK Build #${{ github.run_number }}"
+          body: |
+            ## 📱 Apartment Bill Tracker - Android APK
+
+            **Build Number:** ${{ github.run_number }}
+            **Commit:** ${{ github.sha }}
+
+            ### Installation Instructions:
+            1. Download `app.apk` from the assets below
+            2. Transfer to your Android phone
+            3. Open file manager → find APK → Tap to install
+            4. Allow unknown sources if prompted
+            5. Launch app!
+
+            ### Features:
+            - 👥 Room Management
+            - 💰 Billing Tracking
+            - 📊 Reports & Analytics
+            - 📅 Attendance Tracking
+            - 👤 Member Management
+
+            **Backend:** Render.com deployment
+            **Version:** ${{ github.ref }}
+
+            Developed by: Rommel Belia
+          draft: false
+          prerelease: false
+
+      - name: Comment on commit
+        uses: actions/github-script@v6
+        if: always()
+        with:
+          script: |
+            const status = '${{ job.status }}' === 'success' ? '✅' : '❌';
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: `${status} APK Build #${{ github.run_number }} - Check [Releases](https://github.com/${{ github.repository }}/releases)`
+            })

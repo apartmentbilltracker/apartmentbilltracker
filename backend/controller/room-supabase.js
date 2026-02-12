@@ -7,6 +7,8 @@ const createNotification = require("../utils/createNotification");
 const sendMail = require("../utils/sendMail");
 const WelcomeRoomContent = require("../utils/WelcomeRoomContent");
 const PDFDocument = require("pdfkit");
+const { enrichBillingCycle } = require("../utils/enrichBillingCycle");
+const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 
 // Helper to normalize snake_case Supabase fields to camelCase for mobile clients
 const normalizeMember = (member) => ({
@@ -132,6 +134,7 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
         );
         if (activeCycle) {
           room.currentCycleId = activeCycle.id;
+          room.cycleStatus = "active";
           room.billing = {
             start: activeCycle.start_date,
             end: activeCycle.end_date,
@@ -151,7 +154,7 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
               activeCycle.end_date,
             )) || [];
           const completedPayments = payments.filter(
-            (p) => p.status === "completed",
+            (p) => p.status === "completed" || p.status === "verified",
           );
 
           const payerMembers = (members || []).filter((m) => m.is_payer);
@@ -194,6 +197,59 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
                   !!internetPayment),
             };
           });
+
+          // Check if all payors have paid — if so, auto-close the cycle (lightweight)
+          const payerPaymentStatuses = room.memberPayments || [];
+          if (payerPaymentStatuses.length > 0 && payerPaymentStatuses.every(mp => mp.allPaid)) {
+            try {
+              // Direct lightweight update instead of heavy checkAndAutoCloseCycle
+              await SupabaseService.update("billing_cycles", activeCycle.id, {
+                status: "completed",
+                closed_at: new Date(),
+              });
+              room.cycleStatus = "completed";
+              console.log(`[MY-ROOMS] Auto-closed cycle for ${room.name}`);
+            } catch (acErr) {
+              console.log(`[MY-ROOMS] Auto-close error:`, acErr.message);
+            }
+          }
+        } else {
+          // No active cycle — check for most recently completed cycle
+          try {
+            const allCycles = await SupabaseService.getRoomBillingCycles(room.id);
+            const closedCycle = (allCycles || [])
+              .filter((c) => c.status === "completed" || c.status === "closed")
+              .sort((a, b) => new Date(b.closed_at || b.end_date) - new Date(a.closed_at || a.end_date))[0];
+            if (closedCycle) {
+              room.cycleStatus = "completed";
+              room.closedCycleId = closedCycle.id;
+              room.billing = {
+                start: closedCycle.start_date,
+                end: closedCycle.end_date,
+                rent: closedCycle.rent || 0,
+                electricity: closedCycle.electricity || 0,
+                water: closedCycle.water_bill_amount || 0,
+                internet: closedCycle.internet || 0,
+                previousReading: closedCycle.previous_meter_reading ?? null,
+                currentReading: closedCycle.current_meter_reading ?? null,
+              };
+
+              // Populate memberPayments for closed cycle (all payors should be paid)
+              const payerMembers = (members || []).filter((m) => m.is_payer);
+              room.memberPayments = payerMembers.map((member) => ({
+                member: member.user_id,
+                memberName: member.name,
+                isPayer: member.is_payer,
+                rentStatus: "paid",
+                electricityStatus: "paid",
+                waterStatus: "paid",
+                internetStatus: "paid",
+                allPaid: true,
+              }));
+            }
+          } catch (closedErr) {
+            console.log(`[MY-ROOMS] Error fetching closed cycles for room ${room.name}:`, closedErr.message);
+          }
         }
       } catch (billingError) {
         console.log(
@@ -304,6 +360,7 @@ router.get("/:id", async (req, res, next) => {
     );
     if (activeCycle) {
       room.currentCycleId = activeCycle.id;
+      room.cycleStatus = "active";
       room.billing = {
         start: activeCycle.start_date,
         end: activeCycle.end_date,
@@ -314,6 +371,69 @@ router.get("/:id", async (req, res, next) => {
         previousReading: activeCycle.previous_meter_reading ?? null,
         currentReading: activeCycle.current_meter_reading ?? null,
       };
+
+      // Lightweight inline check: if all payors have paid, auto-close
+      try {
+        const payments = (await SupabaseService.getPaymentsForCycle(
+          room.id, activeCycle.start_date, activeCycle.end_date
+        )) || [];
+        const completedPayments = payments.filter(p => p.status === "completed" || p.status === "verified");
+        const payerMembers = (members || []).filter(m => m.is_payer);
+        if (payerMembers.length > 0) {
+          const allPaid = payerMembers.every(member => {
+            const mp = completedPayments.filter(p => p.paid_by === member.user_id);
+            const hasTotal = mp.some(p => p.bill_type === "total");
+            if (hasTotal) return true;
+            return mp.some(p => p.bill_type === "rent") &&
+                   mp.some(p => p.bill_type === "electricity") &&
+                   mp.some(p => p.bill_type === "water") &&
+                   mp.some(p => p.bill_type === "internet");
+          });
+          if (allPaid) {
+            // Direct lightweight update — don't call heavy checkAndAutoCloseCycle
+            await SupabaseService.update("billing_cycles", activeCycle.id, {
+              status: "completed",
+              closed_at: new Date(),
+            });
+            room.cycleStatus = "completed";
+            console.log(`[ROOM GET] Auto-closed cycle for ${room.name}`);
+          }
+        }
+      } catch (acErr) {
+        console.log(`[ROOM GET] Auto-close check error:`, acErr.message);
+      }
+    } else {
+      // Check for most recently completed cycle
+      const closedCycle = (roomBillingCycles || [])
+        .filter((c) => c.status === "completed" || c.status === "closed")
+        .sort((a, b) => new Date(b.closed_at || b.end_date) - new Date(a.closed_at || a.end_date))[0];
+      if (closedCycle) {
+        room.cycleStatus = "completed";
+        room.closedCycleId = closedCycle.id;
+        room.billing = {
+          start: closedCycle.start_date,
+          end: closedCycle.end_date,
+          rent: closedCycle.rent || 0,
+          electricity: closedCycle.electricity || 0,
+          water: closedCycle.water_bill_amount || 0,
+          internet: closedCycle.internet || 0,
+          previousReading: closedCycle.previous_meter_reading ?? null,
+          currentReading: closedCycle.current_meter_reading ?? null,
+        };
+
+        // Populate memberPayments for closed cycle (all payors should be paid)
+        const payerMembers = (members || []).filter((m) => m.is_payer);
+        room.memberPayments = payerMembers.map((member) => ({
+          member: member.user_id,
+          memberName: member.name,
+          isPayer: member.is_payer,
+          rentStatus: "paid",
+          electricityStatus: "paid",
+          waterStatus: "paid",
+          internetStatus: "paid",
+          allPaid: true,
+        }));
+      }
     }
 
     console.log(
@@ -512,11 +632,15 @@ router.put(
       const room = await SupabaseService.findRoomById(req.params.id);
       if (!room) return next(new ErrorHandler("Room not found", 404));
 
-      const member = await SupabaseService.selectByColumn(
+      let member = await SupabaseService.selectByColumn(
         "room_members",
         "id",
         req.params.memberId,
       );
+
+      // Defensive: normalize result shapes (Supabase may occasionally return arrays)
+      if (Array.isArray(member)) member = member[0];
+
       if (!member) {
         return next(new ErrorHandler("Member not found in room", 404));
       }
@@ -524,8 +648,8 @@ router.put(
       const oldPayorStatus = member.is_payer;
       const adminName = req.user?.name || "Administrator";
 
-      // Update member
-      const allowedUpdates = { is_payer: "is_payer" };
+      // Update member – accept both camelCase (mobile) and snake_case keys
+      const allowedUpdates = { is_payer: "is_payer", isPayer: "is_payer" };
       const updateData = {};
       Object.keys(req.body).forEach((field) => {
         if (allowedUpdates[field]) {
@@ -533,11 +657,27 @@ router.put(
         }
       });
 
-      const updatedMember = await SupabaseService.update(
-        "room_members",
-        req.params.memberId,
-        updateData,
-      );
+      if (Object.keys(updateData).length === 0) {
+        return next(new ErrorHandler("No valid fields to update", 400));
+      }
+
+      let updatedMember;
+      try {
+        updatedMember = await SupabaseService.update(
+          "room_members",
+          req.params.memberId,
+          updateData,
+        );
+      } catch (err) {
+        console.error("Error updating room member:", err.message || err);
+        return next(new ErrorHandler(err.message || "Failed to update member", 500));
+      }
+
+      // Normalize update result
+      if (Array.isArray(updatedMember)) updatedMember = updatedMember[0];
+      if (!updatedMember) {
+        return next(new ErrorHandler("Failed to update member", 500));
+      }
 
       // Send notification if payor status changed
       if (
@@ -640,7 +780,8 @@ router.post(
         console.error("Error fetching member user for welcome email:", userErr);
       }
 
-      const memberName = (memberUser && memberUser.name) || member.name || "there";
+      const memberName =
+        (memberUser && memberUser.name) || member.name || "there";
 
       // Send welcome notification
       try {
@@ -850,10 +991,16 @@ router.get("/:id/billing-history", isAuthenticated, async (req, res, next) => {
       return next(new ErrorHandler("Forbidden", 403));
     }
 
-    // Get billing cycles for this room
+    // Get billing cycles for this room and enrich with water/total
     const billingCycles = await SupabaseService.getRoomBillingCycles(
       req.params.id,
     );
+
+    // Enrich each cycle so water_bill_amount and total_billed_amount are accurate
+    const roomMembers = await SupabaseService.getRoomMembers(req.params.id);
+    for (const cycle of billingCycles || []) {
+      await enrichBillingCycle(cycle, roomMembers);
+    }
 
     res.status(200).json({ success: true, billing: billingCycles || [] });
   } catch (error) {

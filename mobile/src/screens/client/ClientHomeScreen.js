@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState, useMemo} from "react";
+import React, { useContext, useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Image,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
@@ -43,6 +44,7 @@ const ClientHomeScreen = ({ navigation }) => {
 
   const userId = state?.user?.id || state?.user?._id;
   const userName = state?.user?.name || "User";
+  const userAvatar = state?.user?.avatar?.url || null;
 
   const getTimeBasedGreeting = () => {
     const hour = new Date().getHours();
@@ -534,7 +536,11 @@ const ClientHomeScreen = ({ navigation }) => {
             onPress={() => navigation.navigate("RoomDetails", { roomId })}
           >
             <Text style={styles.buttonText}>View Details</Text>
-            <Ionicons name="arrow-forward" size={14} color={colors.textOnAccent} />
+            <Ionicons
+              name="arrow-forward"
+              size={14}
+              color={colors.textOnAccent}
+            />
           </TouchableOpacity>
         ) : isPending ? (
           <View style={[styles.button, styles.pendingButton]}>
@@ -551,7 +557,11 @@ const ClientHomeScreen = ({ navigation }) => {
               <ActivityIndicator color={colors.accent} size={16} />
             ) : (
               <>
-                <Ionicons name="add-circle-outline" size={14} color={colors.accent} />
+                <Ionicons
+                  name="add-circle-outline"
+                  size={14}
+                  color={colors.accent}
+                />
                 <Text style={styles.joinButtonText}>Join Room</Text>
               </>
             )}
@@ -575,9 +585,16 @@ const ClientHomeScreen = ({ navigation }) => {
           <View style={styles.modalHeader}>
             <View style={styles.modalHeaderLeft}>
               <View
-                style={[styles.modalIconBg, { backgroundColor: colors.successBg }]}
+                style={[
+                  styles.modalIconBg,
+                  { backgroundColor: colors.successBg },
+                ]}
               >
-                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                <Ionicons
+                  name="checkmark-circle"
+                  size={18}
+                  color={colors.success}
+                />
               </View>
               <Text style={styles.modalTitle}>Payment Status</Text>
             </View>
@@ -590,6 +607,35 @@ const ClientHomeScreen = ({ navigation }) => {
           </View>
 
           <ScrollView style={styles.modalBody}>
+            {userJoinedRoom?.cycleStatus === "completed" && (
+              <View
+                style={{
+                  backgroundColor: colors.successBg,
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <Ionicons
+                  name="checkmark-done-circle"
+                  size={20}
+                  color={colors.success}
+                />
+                <Text
+                  style={{
+                    color: colors.success,
+                    fontWeight: "600",
+                    fontSize: 13,
+                    marginLeft: 8,
+                    flex: 1,
+                  }}
+                >
+                  Billing cycle complete — all bills are settled!
+                </Text>
+              </View>
+            )}
             {getPaymentStatus() && (
               <View>
                 {[
@@ -616,7 +662,11 @@ const ClientHomeScreen = ({ navigation }) => {
                 ].map((item, idx) => (
                   <View key={idx} style={styles.statusRow}>
                     <View style={styles.statusRowLeft}>
-                      <Ionicons name={item.icon} size={18} color={colors.textSecondary} />
+                      <Ionicons
+                        name={item.icon}
+                        size={18}
+                        color={colors.textSecondary}
+                      />
                       <Text style={styles.statusRowLabel}>{item.bill}</Text>
                     </View>
                     <View
@@ -624,7 +674,9 @@ const ClientHomeScreen = ({ navigation }) => {
                         styles.statusPill,
                         {
                           backgroundColor:
-                            item.status === "paid" ? colors.successBg : colors.warningBg,
+                            item.status === "paid"
+                              ? colors.successBg
+                              : colors.warningBg,
                         },
                       ]}
                     >
@@ -633,14 +685,18 @@ const ClientHomeScreen = ({ navigation }) => {
                           item.status === "paid" ? "checkmark-circle" : "time"
                         }
                         size={14}
-                        color={item.status === "paid" ? colors.success : "#e65100"}
+                        color={
+                          item.status === "paid" ? colors.success : "#e65100"
+                        }
                       />
                       <Text
                         style={[
                           styles.statusPillText,
                           {
                             color:
-                              item.status === "paid" ? colors.success : "#e65100",
+                              item.status === "paid"
+                                ? colors.success
+                                : "#e65100",
                           },
                         ]}
                       >
@@ -686,7 +742,10 @@ const ClientHomeScreen = ({ navigation }) => {
           <View style={styles.modalHeader}>
             <View style={styles.modalHeaderLeft}>
               <View
-                style={[styles.modalIconBg, { backgroundColor: colors.warningBg }]}
+                style={[
+                  styles.modalIconBg,
+                  { backgroundColor: colors.warningBg },
+                ]}
               >
                 <Ionicons name="pie-chart" size={18} color={colors.accent} />
               </View>
@@ -826,7 +885,14 @@ const ClientHomeScreen = ({ navigation }) => {
               <Text style={styles.userName}>{userName}</Text>
             </View>
             <View style={styles.headerIconBg}>
-              <Ionicons name="person" size={20} color={colors.textOnAccent} />
+              {userAvatar ? (
+                <Image
+                  source={{ uri: userAvatar }}
+                  style={styles.headerAvatar}
+                />
+              ) : (
+                <Ionicons name="person" size={20} color={colors.textOnAccent} />
+              )}
             </View>
           </View>
         </View>
@@ -916,6 +982,47 @@ const ClientHomeScreen = ({ navigation }) => {
                         {formatShortDate(userJoinedRoom.billing.start)}{" "}
                         {"\u2014"} {formatShortDate(userJoinedRoom.billing.end)}
                       </Text>
+                      {userJoinedRoom?.cycleStatus === "completed" ? (
+                        <View
+                          style={{
+                            backgroundColor: "#e8f5e9",
+                            borderRadius: 6,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            marginLeft: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              fontWeight: "700",
+                              color: "#27ae60",
+                            }}
+                          >
+                            COMPLETED
+                          </Text>
+                        </View>
+                      ) : userJoinedRoom?.cycleStatus === "active" ? (
+                        <View
+                          style={{
+                            backgroundColor: "#fff3e0",
+                            borderRadius: 6,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            marginLeft: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              fontWeight: "700",
+                              color: "#e65100",
+                            }}
+                          >
+                            ACTIVE
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   )}
                 </View>
@@ -999,14 +1106,17 @@ const ClientHomeScreen = ({ navigation }) => {
                 )}
 
                 {/* ─── PAYMENT STATUS ─── */}
-                {getPaymentStatus() && (
+                {(getPaymentStatus() ||
+                  userJoinedRoom?.cycleStatus === "completed") && (
                   <TouchableOpacity
                     style={[
                       styles.paymentCard,
                       {
-                        borderLeftColor: getPaymentStatus().allPaid
-                          ? colors.success
-                          : "#e65100",
+                        borderLeftColor:
+                          getPaymentStatus()?.allPaid ||
+                          userJoinedRoom?.cycleStatus === "completed"
+                            ? colors.success
+                            : "#e65100",
                       },
                     ]}
                     onPress={() => setShowStatusModal(true)}
@@ -1014,27 +1124,46 @@ const ClientHomeScreen = ({ navigation }) => {
                   >
                     <Ionicons
                       name={
-                        getPaymentStatus().allPaid ? "checkmark-circle" : "time"
+                        getPaymentStatus()?.allPaid ||
+                        userJoinedRoom?.cycleStatus === "completed"
+                          ? "checkmark-circle"
+                          : "time"
                       }
                       size={22}
-                      color={getPaymentStatus().allPaid ? colors.success : "#e65100"}
+                      color={
+                        getPaymentStatus()?.allPaid ||
+                        userJoinedRoom?.cycleStatus === "completed"
+                          ? colors.success
+                          : "#e65100"
+                      }
                     />
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text
                         style={[
                           styles.paymentTitle,
                           {
-                            color: getPaymentStatus().allPaid
-                              ? colors.success
-                              : "#e65100",
+                            color:
+                              getPaymentStatus()?.allPaid ||
+                              userJoinedRoom?.cycleStatus === "completed"
+                                ? colors.success
+                                : "#e65100",
                           },
                         ]}
                       >
-                        {getPaymentStatus().allPaid
-                          ? "All Bills Paid"
-                          : "Payment Pending"}
+                        {userJoinedRoom?.cycleStatus === "completed"
+                          ? "Billing Cycle Complete"
+                          : getPaymentStatus()?.allPaid
+                            ? "All Bills Paid"
+                            : "Payment Pending"}
                       </Text>
-                      {!getPaymentStatus().allPaid && (
+                      {userJoinedRoom?.cycleStatus === "completed" ? (
+                        <Text
+                          style={[styles.paymentSub, { color: colors.success }]}
+                        >
+                          All paid! Waiting for new billing cycle.
+                        </Text>
+                      ) : !getPaymentStatus()?.allPaid &&
+                        getPaymentStatus()?.pendingCount > 0 ? (
                         <Text style={styles.paymentSub}>
                           {getPaymentStatus().pendingCount} bill
                           {getPaymentStatus().pendingCount !== 1
@@ -1042,9 +1171,13 @@ const ClientHomeScreen = ({ navigation }) => {
                             : ""}{" "}
                           awaiting payment
                         </Text>
-                      )}
+                      ) : null}
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                    <Ionicons
+                      name="chevron-forward"
+                      size={18}
+                      color={colors.textSecondary}
+                    />
                   </TouchableOpacity>
                 )}
 
@@ -1143,7 +1276,11 @@ const ClientHomeScreen = ({ navigation }) => {
                         { backgroundColor: colors.successBg },
                       ]}
                     >
-                      <Ionicons name="calendar" size={20} color={colors.success} />
+                      <Ionicons
+                        name="calendar"
+                        size={20}
+                        color={colors.success}
+                      />
                     </View>
                     <Text style={styles.actionLabel}>Presence</Text>
                   </TouchableOpacity>
@@ -1302,7 +1439,11 @@ const ClientHomeScreen = ({ navigation }) => {
               /* ─── NO ROOM JOINED ─── */
               <View style={styles.emptyState}>
                 <View style={styles.emptyIconCircle}>
-                  <Ionicons name="home-outline" size={40} color={colors.textSecondary} />
+                  <Ionicons
+                    name="home-outline"
+                    size={40}
+                    color={colors.textSecondary}
+                  />
                 </View>
                 <Text style={styles.emptyTitle}>No Room Joined Yet</Text>
                 <Text style={styles.emptySubtext}>
@@ -1352,10 +1493,17 @@ const ClientHomeScreen = ({ navigation }) => {
                             activeOpacity={0.7}
                           >
                             {joiningRoomId === roomId ? (
-                              <ActivityIndicator color={colors.textOnAccent} size="small" />
+                              <ActivityIndicator
+                                color={colors.textOnAccent}
+                                size="small"
+                              />
                             ) : (
                               <>
-                                <Ionicons name="add" size={16} color={colors.textOnAccent} />
+                                <Ionicons
+                                  name="add"
+                                  size={16}
+                                  color={colors.textOnAccent}
+                                />
                                 <Text style={styles.joinBtnText}>Join</Text>
                               </>
                             )}
@@ -1376,7 +1524,11 @@ const ClientHomeScreen = ({ navigation }) => {
             {/* All rooms joined */}
             {unjoinedRooms.length === 0 && userJoinedRoom && (
               <View style={styles.allJoinedCard}>
-                <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+                <Ionicons
+                  name="checkmark-circle"
+                  size={24}
+                  color={colors.success}
+                />
                 <Text style={styles.allJoinedText}>
                   You've joined all available rooms
                 </Text>
@@ -1389,542 +1541,590 @@ const ClientHomeScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
-  // ─── LAYOUT ───
-  container: { flex: 1, backgroundColor: colors.background },
-  centerLoader: { flex: 1, justifyContent: "center", alignItems: "center" },
+const createStyles = (colors) =>
+  StyleSheet.create({
+    // ─── LAYOUT ───
+    container: { flex: 1, backgroundColor: colors.background },
+    centerLoader: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  // ─── HEADER ───
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 16,
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerRow: { flexDirection: "row", alignItems: "center" },
-  greeting: { fontSize: 13, color: colors.textTertiary, fontWeight: "500" },
-  userName: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: colors.text,
-    marginTop: 2,
-    letterSpacing: -0.3,
-  },
-  headerIconBg: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.accent,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+    // ─── HEADER ───
+    header: {
+      paddingHorizontal: 20,
+      paddingTop: 18,
+      paddingBottom: 16,
+      backgroundColor: colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    headerRow: { flexDirection: "row", alignItems: "center" },
+    greeting: { fontSize: 13, color: colors.textTertiary, fontWeight: "500" },
+    userName: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: colors.text,
+      marginTop: 2,
+      letterSpacing: -0.3,
+    },
+    headerIconBg: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      overflow: "hidden",
+    },
+    headerAvatar: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+    },
 
-  // ─── NOTIFICATION BANNER ───
-  notifBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 16,
-    marginTop: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: colors.accentSurface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#ffe0b2",
-  },
-  notifDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#e65100",
-  },
-  notifTitle: { fontSize: 12, fontWeight: "700", color: "#e65100" },
-  notifMessage: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+    // ─── NOTIFICATION BANNER ───
+    notifBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginHorizontal: 16,
+      marginTop: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      backgroundColor: colors.accentSurface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#ffe0b2",
+    },
+    notifDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: "#e65100",
+    },
+    notifTitle: { fontSize: 12, fontWeight: "700", color: "#e65100" },
+    notifMessage: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
 
-  // ─── MY ROOM CARD ───
-  myRoomCard: {
-    marginHorizontal: 16,
-    marginTop: 14,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: "hidden",
-  },
-  myRoomHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  roomIconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.accentSurface,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#f0e6c8",
-  },
-  myRoomName: { fontSize: 17, fontWeight: "700", color: colors.text },
-  myRoomSub: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
-  detailsChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: colors.accentSurface,
-    borderWidth: 1,
-    borderColor: "#f0e6c8",
-  },
-  detailsChipText: { fontSize: 12, fontWeight: "600", color: colors.accent },
-  periodStrip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: colors.cardAlt,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  periodText: { fontSize: 12, color: colors.textTertiary, fontWeight: "500" },
+    // ─── MY ROOM CARD ───
+    myRoomCard: {
+      marginHorizontal: 16,
+      marginTop: 14,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    myRoomHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 12,
+    },
+    roomIconBg: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    myRoomName: { fontSize: 17, fontWeight: "700", color: colors.text },
+    myRoomSub: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
+    detailsChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 2,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: colors.accentSurface,
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    detailsChipText: { fontSize: 12, fontWeight: "600", color: colors.accent },
+    periodStrip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      backgroundColor: colors.cardAlt,
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+    },
+    periodText: { fontSize: 12, color: colors.textTertiary, fontWeight: "500" },
 
-  // ─── BILLING CARD ───
-  billingCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: "hidden",
-  },
-  billingCardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  billingCardLabel: { fontSize: 12, color: colors.textTertiary, fontWeight: "500" },
-  billingCardAmount: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: colors.accent,
-    marginTop: 2,
-  },
-  billingBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    backgroundColor: colors.accentSurface,
-  },
-  billingBadgeText: { fontSize: 11, fontWeight: "600", color: colors.accent },
-  billingBreakdownRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: colors.cardAlt,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  billingMiniCell: { alignItems: "center", gap: 3 },
-  billingMiniLabel: { fontSize: 10, color: colors.textTertiary, fontWeight: "500" },
-  billingMiniAmount: { fontSize: 12, fontWeight: "700", color: colors.text },
+    // ─── BILLING CARD ───
+    billingCard: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    billingCardTop: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    billingCardLabel: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      fontWeight: "500",
+    },
+    billingCardAmount: {
+      fontSize: 24,
+      fontWeight: "800",
+      color: colors.accent,
+      marginTop: 2,
+    },
+    billingBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
+      backgroundColor: colors.accentSurface,
+    },
+    billingBadgeText: { fontSize: 11, fontWeight: "600", color: colors.accent },
+    billingBreakdownRow: {
+      flexDirection: "row",
+      justifyContent: "space-around",
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      backgroundColor: colors.cardAlt,
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+    },
+    billingMiniCell: { alignItems: "center", gap: 3 },
+    billingMiniLabel: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      fontWeight: "500",
+    },
+    billingMiniAmount: { fontSize: 12, fontWeight: "700", color: colors.text },
 
-  // ─── PAYMENT STATUS ───
-  paymentCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginTop: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderLeftWidth: 4,
-  },
-  paymentTitle: { fontSize: 14, fontWeight: "700" },
-  paymentSub: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
+    // ─── PAYMENT STATUS ───
+    paymentCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginHorizontal: 16,
+      marginTop: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderLeftWidth: 4,
+    },
+    paymentTitle: { fontSize: 14, fontWeight: "700" },
+    paymentSub: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
 
-  // ─── COUNTDOWN ───
-  countdownCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  countdownRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  countdownText: { flex: 1, fontSize: 13, fontWeight: "600", color: colors.text },
-  countdownPct: { fontSize: 12, fontWeight: "700", color: colors.textTertiary },
-  countdownBarBg: {
-    height: 5,
-    backgroundColor: colors.inputBg,
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  countdownBarFill: { height: "100%", borderRadius: 3 },
+    // ─── COUNTDOWN ───
+    countdownCard: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    countdownRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8,
+    },
+    countdownText: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    countdownPct: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.textTertiary,
+    },
+    countdownBarBg: {
+      height: 5,
+      backgroundColor: colors.inputBg,
+      borderRadius: 3,
+      overflow: "hidden",
+    },
+    countdownBarFill: { height: "100%", borderRadius: 3 },
 
-  // ─── QUICK ACTIONS ───
-  actionsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginHorizontal: 16,
-    marginTop: 14,
-  },
-  actionCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  actionIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  actionLabel: { fontSize: 12, fontWeight: "600", color: colors.textSecondary },
+    // ─── QUICK ACTIONS ───
+    actionsRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginHorizontal: 16,
+      marginTop: 14,
+    },
+    actionCard: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      paddingVertical: 16,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    actionIconBg: {
+      width: 40,
+      height: 40,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    actionLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
 
-  // ─── PAYORS STATUS ───
-  payorsCard: {
-    marginHorizontal: 16,
-    marginTop: 14,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: "hidden",
-  },
-  payorsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  payorsTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
-  payorsPeriod: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    backgroundColor: colors.infoBg,
-    borderRadius: 8,
-  },
-  payorsPeriodText: { fontSize: 11, fontWeight: "600", color: colors.waterColor },
-  payorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  payorAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.accentSurface,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#f0e6c8",
-  },
-  payorAvatarText: { fontSize: 14, fontWeight: "700", color: colors.accent },
-  payorNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 4,
-  },
-  payorName: { fontSize: 13, fontWeight: "600", color: colors.text },
-  paidChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: colors.success,
-  },
-  paidChipText: { fontSize: 9, fontWeight: "700", color: "#fff" },
-  payorBillsRow: { flexDirection: "row", gap: 6 },
-  payorBillChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  payorBillChipText: { fontSize: 10, fontWeight: "700" },
-  payorDivider: { height: 1, backgroundColor: colors.background, marginHorizontal: 16 },
-  legendRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    alignItems: "center",
-  },
-  legendText: { fontSize: 10, color: colors.textTertiary, fontStyle: "italic" },
+    // ─── PAYORS STATUS ───
+    payorsCard: {
+      marginHorizontal: 16,
+      marginTop: 14,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    payorsHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    payorsTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
+    payorsPeriod: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginHorizontal: 16,
+      marginTop: 10,
+      marginBottom: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      backgroundColor: colors.infoBg,
+      borderRadius: 8,
+    },
+    payorsPeriodText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.waterColor,
+    },
+    payorRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    payorAvatar: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    payorAvatarText: { fontSize: 14, fontWeight: "700", color: colors.accent },
+    payorNameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 4,
+    },
+    payorName: { fontSize: 13, fontWeight: "600", color: colors.text },
+    paidChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 2,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 8,
+      backgroundColor: colors.success,
+    },
+    paidChipText: { fontSize: 9, fontWeight: "700", color: "#fff" },
+    payorBillsRow: { flexDirection: "row", gap: 6 },
+    payorBillChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 6,
+    },
+    payorBillChipText: { fontSize: 10, fontWeight: "700" },
+    payorDivider: {
+      height: 1,
+      backgroundColor: colors.background,
+      marginHorizontal: 16,
+    },
+    legendRow: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+      alignItems: "center",
+    },
+    legendText: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      fontStyle: "italic",
+    },
 
-  // ─── EMPTY STATE ───
-  emptyState: { alignItems: "center", paddingVertical: 50 },
-  emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
-  emptySubtext: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    marginTop: 6,
-    textAlign: "center",
-    paddingHorizontal: 40,
-  },
+    // ─── EMPTY STATE ───
+    emptyState: { alignItems: "center", paddingVertical: 50 },
+    emptyIconCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    emptyTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+    emptySubtext: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 6,
+      textAlign: "center",
+      paddingHorizontal: 40,
+    },
 
-  // ─── AVAILABLE ROOMS ───
-  availSection: { marginHorizontal: 16, marginTop: 18 },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.textTertiary,
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  availCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: "hidden",
-  },
-  availHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  availIconBg: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: colors.accentSurface,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#f0e6c8",
-  },
-  availName: { fontSize: 14, fontWeight: "600", color: colors.text },
-  availMembers: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
-  availDesc: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    lineHeight: 17,
-    paddingHorizontal: 14,
-    paddingBottom: 12,
-  },
-  pendingChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: colors.warningBg,
-    borderWidth: 1,
-    borderColor: "#ffe0b2",
-  },
-  pendingChipText: { fontSize: 11, fontWeight: "600", color: "#e67e22" },
-  joinBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: colors.accent,
-  },
-  joinBtnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
-  allJoinedCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginHorizontal: 16,
-    marginTop: 18,
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: colors.successBg,
-    borderWidth: 1,
-    borderColor: "#d4edd4",
-  },
-  allJoinedText: { fontSize: 13, fontWeight: "600", color: colors.success },
+    // ─── AVAILABLE ROOMS ───
+    availSection: { marginHorizontal: 16, marginTop: 18 },
+    sectionLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      letterSpacing: 0.5,
+      marginBottom: 10,
+    },
+    availCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    availHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+    },
+    availIconBg: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    availName: { fontSize: 14, fontWeight: "600", color: colors.text },
+    availMembers: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
+    availDesc: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      lineHeight: 17,
+      paddingHorizontal: 14,
+      paddingBottom: 12,
+    },
+    pendingChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 14,
+      backgroundColor: colors.warningBg,
+      borderWidth: 1,
+      borderColor: "#ffe0b2",
+    },
+    pendingChipText: { fontSize: 11, fontWeight: "600", color: "#e67e22" },
+    joinBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: 10,
+      backgroundColor: colors.accent,
+    },
+    joinBtnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+    allJoinedCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginHorizontal: 16,
+      marginTop: 18,
+      paddingVertical: 16,
+      borderRadius: 12,
+      backgroundColor: colors.successBg,
+      borderWidth: 1,
+      borderColor: "#d4edd4",
+    },
+    allJoinedText: { fontSize: 13, fontWeight: "600", color: colors.success },
 
-  // ─── MODALS ───
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
-  modal: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "85%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  modalHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  modalIconBg: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
-  modalCloseBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBody: { paddingHorizontal: 20, paddingVertical: 16 },
-  modalActionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginHorizontal: 20,
-    marginBottom: 24,
-    paddingVertical: 13,
-    borderRadius: 10,
-    backgroundColor: colors.accent,
-  },
-  modalActionBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+    // ─── MODALS ───
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      justifyContent: "flex-end",
+    },
+    modal: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: "85%",
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    modalHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+    modalIconBg: {
+      width: 34,
+      height: 34,
+      borderRadius: 8,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
+    modalCloseBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalBody: { paddingHorizontal: 20, paddingVertical: 16 },
+    modalActionBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      marginHorizontal: 20,
+      marginBottom: 24,
+      paddingVertical: 13,
+      borderRadius: 10,
+      backgroundColor: colors.accent,
+    },
+    modalActionBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
-  // ─── STATUS MODAL ───
-  statusRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  statusRowLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  statusRowLabel: { fontSize: 14, fontWeight: "600", color: colors.text },
-  statusPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  statusPillText: { fontSize: 12, fontWeight: "700" },
+    // ─── STATUS MODAL ───
+    statusRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    statusRowLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+    statusRowLabel: { fontSize: 14, fontWeight: "600", color: colors.text },
+    statusPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
+    },
+    statusPillText: { fontSize: 12, fontWeight: "700" },
 
-  // ─── EXPENSE MODAL ───
-  expenseSummaryCard: {
-    backgroundColor: colors.accentSurface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#f0e6c8",
-  },
-  expenseSummaryLabel: { fontSize: 12, color: colors.textTertiary, fontWeight: "500" },
-  expenseSummaryAmount: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: colors.accent,
-    marginTop: 4,
-  },
-  expenseSummaryNote: { fontSize: 12, color: colors.textTertiary, marginTop: 6 },
-  expenseRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  expenseRowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  expenseDot: { width: 8, height: 8, borderRadius: 4 },
-  expenseRowName: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 4,
-  },
-  expenseBarBg: {
-    height: 4,
-    backgroundColor: colors.inputBg,
-    borderRadius: 2,
-    overflow: "hidden",
-    width: 100,
-  },
-  expenseBarFill: { height: "100%", borderRadius: 2 },
-  expenseRowRight: { alignItems: "flex-end" },
-  expenseRowAmount: { fontSize: 14, fontWeight: "700", color: colors.text },
-  expenseRowPct: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
-});
+    // ─── EXPENSE MODAL ───
+    expenseSummaryCard: {
+      backgroundColor: colors.accentSurface,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    expenseSummaryLabel: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      fontWeight: "500",
+    },
+    expenseSummaryAmount: {
+      fontSize: 28,
+      fontWeight: "800",
+      color: colors.accent,
+      marginTop: 4,
+    },
+    expenseSummaryNote: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 6,
+    },
+    expenseRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    expenseRowLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      flex: 1,
+    },
+    expenseDot: { width: 8, height: 8, borderRadius: 4 },
+    expenseRowName: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    expenseBarBg: {
+      height: 4,
+      backgroundColor: colors.inputBg,
+      borderRadius: 2,
+      overflow: "hidden",
+      width: 100,
+    },
+    expenseBarFill: { height: "100%", borderRadius: 2 },
+    expenseRowRight: { alignItems: "flex-end" },
+    expenseRowAmount: { fontSize: 14, fontWeight: "700", color: colors.text },
+    expenseRowPct: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
+  });
 
 export default ClientHomeScreen;

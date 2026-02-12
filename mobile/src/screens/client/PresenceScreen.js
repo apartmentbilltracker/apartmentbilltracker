@@ -87,6 +87,12 @@ const PresenceScreen = () => {
   useEffect(() => {
     if (selectedRoom && (selectedRoom.id || selectedRoom._id)) {
       loadMarkedDates();
+
+      // Auto-set calendar to the billing cycle start month
+      if (selectedRoom?.billing?.start) {
+        const billingStart = new Date(selectedRoom.billing.start);
+        setCurrentMonth(new Date(billingStart.getFullYear(), billingStart.getMonth(), 1));
+      }
     }
   }, [selectedRoom?.id || selectedRoom?._id]);
 
@@ -541,6 +547,29 @@ const PresenceScreen = () => {
     year: "numeric",
   });
 
+  // Compute whether prev/next month navigation is within billing cycle range
+  const canGoPrevMonth = useMemo(() => {
+    if (!selectedRoom?.billing?.start) return true;
+    const billingStart = new Date(selectedRoom.billing.start);
+    // Allow if currentMonth is after the billing start month
+    return (
+      currentMonth.getFullYear() > billingStart.getFullYear() ||
+      (currentMonth.getFullYear() === billingStart.getFullYear() &&
+        currentMonth.getMonth() > billingStart.getMonth())
+    );
+  }, [currentMonth, selectedRoom?.billing?.start]);
+
+  const canGoNextMonth = useMemo(() => {
+    if (!selectedRoom?.billing?.end) return true;
+    const billingEnd = new Date(selectedRoom.billing.end);
+    // Allow if currentMonth is before the billing end month
+    return (
+      currentMonth.getFullYear() < billingEnd.getFullYear() ||
+      (currentMonth.getFullYear() === billingEnd.getFullYear() &&
+        currentMonth.getMonth() < billingEnd.getMonth())
+    );
+  }, [currentMonth, selectedRoom?.billing?.end]);
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -761,29 +790,33 @@ const PresenceScreen = () => {
           <View style={styles.card}>
             <View style={styles.calendarNav}>
               <TouchableOpacity
-                style={styles.navBtn}
-                onPress={() =>
+                style={[styles.navBtn, !canGoPrevMonth && { opacity: 0.25 }]}
+                onPress={() => {
+                  if (!canGoPrevMonth) return;
                   setCurrentMonth(
                     new Date(
                       currentMonth.getFullYear(),
                       currentMonth.getMonth() - 1,
                     ),
-                  )
-                }
+                  );
+                }}
+                disabled={!canGoPrevMonth}
               >
                 <Ionicons name="chevron-back" size={20} color={colors.accent} />
               </TouchableOpacity>
               <Text style={styles.monthLabel}>{monthName}</Text>
               <TouchableOpacity
-                style={styles.navBtn}
-                onPress={() =>
+                style={[styles.navBtn, !canGoNextMonth && { opacity: 0.25 }]}
+                onPress={() => {
+                  if (!canGoNextMonth) return;
                   setCurrentMonth(
                     new Date(
                       currentMonth.getFullYear(),
                       currentMonth.getMonth() + 1,
                     ),
-                  )
-                }
+                  );
+                }}
+                disabled={!canGoNextMonth}
               >
                 <Ionicons
                   name="chevron-forward"

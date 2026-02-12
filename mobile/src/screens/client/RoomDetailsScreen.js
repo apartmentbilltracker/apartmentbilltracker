@@ -84,10 +84,23 @@ const RoomDetailsScreen = ({ route, navigation }) => {
 
   const calculateTotalWaterBill = () => {
     if (!room?.members) return 0;
+    const start = room?.billing?.start;
+    const end = room?.billing?.end;
     let totalDays = 0;
     room.members.forEach((member) => {
-      const presenceDays = member.presence ? member.presence.length : 0;
-      totalDays += presenceDays;
+      const presenceArr = Array.isArray(member.presence) ? member.presence : [];
+      if (start && end) {
+        const s = new Date(start);
+        s.setHours(0, 0, 0, 0);
+        const e = new Date(end);
+        e.setHours(23, 59, 59, 999);
+        totalDays += presenceArr.filter((day) => {
+          const d = new Date(day);
+          return d >= s && d <= e;
+        }).length;
+      } else {
+        totalDays += presenceArr.length;
+      }
     });
     return totalDays * WATER_BILL_PER_DAY;
   };
@@ -318,7 +331,9 @@ const RoomDetailsScreen = ({ route, navigation }) => {
                   <Ionicons
                     name={member.isPayer ? "checkmark-circle" : "person"}
                     size={12}
-                    color={member.isPayer ? colors.success : colors.textTertiary}
+                    color={
+                      member.isPayer ? colors.success : colors.textTertiary
+                    }
                   />
                   <Text
                     style={[

@@ -219,7 +219,7 @@ const RegisterStep2Screen = ({ navigation, route }) => {
         </View>
 
         <View style={styles.creditRow}>
-          <Text style={styles.creditText}>Developed by: Rommel Belia</Text>
+          <Text style={styles.creditText}>v.1.1.2</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

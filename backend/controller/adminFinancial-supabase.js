@@ -65,7 +65,7 @@ router.get(
             activeCycle.end_date,
           )) || [];
         const completedPayments = payments.filter(
-          (p) => p.status === "completed",
+          (p) => p.status === "completed" || p.status === "verified",
         );
 
         // Process each member charge
@@ -102,21 +102,11 @@ router.get(
           );
 
           if (hasTotalPayment) {
-            const totalPaymentAmount = memberPayments
-              .filter((p) => p.bill_type === "total")
-              .reduce((sum, p) => sum + (p.amount || 0), 0);
-            const cycleTotalBilled =
-              activeCycle.total_billed_amount ||
-              (parseFloat(activeCycle.rent) || 0) +
-                (parseFloat(activeCycle.electricity) || 0) +
-                (parseFloat(activeCycle.water_bill_amount) || 0) +
-                (parseFloat(activeCycle.internet) || 0);
-            const proportion =
-              cycleTotalBilled > 0 ? totalPaymentAmount / cycleTotalBilled : 0;
-            rentCollected += proportion * (activeCycle.rent || 0);
-            electricityCollected += proportion * (activeCycle.electricity || 0);
-            waterCollected += proportion * (activeCycle.water_bill_amount || 0);
-            internetCollected += proportion * (activeCycle.internet || 0);
+            // Member paid their total — credit their actual per-member shares
+            rentCollected += charge.rent_share || 0;
+            electricityCollected += charge.electricity_share || 0;
+            waterCollected += charge.water_bill_share || 0;
+            internetCollected += charge.internet_share || 0;
           } else {
             if (hasRentPayment) rentCollected += perPayerShare;
             else rentPending += perPayerShare;
@@ -133,7 +123,7 @@ router.get(
         });
       }
 
-      const totalCollected =
+      const rawTotalCollected =
         rentCollected +
         electricityCollected +
         waterCollected +
@@ -146,6 +136,8 @@ router.get(
             (parseFloat(activeCycle.water_bill_amount) || 0) +
             (parseFloat(activeCycle.internet) || 0)
           : 0);
+      // Cap collected at billed to prevent rounding overshoot
+      const totalCollected = Math.min(rawTotalCollected, activeCycleBilled);
       const outstanding = activeCycle ? activeCycleBilled - totalCollected : 0;
       const collectionRate =
         activeCycleBilled > 0
@@ -213,21 +205,24 @@ router.get(
       }
 
       const cycles = await SupabaseService.getRoomBillingCycles(roomId);
+
+      // Enrich all cycles so water + total_billed_amount are up-to-date
+      const members = await SupabaseService.getRoomMembers(roomId);
+      for (const cycle of cycles) {
+        await enrichBillingCycle(cycle, members);
+      }
+
       const trends = cycles
         .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
         .map((cycle) => ({
           cycleNumber: cycle.cycle_number,
           startDate: cycle.start_date,
           endDate: cycle.end_date,
-          totalBilled:
-            cycle.total_billed_amount ||
-            (parseFloat(cycle.rent) || 0) +
-              (parseFloat(cycle.electricity) || 0) +
-              (parseFloat(cycle.water_bill_amount) || 0) +
-              (parseFloat(cycle.internet) || 0),
+          totalBilled: cycle.total_billed_amount,
           rent: cycle.rent,
           electricity: cycle.electricity,
           water: cycle.water_bill_amount,
+          internet: cycle.internet,
           status: cycle.status,
         }));
 

@@ -261,7 +261,7 @@ const RegisterScreen = ({ navigation }) => {
 
         {/* Developer Credit Footer */}
         <View style={styles.developerFooter}>
-          <Text style={styles.developerText}>Developed by: Rommel Belia</Text>
+          <Text style={styles.developerText}>v1.1.2</Text>
         </View>
       </View>
     </ScrollView>

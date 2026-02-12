@@ -176,7 +176,11 @@ const AdminProfileScreen = ({ navigation }) => {
             onPress={handleEditPress}
             disabled={isUpdating}
           >
-            <Ionicons name="camera-outline" size={14} color={colors.textOnAccent} />
+            <Ionicons
+              name="camera-outline"
+              size={14}
+              color={colors.textOnAccent}
+            />
           </TouchableOpacity>
         </View>
         <Text style={styles.userName}>{user.name || "Admin"}</Text>
@@ -187,7 +191,11 @@ const AdminProfileScreen = ({ navigation }) => {
           onPress={handleEditPress}
           disabled={isUpdating}
         >
-          <Ionicons name="create-outline" size={16} color={colors.textOnAccent} />
+          <Ionicons
+            name="create-outline"
+            size={16}
+            color={colors.textOnAccent}
+          />
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
@@ -230,7 +238,7 @@ const AdminProfileScreen = ({ navigation }) => {
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Version</Text>
-          <Text style={styles.infoValue}>1.0.0</Text>
+          <Text style={styles.infoValue}>1.1.2</Text>
         </View>
         <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
           <Text style={styles.infoLabel}>Build</Text>
@@ -272,7 +280,11 @@ const AdminProfileScreen = ({ navigation }) => {
               Manage client support requests
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -297,7 +309,11 @@ const AdminProfileScreen = ({ navigation }) => {
               Review and fix reported issues
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -319,7 +335,11 @@ const AdminProfileScreen = ({ navigation }) => {
               Create and edit frequently asked questions
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
         </TouchableOpacity>
       </View>
 
@@ -355,6 +375,65 @@ const AdminProfileScreen = ({ navigation }) => {
         </View>
       </View>
 
+      {/* ─── APP MANAGEMENT ─── */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.legalRow}
+          onPress={() => navigation.navigate("VersionControl")}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="cloud-download-outline"
+            size={18}
+            color={colors.accent}
+          />
+          <Text style={styles.legalRowText}>Version Control</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={colors.textTertiary}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* ─── LEGAL ─── */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.legalRow}
+          onPress={() => navigation.navigate("TermsOfService")}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="document-text-outline"
+            size={18}
+            color={colors.accent}
+          />
+          <Text style={styles.legalRowText}>Terms of Service</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={colors.textTertiary}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.legalRow}
+          onPress={() => navigation.navigate("PrivacyPolicy")}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={18}
+            color={colors.accent}
+          />
+          <Text style={styles.legalRowText}>Privacy Policy</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={colors.textTertiary}
+          />
+        </TouchableOpacity>
+      </View>
+
       {/* Switch View & Logout */}
       <View style={styles.section}>
         <TouchableOpacity
@@ -363,7 +442,11 @@ const AdminProfileScreen = ({ navigation }) => {
           activeOpacity={0.8}
         >
           <View style={styles.clientViewIconWrap}>
-            <Ionicons name="swap-horizontal-outline" size={22} color={colors.textOnAccent} />
+            <Ionicons
+              name="swap-horizontal-outline"
+              size={22}
+              color={colors.textOnAccent}
+            />
           </View>
           <View style={styles.clientViewContent}>
             <Text style={styles.clientViewTitle}>Switch to Client View</Text>
@@ -413,7 +496,11 @@ const AdminProfileScreen = ({ navigation }) => {
           <View style={styles.modalContent}>
             <View style={styles.modalIconHeader}>
               <View style={styles.modalIconWrap}>
-                <Ionicons name="person-outline" size={24} color={colors.accent} />
+                <Ionicons
+                  name="person-outline"
+                  size={24}
+                  color={colors.accent}
+                />
               </View>
             </View>
             <View style={styles.modalHeaderRow}>
@@ -451,7 +538,11 @@ const AdminProfileScreen = ({ navigation }) => {
                 onPress={pickImage}
                 disabled={isUpdating}
               >
-                <Ionicons name="camera-outline" size={16} color={colors.textOnAccent} />
+                <Ionicons
+                  name="camera-outline"
+                  size={16}
+                  color={colors.textOnAccent}
+                />
                 <Text style={styles.changeAvatarText}>Change Avatar</Text>
               </TouchableOpacity>
             </View>
@@ -482,7 +573,11 @@ const AdminProfileScreen = ({ navigation }) => {
                 <ActivityIndicator color={colors.textOnAccent} />
               ) : (
                 <>
-                  <Ionicons name="checkmark" size={18} color={colors.textOnAccent} />
+                  <Ionicons
+                    name="checkmark"
+                    size={18}
+                    color={colors.textOnAccent}
+                  />
                   <Text style={styles.saveButtonText}>Save Changes</Text>
                 </>
               )}
@@ -749,6 +844,23 @@ const createStyles = (colors) =>
     clientViewSubtitle: {
       color: "rgba(255,255,255,0.7)",
       fontSize: 12,
+    },
+
+    /* Legal */
+    legalRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 11,
+      paddingHorizontal: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    legalRowText: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.text,
     },
 
     /* Logout */

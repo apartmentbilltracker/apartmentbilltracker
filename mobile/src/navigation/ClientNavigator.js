@@ -12,6 +12,8 @@ import RoomDetailsScreen from "../screens/client/RoomDetailsScreen";
 import ProfileScreen from "../screens/client/ProfileScreen";
 import MyTicketsScreen from "../screens/client/MyTicketsScreen";
 import MyBugReportsScreen from "../screens/client/MyBugReportsScreen";
+import TermsOfServiceScreen from "../screens/legal/TermsOfServiceScreen";
+import PrivacyPolicyScreen from "../screens/legal/PrivacyPolicyScreen";
 import PaymentMethodScreen from "../screens/client/PaymentMethodScreen";
 import GCashPaymentScreen from "../screens/client/GCashPaymentScreen";
 import BankTransferPaymentScreen from "../screens/client/BankTransferPaymentScreen";
@@ -171,6 +173,16 @@ const ProfileStack = () => {
         name="MyBugReports"
         component={MyBugReportsScreen}
         options={{ title: "My Bug Reports" }}
+      />
+      <Stack.Screen
+        name="TermsOfService"
+        component={TermsOfServiceScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PrivacyPolicy"
+        component={PrivacyPolicyScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

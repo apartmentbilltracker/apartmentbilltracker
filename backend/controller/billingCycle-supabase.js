@@ -4,7 +4,10 @@ const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated } = require("../middleware/auth");
-const { enrichBillingCycle, enrichBillingCycles } = require("../utils/enrichBillingCycle");
+const {
+  enrichBillingCycle,
+  enrichBillingCycles,
+} = require("../utils/enrichBillingCycle");
 
 // Helper to normalize a billing cycle charge for mobile compatibility
 const normalizeCharge = (charge) => {
@@ -275,22 +278,20 @@ router.get("/totals/latest", isAuthenticated, async (req, res, next) => {
         parseFloat(latestCycle.water_bill_amount || 0) +
         parseFloat(latestCycle.internet || 0);
 
-    // Get payments for this cycle's room within the cycle date range
-    const allRoomPayments = await SupabaseService.getRoomPayments(
-      latestCycle.room_id,
-    );
-    const cyclePayments = (allRoomPayments || []).filter((p) => {
-      const paymentDate = new Date(p.payment_date || p.created_at);
-      return (
-        paymentDate >= new Date(latestCycle.start_date) &&
-        paymentDate <= new Date(latestCycle.end_date)
-      );
-    });
+    // Get payments matched by billing cycle columns (not payment_date)
+    const cyclePayments =
+      (await SupabaseService.getPaymentsForCycle(
+        latestCycle.room_id,
+        latestCycle.start_date,
+        latestCycle.end_date,
+      )) || [];
 
-    const totalCollected = cyclePayments
-      .filter((p) => p.status === "completed")
+    const rawCollected = cyclePayments
+      .filter((p) => p.status === "completed" || p.status === "verified")
       .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
-    const totalPending = totalBilled - totalCollected;
+    // Cap collected at totalBilled to prevent rounding overshoot
+    const totalCollected = Math.min(rawCollected, totalBilled);
+    const totalPending = Math.max(0, totalBilled - totalCollected);
     const collectionRate =
       totalBilled > 0 ? ((totalCollected / totalBilled) * 100).toFixed(2) : 0;
 
@@ -305,6 +306,7 @@ router.get("/totals/latest", isAuthenticated, async (req, res, next) => {
         latestCycleId: latestCycle.id,
         startDate: latestCycle.start_date,
         endDate: latestCycle.end_date,
+        cycleStatus: latestCycle.status || "active",
       },
     });
   } catch (error) {
@@ -359,19 +361,13 @@ router.get("/totals/month", isAuthenticated, async (req, res, next) => {
       // Enrich with presence-based water charges
       await enrichBillingCycle(cycle);
 
-      // Get all payments for the room during this cycle period
-      const allRoomPayments = await SupabaseService.getRoomPayments(
-        cycle.room_id,
-      );
-
-      // Filter payments within the cycle date range
-      const cyclePayments = (allRoomPayments || []).filter((p) => {
-        const paymentDate = new Date(p.payment_date || p.created_at);
-        return (
-          paymentDate >= new Date(cycle.start_date) &&
-          paymentDate <= new Date(cycle.end_date)
-        );
-      });
+      // Get payments matched by billing cycle columns (not payment_date)
+      const cyclePayments =
+        (await SupabaseService.getPaymentsForCycle(
+          cycle.room_id,
+          cycle.start_date,
+          cycle.end_date,
+        )) || [];
 
       const totalBilled = cycle.total_billed_amount
         ? parseFloat(cycle.total_billed_amount)
@@ -379,9 +375,10 @@ router.get("/totals/month", isAuthenticated, async (req, res, next) => {
           parseFloat(cycle.electricity || 0) +
           parseFloat(cycle.water_bill_amount || 0) +
           parseFloat(cycle.internet || 0);
-      const totalCollected = cyclePayments
-        .filter((p) => p.status === "completed")
+      const rawCollected = cyclePayments
+        .filter((p) => p.status === "completed" || p.status === "verified")
         .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      const totalCollected = Math.min(rawCollected, totalBilled);
 
       monthlyStats.push({
         cycleId: cycle.id,

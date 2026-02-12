@@ -81,6 +81,7 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
       await apiService.post(
         `/api/v2/payments/admin/verify/${selectedPayment.id || selectedPayment._id}`,
         {
+          status: "completed",
           billType: selectedPayment.billType,
           memberId: selectedPayment.memberId,
           roomId: room.id || room._id,
@@ -318,7 +319,11 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
       {pendingPayments.length === 0 ? (
         <View style={styles.emptyWrap}>
           <View style={styles.emptyIcon}>
-            <Ionicons name="checkmark-done-circle" size={48} color={colors.success} />
+            <Ionicons
+              name="checkmark-done-circle"
+              size={48}
+              color={colors.success}
+            />
           </View>
           <Text style={styles.emptyTitle}>All Caught Up!</Text>
           <Text style={styles.emptySubtitle}>
@@ -515,7 +520,11 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
                   { backgroundColor: colors.successBg },
                 ]}
               >
-                <Ionicons name="checkmark-circle" size={22} color={colors.success} />
+                <Ionicons
+                  name="checkmark-circle"
+                  size={22}
+                  color={colors.success}
+                />
               </View>
               <Text style={styles.modalTitle}>Verify Payment</Text>
               <TouchableOpacity

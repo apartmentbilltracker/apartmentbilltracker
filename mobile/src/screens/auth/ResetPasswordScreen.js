@@ -16,21 +16,21 @@ import { authService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import AuthBubbles from "../../components/AuthBubbles";
 
-/* ── helper ── */
-const Requirement = ({ met, text }) => (
-  <View style={styles.req}>
-    <Ionicons
-      name={met ? "checkmark-circle" : "ellipse-outline"}
-      size={16}
-      color={met ? "#22c55e" : "#cbd5e1"}
-    />
-    <Text style={[styles.reqText, met && styles.reqMet]}>{text}</Text>
-  </View>
-);
-
 const ResetPasswordScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+
+  /* ── helper ── */
+  const Requirement = ({ met, text }) => (
+    <View style={styles.req}>
+      <Ionicons
+        name={met ? "checkmark-circle" : "ellipse-outline"}
+        size={16}
+        color={met ? "#22c55e" : "#cbd5e1"}
+      />
+      <Text style={[styles.reqText, met && styles.reqMet]}>{text}</Text>
+    </View>
+  );
 
   const { email, resetCode } = route.params;
   const [password, setPassword] = useState("");

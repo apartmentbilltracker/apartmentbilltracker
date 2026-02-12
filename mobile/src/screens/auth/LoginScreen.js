@@ -582,7 +582,7 @@ const LoginScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.creditRow}>
-          <Text style={styles.creditText}>Developed by: Rommel Belia</Text>
+          <Text style={styles.creditText}>v1.1.2</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

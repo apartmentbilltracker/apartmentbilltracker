@@ -19,6 +19,19 @@ import { useTheme } from "../../theme/ThemeContext";
 
 const WATER_BILL_PER_DAY = 5;
 
+/** Return only the presence dates that fall within a billing cycle's date range */
+const filterPresenceByDates = (presenceArr, startDate, endDate) => {
+  if (!presenceArr || !startDate || !endDate) return presenceArr || [];
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+  return presenceArr.filter((d) => {
+    const pd = new Date(d);
+    return pd >= start && pd <= end;
+  });
+};
+
 const getBillColors = (c) => ({
   rent: "#e65100",
   electricity: c.electricityColor,
@@ -96,9 +109,11 @@ const BillingScreen = ({ route }) => {
 
   const calculateTotalWaterBill = () => {
     if (!billing?.members) return 0;
+    const startDate = billing.billing?.start;
+    const endDate = billing.billing?.end;
     let totalDays = 0;
     billing.members.forEach((member) => {
-      totalDays += member.presence ? member.presence.length : 0;
+      totalDays += filterPresenceByDates(member.presence, startDate, endDate).length;
     });
     return totalDays * WATER_BILL_PER_DAY;
   };
@@ -131,6 +146,8 @@ const BillingScreen = ({ route }) => {
     }
 
     // Fallback calculation
+    const startDate = billing.billing?.start;
+    const endDate = billing.billing?.end;
     const totalPayorCount =
       (billing.members || []).filter((m) => m.isPayer !== false).length || 1;
 
@@ -142,12 +159,12 @@ const BillingScreen = ({ route }) => {
 
     if (!myMember || !myMember.isPayer) return 0;
 
-    const myOwnWater = (myMember.presence?.length || 0) * WATER_BILL_PER_DAY;
+    const myOwnWater = filterPresenceByDates(myMember.presence, startDate, endDate).length * WATER_BILL_PER_DAY;
 
     let nonPayorWater = 0;
     billing.members.forEach((member) => {
       if (!member.isPayer || member.isPayer === false) {
-        nonPayorWater += (member.presence?.length || 0) * WATER_BILL_PER_DAY;
+        nonPayorWater += filterPresenceByDates(member.presence, startDate, endDate).length * WATER_BILL_PER_DAY;
       }
     });
 
@@ -185,21 +202,27 @@ const BillingScreen = ({ route }) => {
     }
 
     // FALLBACK
+    const startDate = billing.billing?.start;
+    const endDate = billing.billing?.end;
     const totalPayorCount =
       (billing.members || []).filter((m) => m.isPayer !== false).length || 1;
 
     const myPresenceDays =
-      billing.members.find(
-        (m) =>
-          String(m.user?.id || m.user?._id || m.user) ===
-          String(state?.user?.id || state?.user?._id),
-      )?.presence?.length || 0;
+      filterPresenceByDates(
+        billing.members.find(
+          (m) =>
+            String(m.user?.id || m.user?._id || m.user) ===
+            String(state?.user?.id || state?.user?._id),
+        )?.presence,
+        startDate,
+        endDate,
+      ).length;
     const myOwnWater = myPresenceDays * WATER_BILL_PER_DAY;
 
     let nonPayorWater = 0;
     billing.members.forEach((member) => {
       if (!member.isPayer || member.isPayer === false) {
-        nonPayorWater += (member.presence?.length || 0) * WATER_BILL_PER_DAY;
+        nonPayorWater += filterPresenceByDates(member.presence, startDate, endDate).length * WATER_BILL_PER_DAY;
       }
     });
 

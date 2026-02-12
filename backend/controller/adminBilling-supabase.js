@@ -83,7 +83,7 @@ router.get(
         )) || [];
 
       const completedPayments = payments.filter(
-        (p) => p.status === "completed",
+        (p) => p.status === "completed" || p.status === "verified",
       );
 
       const payerCount = members.filter((m) => m.is_payer).length;
@@ -140,11 +140,16 @@ router.get(
 
           const WATER_BILL_PER_DAY = 5;
           const ownWaterAmount = Number(
-            (charge.water_own ?? (charge.presence_days || 0) * WATER_BILL_PER_DAY).toFixed(2),
+            (
+              charge.water_own ??
+              (charge.presence_days || 0) * WATER_BILL_PER_DAY
+            ).toFixed(2),
           );
           const waterShare = Number((charge.water_bill_share || 0).toFixed(2));
           const sharedNonPayorWater = Number(
-            (charge.water_shared_nonpayor ?? (waterShare - ownWaterAmount)).toFixed(2),
+            (
+              charge.water_shared_nonpayor ?? waterShare - ownWaterAmount
+            ).toFixed(2),
           );
 
           const memberPayments = completedPayments.filter(
@@ -261,7 +266,7 @@ router.get(
         )) || [];
 
       const completedPayments = payments.filter(
-        (p) => p.status === "completed",
+        (p) => p.status === "completed" || p.status === "verified",
       );
 
       const memberStatus = members
@@ -336,7 +341,11 @@ router.get(
           };
         });
 
-      const totalDue = memberStatus.reduce((sum, m) => sum + m.totalDue, 0);
+      // Use the canonical total_billed_amount from the enriched cycle
+      // instead of re-summing individually-rounded member totals
+      const totalDue = billingCycle.total_billed_amount
+        ? parseFloat(billingCycle.total_billed_amount)
+        : memberStatus.reduce((sum, m) => sum + m.totalDue, 0);
       const totalPaid = memberStatus
         .filter((m) => m.allPaid)
         .reduce((sum, m) => sum + m.totalDue, 0);
@@ -489,14 +498,18 @@ router.get(
           cycle.end_date,
         );
         completedPayments = completedPayments.concat(
-          cyclePayments.filter((p) => p.status === "completed"),
+          cyclePayments.filter(
+            (p) => p.status === "completed" || p.status === "verified",
+          ),
         );
       }
 
-      const totalCollected = completedPayments.reduce(
+      const rawCollected = completedPayments.reduce(
         (sum, p) => sum + (parseFloat(p.amount) || 0),
         0,
       );
+      // Cap collected at totalBilled to prevent rounding overshoot
+      const totalCollected = Math.min(rawCollected, totalBilled);
 
       const totalPending = Math.max(0, totalBilled - totalCollected);
       const collectionRate =

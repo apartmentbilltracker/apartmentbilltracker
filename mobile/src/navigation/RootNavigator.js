@@ -9,6 +9,8 @@ import RegisterStep3Screen from "../screens/auth/RegisterStep3Screen";
 import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 import VerifyResetCodeScreen from "../screens/auth/VerifyResetCodeScreen";
 import ResetPasswordScreen from "../screens/auth/ResetPasswordScreen";
+import TermsOfServiceScreen from "../screens/legal/TermsOfServiceScreen";
+import PrivacyPolicyScreen from "../screens/legal/PrivacyPolicyScreen";
 import ClientNavigator from "./ClientNavigator";
 import AdminNavigator from "./AdminNavigator";
 import SplashScreen from "../screens/SplashScreen";
@@ -45,6 +47,8 @@ const AuthStack = () => (
     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     <Stack.Screen name="VerifyResetCode" component={VerifyResetCodeScreen} />
     <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+    <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
+    <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
   </Stack.Navigator>
 );
 

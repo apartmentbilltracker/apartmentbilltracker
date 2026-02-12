@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo} from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -32,14 +32,24 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
 
+  // Use refs for cleanup to avoid stale closures
+  const stepRef = React.useRef(step);
+  const transactionIdRef = React.useRef(transactionId);
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+  useEffect(() => {
+    transactionIdRef.current = transactionId;
+  }, [transactionId]);
+
   useEffect(() => {
     initiateGCashPayment();
   }, []);
 
   const handleBack = async () => {
-    if (transactionId && step === "qr") {
+    if (transactionIdRef.current && stepRef.current === "qr") {
       try {
-        await apiService.cancelTransaction(transactionId);
+        await apiService.cancelTransaction(transactionIdRef.current);
       } catch (err) {
         // ignore
       }
@@ -115,9 +125,9 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   useEffect(() => {
     return () => {
       const cancelOnUnmount = async () => {
-        if (transactionId && step === "qr") {
+        if (transactionIdRef.current && stepRef.current === "qr") {
           try {
-            await apiService.cancelTransaction(transactionId);
+            await apiService.cancelTransaction(transactionIdRef.current);
           } catch (err) {
             // Ignore errors on cancel
           }
@@ -125,7 +135,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       };
       cancelOnUnmount();
     };
-  }, [transactionId, step]);
+  }, []);
 
   const initiateGCashPayment = async () => {
     try {
@@ -212,7 +222,9 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         ]}
       >
         <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={{ marginTop: 12, fontSize: 14, color: colors.textTertiary }}>
+        <Text
+          style={{ marginTop: 12, fontSize: 14, color: colors.textTertiary }}
+        >
           Preparing payment…
         </Text>
       </View>
@@ -259,7 +271,11 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                   />
                 ) : (
                   <View style={styles.qrPlaceholder}>
-                    <Ionicons name="qr-code-outline" size={72} color={colors.skeleton} />
+                    <Ionicons
+                      name="qr-code-outline"
+                      size={72}
+                      color={colors.skeleton}
+                    />
                   </View>
                 )}
               </View>
@@ -271,7 +287,10 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                   activeOpacity={0.7}
                 >
                   {downloadLoading ? (
-                    <ActivityIndicator size="small" color={colors.textOnAccent} />
+                    <ActivityIndicator
+                      size="small"
+                      color={colors.textOnAccent}
+                    />
                   ) : (
                     <>
                       <Ionicons
@@ -305,7 +324,11 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                     onPress={() => copyToClipboard(referenceNumber)}
                     style={styles.copyButton}
                   >
-                    <Ionicons name="copy-outline" size={18} color={colors.accent} />
+                    <Ionicons
+                      name="copy-outline"
+                      size={18}
+                      color={colors.accent}
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -449,7 +472,11 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                 style={styles.billsButton}
                 onPress={() => navigation.navigate("Bills", { refresh: true })}
               >
-                <Ionicons name="receipt-outline" size={18} color={colors.textOnAccent} />
+                <Ionicons
+                  name="receipt-outline"
+                  size={18}
+                  color={colors.textOnAccent}
+                />
                 <Text style={styles.billsButtonText}>Back to Bills</Text>
               </TouchableOpacity>
             </View>
@@ -462,403 +489,404 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerContent: {
-    flex: 1,
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    marginTop: 2,
-  },
-  content: {
-    flex: 1,
-    padding: 14,
-  },
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: colors.card,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.divider,
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerContent: {
+      flex: 1,
+      alignItems: "center",
+    },
+    title: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    content: {
+      flex: 1,
+      padding: 14,
+    },
 
-  /* Amount Card */
-  amountCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    paddingVertical: 22,
-    paddingHorizontal: 20,
-    marginBottom: 14,
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#b38604",
-    shadowColor: "#b38604",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  amountLabel: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  amountValue: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: colors.accent,
-    marginTop: 6,
-  },
-  billTypeText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 6,
-    fontWeight: "500",
-  },
+    /* Amount Card */
+    amountCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      paddingVertical: 22,
+      paddingHorizontal: 20,
+      marginBottom: 14,
+      alignItems: "center",
+      borderWidth: 1.5,
+      borderColor: "#b38604",
+      shadowColor: "#b38604",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    amountLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    amountValue: {
+      fontSize: 34,
+      fontWeight: "800",
+      color: colors.accent,
+      marginTop: 6,
+    },
+    billTypeText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 6,
+      fontWeight: "500",
+    },
 
-  /* Step Badge */
-  stepBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.warningBg,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 8,
-  },
-  stepBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.accent,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
+    /* Step Badge */
+    stepBadge: {
+      alignSelf: "flex-start",
+      backgroundColor: colors.warningBg,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      marginBottom: 8,
+    },
+    stepBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
 
-  /* Cards */
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 12,
-  },
+    /* Cards */
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 12,
+    },
 
-  /* QR Section */
-  qrCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  qrContainer: {
-    width: 200,
-    height: 200,
-    borderWidth: 1.5,
-    borderColor: colors.divider,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-    backgroundColor: colors.cardAlt,
-    overflow: "hidden",
-  },
-  qrImage: {
-    width: 200,
-    height: 200,
-  },
-  qrPlaceholder: {
-    width: 200,
-    height: 200,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  downloadButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accent,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    marginBottom: 12,
-    gap: 8,
-  },
-  downloadButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  qrHint: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    textAlign: "center",
-  },
+    /* QR Section */
+    qrCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14,
+      alignItems: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    qrContainer: {
+      width: 200,
+      height: 200,
+      borderWidth: 1.5,
+      borderColor: colors.divider,
+      borderRadius: 14,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+      backgroundColor: colors.cardAlt,
+      overflow: "hidden",
+    },
+    qrImage: {
+      width: 200,
+      height: 200,
+    },
+    qrPlaceholder: {
+      width: 200,
+      height: 200,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    downloadButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.accent,
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      borderRadius: 10,
+      marginBottom: 12,
+      gap: 8,
+    },
+    downloadButtonText: {
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    qrHint: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      textAlign: "center",
+    },
 
-  /* Reference */
-  referenceBox: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-  },
-  referenceLabel: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-    marginBottom: 6,
-  },
-  referenceContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
-  },
-  referenceNumber: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-    letterSpacing: 1,
-  },
-  copyButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: colors.warningBg,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  referenceHint: {
-    fontSize: 11,
-    color: colors.textTertiary,
-  },
+    /* Reference */
+    referenceBox: {
+      backgroundColor: colors.background,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 8,
+    },
+    referenceLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+      marginBottom: 6,
+    },
+    referenceContent: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 8,
+    },
+    referenceNumber: {
+      flex: 1,
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+      letterSpacing: 1,
+    },
+    copyButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      backgroundColor: colors.warningBg,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    referenceHint: {
+      fontSize: 11,
+      color: colors.textTertiary,
+    },
 
-  /* Instructions */
-  instructionsCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  instructionsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 14,
-  },
-  instructionsTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  instructionItem: {
-    flexDirection: "row",
-    marginBottom: 12,
-    alignItems: "flex-start",
-  },
-  instructionDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.accent,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  instructionNumber: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  instructionText: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.text,
-    lineHeight: 19,
-    paddingTop: 3,
-  },
+    /* Instructions */
+    instructionsCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    instructionsHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 14,
+    },
+    instructionsTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    instructionItem: {
+      flexDirection: "row",
+      marginBottom: 12,
+      alignItems: "flex-start",
+    },
+    instructionDot: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    instructionNumber: {
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    instructionText: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.text,
+      lineHeight: 19,
+      paddingTop: 3,
+    },
 
-  /* Form */
-  formGroup: {
-    marginBottom: 14,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.textTertiary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.text,
-    backgroundColor: colors.cardAlt,
-  },
-  verifyButton: {
-    flexDirection: "row",
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  verifyButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  verifyHint: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    textAlign: "center",
-    marginTop: 4,
-  },
-  disabled: {
-    opacity: 0.6,
-  },
+    /* Form */
+    formGroup: {
+      marginBottom: 14,
+    },
+    label: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 6,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+      backgroundColor: colors.cardAlt,
+    },
+    verifyButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 8,
+    },
+    verifyButtonText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    verifyHint: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      textAlign: "center",
+      marginTop: 4,
+    },
+    disabled: {
+      opacity: 0.6,
+    },
 
-  /* Success */
-  successContainer: {
-    alignItems: "center",
-    paddingVertical: 30,
-  },
-  successIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.successBg,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  successTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.text,
-    marginBottom: 4,
-  },
-  successSubtitle: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    marginBottom: 24,
-  },
-  successCard: {
-    width: "100%",
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  successRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-  },
-  successLabel: {
-    fontSize: 13,
-    color: colors.textTertiary,
-  },
-  successValue: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.skeleton,
-    marginVertical: 4,
-  },
-  successButtons: {
-    width: "100%",
-    gap: 10,
-  },
-  historyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingVertical: 13,
-    gap: 6,
-  },
-  historyButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.accent,
-  },
-  billsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 13,
-    gap: 6,
-  },
-  billsButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#fff",
-  },
-});
+    /* Success */
+    successContainer: {
+      alignItems: "center",
+      paddingVertical: 30,
+    },
+    successIconCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.successBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    successTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    successSubtitle: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginBottom: 24,
+    },
+    successCard: {
+      width: "100%",
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 24,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    successRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingVertical: 8,
+    },
+    successLabel: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+    successValue: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.skeleton,
+      marginVertical: 4,
+    },
+    successButtons: {
+      width: "100%",
+      gap: 10,
+    },
+    historyButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingVertical: 13,
+      gap: 6,
+    },
+    historyButtonText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+    billsButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 13,
+      gap: 6,
+    },
+    billsButtonText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#fff",
+    },
+  });
 
 export default GCashPaymentScreen;

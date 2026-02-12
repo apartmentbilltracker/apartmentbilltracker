@@ -6,6 +6,34 @@ const SupabaseService = require("../db/SupabaseService");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated, isAdmin } = require("../middleware/auth");
+const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
+
+// Helper: check if a payment method is enabled in app_settings
+const isPaymentMethodEnabled = async (method) => {
+  try {
+    const rows = await SupabaseService.selectAllRecords("app_settings");
+    if (!rows || rows.length === 0) return true; // no settings row = all enabled
+    const settings = rows[0];
+    if (method === "gcash") return settings.gcash_enabled !== false;
+    if (method === "bank_transfer") return settings.bank_transfer_enabled !== false;
+    return true;
+  } catch {
+    return true; // on error, don't block payments
+  }
+};
+
+const getMaintenanceMessage = async (method) => {
+  try {
+    const rows = await SupabaseService.selectAllRecords("app_settings");
+    if (!rows || rows.length === 0) return "";
+    const settings = rows[0];
+    if (method === "gcash") return settings.gcash_maintenance_message || "";
+    if (method === "bank_transfer") return settings.bank_transfer_maintenance_message || "";
+    return "";
+  } catch {
+    return "";
+  }
+};
 
 // Helper: Calculate water charges from presence marking
 const recalculateWaterFromPresence = (members) => {
@@ -64,7 +92,7 @@ router.get(
         )) || [];
 
       const completedPayments = payments.filter(
-        (p) => p.status === "completed",
+        (p) => p.status === "completed" || p.status === "verified",
       );
 
       const paymentStatus = members
@@ -146,7 +174,7 @@ router.post(
       }
 
       const updated = await SupabaseService.update("payments", paymentId, {
-        status: "verified",
+        status: "completed",
         verified_by: verifiedBy || req.user.id,
         verified_at: new Date().toISOString(),
       });
@@ -293,6 +321,7 @@ router.post(
         amount: Number(amount),
         reference: referenceNumber,
         payment_method: paymentMethod || "cash",
+        status: "pending",
         billing_cycle_start: activeCycle.start_date,
         billing_cycle_end: activeCycle.end_date,
       });
@@ -316,6 +345,18 @@ router.post(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
+      // Check if GCash is enabled
+      const enabled = await isPaymentMethodEnabled("gcash");
+      if (!enabled) {
+        const msg = await getMaintenanceMessage("gcash");
+        return next(
+          new ErrorHandler(
+            msg || "GCash payments are temporarily unavailable due to scheduled maintenance. Please try again later or use another payment method.",
+            503,
+          ),
+        );
+      }
+
       const { roomId, amount, billType } = req.body;
 
       if (!roomId || !amount || !billType) {
@@ -344,6 +385,7 @@ router.post(
         amount: Number(amount),
         reference: referenceNumber,
         payment_method: "gcash",
+        status: "pending",
         billing_cycle_start: activeCycle.start_date,
         billing_cycle_end: activeCycle.end_date,
       });
@@ -388,16 +430,20 @@ router.post(
         return next(new ErrorHandler("Payment not found", 404));
       }
 
-      // Append mobile number to reference if provided
+      // Update status to completed and append mobile number
+      const updateData = { status: "completed" };
       if (mobileNumber && payment.reference) {
-        await SupabaseService.updatePayment(transactionId, {
-          reference: `${payment.reference} (${mobileNumber})`,
-        });
+        updateData.reference = `${payment.reference} (${mobileNumber})`;
       }
+      await SupabaseService.updatePayment(transactionId, updateData);
+
+      // Auto-close cycle if all payors have paid
+      const autoClose = await checkAndAutoCloseCycle(payment.room_id);
 
       res.status(200).json({
         success: true,
-        message: "GCash payment recorded. Awaiting admin verification.",
+        message: "GCash payment verified and recorded.",
+        cycleClosed: autoClose.closed,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -413,6 +459,18 @@ router.post(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
+      // Check if Bank Transfer is enabled
+      const enabled = await isPaymentMethodEnabled("bank_transfer");
+      if (!enabled) {
+        const msg = await getMaintenanceMessage("bank_transfer");
+        return next(
+          new ErrorHandler(
+            msg || "Bank Transfer payments are temporarily unavailable due to scheduled maintenance. Please try again later or use another payment method.",
+            503,
+          ),
+        );
+      }
+
       const { roomId, amount, billType } = req.body;
 
       if (!roomId || !amount || !billType) {
@@ -441,6 +499,7 @@ router.post(
         amount: Number(amount),
         reference: referenceNumber,
         payment_method: "bank_transfer",
+        status: "pending",
         billing_cycle_start: activeCycle.start_date,
         billing_cycle_end: activeCycle.end_date,
       });
@@ -485,16 +544,20 @@ router.post(
         return next(new ErrorHandler("Payment not found", 404));
       }
 
-      // Append bank reference to our reference if provided
+      // Update status to completed and append bank reference
+      const updateData = { status: "completed" };
       if (bankReferenceNumber && payment.reference) {
-        await SupabaseService.updatePayment(transactionId, {
-          reference: `${payment.reference} | Bank: ${bankReferenceNumber}`,
-        });
+        updateData.reference = `${payment.reference} | Bank: ${bankReferenceNumber}`;
       }
+      await SupabaseService.updatePayment(transactionId, updateData);
+
+      // Auto-close cycle if all payors have paid
+      const autoClose = await checkAndAutoCloseCycle(payment.room_id);
 
       res.status(200).json({
         success: true,
-        message: "Bank transfer recorded. Awaiting admin verification.",
+        message: "Bank transfer verified and recorded.",
+        cycleClosed: autoClose.closed,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -559,21 +622,26 @@ router.post(
         amount: Number(amount),
         reference: fullReference,
         payment_method: "cash",
+        status: "completed",
         billing_cycle_start: activeCycle.start_date,
         billing_cycle_end: activeCycle.end_date,
       });
 
       const createdPayment = Array.isArray(payment) ? payment[0] : payment;
 
+      // Auto-close cycle if all payors have paid
+      const autoClose = await checkAndAutoCloseCycle(roomId);
+
       res.status(201).json({
         success: true,
         message: "Cash payment recorded",
+        cycleClosed: autoClose.closed,
         transaction: {
           id: createdPayment.id,
           referenceNumber,
           amount: Number(amount),
           billType,
-          status: "pending",
+          status: "completed",
         },
       });
     } catch (error) {
@@ -625,7 +693,12 @@ router.get(
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId } = req.params;
-      const payments = await SupabaseService.getRoomPayments(roomId);
+      const allPayments = await SupabaseService.getRoomPayments(roomId);
+
+      // Non-admin users only see their own payments
+      const payments = req.user.is_admin
+        ? allPayments
+        : (allPayments || []).filter((p) => p.paid_by === req.user.id);
 
       // Filter out cancelled/deleted payments and normalize snake_case to camelCase
       const transactions = (payments || [])
@@ -686,7 +759,7 @@ router.get(
       const payments = await SupabaseService.getRoomPayments(roomId);
 
       const totalPaid = payments
-        .filter((p) => p.status === "verified")
+        .filter((p) => p.status === "completed")
         .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
       const totalPending = payments
