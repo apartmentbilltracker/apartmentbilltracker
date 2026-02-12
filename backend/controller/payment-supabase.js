@@ -4,6 +4,7 @@ const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated, isAdmin } = require("../middleware/auth");
+const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 
 // Helper to normalize settlement for mobile compatibility
 const normalizeSettlement = (s) => ({
@@ -48,11 +49,16 @@ router.post("/mark-bill-paid", isAuthenticated, async (req, res, next) => {
       bill_type: billType,
       payment_method: paymentMethod || "cash",
       reference,
+      status: "completed",
     });
+
+    // Auto-close cycle if all payors have paid
+    const autoClose = await checkAndAutoCloseCycle(roomId);
 
     res.status(200).json({
       success: true,
       message: "Bill marked as paid successfully",
+      cycleClosed: autoClose.closed,
       payment,
     });
   } catch (error) {
@@ -70,7 +76,12 @@ router.get(
     try {
       const { roomId } = req.params;
 
-      const payments = await SupabaseService.getRoomPayments(roomId);
+      const allPayments = await SupabaseService.getRoomPayments(roomId);
+
+      // Non-admin users only see their own payments
+      const payments = req.user.is_admin
+        ? allPayments
+        : (allPayments || []).filter((p) => p.paid_by === req.user.id);
 
       // Enrich with user details
       for (let payment of payments) {
@@ -421,14 +432,16 @@ router.post(
       const { paymentId } = req.params;
       const { status } = req.body;
 
-      if (!status) {
-        return next(new ErrorHandler("Status is required", 400));
-      }
+      const paymentStatus = status || "completed";
 
       const updatedPayment = await SupabaseService.update(
         "payments",
         paymentId,
-        { status },
+        {
+          status: paymentStatus,
+          verified_by: req.user.id,
+          verified_at: new Date().toISOString(),
+        },
       );
 
       res.status(200).json({

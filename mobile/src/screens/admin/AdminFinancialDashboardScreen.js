@@ -165,7 +165,11 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
 
         <View style={styles.closedWrap}>
           <View style={styles.closedIcon}>
-            <Ionicons name="checkmark-done-circle" size={52} color={colors.success} />
+            <Ionicons
+              name="checkmark-done-circle"
+              size={52}
+              color={colors.success}
+            />
           </View>
           <Text style={styles.closedTitle}>Billing Cycle Completed</Text>
           <Text style={styles.closedSubtitle}>
@@ -255,6 +259,20 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
             {collectionRate}%
           </Text>
         </View>
+        {/* Cycle status badge */}
+        <View
+          style={{
+            backgroundColor: "#fff3e0",
+            borderRadius: 6,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+            marginLeft: 6,
+          }}
+        >
+          <Text style={{ fontSize: 9, fontWeight: "700", color: "#e65100" }}>
+            ACTIVE
+          </Text>
+        </View>
       </View>
 
       {/* ── KPI Cards ── */}
@@ -273,8 +291,8 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
           <Text style={styles.kpiValue}>
             ₱
             {(dashboard?.totalBilled || 0).toLocaleString(undefined, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
             })}
           </Text>
         </View>
@@ -284,14 +302,18 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
           <View
             style={[styles.kpiIconWrap, { backgroundColor: colors.successBg }]}
           >
-            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+            <Ionicons
+              name="checkmark-circle"
+              size={18}
+              color={colors.success}
+            />
           </View>
           <Text style={styles.kpiLabel}>Collected</Text>
           <Text style={[styles.kpiValue, { color: colors.success }]}>
             ₱
             {(dashboard?.totalCollected || 0).toLocaleString(undefined, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
             })}
           </Text>
         </View>
@@ -311,8 +333,8 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
           <Text style={[styles.kpiValue, { color: colors.electricityColor }]}>
             ₱
             {(dashboard?.outstanding || 0).toLocaleString(undefined, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
             })}
           </Text>
         </View>
@@ -416,7 +438,7 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
                         {meta.label}
                       </Text>
                       <Text style={styles.breakdownChipValue}>
-                        ₱{expected.toFixed(0)}
+                        ₱{expected.toFixed(2)}
                       </Text>
                     </View>
                   </View>
@@ -489,7 +511,9 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
                       style={[
                         styles.trendIconWrap,
                         {
-                          backgroundColor: isActive ? colors.successBg : colors.infoBg,
+                          backgroundColor: isActive
+                            ? colors.successBg
+                            : colors.infoBg,
                         },
                       ]}
                     >
@@ -520,7 +544,9 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
                     style={[
                       styles.trendStatusBadge,
                       {
-                        backgroundColor: isActive ? colors.successBg : colors.infoBg,
+                        backgroundColor: isActive
+                          ? colors.successBg
+                          : colors.infoBg,
                       },
                     ]}
                   >
@@ -587,7 +613,11 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
                 { backgroundColor: colors.successBg },
               ]}
             >
-              <Ionicons name="checkmark-done" size={20} color={colors.success} />
+              <Ionicons
+                name="checkmark-done"
+                size={20}
+                color={colors.success}
+              />
             </View>
             <Text style={styles.actionLabel}>Verify Payments</Text>
             <Ionicons

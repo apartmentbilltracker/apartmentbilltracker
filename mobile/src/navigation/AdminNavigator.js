@@ -20,10 +20,14 @@ import AdminBillingDetailsScreen from "../screens/admin/AdminBillingDetailsScree
 import AdminAdjustmentsScreen from "../screens/admin/AdminAdjustmentsScreen";
 import AdminRemindersScreen from "../screens/admin/AdminRemindersScreen";
 import AdminPresenceRemindersScreen from "../screens/admin/AdminPresenceRemindersScreen";
+import AdminPaymentSettingsScreen from "../screens/admin/AdminPaymentSettingsScreen";
+import AdminVersionControlScreen from "../screens/admin/AdminVersionControlScreen";
 import AdminAnnouncementsScreen from "../screens/admin/AdminAnnouncementsScreen";
 import AdminSupportTicketsScreen from "../screens/admin/AdminSupportTicketsScreen";
 import AdminBugReportsScreen from "../screens/admin/AdminBugReportsScreen";
 import AdminFAQScreen from "../screens/admin/AdminFAQScreen";
+import TermsOfServiceScreen from "../screens/legal/TermsOfServiceScreen";
+import PrivacyPolicyScreen from "../screens/legal/PrivacyPolicyScreen";
 import { useTheme } from "../theme/ThemeContext";
 
 const Stack = createNativeStackNavigator();
@@ -123,6 +127,11 @@ const BillingStack = () => {
         component={AdminPresenceRemindersScreen}
         options={{ title: "Presence Reminders" }}
       />
+      <Stack.Screen
+        name="PaymentSettings"
+        component={AdminPaymentSettingsScreen}
+        options={{ title: "Payment Settings" }}
+      />
     </Stack.Navigator>
   );
 };
@@ -163,6 +172,21 @@ const ProfileStack = () => {
         name="ManageFAQs"
         component={AdminFAQScreen}
         options={{ title: "Manage FAQs" }}
+      />
+      <Stack.Screen
+        name="TermsOfService"
+        component={TermsOfServiceScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PrivacyPolicy"
+        component={PrivacyPolicyScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="VersionControl"
+        component={AdminVersionControlScreen}
+        options={{ title: "Version Control" }}
       />
     </Stack.Navigator>
   );

@@ -738,7 +738,7 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
                   <Text
                     style={[styles.collectionKpiValue, { color: kpi.color }]}
                   >
-                    ₱{(kpi.value || 0).toFixed(0)}
+                    ₱{(kpi.value || 0).toFixed(2)}
                   </Text>
                 </View>
               ))}

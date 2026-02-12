@@ -1,4 +1,4 @@
-import React, { useState, useMemo} from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   Alert,
   Modal,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { settingsService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 
 const PaymentMethodScreen = ({ navigation, route }) => {
@@ -19,6 +21,37 @@ const PaymentMethodScreen = ({ navigation, route }) => {
   const { roomId, roomName, amount, billType } = route.params;
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [methodStatus, setMethodStatus] = useState(null); // null = loading
+
+  useEffect(() => {
+    fetchMethodStatus();
+  }, []);
+
+  const fetchMethodStatus = async () => {
+    try {
+      const response = await settingsService.getPaymentMethods();
+      setMethodStatus(response?.paymentMethods || null);
+    } catch {
+      // On error, assume all methods enabled (don't block payments)
+      setMethodStatus({
+        gcash: { enabled: true, maintenanceMessage: "" },
+        bank_transfer: { enabled: true, maintenanceMessage: "" },
+        cash: { enabled: true, maintenanceMessage: "" },
+      });
+    }
+  };
+
+  const isMethodDisabled = (methodId) => {
+    if (!methodStatus) return false; // still loading — allow
+    const entry = methodStatus[methodId];
+    return entry ? entry.enabled === false : false;
+  };
+
+  const getMaintenanceMessage = (methodId) => {
+    if (!methodStatus) return "";
+    const entry = methodStatus[methodId];
+    return entry?.maintenanceMessage || "";
+  };
 
   const paymentMethods = [
     {
@@ -48,6 +81,15 @@ const PaymentMethodScreen = ({ navigation, route }) => {
   ];
 
   const handleSelectMethod = (method) => {
+    if (isMethodDisabled(method.id)) {
+      const customMsg = getMaintenanceMessage(method.id);
+      Alert.alert(
+        "Temporarily Unavailable",
+        customMsg ||
+          `${method.name} is currently undergoing scheduled maintenance. Please try again later or use another payment method.`,
+      );
+      return;
+    }
     setSelectedMethod(method);
     setShowConfirm(true);
   };
@@ -108,34 +150,62 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>Select Payment Method</Text>
 
-        {paymentMethods.map((method) => (
-          <TouchableOpacity
-            key={method.id}
-            style={styles.methodCard}
-            onPress={() => handleSelectMethod(method)}
-          >
-            <View
-              style={[
-                styles.methodIconContainer,
-                { backgroundColor: `${method.color}15` },
-              ]}
+        {paymentMethods.map((method) => {
+          const disabled = isMethodDisabled(method.id);
+          return (
+            <TouchableOpacity
+              key={method.id}
+              style={[styles.methodCard, disabled && styles.methodCardDisabled]}
+              onPress={() => handleSelectMethod(method)}
+              activeOpacity={disabled ? 0.5 : 0.7}
             >
-              {method.image ? (
-                <Image source={method.image} style={styles.methodImage} />
+              <View
+                style={[
+                  styles.methodIconContainer,
+                  { backgroundColor: `${method.color}15` },
+                  disabled && { opacity: 0.4 },
+                ]}
+              >
+                {method.image ? (
+                  <Image source={method.image} style={styles.methodImage} />
+                ) : (
+                  <Ionicons
+                    name={method.icon}
+                    size={26}
+                    color={method.color}
+                  />
+                )}
+              </View>
+
+              <View style={[styles.methodContent, disabled && { opacity: 0.5 }]}>
+                <Text style={styles.methodName}>{method.name}</Text>
+                <Text style={styles.methodDescription}>
+                  {method.description}
+                </Text>
+                {disabled ? (
+                  <View style={styles.maintenanceBadge}>
+                    <Ionicons name="construct" size={11} color="#e65100" />
+                    <Text style={styles.maintenanceBadgeText}>
+                      Temporarily Unavailable
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.methodDetails}>{method.details}</Text>
+                )}
+              </View>
+
+              {disabled ? (
+                <Ionicons name="lock-closed" size={18} color="#bbb" />
               ) : (
-                <Ionicons name={method.icon} size={26} color={method.color} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.accent}
+                />
               )}
-            </View>
-
-            <View style={styles.methodContent}>
-              <Text style={styles.methodName}>{method.name}</Text>
-              <Text style={styles.methodDescription}>{method.description}</Text>
-              <Text style={styles.methodDetails}>{method.details}</Text>
-            </View>
-
-            <Ionicons name="chevron-forward" size={20} color={colors.accent} />
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          );
+        })}
 
         <View style={styles.infoCard}>
           <View style={styles.infoIconCircle}>
@@ -358,6 +428,27 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: 11,
     color: colors.textTertiary,
     marginTop: 3,
+  },
+  methodCardDisabled: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+  },
+  maintenanceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "#fff3e0",
+    borderRadius: 6,
+    alignSelf: "flex-start",
+  },
+  maintenanceBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#e65100",
   },
   infoCard: {
     flexDirection: "row",

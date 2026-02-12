@@ -18,23 +18,23 @@ import { authService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import AuthBubbles from "../../components/AuthBubbles";
 
-/* ── helper component ── */
-const PasswordRequirement = ({ met, text }) => (
-  <View style={styles.requirement}>
-    <Ionicons
-      name={met ? "checkmark-circle" : "ellipse-outline"}
-      size={16}
-      color={met ? "#27ae60" : "#cbd5e1"}
-    />
-    <Text style={[styles.requirementText, met && styles.requirementMet]}>
-      {text}
-    </Text>
-  </View>
-);
-
 const RegisterStep3Screen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+
+  /* ── helper component ── */
+  const PasswordRequirement = ({ met, text }) => (
+    <View style={styles.requirement}>
+      <Ionicons
+        name={met ? "checkmark-circle" : "ellipse-outline"}
+        size={16}
+        color={met ? "#27ae60" : "#cbd5e1"}
+      />
+      <Text style={[styles.requirementText, met && styles.requirementMet]}>
+        {text}
+      </Text>
+    </View>
+  );
 
   const { email, name } = route.params || {};
   const { signIn } = useContext(AuthContext);
@@ -288,6 +288,25 @@ const RegisterStep3Screen = ({ navigation, route }) => {
             </View>
           ) : null}
 
+          {/* Terms Agreement */}
+          <Text style={styles.termsText}>
+            By creating an account, you agree to our{" "}
+            <Text
+              style={styles.termsLink}
+              onPress={() => navigation.navigate("TermsOfService")}
+            >
+              Terms of Service
+            </Text>{" "}
+            and{" "}
+            <Text
+              style={styles.termsLink}
+              onPress={() => navigation.navigate("PrivacyPolicy")}
+            >
+              Privacy Policy
+            </Text>
+            .
+          </Text>
+
           {/* CTA */}
           <TouchableOpacity
             style={[styles.primaryBtn, loading && { opacity: 0.6 }]}
@@ -319,7 +338,7 @@ const RegisterStep3Screen = ({ navigation, route }) => {
         </View>
 
         <View style={styles.creditRow}>
-          <Text style={styles.creditText}>Developed by: Rommel Belia</Text>
+          <Text style={styles.creditText}>v.1.1.2</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -485,6 +504,20 @@ const createStyles = (colors) =>
       elevation: 3,
     },
     primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+
+    /* Terms */
+    termsText: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: colors.textTertiary,
+      textAlign: "center",
+      marginBottom: 16,
+      marginTop: 4,
+    },
+    termsLink: {
+      color: colors.accent,
+      fontWeight: "600",
+    },
 
     /* Footer */
     footerRow: {

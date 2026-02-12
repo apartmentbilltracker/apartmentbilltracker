@@ -329,7 +329,9 @@ const ProfileScreen = ({ navigation }) => {
             <Ionicons
               name={payorStatus === "Payor" ? "checkmark-circle" : "person"}
               size={14}
-              color={payorStatus === "Payor" ? colors.success : colors.textSecondary}
+              color={
+                payorStatus === "Payor" ? colors.success : colors.textSecondary
+              }
             />
             <Text
               style={[
@@ -549,6 +551,45 @@ const ProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* ─── LEGAL ─── */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Legal</Text>
+        <TouchableOpacity
+          style={styles.legalRow}
+          onPress={() => navigation.navigate("TermsOfService")}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="document-text-outline"
+            size={18}
+            color={colors.accent}
+          />
+          <Text style={styles.legalRowText}>Terms of Service</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={colors.textTertiary}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.legalRow}
+          onPress={() => navigation.navigate("PrivacyPolicy")}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={18}
+            color={colors.accent}
+          />
+          <Text style={styles.legalRowText}>Privacy Policy</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={colors.textTertiary}
+          />
+        </TouchableOpacity>
+      </View>
 
       {/* ─── LOGOUT ─── */}
       <View style={styles.logoutWrap}>
@@ -1139,6 +1180,22 @@ const createStyles = (colors) =>
       color: colors.background,
       fontSize: 15,
       fontWeight: "600",
+    },
+
+    /* ─── Legal ─── */
+    legalRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 11,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    legalRowText: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.text,
     },
 
     /* ─── Logout ─── */

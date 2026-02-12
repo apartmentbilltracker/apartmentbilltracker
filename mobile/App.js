@@ -1,8 +1,9 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { View, Text, StyleSheet, StatusBar } from "react-native";
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Linking } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { AuthProvider, AuthContext } from "./src/context/AuthContext";
 import LoginScreen from "./src/screens/auth/LoginScreen";
 import RegisterScreen from "./src/screens/auth/RegisterScreen";
@@ -23,6 +24,7 @@ import BankTransferPaymentScreen from "./src/screens/client/BankTransferPaymentS
 import CashPaymentScreen from "./src/screens/client/CashPaymentScreen";
 import notificationService from "./src/services/notificationService";
 import updateService from "./src/services/updateService";
+import { getAPIBaseURL } from "./src/config/config";
 import OnboardingScreen, {
   checkOnboardingComplete,
 } from "./src/screens/OnboardingScreen";
@@ -137,16 +139,19 @@ export default function App() {
   }, []);
 
   const checkAppVersion = async () => {
-    // Get backend URL from environment or use default
-    const backendURL =
-      process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
-
+    const backendURL = getAPIBaseURL();
     const status = await updateService.checkForUpdate(backendURL);
     setUpdateStatus(status);
 
-    // Show alert if update is required
+    // Show alert if update is required (or optional new version)
     if (status.requiresUpdate) {
-      updateService.showUpdateAlert(status.isForced, status.updateUrl);
+      updateService.showUpdateAlert(
+        status.isForced,
+        status.updateUrl,
+        status.updateMessage,
+      );
+    } else if (status.hasNewVersion) {
+      updateService.showUpdateAlert(false, status.updateUrl, status.updateMessage);
     }
   };
 
@@ -155,10 +160,37 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <View style={styles.container}>
+          <View style={styles.updateIconWrap}>
+            <Ionicons name="cloud-download-outline" size={64} color="#b38604" />
+          </View>
           <Text style={styles.title}>Update Required</Text>
           <Text style={styles.subtitle}>
-            A new version is available. Please update the app to continue.
+            {updateStatus.updateMessage ||
+              "A new version is available. Please update the app to continue."}
           </Text>
+          <Text style={styles.versionInfo}>
+            Current: v{updateStatus.currentVersion}{"  →  "}Latest: v{updateStatus.latestVersion || updateStatus.minVersion}
+          </Text>
+          <TouchableOpacity
+            style={styles.updateButton}
+            activeOpacity={0.8}
+            onPress={() => {
+              const url =
+                updateStatus.updateUrl ||
+                "https://github.com/@apartmentbilltracker/apartment-bill-tracker/releases";
+              Linking.openURL(url);
+            }}
+          >
+            <Ionicons name="download-outline" size={20} color="#fff" />
+            <Text style={styles.updateButtonText}>Download Update</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.retryButton}
+            activeOpacity={0.7}
+            onPress={checkAppVersion}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaProvider>
     );
@@ -210,18 +242,59 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#FFFDF5",
+    paddingHorizontal: 32,
+  },
+  updateIconWrap: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#FFF8E1",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#d32f2f",
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#333",
     marginBottom: 10,
   },
   subtitle: {
-    fontSize: 16,
-    color: "#333",
+    fontSize: 15,
+    color: "#666",
     textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  versionInfo: {
+    fontSize: 12,
+    color: "#999",
+    fontWeight: "500",
+    marginBottom: 28,
+  },
+  updateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#b38604",
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    gap: 8,
+    marginBottom: 12,
+  },
+  updateButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  retryButton: {
+    paddingVertical: 10,
     paddingHorizontal: 20,
+  },
+  retryButtonText: {
+    color: "#b38604",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

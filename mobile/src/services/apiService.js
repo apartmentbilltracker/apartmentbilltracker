@@ -250,6 +250,21 @@ export const paymentProcessingService = {
     api.get(`/api/v2/payment-processing/analytics/${roomId}`).then(extractData),
 };
 
+// App Settings Services (payment method toggles, version control, etc.)
+export const settingsService = {
+  getPaymentMethods: () =>
+    api.get("/api/v2/settings/payment-methods").then(extractData),
+
+  updatePaymentMethods: (data) =>
+    api.put("/api/v2/settings/payment-methods", data).then(extractData),
+
+  getVersionControl: () =>
+    api.get("/api/v2/settings/version-control").then(extractData),
+
+  updateVersionControl: (data) =>
+    api.put("/api/v2/settings/version-control", data).then(extractData),
+};
+
 export const announcementService = {
   getRoomAnnouncements: (roomId) =>
     api.get(`/api/v2/announcements/room/${roomId}`).then(extractData),

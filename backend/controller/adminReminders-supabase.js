@@ -56,7 +56,7 @@ router.get(
           )) || [];
 
         const completedPayments = payments.filter(
-          (p) => p.status === "completed",
+          (p) => p.status === "completed" || p.status === "verified",
         );
 
         members.forEach((member) => {

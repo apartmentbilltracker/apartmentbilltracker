@@ -1,6 +1,36 @@
 const supabase = require("./SupabaseClient");
 
 /**
+ * Sanitize Supabase error messages — strip HTML from Cloudflare/proxy error pages
+ */
+const sanitizeError = (msg) => {
+  if (!msg) return "Unknown error";
+  if (typeof msg === "string" && msg.includes("<!DOCTYPE")) {
+    return "Supabase temporarily unavailable (503/500)";
+  }
+  return msg;
+};
+
+/**
+ * Simple retry wrapper for transient Supabase errors (Cloudflare 500/503)
+ */
+const withRetry = async (fn, retries = 2, delayMs = 500) => {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isTransient =
+        err.message && (err.message.includes("<!DOCTYPE") || err.message.includes("temporarily unavailable"));
+      if (isTransient && i < retries) {
+        await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+};
+
+/**
  * Comprehensive Supabase service layer for database operations
  * Handles all CRUD operations and specialized queries
  */
@@ -19,7 +49,7 @@ class SupabaseService {
       .insert([data])
       .select()
       .single();
-    if (error) throw new Error(`Insert error: ${error.message}`);
+    if (error) throw new Error(`Insert error: ${sanitizeError(error.message)}`);
     return result;
   }
 
@@ -34,7 +64,7 @@ class SupabaseService {
       .from(table)
       .insert(dataArray)
       .select();
-    if (error) throw new Error(`Insert error: ${error.message}`);
+    if (error) throw new Error(`Insert error: ${sanitizeError(error.message)}`);
     return data;
   }
 
@@ -47,14 +77,16 @@ class SupabaseService {
    * @returns {Promise<object|null>} Found record or null
    */
   static async selectByColumn(table, column, value, select = "*") {
-    const { data, error } = await supabase
-      .from(table)
-      .select(select)
-      .eq(column, value)
-      .single();
-    if (error && error.code !== "PGRST116")
-      throw new Error(`Select error: ${error.message}`);
-    return data || null;
+    return withRetry(async () => {
+      const { data, error } = await supabase
+        .from(table)
+        .select(select)
+        .eq(column, value)
+        .single();
+      if (error && error.code !== "PGRST116")
+        throw new Error(`Select error: ${sanitizeError(error.message)}`);
+      return data || null;
+    });
   }
 
   /**
@@ -75,15 +107,17 @@ class SupabaseService {
     orderBy = "created_at",
     ascending = false,
   ) {
-    let query = supabase.from(table).select(select).eq(column, value);
+    return withRetry(async () => {
+      let query = supabase.from(table).select(select).eq(column, value);
 
-    if (orderBy) {
-      query = query.order(orderBy, { ascending });
-    }
+      if (orderBy) {
+        query = query.order(orderBy, { ascending });
+      }
 
-    const { data, error } = await query;
-    if (error) throw new Error(`Select error: ${error.message}`);
-    return data || [];
+      const { data, error } = await query;
+      if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
+      return data || [];
+    });
   }
 
   /**
@@ -93,9 +127,11 @@ class SupabaseService {
    * @returns {Promise<array>} All records
    */
   static async selectAllRecords(table, select = "*") {
-    const { data, error } = await supabase.from(table).select(select);
-    if (error) throw new Error(`Select error: ${error.message}`);
-    return data || [];
+    return withRetry(async () => {
+      const { data, error } = await supabase.from(table).select(select);
+      if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
+      return data || [];
+    });
   }
 
   /**
@@ -117,13 +153,24 @@ class SupabaseService {
    * @returns {Promise<object>} Updated record
    */
   static async update(table, id, updates) {
+    if (!id) throw new Error("Update error: missing id");
+
     const { data, error } = await supabase
       .from(table)
       .update(updates)
       .eq("id", id)
-      .select()
-      .single();
-    if (error) throw new Error(`Update error: ${error.message}`);
+      .select();
+
+    if (error) throw new Error(`Update error: ${sanitizeError(error.message)}`);
+    if (Array.isArray(data)) {
+      if (data.length === 0) return null;
+      if (data.length === 1) return data[0];
+      // More than one row updated unexpectedly when filtering by id
+      throw new Error(
+        "Update error: expected a single record but multiple rows were returned",
+      );
+    }
+
     return data;
   }
 
@@ -141,7 +188,7 @@ class SupabaseService {
       .update(updates)
       .eq(column, value)
       .select();
-    if (error) throw new Error(`Update error: ${error.message}`);
+    if (error) throw new Error(`Update error: ${sanitizeError(error.message)}`);
     return data;
   }
 
@@ -153,7 +200,7 @@ class SupabaseService {
    */
   static async deleteRecord(table, id) {
     const { error } = await supabase.from(table).delete().eq("id", id);
-    if (error) throw new Error(`Delete error: ${error.message}`);
+    if (error) throw new Error(`Delete error: ${sanitizeError(error.message)}`);
   }
 
   /**
@@ -165,7 +212,7 @@ class SupabaseService {
    */
   static async deleteMany(table, column, value) {
     const { error } = await supabase.from(table).delete().eq(column, value);
-    if (error) throw new Error(`Delete error: ${error.message}`);
+    if (error) throw new Error(`Delete error: ${sanitizeError(error.message)}`);
   }
 
   // ============ USER OPERATIONS ============

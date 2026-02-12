@@ -141,6 +141,7 @@ const adminBillingRoutes = require("./controller/adminBilling-supabase");
 const adminRemindersRoutes = require("./controller/adminReminders-supabase");
 const notificationsRoutes = require("./controller/notifications-supabase");
 const faqRoutes = require("./controller/faq-supabase");
+const settingsRoutes = require("./controller/settings-supabase");
 
 // 5. Debug Endpoints (Add before routes)
 app.post("/api/v2/debug/upload", (req, res) => {
@@ -213,22 +214,31 @@ app.get("/api/v2/debug/smtp-check", (req, res) => {
   socket.connect(port, host);
 });
 
-// App Version Check Endpoint
-app.get("/api/app-version", (req, res) => {
+// App Version Check Endpoint — reads from app_settings DB table
+app.get("/api/app-version", async (req, res) => {
   try {
-    // Define minimum version - update this when releasing new app versions
-    const minVersion = process.env.MIN_APP_VERSION || "1.0.0";
-    const isForced = process.env.FORCE_APP_UPDATE === "true" || false;
-    // Default to GitHub releases page if no URL specified
-    const updateUrl =
-      process.env.APP_UPDATE_URL ||
-      "https://github.com/mjdev031219/abt-mobile-app/releases";
+    const SupabaseService = require("./db/SupabaseService");
+    let settings = null;
+    try {
+      const rows = await SupabaseService.selectAllRecords("app_settings");
+      if (rows && rows.length > 0) settings = rows[0];
+    } catch (err) {
+      console.error("app_settings read error for version check:", err.message);
+    }
+
+    const minVersion = settings?.min_app_version || process.env.MIN_APP_VERSION || "1.0.0";
+    const isForced = settings?.force_update ?? (process.env.FORCE_APP_UPDATE === "true") ?? false;
+    const updateUrl = settings?.update_url || process.env.APP_UPDATE_URL || "https://github.com/@apartmentbilltracker/apartment-bill-tracker/releases";
+    const latestVersion = settings?.latest_app_version || minVersion;
+    const updateMessage = settings?.update_message || "";
 
     res.status(200).json({
       success: true,
       minVersion,
+      latestVersion,
       isForced,
       updateUrl,
+      updateMessage,
       message: "Version check successful",
     });
   } catch (error) {
@@ -254,6 +264,7 @@ app.use("/api/v2/announcements", announcementRoutes);
 app.use("/api/v2/support", supportRoutes);
 app.use("/api/v2/support", bugReportRoutes);
 app.use("/api/v2/faqs", faqRoutes);
+app.use("/api/v2/settings", settingsRoutes);
 
 // Logout route - ensures the token cookie is properly removed
 app.get("/api/v2/user/logout", async (req, res, next) => {

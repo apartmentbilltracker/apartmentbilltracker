@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo} from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -33,10 +33,20 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [transactionId, setTransactionId] = useState("");
 
+  // Use refs for cleanup to avoid stale closures
+  const stepRef = React.useRef(step);
+  const transactionIdRef = React.useRef(transactionId);
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+  useEffect(() => {
+    transactionIdRef.current = transactionId;
+  }, [transactionId]);
+
   const handleBack = async () => {
-    if (transactionId && step === "qr") {
+    if (transactionIdRef.current && stepRef.current === "qr") {
       try {
-        await apiService.cancelTransaction(transactionId);
+        await apiService.cancelTransaction(transactionIdRef.current);
       } catch (err) {
         // ignore
       }
@@ -124,9 +134,9 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   useEffect(() => {
     return () => {
       const cancelOnUnmount = async () => {
-        if (transactionId && step === "qr") {
+        if (transactionIdRef.current && stepRef.current === "qr") {
           try {
-            await apiService.cancelTransaction(transactionId);
+            await apiService.cancelTransaction(transactionIdRef.current);
           } catch (err) {
             // Ignore errors on cancel
           }
@@ -134,7 +144,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       };
       cancelOnUnmount();
     };
-  }, [transactionId, step]);
+  }, []);
 
   const initiateBankTransfer = async () => {
     try {
@@ -217,7 +227,9 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
         ]}
       >
         <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={{ marginTop: 12, fontSize: 14, color: colors.textTertiary }}>
+        <Text
+          style={{ marginTop: 12, fontSize: 14, color: colors.textTertiary }}
+        >
           Preparing transfer…
         </Text>
       </View>
@@ -274,7 +286,11 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
                     <Text style={styles.bankSelectorValue}>{bankName}</Text>
                   </View>
                 </View>
-                <Ionicons name="chevron-down" size={20} color={colors.textTertiary} />
+                <Ionicons
+                  name="chevron-down"
+                  size={20}
+                  color={colors.textTertiary}
+                />
               </TouchableOpacity>
             </View>
 
@@ -314,7 +330,11 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
                       }
                       style={styles.copyButton}
                     >
-                      <Ionicons name="copy-outline" size={16} color={colors.accent} />
+                      <Ionicons
+                        name="copy-outline"
+                        size={16}
+                        color={colors.accent}
+                      />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -403,7 +423,11 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
                   <ActivityIndicator size="small" color={colors.textOnAccent} />
                 ) : (
                   <>
-                    <Ionicons name="download-outline" size={18} color={colors.textOnAccent} />
+                    <Ionicons
+                      name="download-outline"
+                      size={18}
+                      color={colors.textOnAccent}
+                    />
                     <Text style={styles.downloadButtonText}>Save QR Code</Text>
                   </>
                 )}
@@ -427,7 +451,11 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
                     onPress={() => copyToClipboard(referenceNumber)}
                     style={styles.copyButton}
                   >
-                    <Ionicons name="copy-outline" size={16} color={colors.accent} />
+                    <Ionicons
+                      name="copy-outline"
+                      size={16}
+                      color={colors.accent}
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -545,7 +573,11 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
                   navigation.navigate("BillsMain", { refresh: true })
                 }
               >
-                <Ionicons name="receipt-outline" size={18} color={colors.textOnAccent} />
+                <Ionicons
+                  name="receipt-outline"
+                  size={18}
+                  color={colors.textOnAccent}
+                />
                 <Text style={styles.billsButtonText}>Back to Bills</Text>
               </TouchableOpacity>
             </View>
@@ -599,7 +631,11 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
                       <Ionicons
                         name="business-outline"
                         size={20}
-                        color={bankName === bank.name ? colors.accent : colors.textTertiary}
+                        color={
+                          bankName === bank.name
+                            ? colors.accent
+                            : colors.textTertiary
+                        }
                       />
                     </View>
                     <View>
@@ -631,568 +667,569 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerContent: {
-    flex: 1,
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    marginTop: 2,
-  },
-  content: {
-    flex: 1,
-    padding: 14,
-  },
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: colors.card,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.divider,
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerContent: {
+      flex: 1,
+      alignItems: "center",
+    },
+    title: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    content: {
+      flex: 1,
+      padding: 14,
+    },
 
-  /* Amount Card */
-  amountCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    paddingVertical: 22,
-    paddingHorizontal: 20,
-    marginBottom: 14,
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#b38604",
-    shadowColor: "#b38604",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  amountLabel: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  amountValue: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: colors.accent,
-    marginTop: 6,
-  },
-  billTypeText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 6,
-    fontWeight: "500",
-  },
+    /* Amount Card */
+    amountCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      paddingVertical: 22,
+      paddingHorizontal: 20,
+      marginBottom: 14,
+      alignItems: "center",
+      borderWidth: 1.5,
+      borderColor: "#b38604",
+      shadowColor: "#b38604",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    amountLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    amountValue: {
+      fontSize: 34,
+      fontWeight: "800",
+      color: colors.accent,
+      marginTop: 6,
+    },
+    billTypeText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 6,
+      fontWeight: "500",
+    },
 
-  /* Step Badge */
-  stepBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.warningBg,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 8,
-  },
-  stepBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.accent,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
+    /* Step Badge */
+    stepBadge: {
+      alignSelf: "flex-start",
+      backgroundColor: colors.warningBg,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      marginBottom: 8,
+    },
+    stepBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
 
-  /* Cards */
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 12,
-  },
+    /* Cards */
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 12,
+    },
 
-  /* Bank Selector */
-  bankSelector: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: colors.cardAlt,
-  },
-  bankSelectorLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  bankIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.warningBg,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bankSelectorLabel: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    fontWeight: "500",
-  },
-  bankSelectorValue: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-    marginTop: 2,
-  },
+    /* Bank Selector */
+    bankSelector: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      backgroundColor: colors.cardAlt,
+    },
+    bankSelectorLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    bankIconContainer: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: colors.warningBg,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    bankSelectorLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      fontWeight: "500",
+    },
+    bankSelectorValue: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginTop: 2,
+    },
 
-  /* Bank Details */
-  detailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  detailLabel: {
-    fontSize: 13,
-    color: colors.textTertiary,
-  },
-  detailValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.text,
-    maxWidth: "60%",
-    textAlign: "right",
-  },
-  accountNumberContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  accountNumber: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.accent,
-    letterSpacing: 1,
-  },
-  copyButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: colors.warningBg,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.skeleton,
-    marginVertical: 4,
-  },
+    /* Bank Details */
+    detailRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 10,
+    },
+    detailLabel: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+    detailValue: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+      maxWidth: "60%",
+      textAlign: "right",
+    },
+    accountNumberContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    accountNumber: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.accent,
+      letterSpacing: 1,
+    },
+    copyButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      backgroundColor: colors.warningBg,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.skeleton,
+      marginVertical: 4,
+    },
 
-  /* Instructions */
-  instructionsCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  instructionsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 14,
-  },
-  instructionsTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  instructionItem: {
-    flexDirection: "row",
-    marginBottom: 12,
-    alignItems: "flex-start",
-  },
-  instructionDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.accent,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  instructionNumber: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  instructionText: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.text,
-    lineHeight: 19,
-    paddingTop: 3,
-  },
+    /* Instructions */
+    instructionsCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    instructionsHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 14,
+    },
+    instructionsTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    instructionItem: {
+      flexDirection: "row",
+      marginBottom: 12,
+      alignItems: "flex-start",
+    },
+    instructionDot: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    instructionNumber: {
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    instructionText: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.text,
+      lineHeight: 19,
+      paddingTop: 3,
+    },
 
-  /* Proceed Button */
-  proceedButton: {
-    flexDirection: "row",
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  proceedButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
+    /* Proceed Button */
+    proceedButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+    },
+    proceedButtonText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+    },
 
-  /* QR Section */
-  qrCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  qrContainer: {
-    width: 200,
-    height: 200,
-    borderWidth: 1.5,
-    borderColor: colors.divider,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-    backgroundColor: colors.cardAlt,
-    overflow: "hidden",
-  },
-  qrImage: {
-    width: 200,
-    height: 200,
-  },
-  downloadButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accent,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    marginBottom: 12,
-    gap: 8,
-  },
-  downloadButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  qrHint: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    textAlign: "center",
-  },
+    /* QR Section */
+    qrCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14,
+      alignItems: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    qrContainer: {
+      width: 200,
+      height: 200,
+      borderWidth: 1.5,
+      borderColor: colors.divider,
+      borderRadius: 14,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+      backgroundColor: colors.cardAlt,
+      overflow: "hidden",
+    },
+    qrImage: {
+      width: 200,
+      height: 200,
+    },
+    downloadButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.accent,
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      borderRadius: 10,
+      marginBottom: 12,
+      gap: 8,
+    },
+    downloadButtonText: {
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    qrHint: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      textAlign: "center",
+    },
 
-  /* Reference */
-  referenceBox: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-  },
-  referenceLabel: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-    marginBottom: 6,
-  },
-  referenceContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
-  },
-  referenceNumber: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-    letterSpacing: 1,
-  },
-  referenceHint: {
-    fontSize: 11,
-    color: colors.textTertiary,
-  },
+    /* Reference */
+    referenceBox: {
+      backgroundColor: colors.background,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 8,
+    },
+    referenceLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+      marginBottom: 6,
+    },
+    referenceContent: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 8,
+    },
+    referenceNumber: {
+      flex: 1,
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+      letterSpacing: 1,
+    },
+    referenceHint: {
+      fontSize: 11,
+      color: colors.textTertiary,
+    },
 
-  /* Confirm & Cancel */
-  confirmButton: {
-    flexDirection: "row",
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  confirmButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  confirmHint: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  cancelButton: {
-    flexDirection: "row",
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  cancelButtonText: {
-    color: "#c62828",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  disabled: {
-    opacity: 0.6,
-  },
+    /* Confirm & Cancel */
+    confirmButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 8,
+    },
+    confirmButtonText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    confirmHint: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      textAlign: "center",
+      marginBottom: 12,
+    },
+    cancelButton: {
+      flexDirection: "row",
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingVertical: 13,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 8,
+    },
+    cancelButtonText: {
+      color: "#c62828",
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    disabled: {
+      opacity: 0.6,
+    },
 
-  /* Success */
-  successContainer: {
-    alignItems: "center",
-    paddingVertical: 30,
-  },
-  successIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.successBg,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  successTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.text,
-    marginBottom: 4,
-  },
-  successSubtitle: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    marginBottom: 24,
-  },
-  successCard: {
-    width: "100%",
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  successRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-  },
-  successLabel: {
-    fontSize: 13,
-    color: colors.textTertiary,
-  },
-  successValue: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  successButtons: {
-    width: "100%",
-    gap: 10,
-  },
-  historyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingVertical: 13,
-    gap: 6,
-  },
-  historyButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.accent,
-  },
-  billsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 13,
-    gap: 6,
-  },
-  billsButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#fff",
-  },
+    /* Success */
+    successContainer: {
+      alignItems: "center",
+      paddingVertical: 30,
+    },
+    successIconCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.successBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    successTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    successSubtitle: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginBottom: 24,
+    },
+    successCard: {
+      width: "100%",
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 24,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    successRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingVertical: 8,
+    },
+    successLabel: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+    successValue: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    successButtons: {
+      width: "100%",
+      gap: 10,
+    },
+    historyButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingVertical: 13,
+      gap: 6,
+    },
+    historyButtonText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+    billsButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 13,
+      gap: 6,
+    },
+    billsButtonText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#fff",
+    },
 
-  /* Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
-    paddingBottom: 20,
-  },
-  modalDragHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.skeleton,
-    alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
-  },
-  modalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  bankList: {
-    padding: 16,
-  },
-  bankListItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    marginBottom: 8,
-    borderRadius: 14,
-    backgroundColor: colors.cardAlt,
-  },
-  selectedBankItem: {
-    backgroundColor: colors.warningBg,
-    borderWidth: 1.5,
-    borderColor: "#b38604",
-  },
-  bankListLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  bankListIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.inputBg,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bankListIconActive: {
-    backgroundColor: colors.warningBg,
-  },
-  bankListName: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  bankListNameActive: {
-    color: colors.accent,
-    fontWeight: "700",
-  },
-  bankListDetails: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    marginTop: 2,
-  },
-});
+    /* Modal */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.4)",
+      justifyContent: "flex-end",
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: "80%",
+      paddingBottom: 20,
+    },
+    modalDragHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.skeleton,
+      alignSelf: "center",
+      marginTop: 10,
+      marginBottom: 6,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.divider,
+    },
+    modalCloseButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    bankList: {
+      padding: 16,
+    },
+    bankListItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      marginBottom: 8,
+      borderRadius: 14,
+      backgroundColor: colors.cardAlt,
+    },
+    selectedBankItem: {
+      backgroundColor: colors.warningBg,
+      borderWidth: 1.5,
+      borderColor: "#b38604",
+    },
+    bankListLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    bankListIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: colors.inputBg,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    bankListIconActive: {
+      backgroundColor: colors.warningBg,
+    },
+    bankListName: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    bankListNameActive: {
+      color: colors.accent,
+      fontWeight: "700",
+    },
+    bankListDetails: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+  });
 
 export default BankTransferPaymentScreen;

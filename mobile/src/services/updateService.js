@@ -26,21 +26,28 @@ export const checkForUpdate = async (backendURL) => {
 
     const data = await response.json();
     const minVersion = data.minVersion || "1.0.0";
+    const latestVersion = data.latestVersion || minVersion;
     const isForced = data.isForced || false;
     const updateUrl = data.updateUrl || "";
+    const updateMessage = data.updateMessage || "";
 
     console.log("Minimum required version:", minVersion);
+    console.log("Latest version:", latestVersion);
     console.log("Update forced:", isForced);
 
     // Compare versions
     const requiresUpdate = compareVersions(currentVersion, minVersion) < 0;
+    const hasNewVersion = compareVersions(currentVersion, latestVersion) < 0;
 
     return {
       requiresUpdate,
+      hasNewVersion,
       isForced: requiresUpdate && isForced,
       currentVersion,
       minVersion,
+      latestVersion,
       updateUrl,
+      updateMessage,
     };
   } catch (error) {
     console.error("Error checking for updates:", error);
@@ -70,7 +77,11 @@ const compareVersions = (v1, v2) => {
 /**
  * Show update required alert
  */
-export const showUpdateAlert = (isForced = false, updateUrl = "") => {
+export const showUpdateAlert = (isForced = false, updateUrl = "", updateMessage = "") => {
+  const defaultMsg = isForced
+    ? "A critical update is available. You must update the app to continue."
+    : "A new version of Apartment Bill Tracker is available. Update now for the best experience.";
+
   const buttons = [
     {
       text: "Update Now",
@@ -80,7 +91,7 @@ export const showUpdateAlert = (isForced = false, updateUrl = "") => {
         } else {
           // Default to GitHub releases page for this project
           const releaseUrl =
-            "https://github.com/mjdev031219/abt-mobile-app/releases";
+            "https://github.com/@apartmentbilltracker/apartment-bill-tracker/releases";
           Linking.openURL(releaseUrl);
         }
       },
@@ -96,8 +107,8 @@ export const showUpdateAlert = (isForced = false, updateUrl = "") => {
   }
 
   Alert.alert(
-    "Update Available",
-    "A new version of Apartment Bill Tracker is available. Please update to continue using the app.",
+    isForced ? "Update Required" : "Update Available",
+    updateMessage || defaultMsg,
     buttons,
     { cancelable: !isForced },
   );

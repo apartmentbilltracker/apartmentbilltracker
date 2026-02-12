@@ -409,6 +409,14 @@ const AdminDashboardScreen = ({ navigation }) => {
       onPress: () =>
         navigation.navigate("BillingStack", { screen: "AdminBilling" }),
     },
+    {
+      icon: "settings-outline",
+      label: "Pay Settings",
+      color: "#e65100",
+      bg: "#fff3e0",
+      onPress: () =>
+        navigation.navigate("BillingStack", { screen: "PaymentSettings" }),
+    },
   ];
 
   return (
@@ -485,7 +493,11 @@ const AdminDashboardScreen = ({ navigation }) => {
             <View style={[styles.collectionMetric, styles.collectedMetric]}>
               <View style={styles.metricIconRow}>
                 <View style={styles.metricIconBg}>
-                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={18}
+                    color={colors.success}
+                  />
                 </View>
                 <Text style={styles.metricLabel}>Collected</Text>
               </View>
@@ -525,6 +537,65 @@ const AdminDashboardScreen = ({ navigation }) => {
               />
             </View>
           </View>
+
+          {/* All Payors Paid Notice */}
+          {latestBillingCycle &&
+            (latestBillingCycle.collectionRate >= 100 ||
+              latestBillingCycle.cycleStatus === "completed") && (
+              <View
+                style={{
+                  backgroundColor: colors.successBg,
+                  borderRadius: 10,
+                  padding: 12,
+                  marginTop: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: colors.success + "22",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 10,
+                  }}
+                >
+                  <Ionicons
+                    name="checkmark-done-circle"
+                    size={20}
+                    color={colors.success}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.success,
+                      fontWeight: "700",
+                      fontSize: 13,
+                    }}
+                  >
+                    {latestBillingCycle.cycleStatus === "completed"
+                      ? "Billing Cycle Complete"
+                      : "All Payors Have Paid!"}
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.success,
+                      fontSize: 11,
+                      marginTop: 2,
+                      opacity: 0.8,
+                    }}
+                  >
+                    {latestBillingCycle.cycleStatus === "completed"
+                      ? "This cycle has been closed. You can start a new billing cycle."
+                      : "100% collection achieved. You may close this cycle."}
+                  </Text>
+                </View>
+              </View>
+            )}
         </View>
       </View>
 
@@ -540,8 +611,8 @@ const AdminDashboardScreen = ({ navigation }) => {
             >
               <Ionicons name="home" size={20} color={colors.accent} />
             </View>
-            <Text style={styles.statValue}>{rooms.length}</Text>
-            <Text style={styles.statLabel}>Rooms</Text>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{rooms.length}</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Rooms</Text>
           </View>
           <View style={styles.statCard}>
             <View
@@ -549,8 +620,8 @@ const AdminDashboardScreen = ({ navigation }) => {
             >
               <Ionicons name="people" size={20} color={colors.info} />
             </View>
-            <Text style={styles.statValue}>{totalMembers}</Text>
-            <Text style={styles.statLabel}>Members</Text>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{totalMembers}</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Members</Text>
           </View>
           <View style={styles.statCard}>
             <View
@@ -561,8 +632,8 @@ const AdminDashboardScreen = ({ navigation }) => {
             >
               <Ionicons name="cash" size={20} color={colors.success} />
             </View>
-            <Text style={styles.statValue}>{fmtShort(totalBilledLastN)}</Text>
-            <Text style={styles.statLabel}>Billed</Text>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{fmtShort(totalBilledLastN)}</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Billed</Text>
           </View>
           <View style={styles.statCard}>
             <View
@@ -577,8 +648,8 @@ const AdminDashboardScreen = ({ navigation }) => {
                 color={colors.internetColor}
               />
             </View>
-            <Text style={styles.statValue}>{overallCollectionRate}%</Text>
-            <Text style={styles.statLabel}>Collected</Text>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{overallCollectionRate}%</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Collected</Text>
           </View>
         </View>
       </View>
@@ -586,7 +657,7 @@ const AdminDashboardScreen = ({ navigation }) => {
       {/* Quick Actions */}
       <View style={styles.sectionWrap}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionsRow}>
+        <View style={styles.actionsGrid}>
           {quickActions.map((action, i) => (
             <TouchableOpacity
               key={i}
@@ -599,7 +670,7 @@ const AdminDashboardScreen = ({ navigation }) => {
               >
                 <Ionicons name={action.icon} size={22} color={action.color} />
               </View>
-              <Text style={styles.actionLabel}>{action.label}</Text>
+              <Text style={styles.actionLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{action.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -957,13 +1028,15 @@ const createStyles = (colors) =>
     // Stats Grid
     statsGrid: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: 10,
     },
     statCard: {
-      flex: 1,
+      width: (SCREEN_WIDTH - 32 - 30) / 4,
       backgroundColor: colors.card,
       borderRadius: 14,
       paddingVertical: 14,
+      paddingHorizontal: 6,
       alignItems: "center",
       ...Platform.select({
         ios: {
@@ -984,28 +1057,33 @@ const createStyles = (colors) =>
       marginBottom: 8,
     },
     statValue: {
-      fontSize: 16,
+      fontSize: 14,
       fontWeight: "700",
       color: colors.text,
       marginBottom: 2,
+      textAlign: "center",
+      width: "100%",
     },
     statLabel: {
       fontSize: 10,
       fontWeight: "500",
       color: colors.textTertiary,
+      textAlign: "center",
     },
 
     // Quick Actions
-    actionsRow: {
+    actionsGrid: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: 10,
       marginTop: 10,
     },
     actionCard: {
-      flex: 1,
+      width: (SCREEN_WIDTH - 32 - 20) / 3,
       backgroundColor: colors.card,
       borderRadius: 14,
       paddingVertical: 16,
+      paddingHorizontal: 6,
       alignItems: "center",
       ...Platform.select({
         ios: {
@@ -1029,6 +1107,8 @@ const createStyles = (colors) =>
       fontSize: 11,
       fontWeight: "600",
       color: colors.textSecondary,
+      textAlign: "center",
+      width: "100%",
     },
 
     // Chart

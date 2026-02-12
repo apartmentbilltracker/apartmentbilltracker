@@ -23,6 +23,20 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const WATER_BILL_PER_DAY = 5; // 5 pesos per day
 
+/** Filter a presence array to only include days within start..end */
+const filterPresenceByDates = (presenceArr, start, end) => {
+  if (!presenceArr || !Array.isArray(presenceArr)) return [];
+  if (!start || !end) return presenceArr; // no dates → show all
+  const s = new Date(start);
+  s.setHours(0, 0, 0, 0);
+  const e = new Date(end);
+  e.setHours(23, 59, 59, 999);
+  return presenceArr.filter((day) => {
+    const d = new Date(day);
+    return d >= s && d <= e;
+  });
+};
+
 const BillsScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -253,17 +267,17 @@ const BillsScreen = ({ navigation }) => {
       currentUserMember?.isPayer &&
       memberPresence[currentUserMember.id || currentUserMember._id]
     ) {
-      // Current user's own water consumption
-      const userPresenceDays =
-        memberPresence[currentUserMember.id || currentUserMember._id]?.length ||
-        0;
+      // Current user's own water consumption (filtered by billing dates)
+      const userPresenceDays = getFilteredPresence(
+        currentUserMember.id || currentUserMember._id,
+      ).length;
       const userOwnWater = userPresenceDays * WATER_BILL_PER_DAY;
 
-      // Non-payors' water to split
+      // Non-payors' water to split (filtered by billing dates)
       let nonPayorWater = 0;
       members.forEach((m) => {
         if (!m.isPayer) {
-          const presenceDays = memberPresence[m.id || m._id]?.length || 0;
+          const presenceDays = getFilteredPresence(m.id || m._id).length;
           nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
         }
       });
@@ -288,16 +302,24 @@ const BillsScreen = ({ navigation }) => {
     };
   };
 
+  // Helper: get filtered presence days for a member (within current billing cycle dates)
+  const getFilteredPresence = (memberId) => {
+    const raw = memberPresence[memberId] || [];
+    return filterPresenceByDates(
+      raw,
+      selectedRoom?.billing?.start,
+      selectedRoom?.billing?.end,
+    );
+  };
+
   const calculateTotalWaterBill = () => {
-    // Total water = ALL members' presence days × ₱5 (including non-payors)
+    // Total water = members' presence days within billing period × ₱5
     if (!selectedRoom?.members || selectedRoom.members.length === 0) return 0;
     let totalDays = 0;
     selectedRoom.members.forEach((member) => {
-      const presence = memberPresence[member.id || member._id] || [];
-      totalDays += presence.length;
+      totalDays += getFilteredPresence(member.id || member._id).length;
     });
     const result = totalDays * WATER_BILL_PER_DAY;
-    // Ensure we always return a number, never undefined
     return typeof result === "number" ? result : 0;
   };
 
@@ -342,8 +364,7 @@ const BillsScreen = ({ navigation }) => {
 
   // Calculate individual member's water consumption (for "Room Members & Water Bill" section)
   const calculateMemberWaterBill = (memberId) => {
-    // Show INDIVIDUAL water consumption (days × ₱5)
-    // Non-payors' portion is NOT added here - only show what this member consumed
+    // Show INDIVIDUAL water consumption (days within billing period × ₱5)
     if (!selectedRoom?.members) return 0;
 
     const member = selectedRoom.members.find(
@@ -351,7 +372,7 @@ const BillsScreen = ({ navigation }) => {
     );
     if (!member) return 0;
 
-    const presence = memberPresence[memberId] || [];
+    const presence = getFilteredPresence(memberId);
     const result = presence.length * WATER_BILL_PER_DAY;
     return typeof result === "number" ? result : 0;
   };
@@ -386,7 +407,7 @@ const BillsScreen = ({ navigation }) => {
       }
     }
 
-    // FALLBACK: Manual calculation from room data
+    // FALLBACK: Manual calculation from room data (filtered by billing dates)
     console.log(
       `⚠️ calculateMemberWaterShare: No activeCycle, using fallback for ${memberId}`,
     );
@@ -396,13 +417,14 @@ const BillsScreen = ({ navigation }) => {
 
     selectedRoom.members.forEach((member) => {
       if (!member.isPayer) {
-        const presenceDays =
-          memberPresence[member.id || member._id]?.length || 0;
+        const presenceDays = getFilteredPresence(
+          member.id || member._id,
+        ).length;
         nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
       }
     });
 
-    const presence = memberPresence[memberId] || [];
+    const presence = getFilteredPresence(memberId);
     const memberOwnWater = presence.length * WATER_BILL_PER_DAY;
     const sharedNonPayorWater =
       payorCount > 0 ? r2(nonPayorWater / payorCount) : 0;
@@ -446,20 +468,21 @@ const BillsScreen = ({ navigation }) => {
       }
     }
 
-    // FALLBACK: Calculate from local presence data
+    // FALLBACK: Calculate from local presence data (filtered by billing dates)
     const payorCount =
       selectedRoom.members.filter((m) => m.isPayer).length || 1;
 
-    const userPresence =
-      memberPresence[currentUserMember.id || currentUserMember._id]?.length ||
-      0;
+    const userPresence = getFilteredPresence(
+      currentUserMember.id || currentUserMember._id,
+    ).length;
     const ownWater = userPresence * WATER_BILL_PER_DAY;
 
     let nonPayorWater = 0;
     selectedRoom.members.forEach((member) => {
       if (!member.isPayer) {
-        const presenceDays =
-          memberPresence[member.id || member._id]?.length || 0;
+        const presenceDays = getFilteredPresence(
+          member.id || member._id,
+        ).length;
         nonPayorWater += presenceDays * WATER_BILL_PER_DAY;
       }
     });
@@ -971,7 +994,7 @@ const BillsScreen = ({ navigation }) => {
           const useBE = bc?.isPayer;
           return {
             name: member.user?.name || "Unknown",
-            presenceDays: (memberPresence[mid] || []).length,
+            presenceDays: getFilteredPresence(mid).length,
             waterBill: calculateMemberWaterBill(mid).toFixed(2),
             isPayer: member.isPayer,
             billShare: member.isPayer
@@ -1206,7 +1229,10 @@ const BillsScreen = ({ navigation }) => {
 
         {selectedRoom && (
           <>
-            {billing?.start && billing?.end && !hasUserPaidAllBills() ? (
+            {billing?.start &&
+            billing?.end &&
+            !hasUserPaidAllBills() &&
+            selectedRoom?.cycleStatus !== "completed" ? (
               <View style={styles.contentPadding}>
                 {/* ─── BILLING PERIOD CARD ─── */}
                 <View style={styles.card}>
@@ -1680,8 +1706,10 @@ const BillsScreen = ({ navigation }) => {
                   </View>
                 )}
               </View>
-            ) : hasUserPaidAllBills() ? (
+            ) : hasUserPaidAllBills() ||
+              selectedRoom?.cycleStatus === "completed" ? (
               <View style={styles.contentPadding}>
+                {/* All Paid Banner */}
                 <View style={styles.statusCard}>
                   <View
                     style={[
@@ -1695,11 +1723,155 @@ const BillsScreen = ({ navigation }) => {
                       color={colors.success}
                     />
                   </View>
-                  <Text style={styles.statusTitle}>All Bills Paid</Text>
+                  <Text style={styles.statusTitle}>All Bills Paid!</Text>
                   <Text style={styles.statusSubtext}>
-                    You have paid all bills for this billing period
+                    {selectedRoom?.cycleStatus === "completed"
+                      ? "This billing cycle is complete. Waiting for admin to start a new billing cycle."
+                      : "You have paid all bills for this billing period. Waiting for the billing cycle to close."}
                   </Text>
                 </View>
+
+                {/* Show billing summary even after paid */}
+                {billing?.start && billing?.end && (
+                  <View style={[styles.card, { marginTop: 12 }]}>
+                    <View style={styles.cardHeader}>
+                      <View
+                        style={[
+                          styles.cardIconBg,
+                          { backgroundColor: colors.success },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="receipt-long"
+                          size={16}
+                          color={colors.textOnAccent}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Billing Summary</Text>
+                      <View
+                        style={{
+                          backgroundColor: colors.successBg,
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 10,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.success,
+                            fontSize: 11,
+                            fontWeight: "700",
+                          }}
+                        >
+                          PAID
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.periodRow}>
+                      <View style={styles.periodBlock}>
+                        <Text style={styles.periodBlockLabel}>Start</Text>
+                        <Text style={styles.periodBlockDate}>
+                          {new Date(billing.start).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </Text>
+                      </View>
+                      <View style={styles.periodArrow}>
+                        <MaterialIcons
+                          name="arrow-forward"
+                          size={20}
+                          color={colors.textSecondary}
+                        />
+                      </View>
+                      <View style={styles.periodBlock}>
+                        <Text style={styles.periodBlockLabel}>End</Text>
+                        <Text style={styles.periodBlockDate}>
+                          {new Date(billing.end).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {billShare && (
+                      <View style={{ marginTop: 12 }}>
+                        {[
+                          {
+                            label: "Rent",
+                            value: billShare.rent,
+                            color: "#e65100",
+                          },
+                          {
+                            label: "Electricity",
+                            value: billShare.electricity,
+                            color: colors.electricityColor,
+                          },
+                          {
+                            label: "Water",
+                            value: billShare.water,
+                            color: colors.info,
+                          },
+                          {
+                            label: "Internet",
+                            value: billShare.internet,
+                            color: colors.internetColor,
+                          },
+                        ].map((item, i) => (
+                          <View key={i} style={styles.shareItemPaid}>
+                            <View style={styles.shareItemLeft}>
+                              <View
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: 4,
+                                  backgroundColor: item.color,
+                                  marginRight: 8,
+                                }}
+                              />
+                              <Text style={styles.shareItemLabel}>
+                                {item.label}
+                              </Text>
+                            </View>
+                            <Text
+                              style={[
+                                styles.shareItemValue,
+                                { color: colors.success },
+                              ]}
+                            >
+                              {fmt(item.value)}
+                            </Text>
+                          </View>
+                        ))}
+                        <View
+                          style={[
+                            styles.totalDueStrip,
+                            { backgroundColor: colors.successBg },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.totalDueLabel,
+                              { color: colors.success },
+                            ]}
+                          >
+                            Total Paid
+                          </Text>
+                          <Text
+                            style={[
+                              styles.totalDueAmount,
+                              { color: colors.success },
+                            ]}
+                          >
+                            {fmt(billShare.total)}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
             ) : (
               <View style={styles.contentPadding}>
@@ -2597,6 +2769,15 @@ const createStyles = (colors) =>
       alignItems: "center",
       gap: 10,
       flex: 1,
+    },
+    shareItemPaid: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
     },
     shareItemLabel: {
       fontSize: 13,
