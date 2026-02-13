@@ -1,5 +1,7 @@
 import React, { useContext, useState, useEffect } from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../theme/ThemeContext";
 import { AuthContext } from "../context/AuthContext";
 import LoginScreen from "../screens/auth/LoginScreen";
 import RegisterScreen from "../screens/auth/RegisterScreen";
@@ -21,36 +23,44 @@ import OnboardingScreen, {
 const Stack = createNativeStackNavigator();
 
 // Auth Stack for login/register
-const AuthStack = () => (
-  <Stack.Navigator
-    screenOptions={{
-      headerShown: false,
-    }}
-  >
-    <Stack.Screen
-      name="Login"
-      component={LoginScreen}
-      options={{
-        animationEnabled: false,
+const AuthStack = () => {
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          paddingTop: insets.top,
+          backgroundColor: colors.background,
+        },
       }}
-    />
-    <Stack.Screen
-      name="Register"
-      component={RegisterScreen}
-      options={{
-        animationEnabled: false,
-      }}
-    />
-    <Stack.Screen name="RegisterStep1" component={RegisterStep1Screen} />
-    <Stack.Screen name="RegisterStep2" component={RegisterStep2Screen} />
-    <Stack.Screen name="RegisterStep3" component={RegisterStep3Screen} />
-    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-    <Stack.Screen name="VerifyResetCode" component={VerifyResetCodeScreen} />
-    <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
-    <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
-    <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-  </Stack.Navigator>
-);
+    >
+      <Stack.Screen
+        name="Login"
+        component={LoginScreen}
+        options={{
+          animationEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="Register"
+        component={RegisterScreen}
+        options={{
+          animationEnabled: false,
+        }}
+      />
+      <Stack.Screen name="RegisterStep1" component={RegisterStep1Screen} />
+      <Stack.Screen name="RegisterStep2" component={RegisterStep2Screen} />
+      <Stack.Screen name="RegisterStep3" component={RegisterStep3Screen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="VerifyResetCode" component={VerifyResetCodeScreen} />
+      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+      <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+    </Stack.Navigator>
+  );
+};
 
 const RootNavigator = () => {
   const authContext = useContext(AuthContext);

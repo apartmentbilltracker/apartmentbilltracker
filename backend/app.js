@@ -104,6 +104,7 @@ const adminRemindersRoutes = require("./controller/adminReminders-supabase");
 const notificationsRoutes = require("./controller/notifications-supabase");
 const faqRoutes = require("./controller/faq-supabase");
 const settingsRoutes = require("./controller/settings-supabase");
+const adminBroadcastRoutes = require("./controller/adminBroadcast-supabase");
 
 // App Version Check Endpoint — reads from app_settings DB table
 app.get("/api/app-version", async (req, res) => {
@@ -163,6 +164,7 @@ app.use("/api/v2/support", supportRoutes);
 app.use("/api/v2/support", bugReportRoutes);
 app.use("/api/v2/faqs", faqRoutes);
 app.use("/api/v2/settings", settingsRoutes);
+app.use("/api/v2/admin/broadcast", adminBroadcastRoutes);
 
 // Logout route - ensures the token cookie is properly removed
 app.get("/api/v2/user/logout", async (req, res, next) => {

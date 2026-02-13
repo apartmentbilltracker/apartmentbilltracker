@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ClientHomeScreen from "../screens/client/ClientHomeScreen";
 import PresenceScreen from "../screens/client/PresenceScreen";
 import BillingScreen from "../screens/client/BillingScreen";
@@ -37,8 +38,13 @@ const Tab = createBottomTabNavigator();
 /** Hook – returns themed stack header options */
 const useHeaderOptions = () => {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   return {
     headerShown: false,
+    contentStyle: {
+      paddingTop: insets.top,
+      backgroundColor: colors.background,
+    },
     headerStyle: {
       backgroundColor: colors.headerBg,
       elevation: 0,
@@ -201,25 +207,24 @@ const AnnouncementsStack = () => {
   );
 };
 
-const NotificationsStack = ({ onNotificationsStatusChange }) => (
-  <Stack.Navigator
-    screenOptions={{
-      headerShown: false,
-    }}
-  >
-    <Stack.Screen
-      name="NotificationsInbox"
-      component={NotificationsInboxScreen}
-      options={{ title: "Notifications" }}
-      listeners={({ navigation }) => ({
-        beforeRemove: () => {
-          // Refresh count when leaving NotificationsStack
-          onNotificationsStatusChange?.();
-        },
-      })}
-    />
-  </Stack.Navigator>
-);
+const NotificationsStack = ({ onNotificationsStatusChange }) => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="NotificationsInbox"
+        component={NotificationsInboxScreen}
+        options={{ title: "Notifications" }}
+        listeners={({ navigation }) => ({
+          beforeRemove: () => {
+            // Refresh count when leaving NotificationsStack
+            onNotificationsStatusChange?.();
+          },
+        })}
+      />
+    </Stack.Navigator>
+  );
+};
 
 const ClientNavigator = () => {
   const { state } = useContext(AuthContext);

@@ -382,6 +382,19 @@ const AdminProfileScreen = ({ navigation }) => {
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.legalRow}
+          onPress={() => navigation.navigate("Broadcast")}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="megaphone-outline" size={18} color={colors.accent} />
+          <Text style={styles.legalRowText}>Send Notification</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={colors.textTertiary}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.legalRow}
           onPress={() => navigation.navigate("VersionControl")}
           activeOpacity={0.7}
         >
