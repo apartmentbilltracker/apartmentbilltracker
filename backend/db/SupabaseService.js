@@ -20,7 +20,9 @@ const withRetry = async (fn, retries = 2, delayMs = 500) => {
       return await fn();
     } catch (err) {
       const isTransient =
-        err.message && (err.message.includes("<!DOCTYPE") || err.message.includes("temporarily unavailable"));
+        err.message &&
+        (err.message.includes("<!DOCTYPE") ||
+          err.message.includes("temporarily unavailable"));
       if (isTransient && i < retries) {
         await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
         continue;
@@ -35,6 +37,16 @@ const withRetry = async (fn, retries = 2, delayMs = 500) => {
  * Handles all CRUD operations and specialized queries
  */
 class SupabaseService {
+  // ============ RAW CLIENT ACCESS ============
+
+  /**
+   * Get the raw Supabase client for advanced queries (e.g. .in(), .or())
+   * @returns {import('@supabase/supabase-js').SupabaseClient}
+   */
+  static getClient() {
+    return supabase;
+  }
+
   // ============ GENERIC CRUD OPERATIONS ============
 
   /**
@@ -115,7 +127,8 @@ class SupabaseService {
       }
 
       const { data, error } = await query;
-      if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
+      if (error)
+        throw new Error(`Select error: ${sanitizeError(error.message)}`);
       return data || [];
     });
   }
@@ -129,7 +142,8 @@ class SupabaseService {
   static async selectAllRecords(table, select = "*") {
     return withRetry(async () => {
       const { data, error } = await supabase.from(table).select(select);
-      if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
+      if (error)
+        throw new Error(`Select error: ${sanitizeError(error.message)}`);
       return data || [];
     });
   }
@@ -250,6 +264,25 @@ class SupabaseService {
   static async findUserById(id) {
     const user = await this.selectByColumn("users", "id", id);
     return this.formatUserData(user);
+  }
+
+  /**
+   * Batch-fetch multiple users by IDs in a single query
+   * Returns a Map of userId → formatted user data
+   */
+  static async findUsersByIds(ids) {
+    if (!ids || ids.length === 0) return new Map();
+    const uniqueIds = [...new Set(ids)];
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .in("id", uniqueIds);
+    if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
+    const map = new Map();
+    for (const user of data || []) {
+      map.set(user.id, this.formatUserData(user));
+    }
+    return map;
   }
 
   static async findUserByPhone(phoneNumber) {

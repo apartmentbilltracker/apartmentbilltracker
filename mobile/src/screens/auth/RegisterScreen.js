@@ -261,7 +261,9 @@ const RegisterScreen = ({ navigation }) => {
 
         {/* Developer Credit Footer */}
         <View style={styles.developerFooter}>
-          <Text style={styles.developerText}>v1.1.2</Text>
+          <Text style={styles.developerText}>
+            v{Constants.expoConfig?.version || "1.0.0"}
+          </Text>
         </View>
       </View>
     </ScrollView>

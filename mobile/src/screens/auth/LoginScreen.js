@@ -5,6 +5,7 @@ import React, {
   useMemo,
   useCallback,
 } from "react";
+import Constants from "expo-constants";
 import {
   View,
   Text,
@@ -24,7 +25,6 @@ import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import * as Facebook from "expo-auth-session/providers/facebook";
 import { makeRedirectUri } from "expo-auth-session";
-import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { AuthContext } from "../../context/AuthContext";
 import { apiService } from "../../services/apiService";
@@ -582,7 +582,9 @@ const LoginScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.creditRow}>
-          <Text style={styles.creditText}>v1.1.2</Text>
+          <Text style={styles.creditText}>
+            v{Constants.expoConfig?.version || "1.0.0"}
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

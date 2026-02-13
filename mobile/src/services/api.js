@@ -4,12 +4,7 @@ import { getAPIBaseURL } from "../config/config";
 class APIClient {
   constructor() {
     this.baseURL = getAPIBaseURL();
-    this.timeout = 30000; // Increased from 15s to 30s to handle slower queries
-
-    console.log("\n=== API Initialization ===");
-    console.log("Base URL:", this.baseURL);
-    console.log("Timeout: 30000ms");
-    console.log("============================\n");
+    this.timeout = 30000;
   }
 
   // Helper to get timeout promise
@@ -35,7 +30,6 @@ class APIClient {
       }
 
       const method = options.method || "GET";
-      console.log("[API Request]", method, url);
 
       const fetchPromise = fetch(url, {
         ...options,
@@ -60,8 +54,6 @@ class APIClient {
         data = await response.text();
       }
 
-      console.log("[API Response]", response.status, url);
-
       if (!response.ok) {
         if (response.status === 401) {
           await SecureStore.deleteItemAsync("authToken");
@@ -74,12 +66,12 @@ class APIClient {
 
       return { data, status: response.status };
     } catch (error) {
-      console.log(
+      console.error(
         "[API Error]",
-        error.status || error.code || "Unknown",
+        error.status || "Unknown",
         endpoint,
+        error.message,
       );
-      console.log("[Error Message]", error.message);
       throw error;
     }
   }

@@ -13,6 +13,7 @@ import {
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { AuthContext } from "../../context/AuthContext";
 import { authService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
@@ -338,7 +339,9 @@ const RegisterStep3Screen = ({ navigation, route }) => {
         </View>
 
         <View style={styles.creditRow}>
-          <Text style={styles.creditText}>v.1.1.2</Text>
+          <Text style={styles.creditText}>
+            v{Constants.expoConfig?.version || "1.0.0"}
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
