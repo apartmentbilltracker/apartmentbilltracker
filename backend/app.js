@@ -150,6 +150,11 @@ app.get("/api/app-version", async (req, res) => {
   }
 });
 
+// Health check endpoint (for UptimeRobot / monitoring)
+app.get("/", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 app.use("/api/v2/user", user);
 app.use("/api/v2/rooms", room);
 app.use("/api/v2/billing-cycles", billingCycleRoutes);
