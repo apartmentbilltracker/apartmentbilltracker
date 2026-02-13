@@ -73,8 +73,7 @@ export const scheduleDailyPresenceReminder = async (hour = 9, minute = 0) => {
     // Calculate seconds until trigger time
     const secondsUntil = Math.floor((triggerTime - now) / 1000);
 
-    // For daily recurring notifications on Android and iOS
-    // Use seconds trigger that repeats daily
+    // Use a daily calendar trigger so it fires at the exact hour/minute every day
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: "🗓️ Mark Your Presence",
@@ -89,9 +88,9 @@ export const scheduleDailyPresenceReminder = async (hour = 9, minute = 0) => {
         priority: "high",
       },
       trigger: {
-        type: "timeInterval",
-        seconds: secondsUntil,
-        repeats: true,
+        type: "daily",
+        hour: hour,
+        minute: minute,
       },
     });
 
