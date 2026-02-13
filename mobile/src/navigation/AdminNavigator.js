@@ -3,6 +3,7 @@ import { View, StyleSheet, Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   supportService,
   roomService,
@@ -22,6 +23,7 @@ import AdminRemindersScreen from "../screens/admin/AdminRemindersScreen";
 import AdminPresenceRemindersScreen from "../screens/admin/AdminPresenceRemindersScreen";
 import AdminPaymentSettingsScreen from "../screens/admin/AdminPaymentSettingsScreen";
 import AdminVersionControlScreen from "../screens/admin/AdminVersionControlScreen";
+import AdminBroadcastScreen from "../screens/admin/AdminBroadcastScreen";
 import AdminAnnouncementsScreen from "../screens/admin/AdminAnnouncementsScreen";
 import AdminSupportTicketsScreen from "../screens/admin/AdminSupportTicketsScreen";
 import AdminBugReportsScreen from "../screens/admin/AdminBugReportsScreen";
@@ -36,8 +38,13 @@ const Tab = createBottomTabNavigator();
 /** Hook – returns themed stack header options */
 const useHeaderOptions = () => {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   return {
     headerShown: false,
+    contentStyle: {
+      paddingTop: insets.top,
+      backgroundColor: colors.background,
+    },
     headerStyle: {
       backgroundColor: colors.headerBg,
       elevation: 0,
@@ -187,6 +194,11 @@ const ProfileStack = () => {
         name="VersionControl"
         component={AdminVersionControlScreen}
         options={{ title: "Version Control" }}
+      />
+      <Stack.Screen
+        name="Broadcast"
+        component={AdminBroadcastScreen}
+        options={{ title: "Send Notification" }}
       />
     </Stack.Navigator>
   );

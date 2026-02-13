@@ -235,8 +235,8 @@ const createStyles = (colors) =>
     scrollContent: {
       flexGrow: 1,
       paddingHorizontal: 24,
-      paddingTop: 52,
-      paddingBottom: 36,
+      paddingTop: 20,
+      paddingBottom: 60,
     },
 
     backBtn: {
