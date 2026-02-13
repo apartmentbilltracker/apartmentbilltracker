@@ -48,27 +48,16 @@ const AdminBillingScreen = ({ navigation }) => {
   const [currReading, setCurrReading] = useState("");
   const [cycleCompleted, setCycleCompleted] = useState(false);
 
-  useEffect(() => {
-    fetchRooms();
-  }, []);
-
-  // Re-fetch rooms when screen gains focus so newly created rooms appear immediately
+  // Fetch rooms on mount and when screen regains focus
   useEffect(() => {
     if (isFocused) {
-      console.log(
-        "🔄 [BILLING SCREEN] Screen focused - checking for closed cycle",
-      );
       fetchRooms();
-      // Check if cycle is closed FIRST before fetching members
-      if (selectedRoom) {
-        checkAndResetIfCycleClosed();
-      }
     }
   }, [isFocused]);
 
+  // Load billing state whenever the selected room changes
   useEffect(() => {
     if (selectedRoom) {
-      // Only fetch room details if we need to (will be checked in checkAndResetIfCycleClosed)
       checkAndResetIfCycleClosed();
     }
   }, [selectedRoom]);
@@ -86,12 +75,16 @@ const AdminBillingScreen = ({ navigation }) => {
 
       // Check if room has cycleStatus from backend
       if (latestRoom?.cycleStatus === "completed" && latestRoom?.billing) {
-        // Cycle completed — show data + completed banner
-        console.log("✅ Billing cycle completed — showing summary with completed state");
         setCycleCompleted(true);
         const billing = latestRoom.billing;
-        setStartDate(billing.start ? new Date(billing.start).toISOString().split("T")[0] : "");
-        setEndDate(billing.end ? new Date(billing.end).toISOString().split("T")[0] : "");
+        setStartDate(
+          billing.start
+            ? new Date(billing.start).toISOString().split("T")[0]
+            : "",
+        );
+        setEndDate(
+          billing.end ? new Date(billing.end).toISOString().split("T")[0] : "",
+        );
         setRent(String(billing.rent || ""));
         setElectricity(String(billing.electricity || ""));
         setInternet(String(billing.internet || ""));
@@ -103,7 +96,6 @@ const AdminBillingScreen = ({ navigation }) => {
 
       if (!latestRoom || !latestRoom.currentCycleId) {
         // No active cycle and no completed cycle — reset all amounts
-        console.log("✅ No active cycle - resetting billing amounts");
         setCycleCompleted(false);
         setStartDate("");
         setEndDate("");
@@ -124,13 +116,19 @@ const AdminBillingScreen = ({ navigation }) => {
 
         const cycleStatus = response?.data?.status;
         if (cycleStatus === "completed" || cycleStatus === "closed") {
-          // Cycle is closed — show data with completed state
-          console.log("🔄 Billing cycle completed — showing with banner");
           setCycleCompleted(true);
           const billing = latestRoom.billing;
           if (billing) {
-            setStartDate(billing.start ? new Date(billing.start).toISOString().split("T")[0] : "");
-            setEndDate(billing.end ? new Date(billing.end).toISOString().split("T")[0] : "");
+            setStartDate(
+              billing.start
+                ? new Date(billing.start).toISOString().split("T")[0]
+                : "",
+            );
+            setEndDate(
+              billing.end
+                ? new Date(billing.end).toISOString().split("T")[0]
+                : "",
+            );
             setRent(String(billing.rent || ""));
             setElectricity(String(billing.electricity || ""));
             setInternet(String(billing.internet || ""));
@@ -141,7 +139,7 @@ const AdminBillingScreen = ({ navigation }) => {
           return;
         }
       } catch (cycleError) {
-        console.log("⚠️  Could not fetch cycle details, loading from room data:", cycleError.message);
+        // Could not fetch cycle details, loading from room data
       }
 
       // Cycle is still active — show amounts normally
@@ -162,7 +160,7 @@ const AdminBillingScreen = ({ navigation }) => {
       setCurrReading(String(billing.currentReading || ""));
       setMembers(latestRoom.members || []);
     } catch (error) {
-      console.log("Error checking cycle status:", error);
+      console.error("Error checking cycle status:", error);
       const billing = selectedRoom.billing;
       if (billing && billing.rent) {
         setStartDate(
@@ -191,17 +189,14 @@ const AdminBillingScreen = ({ navigation }) => {
       const allRooms = response.rooms || response.data?.rooms || [];
       setRooms(allRooms);
 
-      // If no room is currently selected or the selected room no longer exists, choose the first room
-      if (
-        !selectedRoom ||
-        !allRooms.some(
-          (r) => r.id === selectedRoom.id || r._id === selectedRoom._id,
-        )
-      ) {
-        if (allRooms.length > 0) setSelectedRoom(allRooms[0]);
-      }
+      // Always update selectedRoom to the latest data so billing state refreshes on focus
+      const currentId = selectedRoom?.id || selectedRoom?._id;
+      const updatedRoom = currentId
+        ? allRooms.find((r) => r.id === currentId || r._id === currentId)
+        : null;
+      setSelectedRoom(updatedRoom || allRooms[0] || null);
     } catch (error) {
-      console.log("Error fetching rooms:", error);
+      console.error("Error fetching rooms:", error);
     } finally {
       if (isRefresh) setRefreshing(false);
       else setLoading(false);
@@ -214,7 +209,7 @@ const AdminBillingScreen = ({ navigation }) => {
       const room = response.room || response.data?.room;
       setMembers(room.members || []);
     } catch (error) {
-      console.log("Error fetching room details:", error);
+      console.error("Error fetching room details:", error);
     }
   };
 
@@ -361,8 +356,6 @@ const AdminBillingScreen = ({ navigation }) => {
       };
 
       if (!selectedRoom.currentCycleId) {
-        // NEW CYCLE: Create the billing cycle document (first time saving billing)
-        console.log("📝 Creating new billing cycle (first save)...");
         const createResponse = await apiService.post(
           "/api/v2/billing-cycles",
           cyclePayload,
@@ -372,18 +365,12 @@ const AdminBillingScreen = ({ navigation }) => {
           throw new Error("Failed to create billing cycle");
         }
 
-        console.log(
-          "✅ New billing cycle created. Presence data will be used for charges.",
-        );
         Alert.alert(
           "Success",
           "Billing cycle created with current member presence. Click Archive & Close Cycle when ready to finalize.",
         );
       } else {
-        // EXISTING CYCLE: Update the active cycle (preserve presence, update amounts)
-        console.log(
-          "✏️  Updating existing billing cycle (preserving presence)...",
-        );
+        // EXISTING CYCLE: Update the active cycle
         const updateResponse = await apiService.put(
           `/api/v2/billing-cycles/${selectedRoom.currentCycleId}`,
           {
@@ -401,9 +388,6 @@ const AdminBillingScreen = ({ navigation }) => {
           throw new Error("Failed to update billing cycle");
         }
 
-        console.log(
-          "✅ Billing cycle updated. Presence data preserved. Charges will be recalculated.",
-        );
         Alert.alert(
           "Success",
           "Billing amounts updated. Member presence preserved. Click Archive & Close Cycle when ready.",
@@ -457,12 +441,6 @@ const AdminBillingScreen = ({ navigation }) => {
       if (internetValue !== undefined && internetValue > 0) {
         payload.internet = internetValue;
       }
-
-      console.log(
-        "🔍 Billing Cycle Payload:",
-        JSON.stringify(payload, null, 2),
-      );
-      console.log("📊 Internet value in payload:", payload.internet);
 
       // Step 2: Create billing cycle with current data
       // Create and immediately close the billing cycle
@@ -659,33 +637,51 @@ const AdminBillingScreen = ({ navigation }) => {
           <>
             {/* ─── CYCLE COMPLETED BANNER ─── */}
             {cycleCompleted && (
-              <View style={{
-                marginHorizontal: 16,
-                marginTop: 12,
-                backgroundColor: colors.successBg || "#e8f5e9",
-                borderRadius: 14,
-                padding: 16,
-                borderLeftWidth: 4,
-                borderLeftColor: colors.success || "#27ae60",
-              }}>
-                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                  <MaterialIcons name="check-circle" size={24} color={colors.success || "#27ae60"} />
-                  <Text style={{
-                    fontSize: 16,
-                    fontWeight: "700",
-                    color: colors.success || "#27ae60",
-                    marginLeft: 8,
-                  }}>
+              <View
+                style={{
+                  marginHorizontal: 16,
+                  marginTop: 12,
+                  backgroundColor: colors.successBg || "#e8f5e9",
+                  borderRadius: 14,
+                  padding: 16,
+                  borderLeftWidth: 4,
+                  borderLeftColor: colors.success || "#27ae60",
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <MaterialIcons
+                    name="check-circle"
+                    size={24}
+                    color={colors.success || "#27ae60"}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "700",
+                      color: colors.success || "#27ae60",
+                      marginLeft: 8,
+                    }}
+                  >
                     All Payors Paid!
                   </Text>
                 </View>
-                <Text style={{
-                  fontSize: 13,
-                  color: colors.textSecondary,
-                  marginBottom: 14,
-                  lineHeight: 18,
-                }}>
-                  This billing cycle has been auto-completed. All amounts are shown below for reference. Create a new billing cycle when ready.
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: colors.textSecondary,
+                    marginBottom: 14,
+                    lineHeight: 18,
+                  }}
+                >
+                  This billing cycle has been auto-completed. All amounts are
+                  shown below for reference. Create a new billing cycle when
+                  ready.
                 </Text>
                 <TouchableOpacity
                   style={{
@@ -704,7 +700,7 @@ const AdminBillingScreen = ({ navigation }) => {
                         {},
                       );
                     } catch (e) {
-                      console.log("Warning: could not clear presence:", e.message);
+                      // Could not clear presence, not critical
                     }
                     setCycleCompleted(false);
                     setStartDate("");
@@ -714,20 +710,31 @@ const AdminBillingScreen = ({ navigation }) => {
                     setInternet("");
                     setPrevReading("");
                     setCurrReading("");
-                    setMembers((prev) => prev.map((m) => ({ ...m, presence: [] })));
+                    setMembers((prev) =>
+                      prev.map((m) => ({ ...m, presence: [] })),
+                    );
                     // Clear currentCycleId so new save creates a fresh cycle
-                    setSelectedRoom((prev) => ({ ...prev, currentCycleId: null }));
+                    setSelectedRoom((prev) => ({
+                      ...prev,
+                      currentCycleId: null,
+                    }));
                     setEditMode(true);
                   }}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="add-circle" size={18} color={colors.textOnAccent} />
-                  <Text style={{
-                    color: colors.textOnAccent,
-                    fontWeight: "700",
-                    fontSize: 14,
-                    marginLeft: 6,
-                  }}>
+                  <Ionicons
+                    name="add-circle"
+                    size={18}
+                    color={colors.textOnAccent}
+                  />
+                  <Text
+                    style={{
+                      color: colors.textOnAccent,
+                      fontWeight: "700",
+                      fontSize: 14,
+                      marginLeft: 6,
+                    }}
+                  >
                     Create New Billing Cycle
                   </Text>
                 </TouchableOpacity>
@@ -919,14 +926,33 @@ const AdminBillingScreen = ({ navigation }) => {
                   />
                   <Text style={styles.formCardTitle}>Billing Details</Text>
                   {cycleCompleted && (
-                    <View style={{ backgroundColor: "#e8f5e9", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 8 }}>
-                      <Text style={{ fontSize: 10, fontWeight: "700", color: "#27ae60" }}>COMPLETED</Text>
+                    <View
+                      style={{
+                        backgroundColor: "#e8f5e9",
+                        borderRadius: 6,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        marginLeft: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: "700",
+                          color: "#27ae60",
+                        }}
+                      >
+                        COMPLETED
+                      </Text>
                     </View>
                   )}
                 </View>
                 {!editMode ? (
                   <TouchableOpacity
-                    style={[styles.editBadge, cycleCompleted && { opacity: 0.4 }]}
+                    style={[
+                      styles.editBadge,
+                      cycleCompleted && { opacity: 0.4 },
+                    ]}
                     onPress={() => {
                       if (cycleCompleted) {
                         Alert.alert(
@@ -963,15 +989,55 @@ const AdminBillingScreen = ({ navigation }) => {
               </View>
 
               {/* Billing Period */}
-              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
-                <Text style={[styles.formSectionLabel, { marginBottom: 0 }]}>BILLING PERIOD</Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 2,
+                }}
+              >
+                <Text style={[styles.formSectionLabel, { marginBottom: 0 }]}>
+                  BILLING PERIOD
+                </Text>
                 {cycleCompleted ? (
-                  <View style={{ backgroundColor: "#e8f5e9", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 8 }}>
-                    <Text style={{ fontSize: 9, fontWeight: "700", color: "#27ae60" }}>COMPLETED</Text>
+                  <View
+                    style={{
+                      backgroundColor: "#e8f5e9",
+                      borderRadius: 6,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      marginLeft: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 9,
+                        fontWeight: "700",
+                        color: "#27ae60",
+                      }}
+                    >
+                      COMPLETED
+                    </Text>
                   </View>
                 ) : startDate && endDate ? (
-                  <View style={{ backgroundColor: "#fff3e0", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 8 }}>
-                    <Text style={{ fontSize: 9, fontWeight: "700", color: "#e65100" }}>ACTIVE</Text>
+                  <View
+                    style={{
+                      backgroundColor: "#fff3e0",
+                      borderRadius: 6,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      marginLeft: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 9,
+                        fontWeight: "700",
+                        color: "#e65100",
+                      }}
+                    >
+                      ACTIVE
+                    </Text>
                   </View>
                 ) : null}
               </View>

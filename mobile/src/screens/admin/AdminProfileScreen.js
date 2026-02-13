@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import Constants from "expo-constants";
 import { AuthContext } from "../../context/AuthContext";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
@@ -238,7 +239,9 @@ const AdminProfileScreen = ({ navigation }) => {
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Version</Text>
-          <Text style={styles.infoValue}>1.1.2</Text>
+          <Text style={styles.infoValue}>
+            {Constants.expoConfig?.version || "1.0.0"}
+          </Text>
         </View>
         <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
           <Text style={styles.infoLabel}>Build</Text>

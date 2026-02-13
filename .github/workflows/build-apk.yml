@@ -38,47 +38,15 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_NO_VCS: true
         run: |
-          echo "Building APK..."
-          eas build --platform android --profile preview --non-interactive --wait > build_output.txt 2>&1
-          cat build_output.txt
+          echo "Building APK locally..."
+          eas build --platform android --profile preview --non-interactive --local --output ./app.apk
 
-          # Extract build ID from output
-          BUILD_ID=$(grep -oP 'Build ID: \K[\w\-]+' build_output.txt | head -1)
-          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
-
-          # Also try to extract direct URL if available
-          APK_URL=$(grep -oP 'https://[^\s]+\.apk' build_output.txt | head -1)
-          echo "APK_URL=$APK_URL" >> $GITHUB_ENV
-
-      - name: Download APK
-        working-directory: ./mobile
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: |
-          echo "Build ID: ${{ env.BUILD_ID }}"
-          echo "APK URL from build output: ${{ env.APK_URL }}"
-
-          # If we have a direct URL, use it
-          if [ ! -z "${{ env.APK_URL }}" ]; then
-            echo "Downloading APK from direct URL..."
-            curl -L -o ./app.apk "${{ env.APK_URL }}"
-          else
-            # Otherwise use build ID to download
-            echo "Using EAS CLI to download APK..."
-            if [ ! -z "${{ env.BUILD_ID }}" ]; then
-              eas build:download --id "${{ env.BUILD_ID }}" --path ./app.apk --non-interactive
-            else
-              echo "ERROR: Could not determine build ID or APK URL"
-              exit 1
-            fi
-          fi
-
-          # Verify APK was downloaded
+          # Verify APK was built
           if [ -f "./app.apk" ]; then
             SIZE=$(ls -lh ./app.apk | awk '{print $5}')
-            echo "✅ APK downloaded successfully - Size: $SIZE"
+            echo "✅ APK built successfully - Size: $SIZE"
           else
-            echo "❌ APK download failed"
+            echo "❌ APK build failed"
             exit 1
           fi
 

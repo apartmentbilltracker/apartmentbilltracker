@@ -7,7 +7,6 @@ const cloudinary = require("cloudinary").v2;
 const fileUpload = require("express-fileupload");
 const path = require("path");
 const fs = require("fs");
-const net = require("net");
 
 // Cloudinary config
 cloudinary.config({
@@ -80,47 +79,10 @@ app.use(
   }),
 );
 
-// Add this after fileUpload middleware
-app.use((req, res, next) => {
-  if (req.files) {
-    console.log("Files received:", {
-      fileNames: Object.keys(req.files),
-      fileDetails: Object.entries(req.files).map(([key, file]) => ({
-        name: file.name,
-        type: file.mimetype,
-        size: file.size,
-      })),
-    });
-  }
-  next();
-});
-
 app.use(cookieParser());
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-
-// Test cookie setting
-app.use("/test", (req, res) => {
-  res
-    .cookie("testCookie", "testValue", {
-      httpOnly: true,
-      sameSite: "none",
-      secure: true,
-    })
-    .send("Hello world!");
-});
-
-// Test cookie clearing
-app.use("/clear-cookie", (req, res) => {
-  res.cookie("testCookie", "", {
-    expires: new Date(0),
-    httpOnly: true,
-    sameSite: "none",
-    secure: true,
-  });
-  res.send("Cookie cleared");
-});
 
 // Load environment variables
 if (process.env.NODE_ENV !== "PRODUCTION") {
@@ -143,77 +105,6 @@ const notificationsRoutes = require("./controller/notifications-supabase");
 const faqRoutes = require("./controller/faq-supabase");
 const settingsRoutes = require("./controller/settings-supabase");
 
-// 5. Debug Endpoints (Add before routes)
-app.post("/api/v2/debug/upload", (req, res) => {
-  console.log(
-    "Debug upload - Files:",
-    req.files ? Object.keys(req.files) : "none",
-  );
-  console.log("Debug upload - Body:", req.body);
-
-  if (req.files?.testFile) {
-    const file = req.files.testFile;
-    return res.status(200).json({
-      success: true,
-      fileName: file.name,
-      size: file.size,
-      mimetype: file.mimetype,
-    });
-  }
-
-  res.status(400).json({
-    success: false,
-    message: "No file received",
-  });
-});
-
-// Debug: SMTP connectivity check (temporary)
-app.get("/api/v2/debug/smtp-check", (req, res) => {
-  const host = process.env.SMPT_HOST;
-  const port = process.env.SMPT_PORT ? Number(process.env.SMPT_PORT) : 465;
-
-  if (!host) {
-    return res
-      .status(400)
-      .json({ success: false, message: "SMPT_HOST not set" });
-  }
-
-  const socket = new net.Socket();
-  let finished = false;
-
-  socket.setTimeout(8000);
-
-  socket.on("connect", () => {
-    finished = true;
-    socket.destroy();
-    return res
-      .status(200)
-      .json({ success: true, message: `Connected to ${host}:${port}` });
-  });
-
-  socket.on("timeout", () => {
-    if (finished) return;
-    finished = true;
-    socket.destroy();
-    return res
-      .status(504)
-      .json({ success: false, message: "Connection timed out" });
-  });
-
-  socket.on("error", (err) => {
-    if (finished) return;
-    finished = true;
-    socket.destroy();
-    return res.status(502).json({
-      success: false,
-      message: "Connection error",
-      error: err.message,
-    });
-  });
-
-  socket.connect(port, host);
-});
-
 // App Version Check Endpoint — reads from app_settings DB table
 app.get("/api/app-version", async (req, res) => {
   try {
@@ -226,9 +117,16 @@ app.get("/api/app-version", async (req, res) => {
       console.error("app_settings read error for version check:", err.message);
     }
 
-    const minVersion = settings?.min_app_version || process.env.MIN_APP_VERSION || "1.0.0";
-    const isForced = settings?.force_update ?? (process.env.FORCE_APP_UPDATE === "true") ?? false;
-    const updateUrl = settings?.update_url || process.env.APP_UPDATE_URL || "https://github.com/@apartmentbilltracker/apartment-bill-tracker/releases";
+    const minVersion =
+      settings?.min_app_version || process.env.MIN_APP_VERSION || "1.0.0";
+    const isForced =
+      settings?.force_update ??
+      process.env.FORCE_APP_UPDATE === "true" ??
+      false;
+    const updateUrl =
+      settings?.update_url ||
+      process.env.APP_UPDATE_URL ||
+      "https://github.com/@apartmentbilltracker/apartment-bill-tracker/releases";
     const latestVersion = settings?.latest_app_version || minVersion;
     const updateMessage = settings?.update_message || "";
 

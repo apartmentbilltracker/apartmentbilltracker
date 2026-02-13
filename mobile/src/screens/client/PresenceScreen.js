@@ -91,7 +91,9 @@ const PresenceScreen = () => {
       // Auto-set calendar to the billing cycle start month
       if (selectedRoom?.billing?.start) {
         const billingStart = new Date(selectedRoom.billing.start);
-        setCurrentMonth(new Date(billingStart.getFullYear(), billingStart.getMonth(), 1));
+        setCurrentMonth(
+          new Date(billingStart.getFullYear(), billingStart.getMonth(), 1),
+        );
       }
     }
   }, [selectedRoom?.id || selectedRoom?._id]);
@@ -167,7 +169,6 @@ const PresenceScreen = () => {
 
     // Prevent duplicate marking requests
     if (isMarkingInProgress) {
-      console.log("⏱️ Mark request already in progress, skipping duplicate");
       return;
     }
 
@@ -175,7 +176,6 @@ const PresenceScreen = () => {
 
     // Prevent double-clicking the same date
     if (pendingUpdatesRef.current.has(dateStr)) {
-      console.log(`⏱️ Date ${dateStr} already being processed`);
       return;
     }
 
@@ -212,7 +212,6 @@ const PresenceScreen = () => {
     updateTimeoutRef.current = setTimeout(async () => {
       // Prevent duplicate API calls
       if (isMarkingInProgress) {
-        console.log("⏱️ Another marking request in progress, will retry");
         updateTimeoutRef.current = setTimeout(() => markPresence(date), 300);
         return;
       }
@@ -220,7 +219,6 @@ const PresenceScreen = () => {
       setIsMarkingInProgress(true);
 
       try {
-        console.log("📤 Sending presence update:", updatedDates);
         await presenceService.markPresence(
           selectedRoom.id || selectedRoom._id,
           {
@@ -293,8 +291,6 @@ const PresenceScreen = () => {
       let updatedDates = [...new Set([...markedDates, ...datesToAdd])];
       updatedDates.sort();
 
-      console.log("Marking all month dates:", datesToAdd.length, "dates");
-
       await presenceService.markPresence(selectedRoom.id || selectedRoom._id, {
         presenceDates: updatedDates,
       });
@@ -356,8 +352,6 @@ const PresenceScreen = () => {
 
       let updatedDates = [...new Set([...markedDates, ...datesToAdd])];
       updatedDates.sort();
-
-      console.log("Marking workdays:", datesToAdd.length, "dates");
 
       await presenceService.markPresence(selectedRoom.id || selectedRoom._id, {
         presenceDates: updatedDates,
@@ -423,8 +417,6 @@ const PresenceScreen = () => {
 
       let updatedDates = [...new Set([...markedDates, ...datesToAdd])];
       updatedDates.sort();
-
-      console.log("Marking date range:", datesToAdd.length, "dates");
 
       await presenceService.markPresence(selectedRoom.id || selectedRoom._id, {
         presenceDates: updatedDates,

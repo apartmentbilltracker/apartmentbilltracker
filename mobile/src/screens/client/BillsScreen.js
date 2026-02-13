@@ -69,85 +69,39 @@ const BillsScreen = ({ navigation }) => {
 
   // Refetch whenever user profile changes (name or avatar)
   useEffect(() => {
-    console.log("User profile changed, refetching rooms");
     fetchRooms();
   }, [state.user?.name, state.user?.avatar?.url]);
 
   useEffect(() => {
     if (selectedRoom) {
-      loadMemberPresence(selectedRoom.id || selectedRoom._id);
-      fetchActiveBillingCycle(selectedRoom.id || selectedRoom._id); // Fetch active cycle for accurate charges
-      console.log("📍 BillsScreen - selectedRoom changed");
-      console.log("   Room ID:", selectedRoom.id || selectedRoom._id);
-      console.log("   memberPayments:", selectedRoom.memberPayments);
-      console.log("   billing:", selectedRoom.billing);
-      if (
-        selectedRoom.memberPayments &&
-        selectedRoom.memberPayments.length > 0
-      ) {
-        console.log("   First memberPayment:", selectedRoom.memberPayments[0]);
-      }
+      // Extract presence directly from already-loaded room members (no extra API call)
+      extractMemberPresence(selectedRoom);
+      fetchActiveBillingCycle(selectedRoom.id || selectedRoom._id);
     }
   }, [selectedRoom]);
 
-  const loadMemberPresence = async (roomId) => {
-    try {
-      console.log("Loading presence for room:", roomId);
-
-      // Fetch the room data directly - presence is already embedded in members
-      const roomResponse = await roomService.getRoomById(roomId);
-      const roomData = roomResponse.data || roomResponse;
-      const room = roomData.room || roomData;
-
-      console.log("Room data with members:", room.members);
-
-      // Extract presence by member from room members
-      if (room?.members) {
-        const presenceMap = {};
-        room.members.forEach((member) => {
-          presenceMap[member.id || member._id] = member.presence || [];
-          console.log(`Member ${member.user?.name} presence:`, member.presence);
-        });
-        setMemberPresence(presenceMap);
-        console.log("Member presence map:", presenceMap);
-      }
-    } catch (error) {
-      console.error("Error loading member presence:", error);
+  // Extract presence from already-loaded room data — no extra API call needed
+  const extractMemberPresence = (room) => {
+    if (room?.members) {
+      const presenceMap = {};
+      room.members.forEach((member) => {
+        presenceMap[member.id || member._id] = member.presence || [];
+      });
+      setMemberPresence(presenceMap);
     }
   };
 
   const fetchActiveBillingCycle = async (roomId) => {
     try {
-      console.log("🔄 Fetching active billing cycle for room:", roomId);
       const response = await billingCycleService.getBillingCycles(roomId);
-      console.log("📦 getBillingCycles response:", response);
-
-      // Response could be: array directly, or { billingCycles: array }
       let cycles = Array.isArray(response)
         ? response
         : response?.billingCycles || response?.data || [];
-      console.log("📋 Parsed cycles:", cycles);
 
-      // Find active cycle
       const active = cycles.find((c) => c.status === "active");
-      if (active) {
-        setActiveCycle(active);
-        console.log(
-          "✅ Active cycle found:",
-          active.id || active._id,
-          "with memberCharges count:",
-          active.memberCharges?.length,
-        );
-        console.log(
-          "   memberCharges:",
-          JSON.stringify(active.memberCharges, null, 2),
-        );
-      } else {
-        console.log("⚠️ No active cycle found in", cycles.length, "cycles");
-        setActiveCycle(null);
-      }
+      setActiveCycle(active || null);
     } catch (error) {
-      console.error("❌ Error fetching active billing cycle:", error);
+      console.error("Error fetching active billing cycle:", error);
       setActiveCycle(null);
     }
   };
@@ -155,35 +109,20 @@ const BillsScreen = ({ navigation }) => {
   const fetchRooms = async (skipAutoSelect = false) => {
     try {
       setLoading(true);
-      console.log("Fetching rooms...");
       const response = await roomService.getClientRooms();
-      console.log("Bills Screen - getClientRooms response:", response);
-      // Handle response structure from fetch API: response = { data, status }
       const data = response.data || response;
       const fetchedRooms = data.rooms || data || [];
-      console.log("Bills Screen - fetched rooms:", fetchedRooms);
-      console.log(
-        "Bills Screen - first room members:",
-        fetchedRooms[0]?.members,
-      );
 
-      // Backend already filters to show only rooms user is part of (via $or query with memberPayments)
-      // So use all returned rooms without additional filtering
-      console.log("Bills Screen - user rooms:", fetchedRooms);
       setRooms(fetchedRooms);
 
-      // Update selectedRoom with fresh data or set to first room
-      // Skip auto-selection if explicitly requested (e.g., when returning from payment)
       if (!skipAutoSelect) {
         if (selectedRoom && fetchedRooms.length > 0) {
-          // Find the updated version of the currently selected room
           const updatedSelectedRoom = fetchedRooms.find(
             (room) =>
               (room.id || room._id) === (selectedRoom.id || selectedRoom._id),
           );
           if (updatedSelectedRoom) {
             setSelectedRoom(updatedSelectedRoom);
-            console.log("Updated selectedRoom with fresh data");
           }
         } else if (fetchedRooms.length > 0) {
           setSelectedRoom(fetchedRooms[0]);
@@ -191,7 +130,6 @@ const BillsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error("Error fetching rooms:", error.message);
-      console.error("Error details:", error);
       Alert.alert("Error", "Failed to load rooms");
     } finally {
       setLoading(false);
@@ -201,9 +139,6 @@ const BillsScreen = ({ navigation }) => {
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchRooms();
-    if (selectedRoom) {
-      await loadMemberPresence(selectedRoom.id || selectedRoom._id);
-    }
     setRefreshing(false);
   };
 
@@ -212,18 +147,10 @@ const BillsScreen = ({ navigation }) => {
 
     // PRIORITY 1: Use activeCycle memberCharges if available AND populated
     if (activeCycle?.memberCharges?.length > 0) {
-      console.log("💼 calculateBillShare: Using activeCycle memberCharges");
       const userCharge = activeCycle.memberCharges.find(
         (c) => String(c.userId) === String(userId),
       );
       if (userCharge) {
-        console.log("   Found user charge:", {
-          water: userCharge.waterBillShare,
-          rent: userCharge.rentShare,
-          electricity: userCharge.electricityShare,
-          internet: userCharge.internetShare,
-          total: userCharge.totalDue,
-        });
         return {
           rent: userCharge.rentShare || 0,
           electricity: userCharge.electricityShare || 0,
@@ -236,11 +163,6 @@ const BillsScreen = ({ navigation }) => {
     }
 
     // FALLBACK: Calculate from room data if no active cycle or empty memberCharges
-    console.log(
-      activeCycle
-        ? "⚠️ calculateBillShare: activeCycle found but memberCharges empty, using fallback"
-        : "⚠️ calculateBillShare: No activeCycle yet, using fallback calculation",
-    );
     const billing = selectedRoom.billing;
     const members = selectedRoom.members || [];
     const payorCount = Math.max(
@@ -285,9 +207,6 @@ const BillsScreen = ({ navigation }) => {
       const sharedNonPayorWater =
         payorCount > 0 ? r2(nonPayorWater / payorCount) : 0;
       waterShare = r2(userOwnWater + sharedNonPayorWater);
-      console.log(
-        `   Fallback water calc: own=${userOwnWater}, shared=${sharedNonPayorWater}, total=${waterShare}`,
-      );
     }
 
     return {
@@ -327,39 +246,17 @@ const BillsScreen = ({ navigation }) => {
   const hasUserPaidAllBills = () => {
     if (!selectedRoom || !userId) return false;
 
-    console.log("🔍 BillsScreen - Checking payment status for user:", userId);
-    console.log("   memberPayments available:", selectedRoom.memberPayments);
-
-    // Find user's payment status
     const userPayment = selectedRoom.memberPayments?.find(
       (mp) => String(mp.member) === String(userId),
     );
-
-    console.log("   userPayment found:", userPayment);
-
     if (!userPayment) return false;
 
-    // User has paid all bills if all statuses are "paid"
-    const allPaid =
+    return (
       userPayment.rentStatus === "paid" &&
       userPayment.electricityStatus === "paid" &&
       userPayment.waterStatus === "paid" &&
-      userPayment.internetStatus === "paid";
-
-    console.log(
-      "   rentStatus:",
-      userPayment.rentStatus,
-      "electricityStatus:",
-      userPayment.electricityStatus,
-      "waterStatus:",
-      userPayment.waterStatus,
-      "internetStatus:",
-      userPayment.internetStatus,
-      "allPaid:",
-      allPaid,
+      userPayment.internetStatus === "paid"
     );
-
-    return allPaid;
   };
 
   // Calculate individual member's water consumption (for "Room Members & Water Bill" section)
@@ -393,24 +290,15 @@ const BillsScreen = ({ navigation }) => {
 
     // PRIORITY 1: Use active billing cycle data if populated
     if (activeCycle?.memberCharges?.length > 0 && userId) {
-      console.log(
-        `💧 calculateMemberWaterShare: Using activeCycle memberCharges for ${memberId}`,
-      );
       const userCharge = activeCycle.memberCharges.find(
         (c) => String(c.userId) === String(memberId),
       );
       if (userCharge && userCharge.isPayer) {
-        console.log(
-          `   Found user charge water share: ${userCharge.waterBillShare}`,
-        );
         return userCharge.waterBillShare || 0;
       }
     }
 
     // FALLBACK: Manual calculation from room data (filtered by billing dates)
-    console.log(
-      `⚠️ calculateMemberWaterShare: No activeCycle, using fallback for ${memberId}`,
-    );
     const payorCount =
       selectedRoom.members.filter((m) => m.isPayer).length || 1;
     let nonPayorWater = 0;
@@ -429,9 +317,6 @@ const BillsScreen = ({ navigation }) => {
     const sharedNonPayorWater =
       payorCount > 0 ? r2(nonPayorWater / payorCount) : 0;
 
-    console.log(
-      `   Fallback: own=${memberOwnWater}, shared=${sharedNonPayorWater}, total=${memberOwnWater + sharedNonPayorWater}`,
-    );
     const result = r2(memberOwnWater + sharedNonPayorWater);
     return typeof result === "number" ? result : 0;
   };
@@ -530,13 +415,9 @@ const BillsScreen = ({ navigation }) => {
   };
 
   const getFirstDayOfMonth = (date) => {
-    // Use UTC to avoid timezone issues
     const firstDay = new Date(
       Date.UTC(date.getFullYear(), date.getMonth(), 1),
     ).getUTCDay();
-    console.log(
-      `Calendar Debug: ${date.getMonth() + 1}/${date.getFullYear()} starts on day ${firstDay} (0=Sun, 4=Thu)`,
-    );
     return firstDay;
   };
 
@@ -556,10 +437,6 @@ const BillsScreen = ({ navigation }) => {
     const firstDay = getFirstDayOfMonth(presenceMonth);
     const days = [];
 
-    console.log(
-      `Generating calendar: ${year}-${month + 1}, ${daysInMonth} days, starting on day ${firstDay}`,
-    );
-
     // Add empty cells for days before month starts (Sunday = 0)
     for (let i = 0; i < firstDay; i++) {
       days.push(null);
@@ -575,7 +452,6 @@ const BillsScreen = ({ navigation }) => {
       days.push(null);
     }
 
-    console.log(`Calendar grid size: ${days.length} cells`);
     return days;
   };
 

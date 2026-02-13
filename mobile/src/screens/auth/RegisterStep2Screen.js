@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo } from "react";
+import Constants from "expo-constants";
 import {
   View,
   Text,
@@ -219,7 +220,9 @@ const RegisterStep2Screen = ({ navigation, route }) => {
         </View>
 
         <View style={styles.creditRow}>
-          <Text style={styles.creditText}>v.1.1.2</Text>
+          <Text style={styles.creditText}>
+            v{Constants.expoConfig?.version || "1.0.0"}
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

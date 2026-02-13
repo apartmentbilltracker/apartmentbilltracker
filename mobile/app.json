@@ -3,7 +3,7 @@
     "name": "Apartment Bill Tracker",
     "slug": "apartment-bill-tracker",
     "icon": "./src/assets/icon.png",
-    "version": "1.1.2",
+    "version": "1.1.3",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "aptbilltracker",

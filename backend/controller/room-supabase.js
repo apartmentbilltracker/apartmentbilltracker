@@ -29,6 +29,28 @@ const normalizeRoom = (room) => {
   return room;
 };
 
+// Helper: fetch approved members for a room with user details (batch lookup)
+const enrichRoomMembers = async (roomId) => {
+  const members = await SupabaseService.getRoomMembers(roomId);
+  const userMap = await SupabaseService.findUsersByIds(
+    (members || []).map((m) => m.user_id),
+  );
+  return (members || []).map((member) => {
+    const user = userMap.get(member.user_id);
+    return {
+      ...normalizeMember(member),
+      user: user
+        ? {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar,
+          }
+        : null,
+    };
+  });
+};
+
 // ============================================================
 // CREATE ROOM
 // ============================================================
@@ -60,39 +82,23 @@ router.get("/", isAuthenticated, async (req, res, next) => {
     let rooms = [];
 
     if (req.user.role && req.user.role.includes("admin")) {
-      // Admin sees all rooms
       rooms = await SupabaseService.selectAllRecords("rooms");
     } else {
-      // Regular user sees only rooms they're members of
       const userRooms = await SupabaseService.getUserRooms(req.user.id);
       rooms = userRooms || [];
     }
 
-    // Enhance rooms with member details (populate-like functionality)
-    for (let room of rooms) {
-      const members = await SupabaseService.getRoomMembers(room.id);
-      const enrichedMembers = [];
-      for (let member of members || []) {
-        const user = await SupabaseService.findUserById(member.user_id);
-        enrichedMembers.push({
-          ...normalizeMember(member),
-          user: user
-            ? {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                avatar: user.avatar,
-              }
-            : null,
-        });
-      }
-      room.members = enrichedMembers;
-      normalizeRoom(room);
+    // Parallel member enrichment for all rooms
+    const enrichedMembersPerRoom = await Promise.all(
+      rooms.map((r) => enrichRoomMembers(r.id)),
+    );
+    for (let i = 0; i < rooms.length; i++) {
+      rooms[i].members = enrichedMembersPerRoom[i];
+      normalizeRoom(rooms[i]);
     }
 
     res.status(200).json({ success: true, rooms });
   } catch (error) {
-    console.error("Error in GET /api/v2/rooms:", error);
     next(new ErrorHandler(error.message, 500));
   }
 });
@@ -102,17 +108,54 @@ router.get("/", isAuthenticated, async (req, res, next) => {
 // ============================================================
 router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
   try {
-    // Always filter by membership, even if user is admin
     const userRooms = await SupabaseService.getUserRooms(req.user.id);
     const rooms = userRooms || [];
 
-    // Enhance rooms with member details
-    for (let room of rooms) {
-      const members = await SupabaseService.getRoomMembers(room.id);
-      const enrichedMembers = [];
-      for (let member of members || []) {
-        const user = await SupabaseService.findUserById(member.user_id);
-        enrichedMembers.push({
+    // ── Parallel: fetch members + billing cycles for ALL rooms at once ──
+    const [membersPerRoom, cyclesPerRoom] = await Promise.all([
+      Promise.all(rooms.map((r) => SupabaseService.getRoomMembers(r.id))),
+      Promise.all(
+        rooms.map((r) => SupabaseService.getActiveBillingCycle(r.id)),
+      ),
+    ]);
+
+    // Collect all unique user IDs across all rooms for a single batch lookup
+    const allUserIds = new Set();
+    membersPerRoom.forEach((members) =>
+      (members || []).forEach((m) => allUserIds.add(m.user_id)),
+    );
+    const userMap = await SupabaseService.findUsersByIds([...allUserIds]);
+
+    // ── Parallel: fetch payments for rooms that have an active cycle ──
+    const paymentPromises = cyclesPerRoom.map((cycle, i) =>
+      cycle
+        ? SupabaseService.getPaymentsForCycle(
+            rooms[i].id,
+            cycle.start_date,
+            cycle.end_date,
+          )
+        : Promise.resolve(null),
+    );
+    // For rooms without active cycle, fetch billing cycles to find closed one
+    const closedCyclePromises = cyclesPerRoom.map((cycle, i) =>
+      !cycle
+        ? SupabaseService.getRoomBillingCycles(rooms[i].id)
+        : Promise.resolve(null),
+    );
+    const [paymentsPerRoom, allCyclesPerRoom] = await Promise.all([
+      Promise.all(paymentPromises),
+      Promise.all(closedCyclePromises),
+    ]);
+
+    // ── Assemble room data (no more awaits, pure in-memory) ──
+    for (let i = 0; i < rooms.length; i++) {
+      const room = rooms[i];
+      const members = membersPerRoom[i] || [];
+
+      // Enrich members from batch user map
+      room.members = members.map((member) => {
+        const user = userMap.get(member.user_id);
+        return {
           ...normalizeMember(member),
           user: user
             ? {
@@ -122,145 +165,107 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
                 avatar: user.avatar,
               }
             : null,
-        });
-      }
-      room.members = enrichedMembers;
+        };
+      });
       normalizeRoom(room);
 
-      // Attach active billing cycle data
-      try {
-        const activeCycle = await SupabaseService.getActiveBillingCycle(
-          room.id,
+      const activeCycle = cyclesPerRoom[i];
+      if (activeCycle) {
+        room.currentCycleId = activeCycle.id;
+        room.cycleStatus = "active";
+        room.billing = {
+          start: activeCycle.start_date,
+          end: activeCycle.end_date,
+          rent: activeCycle.rent || 0,
+          electricity: activeCycle.electricity || 0,
+          water: activeCycle.water_bill_amount || 0,
+          internet: activeCycle.internet || 0,
+          previousReading: activeCycle.previous_meter_reading ?? null,
+          currentReading: activeCycle.current_meter_reading ?? null,
+        };
+
+        // Build memberPayments
+        const payments = paymentsPerRoom[i] || [];
+        const completedPayments = payments.filter(
+          (p) => p.status === "completed" || p.status === "verified",
         );
-        if (activeCycle) {
-          room.currentCycleId = activeCycle.id;
-          room.cycleStatus = "active";
-          room.billing = {
-            start: activeCycle.start_date,
-            end: activeCycle.end_date,
-            rent: activeCycle.rent || 0,
-            electricity: activeCycle.electricity || 0,
-            water: activeCycle.water_bill_amount || 0,
-            internet: activeCycle.internet || 0,
-            previousReading: activeCycle.previous_meter_reading ?? null,
-            currentReading: activeCycle.current_meter_reading ?? null,
-          };
-
-          // Build memberPayments (payment status per payor)
-          const payments =
-            (await SupabaseService.getPaymentsForCycle(
-              room.id,
-              activeCycle.start_date,
-              activeCycle.end_date,
-            )) || [];
-          const completedPayments = payments.filter(
-            (p) => p.status === "completed" || p.status === "verified",
+        const payerMembers = members.filter((m) => m.is_payer);
+        room.memberPayments = payerMembers.map((member) => {
+          const mp = completedPayments.filter(
+            (p) => p.paid_by === member.user_id,
           );
+          const isTotalPaid = mp.some((p) => p.bill_type === "total");
+          const rentPaid =
+            isTotalPaid || mp.some((p) => p.bill_type === "rent");
+          const elecPaid =
+            isTotalPaid || mp.some((p) => p.bill_type === "electricity");
+          const waterPaid =
+            isTotalPaid || mp.some((p) => p.bill_type === "water");
+          const internetPaid =
+            isTotalPaid || mp.some((p) => p.bill_type === "internet");
+          return {
+            member: member.user_id,
+            memberName: member.name,
+            isPayer: member.is_payer,
+            rentStatus: rentPaid ? "paid" : "unpaid",
+            electricityStatus: elecPaid ? "paid" : "unpaid",
+            waterStatus: waterPaid ? "paid" : "unpaid",
+            internetStatus: internetPaid ? "paid" : "unpaid",
+            allPaid: rentPaid && elecPaid && waterPaid && internetPaid,
+          };
+        });
 
-          const payerMembers = (members || []).filter((m) => m.is_payer);
-          room.memberPayments = payerMembers.map((member) => {
-            const memberPayments = completedPayments.filter(
-              (p) => p.paid_by === member.user_id,
-            );
-            const rentPayment = memberPayments.find(
-              (p) => p.bill_type === "rent",
-            );
-            const electricityPayment = memberPayments.find(
-              (p) => p.bill_type === "electricity",
-            );
-            const waterPayment = memberPayments.find(
-              (p) => p.bill_type === "water",
-            );
-            const internetPayment = memberPayments.find(
-              (p) => p.bill_type === "internet",
-            );
-            const totalPayment = memberPayments.find(
-              (p) => p.bill_type === "total",
-            );
-            const isTotalPaid = !!totalPayment;
-
-            return {
-              member: member.user_id,
-              memberName: member.name,
-              isPayer: member.is_payer,
-              rentStatus: rentPayment || isTotalPaid ? "paid" : "unpaid",
-              electricityStatus:
-                electricityPayment || isTotalPaid ? "paid" : "unpaid",
-              waterStatus: waterPayment || isTotalPaid ? "paid" : "unpaid",
-              internetStatus:
-                internetPayment || isTotalPaid ? "paid" : "unpaid",
-              allPaid:
-                !!totalPayment ||
-                (!!rentPayment &&
-                  !!electricityPayment &&
-                  !!waterPayment &&
-                  !!internetPayment),
-            };
-          });
-
-          // Check if all payors have paid — if so, auto-close the cycle (lightweight)
-          const payerPaymentStatuses = room.memberPayments || [];
-          if (payerPaymentStatuses.length > 0 && payerPaymentStatuses.every(mp => mp.allPaid)) {
-            try {
-              // Direct lightweight update instead of heavy checkAndAutoCloseCycle
-              await SupabaseService.update("billing_cycles", activeCycle.id, {
-                status: "completed",
-                closed_at: new Date(),
-              });
-              room.cycleStatus = "completed";
-              console.log(`[MY-ROOMS] Auto-closed cycle for ${room.name}`);
-            } catch (acErr) {
-              console.log(`[MY-ROOMS] Auto-close error:`, acErr.message);
-            }
-          }
-        } else {
-          // No active cycle — check for most recently completed cycle
+        // Auto-close if all payors paid
+        if (
+          room.memberPayments.length > 0 &&
+          room.memberPayments.every((mp) => mp.allPaid)
+        ) {
           try {
-            const allCycles = await SupabaseService.getRoomBillingCycles(room.id);
-            const closedCycle = (allCycles || [])
-              .filter((c) => c.status === "completed" || c.status === "closed")
-              .sort((a, b) => new Date(b.closed_at || b.end_date) - new Date(a.closed_at || a.end_date))[0];
-            if (closedCycle) {
-              room.cycleStatus = "completed";
-              room.closedCycleId = closedCycle.id;
-              room.billing = {
-                start: closedCycle.start_date,
-                end: closedCycle.end_date,
-                rent: closedCycle.rent || 0,
-                electricity: closedCycle.electricity || 0,
-                water: closedCycle.water_bill_amount || 0,
-                internet: closedCycle.internet || 0,
-                previousReading: closedCycle.previous_meter_reading ?? null,
-                currentReading: closedCycle.current_meter_reading ?? null,
-              };
-
-              // Populate memberPayments for closed cycle (all payors should be paid)
-              const payerMembers = (members || []).filter((m) => m.is_payer);
-              room.memberPayments = payerMembers.map((member) => ({
-                member: member.user_id,
-                memberName: member.name,
-                isPayer: member.is_payer,
-                rentStatus: "paid",
-                electricityStatus: "paid",
-                waterStatus: "paid",
-                internetStatus: "paid",
-                allPaid: true,
-              }));
-            }
-          } catch (closedErr) {
-            console.log(`[MY-ROOMS] Error fetching closed cycles for room ${room.name}:`, closedErr.message);
+            await SupabaseService.update("billing_cycles", activeCycle.id, {
+              status: "completed",
+              closed_at: new Date(),
+            });
+            room.cycleStatus = "completed";
+          } catch (_) {
+            /* ignore auto-close errors */
           }
         }
-      } catch (billingError) {
-        console.log(
-          `[MY-ROOMS] No active billing for room ${room.name}:`,
-          billingError.message,
-        );
+      } else {
+        // No active cycle — find most recent closed cycle
+        const allCycles = allCyclesPerRoom[i] || [];
+        const closedCycle = allCycles
+          .filter((c) => c.status === "completed" || c.status === "closed")
+          .sort(
+            (a, b) =>
+              new Date(b.closed_at || b.end_date) -
+              new Date(a.closed_at || a.end_date),
+          )[0];
+        if (closedCycle) {
+          room.cycleStatus = "completed";
+          room.closedCycleId = closedCycle.id;
+          room.billing = {
+            start: closedCycle.start_date,
+            end: closedCycle.end_date,
+            rent: closedCycle.rent || 0,
+            electricity: closedCycle.electricity || 0,
+            water: closedCycle.water_bill_amount || 0,
+            internet: closedCycle.internet || 0,
+            previousReading: closedCycle.previous_meter_reading ?? null,
+            currentReading: closedCycle.current_meter_reading ?? null,
+          };
+          const payerMembers = members.filter((m) => m.is_payer);
+          room.memberPayments = payerMembers.map((member) => ({
+            member: member.user_id,
+            memberName: member.name,
+            isPayer: member.is_payer,
+            rentStatus: "paid",
+            electricityStatus: "paid",
+            waterStatus: "paid",
+            internetStatus: "paid",
+            allPaid: true,
+          }));
+        }
       }
-
-      console.log(
-        `[MY-ROOMS] ${room.name}: members=${enrichedMembers.length}, billing=${room.billing ? "yes" : "no"}`,
-      );
     }
 
     res.status(200).json({ success: true, rooms });
@@ -275,47 +280,38 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
 // ============================================================
 router.get("/browse/available", isAuthenticated, async (req, res, next) => {
   try {
-    console.log("GET /api/v2/rooms/browse/available - User ID:", req.user.id);
+    // Parallel: all rooms + user's own memberships (for pending check)
+    const [rooms, userMemberships] = await Promise.all([
+      SupabaseService.selectAllRecords("rooms"),
+      SupabaseService.selectAll(
+        "room_members",
+        "user_id",
+        req.user.id,
+        "*",
+        "joined_at",
+      ),
+    ]);
 
-    const rooms = await SupabaseService.selectAllRecords("rooms");
-
-    // Get user's pending memberships
-    const allMemberships =
-      await SupabaseService.selectAllRecords("room_members");
-    const userPendingRoomIds = (allMemberships || [])
-      .filter((m) => m.user_id === req.user.id && m.status === "pending")
+    const userPendingRoomIds = (userMemberships || [])
+      .filter((m) => m.status === "pending")
       .map((m) => m.room_id);
 
-    // Enhance rooms with member details (only approved members)
-    for (let room of Array.isArray(rooms) ? rooms : []) {
-      const members = await SupabaseService.getRoomMembers(room.id);
-      const enrichedMembers = [];
-      for (let member of members || []) {
-        const user = await SupabaseService.findUserById(member.user_id);
-        enrichedMembers.push({
-          ...normalizeMember(member),
-          user: user
-            ? {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                avatar: user.avatar,
-              }
-            : null,
-        });
-      }
-      room.members = enrichedMembers;
-      normalizeRoom(room);
+    // Parallel member enrichment for all rooms
+    const roomList = Array.isArray(rooms) ? rooms : [];
+    const enrichedMembersPerRoom = await Promise.all(
+      roomList.map((r) => enrichRoomMembers(r.id)),
+    );
+    for (let i = 0; i < roomList.length; i++) {
+      roomList[i].members = enrichedMembersPerRoom[i];
+      normalizeRoom(roomList[i]);
     }
 
-    console.log("Available rooms for browse:", (rooms || []).length);
     res.status(200).json({
       success: true,
-      rooms: Array.isArray(rooms) ? rooms : [],
+      rooms: roomList,
       pendingRoomIds: userPendingRoomIds,
     });
   } catch (error) {
-    console.error("Error in GET /browse/available:", error);
     next(new ErrorHandler(error.message, 500));
   }
 });
@@ -325,18 +321,21 @@ router.get("/browse/available", isAuthenticated, async (req, res, next) => {
 // ============================================================
 router.get("/:id", async (req, res, next) => {
   try {
-    const room = await SupabaseService.findRoomById(req.params.id);
+    // Parallel: room data + members + billing cycles
+    const [room, members, roomBillingCycles] = await Promise.all([
+      SupabaseService.findRoomById(req.params.id),
+      SupabaseService.getRoomMembers(req.params.id),
+      SupabaseService.getRoomBillingCycles(req.params.id),
+    ]);
     if (!room) return next(new ErrorHandler("Room not found", 404));
 
-    // Get members with user details (only approved)
-    const allMembers = await SupabaseService.selectAllRecords("room_members");
-    const members = (allMembers || []).filter(
-      (m) => m.room_id === room.id && (m.status === "approved" || !m.status),
-    );
-    const enrichedMembers = [];
-    for (let member of members) {
-      const user = await SupabaseService.findUserById(member.user_id);
-      enrichedMembers.push({
+    // Batch user lookup instead of N sequential queries
+    const memberUserIds = (members || []).map((m) => m.user_id);
+    const userMap = await SupabaseService.findUsersByIds(memberUserIds);
+
+    room.members = (members || []).map((member) => {
+      const user = userMap.get(member.user_id);
+      return {
         ...normalizeMember(member),
         user: user
           ? {
@@ -346,15 +345,10 @@ router.get("/:id", async (req, res, next) => {
               avatar: user.avatar,
             }
           : null,
-      });
-    }
-    room.members = enrichedMembers;
+      };
+    });
     normalizeRoom(room);
 
-    // Attach active billing cycle data to room response
-    const roomBillingCycles = await SupabaseService.getRoomBillingCycles(
-      room.id,
-    );
     const activeCycle = (roomBillingCycles || []).find(
       (c) => c.status === "active",
     );
@@ -372,41 +366,66 @@ router.get("/:id", async (req, res, next) => {
         currentReading: activeCycle.current_meter_reading ?? null,
       };
 
-      // Lightweight inline check: if all payors have paid, auto-close
-      try {
-        const payments = (await SupabaseService.getPaymentsForCycle(
-          room.id, activeCycle.start_date, activeCycle.end_date
+      // Fetch payments for active cycle
+      const payments =
+        (await SupabaseService.getPaymentsForCycle(
+          room.id,
+          activeCycle.start_date,
+          activeCycle.end_date,
         )) || [];
-        const completedPayments = payments.filter(p => p.status === "completed" || p.status === "verified");
-        const payerMembers = (members || []).filter(m => m.is_payer);
-        if (payerMembers.length > 0) {
-          const allPaid = payerMembers.every(member => {
-            const mp = completedPayments.filter(p => p.paid_by === member.user_id);
-            const hasTotal = mp.some(p => p.bill_type === "total");
-            if (hasTotal) return true;
-            return mp.some(p => p.bill_type === "rent") &&
-                   mp.some(p => p.bill_type === "electricity") &&
-                   mp.some(p => p.bill_type === "water") &&
-                   mp.some(p => p.bill_type === "internet");
+      const completedPayments = payments.filter(
+        (p) => p.status === "completed" || p.status === "verified",
+      );
+      const payerMembers = (members || []).filter((m) => m.is_payer);
+
+      room.memberPayments = payerMembers.map((member) => {
+        const mp = completedPayments.filter(
+          (p) => p.paid_by === member.user_id,
+        );
+        const isTotalPaid = mp.some((p) => p.bill_type === "total");
+        const rentPaid = isTotalPaid || mp.some((p) => p.bill_type === "rent");
+        const elecPaid =
+          isTotalPaid || mp.some((p) => p.bill_type === "electricity");
+        const waterPaid =
+          isTotalPaid || mp.some((p) => p.bill_type === "water");
+        const internetPaid =
+          isTotalPaid || mp.some((p) => p.bill_type === "internet");
+        return {
+          member: member.user_id,
+          memberName: member.name,
+          isPayer: member.is_payer,
+          rentStatus: rentPaid ? "paid" : "unpaid",
+          electricityStatus: elecPaid ? "paid" : "unpaid",
+          waterStatus: waterPaid ? "paid" : "unpaid",
+          internetStatus: internetPaid ? "paid" : "unpaid",
+          allPaid: rentPaid && elecPaid && waterPaid && internetPaid,
+        };
+      });
+
+      // Auto-close if all payors paid
+      if (
+        room.memberPayments.length > 0 &&
+        room.memberPayments.every((mp) => mp.allPaid)
+      ) {
+        try {
+          await SupabaseService.update("billing_cycles", activeCycle.id, {
+            status: "completed",
+            closed_at: new Date(),
           });
-          if (allPaid) {
-            // Direct lightweight update — don't call heavy checkAndAutoCloseCycle
-            await SupabaseService.update("billing_cycles", activeCycle.id, {
-              status: "completed",
-              closed_at: new Date(),
-            });
-            room.cycleStatus = "completed";
-            console.log(`[ROOM GET] Auto-closed cycle for ${room.name}`);
-          }
+          room.cycleStatus = "completed";
+        } catch (_) {
+          /* ignore auto-close errors */
         }
-      } catch (acErr) {
-        console.log(`[ROOM GET] Auto-close check error:`, acErr.message);
       }
     } else {
-      // Check for most recently completed cycle
+      // Most recently completed cycle
       const closedCycle = (roomBillingCycles || [])
         .filter((c) => c.status === "completed" || c.status === "closed")
-        .sort((a, b) => new Date(b.closed_at || b.end_date) - new Date(a.closed_at || a.end_date))[0];
+        .sort(
+          (a, b) =>
+            new Date(b.closed_at || b.end_date) -
+            new Date(a.closed_at || a.end_date),
+        )[0];
       if (closedCycle) {
         room.cycleStatus = "completed";
         room.closedCycleId = closedCycle.id;
@@ -420,8 +439,6 @@ router.get("/:id", async (req, res, next) => {
           previousReading: closedCycle.previous_meter_reading ?? null,
           currentReading: closedCycle.current_meter_reading ?? null,
         };
-
-        // Populate memberPayments for closed cycle (all payors should be paid)
         const payerMembers = (members || []).filter((m) => m.is_payer);
         room.memberPayments = payerMembers.map((member) => ({
           member: member.user_id,
@@ -435,10 +452,6 @@ router.get("/:id", async (req, res, next) => {
         }));
       }
     }
-
-    console.log(
-      `[ROOM GET] ${room.name}: Members count: ${room.members.length}, Active cycle: ${activeCycle ? activeCycle.id : "none"}`,
-    );
 
     res.status(200).json({ success: true, room });
   } catch (error) {
@@ -454,11 +467,16 @@ router.post("/:id/join", isAuthenticated, async (req, res, next) => {
     const room = await SupabaseService.findRoomById(req.params.id);
     if (!room) return next(new ErrorHandler("Room not found", 404));
 
-    // Check if already a member or has pending request
-    const allMemberships =
-      await SupabaseService.selectAllRecords("room_members");
-    const existingMember = (allMemberships || []).find(
-      (m) => m.user_id === req.user.id && m.room_id === req.params.id,
+    // Check if already a member or has pending request (filtered query, not full table scan)
+    const roomMemberships = await SupabaseService.selectAll(
+      "room_members",
+      "room_id",
+      req.params.id,
+      "*",
+      "joined_at",
+    );
+    const existingMember = (roomMemberships || []).find(
+      (m) => m.user_id === req.user.id,
     );
 
     if (existingMember) {
@@ -470,23 +488,7 @@ router.post("/:id/join", isAuthenticated, async (req, res, next) => {
         });
       }
       // Already approved member
-      const members = await SupabaseService.getRoomMembers(room.id);
-      const enrichedMembers = [];
-      for (let member of members || []) {
-        const user = await SupabaseService.findUserById(member.user_id);
-        enrichedMembers.push({
-          ...normalizeMember(member),
-          user: user
-            ? {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                avatar: user.avatar,
-              }
-            : null,
-        });
-      }
-      room.members = enrichedMembers;
+      room.members = await enrichRoomMembers(room.id);
       normalizeRoom(room);
       return res.status(200).json({
         success: true,
@@ -575,26 +577,7 @@ router.put("/:id", isAuthenticated, async (req, res, next) => {
     });
 
     // Enhance with member data
-    const allMembers = await SupabaseService.selectAllRecords("room_members");
-    const members = (allMembers || []).filter(
-      (m) => m.room_id === updatedRoom.id,
-    );
-    const enrichedMembers = [];
-    for (let member of members) {
-      const user = await SupabaseService.findUserById(member.user_id);
-      enrichedMembers.push({
-        ...normalizeMember(member),
-        user: user
-          ? {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              avatar: user.avatar,
-            }
-          : null,
-      });
-    }
-    updatedRoom.members = enrichedMembers;
+    updatedRoom.members = await enrichRoomMembers(updatedRoom.id);
     normalizeRoom(updatedRoom);
 
     res.status(200).json({ success: true, room: updatedRoom });
@@ -670,7 +653,9 @@ router.put(
         );
       } catch (err) {
         console.error("Error updating room member:", err.message || err);
-        return next(new ErrorHandler(err.message || "Failed to update member", 500));
+        return next(
+          new ErrorHandler(err.message || "Failed to update member", 500),
+        );
       }
 
       // Normalize update result
@@ -942,24 +927,7 @@ router.put("/:id/billing", isAuthenticated, async (req, res, next) => {
     // This avoids duplicate billing cycle creation.
 
     // Enhance room with member data
-    const allMembers = await SupabaseService.selectAllRecords("room_members");
-    const members = (allMembers || []).filter((m) => m.room_id === room.id);
-    const enrichedMembers = [];
-    for (let member of members) {
-      const user = await SupabaseService.findUserById(member.user_id);
-      enrichedMembers.push({
-        ...normalizeMember(member),
-        user: user
-          ? {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              avatar: user.avatar,
-            }
-          : null,
-      });
-    }
-    room.members = enrichedMembers;
+    room.members = await enrichRoomMembers(room.id);
     normalizeRoom(room);
 
     res.status(200).json({
@@ -980,12 +948,9 @@ router.get("/:id/billing-history", isAuthenticated, async (req, res, next) => {
     const room = await SupabaseService.findRoomById(req.params.id);
     if (!room) return next(new ErrorHandler("Room not found", 404));
 
-    // Check if user is a member
-    const allMembers = await SupabaseService.selectAllRecords("room_members");
-    const members = (allMembers || []).filter(
-      (m) => m.room_id === req.params.id,
-    );
-    const isMember = members.some((m) => m.user_id === req.user.id);
+    // Check if user is a member (filtered query, not full table scan)
+    const members = await SupabaseService.getRoomMembers(req.params.id);
+    const isMember = (members || []).some((m) => m.user_id === req.user.id);
 
     if (!isMember && room.created_by !== req.user.id) {
       return next(new ErrorHandler("Forbidden", 403));
@@ -1021,12 +986,17 @@ router.post("/:id/presence", isAuthenticated, async (req, res, next) => {
     const room = await SupabaseService.findRoomById(req.params.id);
     if (!room) return next(new ErrorHandler("Room not found", 404));
 
-    // Update presence for the member
-    const allMembers = await SupabaseService.selectAllRecords("room_members");
-    const members = (allMembers || []).filter(
-      (m) => m.room_id === req.params.id,
+    // Update presence for the member (filtered query per room, not full table scan)
+    const roomMembers = await SupabaseService.selectAll(
+      "room_members",
+      "room_id",
+      req.params.id,
+      "*",
+      "joined_at",
     );
-    const memberRecord = members.find((m) => m.user_id === req.user.id);
+    const memberRecord = (roomMembers || []).find(
+      (m) => m.user_id === req.user.id,
+    );
     if (!memberRecord) {
       return next(new ErrorHandler("Not a member of this room", 400));
     }
@@ -1036,27 +1006,7 @@ router.post("/:id/presence", isAuthenticated, async (req, res, next) => {
     });
 
     // Enhance room with members
-    const presenceAllMembers =
-      await SupabaseService.selectAllRecords("room_members");
-    const presenceMembers = (presenceAllMembers || []).filter(
-      (m) => m.room_id === room.id,
-    );
-    const enrichedMembers = [];
-    for (let member of presenceMembers) {
-      const user = await SupabaseService.findUserById(member.user_id);
-      enrichedMembers.push({
-        ...normalizeMember(member),
-        user: user
-          ? {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              avatar: user.avatar,
-            }
-          : null,
-      });
-    }
-    room.members = enrichedMembers;
+    room.members = await enrichRoomMembers(room.id);
     normalizeRoom(room);
 
     res.status(200).json({
@@ -1086,40 +1036,16 @@ router.put("/:id/clear-presence", isAuthenticated, async (req, res, next) => {
       return next(new ErrorHandler("Forbidden", 403));
     }
 
-    // Get all members and clear their presence
-    const allMembers = await SupabaseService.selectAllRecords("room_members");
-    const members = (allMembers || []).filter(
-      (m) => m.room_id === req.params.id,
+    // Get room members and clear their presence
+    const members = await SupabaseService.getRoomMembers(req.params.id);
+    await Promise.all(
+      (members || []).map((member) =>
+        SupabaseService.update("room_members", member.id, { presence: [] }),
+      ),
     );
 
-    for (let member of members) {
-      await SupabaseService.update("room_members", member.id, {
-        presence: [], // Clear presence array
-      });
-    }
-
-    // Enhance room with members
-    const clearPresenceAllMembers =
-      await SupabaseService.selectAllRecords("room_members");
-    const clearPresenceMembers = (clearPresenceAllMembers || []).filter(
-      (m) => m.room_id === room.id,
-    );
-    const enrichedMembers = [];
-    for (let member of clearPresenceMembers) {
-      const user = await SupabaseService.findUserById(member.user_id);
-      enrichedMembers.push({
-        ...normalizeMember(member),
-        user: user
-          ? {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              avatar: user.avatar,
-            }
-          : null,
-      });
-    }
-    room.members = enrichedMembers;
+    // Enhance room with members (re-fetch after update)
+    room.members = await enrichRoomMembers(room.id);
     normalizeRoom(room);
 
     res.status(200).json({
@@ -1140,27 +1066,7 @@ router.get("/:id/export", isAuthenticated, async (req, res, next) => {
     const room = await SupabaseService.findRoomById(req.params.id);
     if (!room) return next(new ErrorHandler("Room not found", 404));
 
-    const exportAllMembers =
-      await SupabaseService.selectAllRecords("room_members");
-    const members = (exportAllMembers || []).filter(
-      (m) => m.room_id === room.id,
-    );
-    const enrichedMembers = [];
-    for (let member of members) {
-      const user = await SupabaseService.findUserById(member.user_id);
-      enrichedMembers.push({
-        ...normalizeMember(member),
-        user: user
-          ? {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              avatar: user.avatar,
-            }
-          : null,
-      });
-    }
-    room.members = enrichedMembers;
+    room.members = await enrichRoomMembers(room.id);
     normalizeRoom(room);
 
     const doc = new PDFDocument({

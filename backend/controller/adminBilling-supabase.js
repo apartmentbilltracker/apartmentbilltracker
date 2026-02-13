@@ -467,17 +467,43 @@ router.get(
 
       const roomIds = adminRooms.map((r) => r.id);
 
-      // Get all active billing cycles for these rooms
-      const allCycles =
-        await SupabaseService.selectAllRecords("billing_cycles");
-      const activeCycles = allCycles.filter(
-        (c) => roomIds.includes(c.room_id) && c.status === "active",
+      // Fetch active billing cycles filtered by room IDs (instead of full table scan)
+      const { data: activeCycles, error: cyclesError } =
+        await SupabaseService.getClient()
+          .from("billing_cycles")
+          .select("*")
+          .in("room_id", roomIds)
+          .eq("status", "active");
+      if (cyclesError) throw new Error(cyclesError.message);
+
+      if (!activeCycles || activeCycles.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            totalCollected: 0,
+            totalPending: 0,
+            collectionRate: 0,
+            totalBilled: 0,
+          },
+        });
+      }
+
+      // Pre-fetch members for all rooms with active cycles in parallel
+      const uniqueRoomIds = [...new Set(activeCycles.map((c) => c.room_id))];
+      const membersPerRoom = await Promise.all(
+        uniqueRoomIds.map((rid) => SupabaseService.getRoomMembers(rid)),
+      );
+      const roomMembersMap = new Map();
+      uniqueRoomIds.forEach((rid, i) =>
+        roomMembersMap.set(rid, membersPerRoom[i]),
       );
 
-      // Enrich active cycles with presence-based water charges
-      for (const cycle of activeCycles) {
-        await enrichBillingCycle(cycle);
-      }
+      // Enrich all active cycles in parallel (pass pre-fetched members)
+      await Promise.all(
+        activeCycles.map((cycle) =>
+          enrichBillingCycle(cycle, roomMembersMap.get(cycle.room_id)),
+        ),
+      );
 
       const totalBilled = activeCycles.reduce((sum, cycle) => {
         const billed = cycle.total_billed_amount
@@ -489,20 +515,19 @@ router.get(
         return sum + (billed || 0);
       }, 0);
 
-      // Get completed payments for active cycles
-      let completedPayments = [];
-      for (const cycle of activeCycles) {
-        const cyclePayments = await SupabaseService.getPaymentsForCycle(
-          cycle.room_id,
-          cycle.start_date,
-          cycle.end_date,
-        );
-        completedPayments = completedPayments.concat(
-          cyclePayments.filter(
-            (p) => p.status === "completed" || p.status === "verified",
+      // Fetch payments for all active cycles in parallel
+      const allPayments = await Promise.all(
+        activeCycles.map((cycle) =>
+          SupabaseService.getPaymentsForCycle(
+            cycle.room_id,
+            cycle.start_date,
+            cycle.end_date,
           ),
-        );
-      }
+        ),
+      );
+      const completedPayments = allPayments
+        .flat()
+        .filter((p) => p.status === "completed" || p.status === "verified");
 
       const rawCollected = completedPayments.reduce(
         (sum, p) => sum + (parseFloat(p.amount) || 0),
