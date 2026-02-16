@@ -926,4 +926,391 @@ router.put(
   }),
 );
 
+// ============ HOST ROLE MANAGEMENT ============
+
+/**
+ * Request to become a host
+ * POST /api/v2/user/request-host
+ */
+router.post(
+  "/request-host",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const user = await SupabaseService.findUserById(req.user.id);
+      if (!user) return next(new ErrorHandler("User not found", 404));
+
+      if (user.role === "host" || user.role === "admin") {
+        return next(
+          new ErrorHandler("You already have elevated privileges", 400),
+        );
+      }
+
+      if (user.host_request_status === "pending") {
+        return next(
+          new ErrorHandler("You already have a pending host request", 400),
+        );
+      }
+
+      await SupabaseService.updateUser(req.user.id, {
+        host_request_status: "pending",
+        host_requested_at: new Date().toISOString(),
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Host request submitted! An admin will review it soon.",
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+/**
+ * Get current user's host request status
+ * GET /api/v2/user/host-status
+ */
+router.get(
+  "/host-status",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const user = await SupabaseService.findUserById(req.user.id);
+      if (!user) return next(new ErrorHandler("User not found", 404));
+
+      res.status(200).json({
+        success: true,
+        hostRequestStatus: user.host_request_status || null,
+        role: user.role,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+/**
+ * Get all pending host requests (admin only)
+ * GET /api/v2/user/pending-host-requests
+ */
+router.get(
+  "/pending-host-requests",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const requester = await SupabaseService.findUserById(req.user.id);
+      if (!requester || !requester.is_admin) {
+        return next(new ErrorHandler("Admin access required", 403));
+      }
+
+      const allUsers = await SupabaseService.getAllUsers();
+      const pendingRequests = (allUsers || [])
+        .filter((u) => u.host_request_status === "pending")
+        .map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          avatar: u.avatar,
+          host_request_status: u.host_request_status,
+          host_requested_at: u.host_requested_at,
+        }));
+
+      res.status(200).json({ success: true, requests: pendingRequests });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+/**
+ * Approve host request (admin only)
+ * PUT /api/v2/user/approve-host/:userId
+ */
+router.put(
+  "/approve-host/:userId",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const requester = await SupabaseService.findUserById(req.user.id);
+      if (!requester || !requester.is_admin) {
+        return next(new ErrorHandler("Admin access required", 403));
+      }
+
+      const { userId } = req.params;
+      const targetUser = await SupabaseService.findUserById(userId);
+      if (!targetUser) return next(new ErrorHandler("User not found", 404));
+
+      if (targetUser.host_request_status !== "pending") {
+        return next(
+          new ErrorHandler("No pending host request for this user", 400),
+        );
+      }
+
+      await SupabaseService.updateUser(userId, {
+        role: "host",
+        host_request_status: "approved",
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `${targetUser.name} is now a host`,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+/**
+ * Reject host request (admin only)
+ * PUT /api/v2/user/reject-host/:userId
+ */
+router.put(
+  "/reject-host/:userId",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const requester = await SupabaseService.findUserById(req.user.id);
+      if (!requester || !requester.is_admin) {
+        return next(new ErrorHandler("Admin access required", 403));
+      }
+
+      const { userId } = req.params;
+      const targetUser = await SupabaseService.findUserById(userId);
+      if (!targetUser) return next(new ErrorHandler("User not found", 404));
+
+      await SupabaseService.updateUser(userId, {
+        host_request_status: "rejected",
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Host request for ${targetUser.name} has been rejected`,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+/**
+ * Get all users with roles (admin only, for user management)
+ * GET /api/v2/user/all-users
+ */
+router.get(
+  "/all-users",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const requester = await SupabaseService.findUserById(req.user.id);
+      if (!requester || !requester.is_admin) {
+        return next(new ErrorHandler("Admin access required", 403));
+      }
+
+      const allUsers = await SupabaseService.getAllUsers();
+      const users = (allUsers || []).map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        avatar: u.avatar,
+        role: u.role,
+        is_admin: u.is_admin,
+        host_request_status: u.host_request_status,
+        created_at: u.created_at,
+      }));
+
+      res.status(200).json({ success: true, users });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+/**
+ * Demote host back to client (admin only)
+ * PUT /api/v2/user/demote-host/:userId
+ */
+router.put(
+  "/demote-host/:userId",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const requester = await SupabaseService.findUserById(req.user.id);
+      if (!requester || !requester.is_admin) {
+        return next(new ErrorHandler("Admin access required", 403));
+      }
+
+      const { userId } = req.params;
+      const targetUser = await SupabaseService.findUserById(userId);
+      if (!targetUser) return next(new ErrorHandler("User not found", 404));
+
+      await SupabaseService.updateUser(userId, {
+        role: "client",
+        host_request_status: null,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `${targetUser.name} has been demoted to client`,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+/**
+ * Change user role (admin only)
+ * PUT /api/v2/user/change-role/:userId
+ * Body: { role: "client" | "host" }
+ */
+router.put(
+  "/change-role/:userId",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const requester = await SupabaseService.findUserById(req.user.id);
+      if (!requester || !requester.is_admin) {
+        return next(new ErrorHandler("Admin access required", 403));
+      }
+
+      const { userId } = req.params;
+      const { role } = req.body;
+
+      if (!role || !["client", "host"].includes(role)) {
+        return next(
+          new ErrorHandler("Invalid role. Must be 'client' or 'host'", 400),
+        );
+      }
+
+      const targetUser = await SupabaseService.findUserById(userId);
+      if (!targetUser) return next(new ErrorHandler("User not found", 404));
+
+      // Prevent changing own role
+      if (userId === req.user.id) {
+        return next(new ErrorHandler("Cannot change your own role", 400));
+      }
+
+      // Prevent changing another admin's role
+      if (targetUser.is_admin) {
+        return next(
+          new ErrorHandler("Cannot change another admin's role", 400),
+        );
+      }
+
+      const updates = { role };
+      if (role === "host") {
+        updates.host_request_status = "approved";
+      } else {
+        updates.host_request_status = null;
+      }
+
+      const updatedUser = await SupabaseService.updateUser(userId, updates);
+
+      res.status(200).json({
+        success: true,
+        message: `${targetUser.name}'s role changed to ${role}`,
+        user: updatedUser,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+/**
+ * Toggle user active status (admin only)
+ * PUT /api/v2/user/toggle-status/:userId
+ * Body: { is_active: true | false }
+ */
+router.put(
+  "/toggle-status/:userId",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const requester = await SupabaseService.findUserById(req.user.id);
+      if (!requester || !requester.is_admin) {
+        return next(new ErrorHandler("Admin access required", 403));
+      }
+
+      const { userId } = req.params;
+      const { is_active } = req.body;
+
+      if (typeof is_active !== "boolean") {
+        return next(new ErrorHandler("is_active must be a boolean", 400));
+      }
+
+      const targetUser = await SupabaseService.findUserById(userId);
+      if (!targetUser) return next(new ErrorHandler("User not found", 404));
+
+      // Prevent deactivating self
+      if (userId === req.user.id) {
+        return next(
+          new ErrorHandler("Cannot deactivate your own account", 400),
+        );
+      }
+
+      // Prevent deactivating another admin
+      if (targetUser.is_admin) {
+        return next(new ErrorHandler("Cannot deactivate another admin", 400));
+      }
+
+      const updatedUser = await SupabaseService.updateUser(userId, {
+        is_active,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `${targetUser.name}'s account has been ${is_active ? "activated" : "deactivated"}`,
+        user: updatedUser,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+/**
+ * Delete user account (admin only)
+ * DELETE /api/v2/user/delete-user/:userId
+ */
+router.delete(
+  "/delete-user/:userId",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const requester = await SupabaseService.findUserById(req.user.id);
+      if (!requester || !requester.is_admin) {
+        return next(new ErrorHandler("Admin access required", 403));
+      }
+
+      const { userId } = req.params;
+      const targetUser = await SupabaseService.findUserById(userId);
+      if (!targetUser) return next(new ErrorHandler("User not found", 404));
+
+      // Prevent deleting self
+      if (userId === req.user.id) {
+        return next(new ErrorHandler("Cannot delete your own account", 400));
+      }
+
+      // Prevent deleting another admin
+      if (targetUser.is_admin) {
+        return next(
+          new ErrorHandler("Cannot delete another admin account", 400),
+        );
+      }
+
+      await SupabaseService.deleteRecord("users", userId);
+
+      res.status(200).json({
+        success: true,
+        message: `${targetUser.name}'s account has been deleted`,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
 module.exports = router;

@@ -1059,7 +1059,7 @@ const BillsScreen = ({ navigation }) => {
                     style={[styles.roomPill, isActive && styles.roomPillActive]}
                     onPress={() => {
                       setSelectedRoom(room);
-                      loadMemberPresence(room.id || room._id);
+                      extractMemberPresence(room);
                     }}
                     activeOpacity={0.7}
                   >
@@ -1339,85 +1339,109 @@ const BillsScreen = ({ navigation }) => {
                         </Text>
                       </View>
                     </View>
-                    {selectedRoom.members.map((member, idx) => (
-                      <TouchableOpacity
-                        key={idx}
-                        style={[
-                          styles.memberRow,
-                          idx < selectedRoom.members.length - 1 &&
-                            styles.memberRowBorder,
-                        ]}
-                        onPress={() => {
-                          setSelectedMemberPresence({
-                            name: member.user?.name || "Unknown",
-                            dates:
-                              memberPresence[member.id || member._id] || [],
-                          });
-                          setShowPresenceModal(true);
-                        }}
-                        activeOpacity={0.6}
-                      >
-                        {member.user?.avatar?.url ? (
-                          <Image
-                            source={{ uri: member.user.avatar.url }}
-                            style={styles.memberAvatar}
-                          />
-                        ) : (
-                          <View style={styles.memberAvatarPlaceholder}>
-                            <Text style={styles.memberAvatarText}>
-                              {(member.user?.name || "M")
-                                .charAt(0)
-                                .toUpperCase()}
-                            </Text>
-                          </View>
-                        )}
-                        <View style={styles.memberInfo}>
-                          <Text style={styles.memberName} numberOfLines={1}>
-                            {member.user?.name || "Unknown"}
-                          </Text>
-                          <View style={styles.memberMeta}>
-                            <Ionicons
-                              name="calendar-outline"
-                              size={11}
-                              color={colors.textTertiary}
-                            />
-                            <Text style={styles.memberPresenceText}>
-                              {
-                                (memberPresence[member.id || member._id] || [])
-                                  .length
-                              }{" "}
-                              days
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.memberWaterCol}>
-                          <Text style={styles.memberWaterAmount}>
-                            {fmt(
-                              calculateMemberWaterBill(member.id || member._id),
-                            )}
-                          </Text>
-                        </View>
-                        <View
+                    {selectedRoom.members.map((member, idx) => {
+                      const memberId = String(
+                        member.user?.id || member.user?._id || member.user,
+                      );
+                      const isCurrentUser = memberId === String(userId);
+                      return (
+                        <TouchableOpacity
+                          key={idx}
                           style={[
-                            styles.roleBadge,
-                            member.isPayer
-                              ? styles.roleBadgePayor
-                              : styles.roleBadgeNon,
+                            styles.memberRow,
+                            idx < selectedRoom.members.length - 1 &&
+                              styles.memberRowBorder,
+                            isCurrentUser && styles.memberRowHighlight,
                           ]}
+                          onPress={() => {
+                            setSelectedMemberPresence({
+                              name: member.user?.name || "Unknown",
+                              dates:
+                                memberPresence[member.id || member._id] || [],
+                            });
+                            setShowPresenceModal(true);
+                          }}
+                          activeOpacity={0.6}
                         >
-                          <Text
+                          {member.user?.avatar?.url ? (
+                            <Image
+                              source={{ uri: member.user.avatar.url }}
+                              style={styles.memberAvatar}
+                            />
+                          ) : (
+                            <View style={styles.memberAvatarPlaceholder}>
+                              <Text style={styles.memberAvatarText}>
+                                {(member.user?.name || "M")
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                          <View style={styles.memberInfo}>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <Text style={styles.memberName} numberOfLines={1}>
+                                {member.user?.name || "Unknown"}
+                              </Text>
+                              {isCurrentUser && (
+                                <View style={styles.youBadge}>
+                                  <Text style={styles.youBadgeText}>You</Text>
+                                </View>
+                              )}
+                            </View>
+                            <View style={styles.memberMeta}>
+                              <Ionicons
+                                name="calendar-outline"
+                                size={11}
+                                color={colors.textTertiary}
+                              />
+                              <Text style={styles.memberPresenceText}>
+                                {
+                                  (
+                                    memberPresence[member.id || member._id] ||
+                                    []
+                                  ).length
+                                }{" "}
+                                days
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.memberWaterCol}>
+                            <Text style={styles.memberWaterAmount}>
+                              {fmt(
+                                calculateMemberWaterBill(
+                                  member.id || member._id,
+                                ),
+                              )}
+                            </Text>
+                          </View>
+                          <View
                             style={[
-                              styles.roleBadgeText,
+                              styles.roleBadge,
                               member.isPayer
-                                ? styles.roleBadgeTextPayor
-                                : styles.roleBadgeTextNon,
+                                ? styles.roleBadgePayor
+                                : styles.roleBadgeNon,
                             ]}
                           >
-                            {member.isPayer ? "Payor" : "Non-Payor"}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+                            <Text
+                              style={[
+                                styles.roleBadgeText,
+                                member.isPayer
+                                  ? styles.roleBadgeTextPayor
+                                  : styles.roleBadgeTextNon,
+                              ]}
+                            >
+                              {member.isPayer ? "Payor" : "Non-Payor"}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 )}
 
@@ -2585,6 +2609,23 @@ const createStyles = (colors) =>
       fontSize: 13,
       fontWeight: "600",
       color: colors.text,
+      flexShrink: 1,
+    },
+    youBadge: {
+      backgroundColor: colors.accent,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    youBadgeText: {
+      fontSize: 9,
+      fontWeight: "700",
+      color: colors.textOnAccent,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    memberRowHighlight: {
+      backgroundColor: colors.accentTransparent || `${colors.accent}10`,
     },
     memberMeta: {
       flexDirection: "row",

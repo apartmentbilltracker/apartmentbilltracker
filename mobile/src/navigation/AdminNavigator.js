@@ -4,17 +4,23 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  supportService,
-  roomService,
-  memberService,
-} from "../services/apiService";
-import AdminDashboardScreen from "../screens/admin/AdminDashboardScreen";
+import { supportService } from "../services/apiService";
+import SuperAdminDashboardScreen from "../screens/admin/SuperAdminDashboardScreen";
+import AdminProfileScreen from "../screens/admin/AdminProfileScreen";
+import AdminVersionControlScreen from "../screens/admin/AdminVersionControlScreen";
+import AdminBroadcastScreen from "../screens/admin/AdminBroadcastScreen";
+import AdminAnnouncementsScreen from "../screens/admin/AdminAnnouncementsScreen";
+import AdminSupportTicketsScreen from "../screens/admin/AdminSupportTicketsScreen";
+import AdminBugReportsScreen from "../screens/admin/AdminBugReportsScreen";
+import AdminFAQScreen from "../screens/admin/AdminFAQScreen";
+import AdminUserManagementScreen from "../screens/admin/AdminUserManagementScreen";
+import AdminAllRoomsScreen from "../screens/admin/AdminAllRoomsScreen";
+import AdminRoomDetailScreen from "../screens/admin/AdminRoomDetailScreen";
+import AdminManageHubScreen from "../screens/admin/AdminManageHubScreen";
 import AdminRoomManagementScreen from "../screens/admin/AdminRoomManagementScreen";
 import AdminBillingScreen from "../screens/admin/AdminBillingScreen";
 import AdminBillingCycleScreen from "../screens/admin/AdminBillingCycleScreen";
 import AdminMembersScreen from "../screens/admin/AdminMembersScreen";
-import AdminProfileScreen from "../screens/admin/AdminProfileScreen";
 import AdminPaymentVerificationScreen from "../screens/admin/AdminPaymentVerificationScreen";
 import AdminFinancialDashboardScreen from "../screens/admin/AdminFinancialDashboardScreen";
 import AdminBillingDetailsScreen from "../screens/admin/AdminBillingDetailsScreen";
@@ -22,12 +28,6 @@ import AdminAdjustmentsScreen from "../screens/admin/AdminAdjustmentsScreen";
 import AdminRemindersScreen from "../screens/admin/AdminRemindersScreen";
 import AdminPresenceRemindersScreen from "../screens/admin/AdminPresenceRemindersScreen";
 import AdminPaymentSettingsScreen from "../screens/admin/AdminPaymentSettingsScreen";
-import AdminVersionControlScreen from "../screens/admin/AdminVersionControlScreen";
-import AdminBroadcastScreen from "../screens/admin/AdminBroadcastScreen";
-import AdminAnnouncementsScreen from "../screens/admin/AdminAnnouncementsScreen";
-import AdminSupportTicketsScreen from "../screens/admin/AdminSupportTicketsScreen";
-import AdminBugReportsScreen from "../screens/admin/AdminBugReportsScreen";
-import AdminFAQScreen from "../screens/admin/AdminFAQScreen";
 import TermsOfServiceScreen from "../screens/legal/TermsOfServiceScreen";
 import PrivacyPolicyScreen from "../screens/legal/PrivacyPolicyScreen";
 import { useTheme } from "../theme/ThemeContext";
@@ -68,30 +68,113 @@ const DashboardStack = () => {
     <Stack.Navigator screenOptions={headerOptions}>
       <Stack.Screen
         name="AdminDashboard"
-        component={AdminDashboardScreen}
+        component={SuperAdminDashboardScreen}
         options={{ title: "Dashboard" }}
       />
     </Stack.Navigator>
   );
 };
 
-const RoomManagementStack = () => {
+const SupportStack = () => {
   const headerOptions = useHeaderOptions();
   return (
     <Stack.Navigator screenOptions={headerOptions}>
       <Stack.Screen
-        name="RoomManagement"
-        component={AdminRoomManagementScreen}
-        options={{ title: "Rooms" }}
+        name="SupportTickets"
+        component={AdminSupportTicketsScreen}
+        options={{ title: "Support Tickets" }}
+      />
+      <Stack.Screen
+        name="BugReports"
+        component={AdminBugReportsScreen}
+        options={{ title: "Bug Reports" }}
+      />
+      <Stack.Screen
+        name="ManageFAQs"
+        component={AdminFAQScreen}
+        options={{ title: "Manage FAQs" }}
       />
     </Stack.Navigator>
   );
 };
 
-const BillingStack = () => {
+const ProfileStack = () => {
   const headerOptions = useHeaderOptions();
   return (
     <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="AdminProfile"
+        component={AdminProfileScreen}
+        options={{ title: "Profile" }}
+      />
+      <Stack.Screen
+        name="ProfileSupportTickets"
+        component={AdminSupportTicketsScreen}
+        options={{ title: "Support Tickets" }}
+      />
+      <Stack.Screen
+        name="ProfileBugReports"
+        component={AdminBugReportsScreen}
+        options={{ title: "Bug Reports" }}
+      />
+      <Stack.Screen
+        name="ProfileManageFAQs"
+        component={AdminFAQScreen}
+        options={{ title: "Manage FAQs" }}
+      />
+      <Stack.Screen
+        name="TermsOfService"
+        component={TermsOfServiceScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PrivacyPolicy"
+        component={PrivacyPolicyScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="VersionControl"
+        component={AdminVersionControlScreen}
+        options={{ title: "Version Control" }}
+      />
+      <Stack.Screen
+        name="Broadcast"
+        component={AdminBroadcastScreen}
+        options={{ title: "Send Notification" }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const ManageStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="ManageHub"
+        component={AdminManageHubScreen}
+        options={{ title: "Management" }}
+      />
+      <Stack.Screen
+        name="UserManagement"
+        component={AdminUserManagementScreen}
+        options={{ title: "User Management" }}
+      />
+      <Stack.Screen
+        name="AllRooms"
+        component={AdminAllRoomsScreen}
+        options={{ title: "All Rooms" }}
+      />
+      <Stack.Screen
+        name="RoomDetail"
+        component={AdminRoomDetailScreen}
+        options={{ title: "Room Details" }}
+      />
+      <Stack.Screen
+        name="RoomManagement"
+        component={AdminRoomManagementScreen}
+        options={{ title: "Room Management" }}
+      />
       <Stack.Screen
         name="AdminBilling"
         component={AdminBillingScreen}
@@ -139,66 +222,10 @@ const BillingStack = () => {
         component={AdminPaymentSettingsScreen}
         options={{ title: "Payment Settings" }}
       />
-    </Stack.Navigator>
-  );
-};
-
-const MembersStack = () => {
-  const headerOptions = useHeaderOptions();
-  return (
-    <Stack.Navigator screenOptions={headerOptions}>
       <Stack.Screen
         name="Members"
         component={AdminMembersScreen}
         options={{ title: "Members" }}
-      />
-    </Stack.Navigator>
-  );
-};
-
-const ProfileStack = () => {
-  const headerOptions = useHeaderOptions();
-  return (
-    <Stack.Navigator screenOptions={headerOptions}>
-      <Stack.Screen
-        name="AdminProfile"
-        component={AdminProfileScreen}
-        options={{ title: "Profile" }}
-      />
-      <Stack.Screen
-        name="SupportTickets"
-        component={AdminSupportTicketsScreen}
-        options={{ title: "Support Tickets" }}
-      />
-      <Stack.Screen
-        name="BugReports"
-        component={AdminBugReportsScreen}
-        options={{ title: "Bug Reports" }}
-      />
-      <Stack.Screen
-        name="ManageFAQs"
-        component={AdminFAQScreen}
-        options={{ title: "Manage FAQs" }}
-      />
-      <Stack.Screen
-        name="TermsOfService"
-        component={TermsOfServiceScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="PrivacyPolicy"
-        component={PrivacyPolicyScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="VersionControl"
-        component={AdminVersionControlScreen}
-        options={{ title: "Version Control" }}
-      />
-      <Stack.Screen
-        name="Broadcast"
-        component={AdminBroadcastScreen}
-        options={{ title: "Send Notification" }}
       />
     </Stack.Navigator>
   );
@@ -219,30 +246,7 @@ const AnnouncementsStack = () => {
 
 const AdminNavigator = () => {
   const [unreadSupportCount, setUnreadSupportCount] = React.useState(0);
-  const [pendingMemberCount, setPendingMemberCount] = React.useState(0);
   const { colors } = useTheme();
-
-  const fetchPendingMemberCount = async () => {
-    try {
-      const response = await roomService.getRooms();
-      const rooms = response.rooms || response.data?.rooms || [];
-      let totalPending = 0;
-      for (const room of rooms) {
-        try {
-          const pendingRes = await memberService.getPendingMembers(
-            room.id || room._id,
-          );
-          const pending = pendingRes?.pendingMembers || [];
-          totalPending += pending.length;
-        } catch {
-          // skip room on error
-        }
-      }
-      setPendingMemberCount(totalPending);
-    } catch (error) {
-      console.error("Error fetching pending member count:", error);
-    }
-  };
 
   const fetchUnreadSupportCount = async () => {
     try {
@@ -272,7 +276,6 @@ const AdminNavigator = () => {
 
   React.useEffect(() => {
     fetchUnreadSupportCount();
-    fetchPendingMemberCount();
   }, []);
 
   return (
@@ -283,12 +286,10 @@ const AdminNavigator = () => {
           let iconName;
           if (route.name === "DashboardStack") {
             iconName = focused ? "bar-chart" : "bar-chart-outline";
-          } else if (route.name === "RoomStack") {
-            iconName = focused ? "home" : "home-outline";
-          } else if (route.name === "BillingStack") {
-            iconName = focused ? "wallet" : "wallet-outline";
-          } else if (route.name === "MembersStack") {
-            iconName = focused ? "people" : "people-outline";
+          } else if (route.name === "ManageStack") {
+            iconName = focused ? "settings" : "settings-outline";
+          } else if (route.name === "SupportStack") {
+            iconName = focused ? "chatbubbles" : "chatbubbles-outline";
           } else if (route.name === "AnnouncementsStack") {
             iconName = focused ? "megaphone" : "megaphone-outline";
           } else if (route.name === "ProfileStack") {
@@ -347,25 +348,28 @@ const AdminNavigator = () => {
         options={{ title: "Dashboard" }}
       />
       <Tab.Screen
-        name="RoomStack"
-        component={RoomManagementStack}
-        options={{ title: "Rooms" }}
+        name="ManageStack"
+        component={ManageStack}
+        options={{ title: "Manage" }}
       />
       <Tab.Screen
-        name="BillingStack"
-        component={BillingStack}
-        options={{ title: "Billing" }}
-      />
-      <Tab.Screen
-        name="MembersStack"
-        component={MembersStack}
+        name="SupportStack"
+        component={SupportStack}
         options={{
-          title: "Members",
-          tabBarBadge: pendingMemberCount > 0 ? pendingMemberCount : null,
+          title: "Support",
+          tabBarBadge: unreadSupportCount > 0 ? "" : null,
+          tabBarBadgeStyle: {
+            backgroundColor: "#e74c3c",
+            minWidth: 8,
+            height: 8,
+            borderRadius: 4,
+            top: 0,
+            right: 2,
+          },
         }}
         listeners={{
           focus: () => {
-            fetchPendingMemberCount();
+            fetchUnreadSupportCount();
           },
         }}
       />
@@ -377,21 +381,13 @@ const AdminNavigator = () => {
       <Tab.Screen
         name="ProfileStack"
         component={ProfileStack}
-        options={{
-          title: "Profile",
-          tabBarBadge: unreadSupportCount > 0 ? "" : null,
-          tabBarBadgeStyle: {
-            backgroundColor: "#e74c3c",
-            minWidth: 8,
-            height: 8,
-            borderRadius: 4,
-            top: 0,
-            right: 2,
-          },
-        }}
-        listeners={({ navigation }) => ({
-          focus: () => {
-            fetchUnreadSupportCount();
+        options={{ title: "Profile" }}
+        listeners={({ navigation: nav }) => ({
+          tabPress: (e) => {
+            // Prevent default tab behavior to avoid conflict
+            e.preventDefault();
+            // Always navigate to AdminProfile when Profile tab is pressed
+            nav.navigate("ProfileStack", { screen: "AdminProfile" });
           },
         })}
       />

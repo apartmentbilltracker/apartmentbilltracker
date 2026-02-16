@@ -14,7 +14,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../../context/AuthContext";
-import { roomService, supportService } from "../../services/apiService";
+import {
+  roomService,
+  supportService,
+  hostRoleService,
+} from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 
 const THEME_OPTIONS = [
@@ -55,6 +59,8 @@ const ProfileScreen = ({ navigation }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [unreadTickets, setUnreadTickets] = useState(0);
   const [unreadBugReports, setUnreadBugReports] = useState(0);
+  const [hostRequestStatus, setHostRequestStatus] = useState(null);
+  const [requestingHost, setRequestingHost] = useState(false);
 
   const user = state.user || {};
   const userId = user.id || user._id;
@@ -64,6 +70,54 @@ const ProfileScreen = ({ navigation }) => {
     ? user.role.includes("admin")
     : typeof user.role === "string" &&
       user.role.toLowerCase().includes("admin");
+
+  const isHost = user.role === "host";
+
+  // Fetch host request status
+  React.useEffect(() => {
+    const fetchHostStatus = async () => {
+      try {
+        const res = await hostRoleService.getHostStatus();
+        setHostRequestStatus(res.hostRequestStatus || null);
+      } catch (e) {
+        console.log("Error fetching host status:", e);
+      }
+    };
+    if (userId && !isAdmin && !isHost) fetchHostStatus();
+  }, [userId]);
+
+  const handleRequestHost = () => {
+    Alert.alert(
+      "Become a Host",
+      "Request to become a room host? An admin will review your request. Once approved you'll get access to room management features.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Request",
+          onPress: async () => {
+            try {
+              setRequestingHost(true);
+              await hostRoleService.requestHost();
+              setHostRequestStatus("pending");
+              Alert.alert(
+                "Success",
+                "Host request submitted! An admin will review it soon.",
+              );
+            } catch (error) {
+              Alert.alert(
+                "Error",
+                error.response?.data?.message ||
+                  error.message ||
+                  "Failed to submit request",
+              );
+            } finally {
+              setRequestingHost(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   // Fetch room to determine payor status
   React.useEffect(() => {
@@ -142,8 +196,14 @@ const ProfileScreen = ({ navigation }) => {
   }, [userId]);
 
   const handleAdminButtonPress = () => {
-    console.log("Switching to admin view...");
-    switchView("admin");
+    const userRole = user?.role?.toLowerCase();
+    if (userRole === "admin") {
+      console.log("Switching to admin view...");
+      switchView("admin");
+    } else if (userRole === "host") {
+      console.log("Switching to host view...");
+      switchView("host");
+    }
   };
 
   const handleEditPress = () => {
@@ -538,16 +598,127 @@ const ProfileScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {/* ─── ADMIN PANEL ─── */}
-      {isAdmin && (
+      {/* ─── BECOME A HOST ─── */}
+      {!isAdmin && !isHost && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Admin Panel</Text>
+          <Text style={styles.cardTitle}>Room Host</Text>
+          {hostRequestStatus === "pending" ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                backgroundColor: "#fff8e1",
+                padding: 14,
+                borderRadius: 10,
+              }}
+            >
+              <Ionicons name="time" size={22} color="#e67e22" />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: "#e67e22",
+                  }}
+                >
+                  Host Request Pending
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: colors.textSecondary,
+                    marginTop: 2,
+                  }}
+                >
+                  Your request is being reviewed by an admin.
+                </Text>
+              </View>
+            </View>
+          ) : hostRequestStatus === "rejected" ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                backgroundColor: "#fce4ec",
+                padding: 14,
+                borderRadius: 10,
+              }}
+            >
+              <Ionicons name="close-circle" size={22} color="#c62828" />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: "#c62828",
+                  }}
+                >
+                  Host Request Rejected
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: colors.textSecondary,
+                    marginTop: 2,
+                  }}
+                >
+                  Your request was not approved. Contact admin for details.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <>
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: colors.textSecondary,
+                  marginBottom: 10,
+                  lineHeight: 18,
+                }}
+              >
+                Become a host to create and manage rooms, billing cycles,
+                members, and payments.
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.adminBtn,
+                  { backgroundColor: "#b38604" },
+                  requestingHost && { opacity: 0.6 },
+                ]}
+                onPress={handleRequestHost}
+                disabled={requestingHost}
+                activeOpacity={0.7}
+              >
+                {requestingHost ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="key" size={18} color="#fff" />
+                    <Text style={styles.adminBtnText}>Become a Host</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
+
+      {/* ─── ADMIN / HOST PANEL ─── */}
+      {(isAdmin || isHost) && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>
+            {isAdmin ? "Admin Panel" : "Host Panel"}
+          </Text>
           <TouchableOpacity
             style={styles.adminBtn}
             onPress={handleAdminButtonPress}
           >
             <Ionicons name="settings" size={18} color={colors.textOnAccent} />
-            <Text style={styles.adminBtnText}>Go to Admin Dashboard</Text>
+            <Text style={styles.adminBtnText}>
+              {isAdmin ? "Go to Admin Dashboard" : "Go to Host Dashboard"}
+            </Text>
           </TouchableOpacity>
         </View>
       )}

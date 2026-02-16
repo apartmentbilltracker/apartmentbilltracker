@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const ErrorHandler = require("../utils/ErrorHandler");
-const { isAuthenticated, isAdmin } = require("../middleware/auth");
+const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 
 // Helper to normalize settlement for mobile compatibility
@@ -78,10 +78,12 @@ router.get(
 
       const allPayments = await SupabaseService.getRoomPayments(roomId);
 
-      // Non-admin users only see their own payments
-      const payments = req.user.is_admin
-        ? allPayments
-        : (allPayments || []).filter((p) => p.paid_by === req.user.id);
+      // Non-admin/host users only see their own payments
+      const role = (req.user.role || "").toLowerCase();
+      const payments =
+        req.user.is_admin || role === "host"
+          ? allPayments
+          : (allPayments || []).filter((p) => p.paid_by === req.user.id);
 
       // Enrich with user details
       for (let payment of payments) {
@@ -370,12 +372,12 @@ router.get(
 );
 
 // ============================================================
-// 9. ADMIN: GET ALL PENDING PAYMENTS FOR A ROOM
+// 9. GET ALL PENDING PAYMENTS FOR A ROOM (admin/host)
 // ============================================================
 router.get(
   "/admin/pending/:roomId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   async (req, res, next) => {
     try {
       const { roomId } = req.params;
@@ -421,12 +423,12 @@ router.get(
 );
 
 // ============================================================
-// 10. ADMIN: VERIFY/CONFIRM A PAYMENT
+// 10. VERIFY/CONFIRM A PAYMENT (admin/host)
 // ============================================================
 router.post(
   "/admin/verify/:paymentId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   async (req, res, next) => {
     try {
       const { paymentId } = req.params;
@@ -456,12 +458,12 @@ router.post(
 );
 
 // ============================================================
-// 11. ADMIN: REJECT A PAYMENT
+// 11. REJECT A PAYMENT (admin/host)
 // ============================================================
 router.post(
   "/admin/reject/:paymentId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   async (req, res, next) => {
     try {
       const { paymentId } = req.params;

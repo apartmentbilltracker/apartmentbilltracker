@@ -57,6 +57,29 @@ export const authService = {
   logout: () => api.get("/api/v2/user/logout").then(extractData),
 };
 
+// Host Role Services
+export const hostRoleService = {
+  requestHost: () => api.post("/api/v2/user/request-host").then(extractData),
+  getHostStatus: () => api.get("/api/v2/user/host-status").then(extractData),
+  getPendingHostRequests: () =>
+    api.get("/api/v2/user/pending-host-requests").then(extractData),
+  approveHost: (userId) =>
+    api.put(`/api/v2/user/approve-host/${userId}`).then(extractData),
+  rejectHost: (userId) =>
+    api.put(`/api/v2/user/reject-host/${userId}`).then(extractData),
+  getAllUsers: () => api.get("/api/v2/user/all-users").then(extractData),
+  demoteHost: (userId) =>
+    api.put(`/api/v2/user/demote-host/${userId}`).then(extractData),
+  changeRole: (userId, role) =>
+    api.put(`/api/v2/user/change-role/${userId}`, { role }).then(extractData),
+  toggleStatus: (userId, is_active) =>
+    api
+      .put(`/api/v2/user/toggle-status/${userId}`, { is_active })
+      .then(extractData),
+  deleteUser: (userId) =>
+    api.delete(`/api/v2/user/delete-user/${userId}`).then(extractData),
+};
+
 // Room Services
 export const roomService = {
   getRooms: () => api.get("/api/v2/rooms").then(extractData),
@@ -70,6 +93,17 @@ export const roomService = {
   updateRoom: (id, data) =>
     api.put(`/api/v2/rooms/${id}`, data).then(extractData),
   deleteRoom: (id) => api.delete(`/api/v2/rooms/${id}`).then(extractData),
+  getAdminAllRooms: () => api.get("/api/v2/rooms/admin/all").then(extractData),
+  adminDeleteRoom: (roomId) =>
+    api.delete(`/api/v2/rooms/admin/${roomId}`).then(extractData),
+  adminRemoveMember: (roomId, memberId) =>
+    api
+      .delete(`/api/v2/rooms/admin/${roomId}/members/${memberId}`)
+      .then(extractData),
+  adminTogglePayer: (roomId, memberId) =>
+    api
+      .put(`/api/v2/rooms/admin/${roomId}/members/${memberId}/toggle-payer`)
+      .then(extractData),
 };
 
 // Presence Services
@@ -395,14 +429,20 @@ export const apiService = {
 // Support Services (Support Tickets, FAQs, Bug Reports)
 export const supportService = {
   // Support Tickets
-  createTicket: (data) =>
-    api.post("/api/v2/support/create-ticket", data).then(extractData),
-  getUserTickets: () => api.get("/api/v2/support/my-tickets").then(extractData),
+  createTicket: (data) => api.post("/api/v2/support", data).then(extractData),
+  getUserTickets: () =>
+    api
+      .get("/api/v2/support/my-tickets")
+      .then(extractData)
+      .then((r) => r?.tickets || []),
   getTicketDetails: (ticketId) =>
-    api.get(`/api/v2/support/ticket/${ticketId}`).then(extractData),
+    api
+      .get(`/api/v2/support/ticket/${ticketId}`)
+      .then(extractData)
+      .then((r) => r?.ticket || r),
   addTicketReply: (ticketId, message) =>
     api
-      .post(`/api/v2/support/ticket/${ticketId}/reply`, { message })
+      .post(`/api/v2/support/ticket/${ticketId}/response`, { message })
       .then(extractData),
   markTicketAsRead: (ticketId) =>
     api.post(`/api/v2/support/ticket/${ticketId}/read`).then(extractData),
@@ -411,26 +451,42 @@ export const supportService = {
   getAllFAQs: (category) =>
     api
       .get(`/api/v2/faqs${category ? `?category=${category}` : ""}`)
-      .then(extractData),
-  getFAQCategories: () => api.get("/api/v2/faqs/categories").then(extractData),
+      .then(extractData)
+      .then((r) => r?.data || []),
+  getFAQCategories: () =>
+    api
+      .get("/api/v2/faqs/categories")
+      .then(extractData)
+      .then((r) => r?.data || []),
   markFAQHelpful: (faqId) =>
     api.post(`/api/v2/faqs/${faqId}/helpful`).then(extractData),
   markFAQNotHelpful: (faqId) =>
     api.post(`/api/v2/faqs/${faqId}/not-helpful`).then(extractData),
 
   // Admin methods
-  getAllTickets: () => api.get("/api/v2/support/all-tickets").then(extractData),
+  getAllTickets: () =>
+    api
+      .get("/api/v2/support/all-tickets")
+      .then(extractData)
+      .then((r) => r?.tickets || []),
   updateTicketStatus: (ticketId, status) =>
     api
       .put(`/api/v2/support/ticket/${ticketId}/status`, { status })
       .then(extractData),
-  getAdminFAQs: () => api.get("/api/v2/faqs").then(extractData),
+  getAdminFAQs: () =>
+    api
+      .get("/api/v2/faqs")
+      .then(extractData)
+      .then((r) => r?.data || []),
   createFAQ: (data) => api.post("/api/v2/faqs", data).then(extractData),
   updateFAQ: (faqId, data) =>
     api.put(`/api/v2/faqs/${faqId}`, data).then(extractData),
   deleteFAQ: (faqId) => api.delete(`/api/v2/faqs/${faqId}`).then(extractData),
   getAllBugReports: () =>
-    api.get("/api/v2/support/all-bug-reports").then(extractData),
+    api
+      .get("/api/v2/support/all-bug-reports")
+      .then(extractData)
+      .then((r) => r?.reports || []),
   updateBugReportStatus: (reportId, status) =>
     api
       .put(`/api/v2/support/bug-report/${reportId}/status`, { status })
@@ -440,15 +496,58 @@ export const supportService = {
   createBugReport: (data) =>
     api.post("/api/v2/support/create-bug-report", data).then(extractData),
   getUserBugReports: () =>
-    api.get("/api/v2/support/my-bug-reports").then(extractData),
+    api
+      .get("/api/v2/support/my-bug-reports")
+      .then(extractData)
+      .then((r) => r?.reports || []),
   getBugReportDetails: (reportId) =>
-    api.get(`/api/v2/support/bug-report/${reportId}`).then(extractData),
+    api
+      .get(`/api/v2/support/bug-report/${reportId}`)
+      .then(extractData)
+      .then((r) => r?.report || r),
   addBugReportResponse: (reportId, message) =>
     api
       .post(`/api/v2/support/bug-report/${reportId}/response`, { message })
       .then(extractData),
   markBugReportAsRead: (reportId) =>
     api.post(`/api/v2/support/bug-report/${reportId}/read`).then(extractData),
+};
+
+export const chatService = {
+  // Enable chat for a room (host only)
+  enableChat: (roomId) =>
+    api.post(`/api/v2/chat/room/${roomId}/enable`).then(extractData),
+
+  // Disable chat for a room (host only)
+  disableChat: (roomId) =>
+    api.post(`/api/v2/chat/room/${roomId}/disable`).then(extractData),
+
+  // Get chat status
+  getChatStatus: (roomId) =>
+    api.get(`/api/v2/chat/room/${roomId}/status`).then(extractData),
+
+  // Send a message
+  sendMessage: (roomId, text) =>
+    api
+      .post(`/api/v2/chat/room/${roomId}/messages`, { text })
+      .then(extractData),
+
+  // Get messages (with optional pagination)
+  getMessages: (roomId, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.before) query.append("before", params.before);
+    if (params.limit) query.append("limit", params.limit);
+    const qs = query.toString();
+    return api
+      .get(`/api/v2/chat/room/${roomId}/messages${qs ? `?${qs}` : ""}`)
+      .then(extractData);
+  },
+
+  // Delete a message
+  deleteMessage: (roomId, messageId) =>
+    api
+      .delete(`/api/v2/chat/room/${roomId}/messages/${messageId}`)
+      .then(extractData),
 };
 
 export default apiService;

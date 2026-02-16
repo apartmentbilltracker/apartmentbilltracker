@@ -1,135 +1,25 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Linking } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  StatusBar,
+  TouchableOpacity,
+  Linking,
+} from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as Notifications from "expo-notifications";
 import { AuthProvider, AuthContext } from "./src/context/AuthContext";
-import LoginScreen from "./src/screens/auth/LoginScreen";
-import RegisterScreen from "./src/screens/auth/RegisterScreen";
-import RegisterStep1Screen from "./src/screens/auth/RegisterStep1Screen";
-import RegisterStep2Screen from "./src/screens/auth/RegisterStep2Screen";
-import RegisterStep3Screen from "./src/screens/auth/RegisterStep3Screen";
-import ForgotPasswordScreen from "./src/screens/auth/ForgotPasswordScreen";
-import VerifyResetCodeScreen from "./src/screens/auth/VerifyResetCodeScreen";
-import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
-import ClientNavigator from "./src/navigation/ClientNavigator";
-import AdminNavigator from "./src/navigation/AdminNavigator";
-import SplashScreen from "./src/screens/SplashScreen";
-import PaymentHistoryScreen from "./src/screens/client/PaymentHistoryScreen";
-import SettlementScreen from "./src/screens/client/SettlementScreen";
-import PaymentMethodScreen from "./src/screens/client/PaymentMethodScreen";
-import GCashPaymentScreen from "./src/screens/client/GCashPaymentScreen";
-import BankTransferPaymentScreen from "./src/screens/client/BankTransferPaymentScreen";
-import CashPaymentScreen from "./src/screens/client/CashPaymentScreen";
+import RootNavigator from "./src/navigation/RootNavigator";
 import notificationService from "./src/services/notificationService";
 import updateService from "./src/services/updateService";
 import { getAPIBaseURL } from "./src/config/config";
-import OnboardingScreen, {
-  checkOnboardingComplete,
-} from "./src/screens/OnboardingScreen";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeContext";
 
-const Stack = createNativeStackNavigator();
-
-function RootNavigator() {
-  const authContext = React.useContext(AuthContext);
-  const [onboardingDone, setOnboardingDone] = React.useState(null);
-
-  // Check onboarding status on mount
-  React.useEffect(() => {
-    checkOnboardingComplete().then((done) => setOnboardingDone(done));
-  }, []);
-
-  console.log("RootNavigator rendering...");
-  console.log("authContext:", !!authContext);
-  console.log("isLoading:", authContext?.isLoading);
-  console.log("isSignedIn:", authContext?.state?.userToken);
-
-  if (!authContext) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>ERROR</Text>
-        <Text style={styles.subtitle}>No AuthContext!</Text>
-      </View>
-    );
-  }
-
-  // Show splash while auth is loading OR onboarding status is being checked
-  if (authContext.isLoading || onboardingDone === null) {
-    return <SplashScreen />;
-  }
-
-  // Show onboarding on first-ever launch
-  if (!onboardingDone) {
-    return <OnboardingScreen onComplete={() => setOnboardingDone(true)} />;
-  }
-
-  const isSignedIn = authContext.state?.userToken != null;
-  const userRole = authContext.state?.user?.role;
-  // Handle role as either array or string
-  const isAdmin = Array.isArray(userRole)
-    ? userRole.includes("admin")
-    : typeof userRole === "string" && userRole.toLowerCase().includes("admin");
-  const currentView = authContext.state?.currentView || "admin";
-  console.log(
-    "Final isSignedIn:",
-    isSignedIn,
-    "isAdmin:",
-    isAdmin,
-    "currentView:",
-    currentView,
-  );
-
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {isSignedIn ? (
-        <>
-          {isAdmin && currentView === "admin" ? (
-            <Stack.Screen name="Admin" component={AdminNavigator} />
-          ) : (
-            <Stack.Screen name="Client" component={ClientNavigator} />
-          )}
-          {/* Modal Stack for Payment and Settlement Screens */}
-          <Stack.Group screenOptions={{ presentation: "modal" }}>
-            <Stack.Screen
-              name="PaymentHistory"
-              component={PaymentHistoryScreen}
-            />
-            <Stack.Screen name="Settlement" component={SettlementScreen} />
-            <Stack.Screen
-              name="PaymentMethod"
-              component={PaymentMethodScreen}
-            />
-            <Stack.Screen name="GCashPayment" component={GCashPaymentScreen} />
-            <Stack.Screen
-              name="BankTransferPayment"
-              component={BankTransferPaymentScreen}
-            />
-            <Stack.Screen name="CashPayment" component={CashPaymentScreen} />
-          </Stack.Group>
-        </>
-      ) : (
-        <>
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
-          <Stack.Screen name="RegisterStep1" component={RegisterStep1Screen} />
-          <Stack.Screen name="RegisterStep2" component={RegisterStep2Screen} />
-          <Stack.Screen name="RegisterStep3" component={RegisterStep3Screen} />
-          <Stack.Screen
-            name="ForgotPassword"
-            component={ForgotPasswordScreen}
-          />
-          <Stack.Screen
-            name="VerifyResetCode"
-            component={VerifyResetCodeScreen}
-          />
-          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
-        </>
-      )}
-    </Stack.Navigator>
-  );
-}
+// Global navigation ref for push notification navigation
+export const navigationRef = React.createRef();
 
 export default function App() {
   const [updateStatus, setUpdateStatus] = React.useState(null);
@@ -151,7 +41,11 @@ export default function App() {
         status.updateMessage,
       );
     } else if (status.hasNewVersion) {
-      updateService.showUpdateAlert(false, status.updateUrl, status.updateMessage);
+      updateService.showUpdateAlert(
+        false,
+        status.updateUrl,
+        status.updateMessage,
+      );
     }
   };
 
@@ -169,7 +63,9 @@ export default function App() {
               "A new version is available. Please update the app to continue."}
           </Text>
           <Text style={styles.versionInfo}>
-            Current: v{updateStatus.currentVersion}{"  →  "}Latest: v{updateStatus.latestVersion || updateStatus.minVersion}
+            Current: v{updateStatus.currentVersion}
+            {"  →  "}Latest: v
+            {updateStatus.latestVersion || updateStatus.minVersion}
           </Text>
           <TouchableOpacity
             style={styles.updateButton}
@@ -207,9 +103,68 @@ export default function App() {
   );
 }
 
+/** Wraps children with a transparent touch detector to reset inactivity timer */
+function ActivityTracker({ children }) {
+  const authContext = React.useContext(AuthContext);
+
+  const handleTouchCapture = React.useCallback(() => {
+    if (authContext?.resetInactivityTimer && authContext?.state?.userToken) {
+      authContext.resetInactivityTimer();
+    }
+    return false; // Don't capture — let touches pass through
+  }, [authContext]);
+
+  return (
+    <View
+      style={{ flex: 1 }}
+      onStartShouldSetResponderCapture={handleTouchCapture}
+    >
+      {children}
+    </View>
+  );
+}
+
 /** Reads theme inside ThemeProvider and passes navTheme to NavigationContainer */
 function ThemedNavigation() {
   const { isDark, colors } = useTheme();
+  const lastNotificationResponse = Notifications.useLastNotificationResponse();
+
+  // Handle push notification taps (works even when app was killed)
+  React.useEffect(() => {
+    if (lastNotificationResponse) {
+      const data =
+        lastNotificationResponse.notification?.request?.content?.data;
+      if (data?.type === "chat_message" && data?.roomId) {
+        // Small delay to ensure navigation is ready
+        setTimeout(() => {
+          const nav = navigationRef.current;
+          if (nav?.isReady()) {
+            const chatParams = {
+              roomId: data.roomId,
+              roomName: data.roomName || "Chat",
+              isHost: false,
+            };
+            // Try client navigator first, fallback to host navigator
+            try {
+              nav.navigate("HomeStack", {
+                screen: "ChatRoom",
+                params: chatParams,
+              });
+            } catch {
+              try {
+                nav.navigate("DashboardStack", {
+                  screen: "ChatRoom",
+                  params: { ...chatParams, isHost: true },
+                });
+              } catch {
+                // Silent — user may be on auth screen
+              }
+            }
+          }
+        }, 500);
+      }
+    }
+  }, [lastNotificationResponse]);
 
   const navTheme = React.useMemo(
     () => ({
@@ -227,12 +182,14 @@ function ThemedNavigation() {
   );
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
         backgroundColor={colors.headerBg}
       />
-      <RootNavigator />
+      <ActivityTracker>
+        <RootNavigator />
+      </ActivityTracker>
     </NavigationContainer>
   );
 }

@@ -5,7 +5,11 @@ const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
-const { isAuthenticated, isAdmin } = require("../middleware/auth");
+const {
+  isAuthenticated,
+  isAdmin,
+  isAdminOrHost,
+} = require("../middleware/auth");
 
 // ─── Default settings (used when no DB row exists yet) ───
 const DEFAULT_SETTINGS = {
@@ -17,7 +21,8 @@ const DEFAULT_SETTINGS = {
   min_app_version: "1.0.0",
   latest_app_version: "1.1.2",
   force_update: false,
-  update_url: "https://github.com/@apartmentbilltracker/apartment-bill-tracker/releases",
+  update_url:
+    "https://github.com/@apartmentbilltracker/apartment-bill-tracker/releases",
   update_message: "",
 };
 
@@ -36,7 +41,10 @@ const getOrCreateSettings = async () => {
     return Array.isArray(created) ? created[0] : created;
   } catch (err) {
     // If the table doesn't exist yet, return defaults with a fake id
-    console.error("app_settings read error (table may not exist):", err.message);
+    console.error(
+      "app_settings read error (table may not exist):",
+      err.message,
+    );
     return { id: null, ...DEFAULT_SETTINGS };
   }
 };
@@ -70,14 +78,14 @@ router.get(
 );
 
 // ─────────────────────────────────────────────
-// PUT /payment-methods  (admin only)
+// PUT /payment-methods  (admin/host)
 // Toggle payment methods and set maintenance messages
 // Body: { gcash_enabled, bank_transfer_enabled, gcash_maintenance_message, bank_transfer_maintenance_message }
 // ─────────────────────────────────────────────
 router.put(
   "/payment-methods",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     const {
       gcash_enabled,
@@ -90,11 +98,15 @@ router.put(
 
     const updates = { updated_at: new Date().toISOString() };
 
-    if (typeof gcash_enabled === "boolean") updates.gcash_enabled = gcash_enabled;
-    if (typeof bank_transfer_enabled === "boolean") updates.bank_transfer_enabled = bank_transfer_enabled;
-    if (typeof gcash_maintenance_message === "string") updates.gcash_maintenance_message = gcash_maintenance_message;
+    if (typeof gcash_enabled === "boolean")
+      updates.gcash_enabled = gcash_enabled;
+    if (typeof bank_transfer_enabled === "boolean")
+      updates.bank_transfer_enabled = bank_transfer_enabled;
+    if (typeof gcash_maintenance_message === "string")
+      updates.gcash_maintenance_message = gcash_maintenance_message;
     if (typeof bank_transfer_maintenance_message === "string")
-      updates.bank_transfer_maintenance_message = bank_transfer_maintenance_message;
+      updates.bank_transfer_maintenance_message =
+        bank_transfer_maintenance_message;
 
     if (!settings.id) {
       // Table might not exist yet — try to create
@@ -107,14 +119,25 @@ router.put(
         const row = Array.isArray(created) ? created[0] : created;
         return res.status(200).json({ success: true, settings: row });
       } catch (err) {
-        return next(new ErrorHandler("Failed to save settings. Ensure the app_settings table exists in Supabase.", 500));
+        return next(
+          new ErrorHandler(
+            "Failed to save settings. Ensure the app_settings table exists in Supabase.",
+            500,
+          ),
+        );
       }
     }
 
-    const updated = await SupabaseService.update("app_settings", settings.id, updates);
+    const updated = await SupabaseService.update(
+      "app_settings",
+      settings.id,
+      updates,
+    );
     const row = Array.isArray(updated) ? updated[0] : updated;
 
-    res.status(200).json({ success: true, settings: row || { ...settings, ...updates } });
+    res
+      .status(200)
+      .json({ success: true, settings: row || { ...settings, ...updates } });
   }),
 );
 
@@ -133,7 +156,9 @@ router.get(
         minAppVersion: settings.min_app_version || "1.0.0",
         latestAppVersion: settings.latest_app_version || "1.1.2",
         forceUpdate: settings.force_update || false,
-        updateUrl: settings.update_url || "https://github.com/@apartmentbilltracker/apartment-bill-tracker/releases",
+        updateUrl:
+          settings.update_url ||
+          "https://github.com/@apartmentbilltracker/apartment-bill-tracker/releases",
         updateMessage: settings.update_message || "",
       },
     });
@@ -167,7 +192,8 @@ router.put(
       updates.latest_app_version = latest_app_version.trim();
     if (typeof force_update === "boolean") updates.force_update = force_update;
     if (typeof update_url === "string") updates.update_url = update_url.trim();
-    if (typeof update_message === "string") updates.update_message = update_message.trim();
+    if (typeof update_message === "string")
+      updates.update_message = update_message.trim();
 
     if (!settings.id) {
       try {
@@ -179,14 +205,25 @@ router.put(
         const row = Array.isArray(created) ? created[0] : created;
         return res.status(200).json({ success: true, settings: row });
       } catch (err) {
-        return next(new ErrorHandler("Failed to save version settings. Ensure app_settings table has version columns.", 500));
+        return next(
+          new ErrorHandler(
+            "Failed to save version settings. Ensure app_settings table has version columns.",
+            500,
+          ),
+        );
       }
     }
 
-    const updated = await SupabaseService.update("app_settings", settings.id, updates);
+    const updated = await SupabaseService.update(
+      "app_settings",
+      settings.id,
+      updates,
+    );
     const row = Array.isArray(updated) ? updated[0] : updated;
 
-    res.status(200).json({ success: true, settings: row || { ...settings, ...updates } });
+    res
+      .status(200)
+      .json({ success: true, settings: row || { ...settings, ...updates } });
   }),
 );
 

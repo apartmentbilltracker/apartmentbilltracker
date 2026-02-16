@@ -19,6 +19,7 @@ const normalizeTicket = (ticket) => ({
   createdAt: ticket.created_at,
   userId: ticket.user_id,
   roomId: ticket.room_id,
+  isReadByAdmin: ticket.is_read || ticket.is_read_by_admin || false,
   // Add `replies` alias for mobile compatibility
   replies: (ticket.responses || []).map(normalizeResponse),
 });
@@ -403,17 +404,28 @@ router.get("/all-tickets", isAuthenticated, async (req, res, next) => {
     // Get all tickets
     const tickets = await SupabaseService.selectAllRecords("support_tickets");
 
-    // Enrich with user and room details
+    // Enrich with user, room, and response details
     const enrichedTickets = [];
     for (let ticket of tickets || []) {
       const ticketUser = await SupabaseService.findUserById(ticket.user_id);
       const room = await SupabaseService.findRoomById(ticket.room_id);
 
-      enrichedTickets.push({
-        ...ticket,
-        user: ticketUser,
-        room: room,
-      });
+      // Fetch responses so normalizeTicket can populate `replies`
+      const responses =
+        (await SupabaseService.selectAll(
+          "support_ticket_responses",
+          "ticket_id",
+          ticket.id,
+        )) || [];
+
+      enrichedTickets.push(
+        normalizeTicket({
+          ...ticket,
+          user: ticketUser,
+          room: room,
+          responses,
+        }),
+      );
     }
 
     res.status(200).json({
@@ -425,5 +437,42 @@ router.get("/all-tickets", isAuthenticated, async (req, res, next) => {
     next(new ErrorHandler(error.message, 500));
   }
 });
+
+// ============================================================
+// MARK TICKET AS READ BY ADMIN
+// ============================================================
+router.post(
+  "/ticket/:ticketId/read",
+  isAuthenticated,
+  async (req, res, next) => {
+    try {
+      const { ticketId } = req.params;
+
+      const ticket = await SupabaseService.selectByColumn(
+        "support_tickets",
+        "id",
+        ticketId,
+      );
+
+      if (!ticket) {
+        return next(new ErrorHandler("Support ticket not found", 404));
+      }
+
+      const updated = await SupabaseService.update(
+        "support_tickets",
+        ticketId,
+        { is_read: true },
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Ticket marked as read",
+        ticket: normalizeTicket(updated),
+      });
+    } catch (error) {
+      next(new ErrorHandler(error.message, 500));
+    }
+  },
+);
 
 module.exports = router;

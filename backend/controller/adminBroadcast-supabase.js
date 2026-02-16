@@ -5,7 +5,7 @@ const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
-const { isAuthenticated, isAdmin } = require("../middleware/auth");
+const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const sendMail = require("../utils/sendMail");
 
 /**
@@ -45,7 +45,7 @@ const buildBroadcastEmail = ({ title, message, senderName }) => {
 router.post(
   "/",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     const {
       title,
@@ -158,7 +158,7 @@ router.post(
 router.get(
   "/users",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const allUsers = await SupabaseService.selectAllRecords(
@@ -178,7 +178,7 @@ router.get(
 router.get(
   "/history",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const supabase = SupabaseService.getClient();

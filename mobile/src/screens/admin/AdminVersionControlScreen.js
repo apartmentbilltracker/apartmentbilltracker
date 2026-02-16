@@ -277,11 +277,18 @@ const AdminVersionControlScreen = ({ navigation }) => {
       {/* Force Update Toggle */}
       <View style={styles.fieldCard}>
         <View style={styles.toggleRow}>
-          <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              flex: 1,
+            }}
+          >
             <View
               style={[
                 styles.fieldIconWrap,
                 {
+                  marginRight: 12,
                   backgroundColor: forceUpdate ? "#FFEBEE" : colors.inputBg,
                 },
               ]}

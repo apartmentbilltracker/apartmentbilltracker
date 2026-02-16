@@ -20,10 +20,33 @@ const savedAccountsService = {
       const raw = await AsyncStorage.getItem(SAVED_ACCOUNTS_KEY);
       if (!raw) return [];
       const accounts = JSON.parse(raw);
+
+      // Sanitize: strip any oversized base64 avatar data that slipped in previously
+      const MAX_AVATAR = 100000; // 100KB
+      let needsRewrite = false;
+      for (const acct of accounts) {
+        if (acct.avatar && acct.avatar.length > MAX_AVATAR) {
+          acct.avatar = null;
+          needsRewrite = true;
+        }
+      }
+      if (needsRewrite) {
+        await AsyncStorage.setItem(
+          SAVED_ACCOUNTS_KEY,
+          JSON.stringify(accounts),
+        );
+      }
+
       // Sort by last login (most recent first)
       return accounts.sort((a, b) => b.lastLogin - a.lastLogin);
     } catch (e) {
       console.warn("Failed to get saved accounts:", e);
+      // If row is corrupt/too large, clear it so app can recover
+      try {
+        await AsyncStorage.removeItem(SAVED_ACCOUNTS_KEY);
+      } catch (_) {
+        /* ignore */
+      }
       return [];
     }
   },
@@ -42,11 +65,15 @@ const savedAccountsService = {
       );
 
       const rawAvatar = user.avatar;
+      const MAX_AVATAR = 100000; // 100KB — safe for AsyncStorage
       let avatarUrl = null;
       if (typeof rawAvatar === "string") {
-        avatarUrl = rawAvatar;
+        avatarUrl = rawAvatar.length > MAX_AVATAR ? null : rawAvatar;
       } else if (rawAvatar && typeof rawAvatar === "object" && rawAvatar.url) {
-        avatarUrl = rawAvatar.url;
+        avatarUrl =
+          rawAvatar.url && rawAvatar.url.length > MAX_AVATAR
+            ? null
+            : rawAvatar.url;
       }
 
       const accountData = {

@@ -10,23 +10,68 @@ import {
   Share,
   RefreshControl,
   Image,
+  Modal,
+  Dimensions,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import MapView, { Marker } from "react-native-maps";
 import { AuthContext } from "../../context/AuthContext";
 import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const WATER_BILL_PER_DAY = 5;
+
+const AMENITY_MAP = {
+  wifi: { icon: "wifi", label: "WiFi", bg: "#e3f2fd", color: "#1976d2" },
+  kitchen: {
+    icon: "restaurant",
+    label: "Kitchen",
+    bg: "#fff3e0",
+    color: "#e65100",
+  },
+  bathroom: {
+    icon: "water",
+    label: "Bathroom",
+    bg: "#e3f2fd",
+    color: "#0288d1",
+  },
+  bedroom: { icon: "bed", label: "Bedroom", bg: "#fce4ec", color: "#c62828" },
+  hotwater: {
+    icon: "flame",
+    label: "Hot Water",
+    bg: "#fff8e1",
+    color: "#ef6c00",
+  },
+  parking: { icon: "car", label: "Parking", bg: "#e8f5e9", color: "#2e7d32" },
+  aircon: { icon: "snow", label: "Air-con", bg: "#e3f2fd", color: "#0277bd" },
+  laundry: { icon: "shirt", label: "Laundry", bg: "#f3e5f5", color: "#6a1b9a" },
+  tv: { icon: "tv", label: "TV", bg: "#eceff1", color: "#37474f" },
+  cctv: { icon: "videocam", label: "CCTV", bg: "#eceff1", color: "#455a64" },
+  common: {
+    icon: "people",
+    label: "Common Area",
+    bg: "#e8f5e9",
+    color: "#388e3c",
+  },
+  gym: { icon: "barbell", label: "Gym", bg: "#fbe9e7", color: "#d84315" },
+};
 
 const RoomDetailsScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
+  const styles = createStyles(colors, insets);
 
   const { roomId } = route.params;
   const { state } = useContext(AuthContext);
   const [room, setRoom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showFullMap, setShowFullMap] = useState(false);
+  const [photoViewVisible, setPhotoViewVisible] = useState(false);
+  const [photoViewIdx, setPhotoViewIdx] = useState(0);
 
   useEffect(() => {
     fetchRoomDetails();
@@ -34,25 +79,20 @@ const RoomDetailsScreen = ({ route, navigation }) => {
 
   // Refetch whenever user profile changes (name or avatar)
   useEffect(() => {
-    console.log("User profile changed, refetching room details");
     fetchRoomDetails();
   }, [state.user?.name, state.user?.avatar?.url]);
 
   const fetchRoomDetails = async () => {
     try {
       setLoading(true);
-      console.log("Fetching room details for:", roomId);
       const roomResponse = await roomService.getRoomById(roomId);
       const roomData = roomResponse.data || roomResponse;
-      console.log("RoomDetailsScreen - Room data:", roomData);
 
       // Extract the room object (it might be wrapped)
       const room = roomData.room || roomData;
-      console.log("RoomDetailsScreen - room members:", room?.members);
       setRoom(room);
     } catch (error) {
       console.error("Error fetching room details:", error.message);
-      console.error("Error details:", error);
       Alert.alert("Error", "Failed to load room details");
     } finally {
       setLoading(false);
@@ -132,357 +172,596 @@ const RoomDetailsScreen = ({ route, navigation }) => {
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-      showsVerticalScrollIndicator={false}
-    >
-      {/* ─── HEADER ─── */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerIcon}>
-            <Ionicons name="home" size={22} color={colors.accent} />
+    <>
+      <ScrollView
+        style={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ─── HEADER ─── */}
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View style={styles.headerIcon}>
+              <Ionicons name="home" size={22} color={colors.accent} />
+            </View>
+            <TouchableOpacity style={styles.shareBtn} onPress={handleShareRoom}>
+              <Ionicons name="share-outline" size={18} color={colors.accent} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.shareBtn} onPress={handleShareRoom}>
-            <Ionicons name="share-outline" size={18} color={colors.accent} />
-          </TouchableOpacity>
+          <Text style={styles.roomName}>{room.name}</Text>
+          <View style={styles.codePill}>
+            <Ionicons name="key-outline" size={13} color={colors.accent} />
+            <Text style={styles.codeText}>Code: {room.code}</Text>
+          </View>
         </View>
-        <Text style={styles.roomName}>{room.name}</Text>
-        <View style={styles.codePill}>
-          <Ionicons name="key-outline" size={13} color={colors.accent} />
-          <Text style={styles.codeText}>Code: {room.code}</Text>
-        </View>
-      </View>
 
-      {/* ─── DESCRIPTION ─── */}
-      {room.description && (
-        <View style={styles.card}>
-          <View style={styles.cardTitleRow}>
-            <Ionicons
-              name="information-circle-outline"
-              size={18}
-              color={colors.accent}
-            />
-            <Text style={styles.cardTitle}>About</Text>
+        {/* ─── DESCRIPTION ─── */}
+        {room.description && (
+          <View style={styles.card}>
+            <View style={styles.cardTitleRow}>
+              <Ionicons
+                name="information-circle-outline"
+                size={18}
+                color={colors.accent}
+              />
+              <Text style={styles.cardTitle}>About</Text>
+            </View>
+            <Text style={styles.descText}>{room.description}</Text>
           </View>
-          <Text style={styles.descText}>{room.description}</Text>
-        </View>
-      )}
+        )}
 
-      {/* ─── BILLING SUMMARY ─── */}
-      {billing?.billing?.start && billing?.billing?.end ? (
-        <View style={styles.card}>
-          <View style={styles.cardTitleRow}>
-            <Ionicons name="receipt-outline" size={18} color={colors.accent} />
-            <Text style={styles.cardTitle}>Billing Summary</Text>
-          </View>
-
-          {/* Period strip */}
-          <View style={styles.periodStrip}>
-            <Ionicons
-              name="calendar-outline"
-              size={14}
-              color={colors.textSecondary}
-            />
-            <Text style={styles.periodText}>
-              {formatDate(billing.billing.start)} —{" "}
-              {formatDate(billing.billing.end)}
-            </Text>
-          </View>
-
-          {/* Bill rows */}
-          {[
-            {
-              label: "Rent",
-              icon: "home",
-              color: "#e65100",
-              value: billing.billing.rent,
-            },
-            {
-              label: "Electricity",
-              icon: "flash",
-              color: colors.electricityColor,
-              value: billing.billing.electricity,
-            },
-            {
-              label: "Water",
-              icon: "water",
-              color: colors.waterColor,
-              value: calculateTotalWaterBill(),
-            },
-            {
-              label: "Internet",
-              icon: "wifi",
-              color: colors.internetColor,
-              value: billing.billing.internet,
-            },
-          ].map((item, idx) => (
-            <View key={idx} style={styles.billRow}>
-              <View style={styles.billRowLeft}>
-                <View
-                  style={[styles.billDot, { backgroundColor: item.color }]}
-                />
-                <Ionicons name={item.icon} size={16} color={item.color} />
-                <Text style={styles.billLabel}>{item.label}</Text>
+        {/* ─── PHOTO GALLERY ─── */}
+        {(() => {
+          const photos = Array.isArray(room.photos) ? room.photos : [];
+          if (photos.length === 0) return null;
+          const galWidth = SCREEN_WIDTH - 32;
+          return (
+            <View style={styles.card}>
+              <View style={styles.cardTitleRow}>
+                <Ionicons name="images" size={18} color={colors.accent} />
+                <Text style={styles.cardTitle}>Photos</Text>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countBadgeText}>{photos.length}</Text>
+                </View>
               </View>
-              <Text style={styles.billValue}>
+              <View style={{ position: "relative" }}>
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.galScroll}
+                  onScroll={(e) => {
+                    const idx = Math.round(
+                      e.nativeEvent.contentOffset.x / galWidth,
+                    );
+                    setPhotoViewIdx(idx);
+                  }}
+                  scrollEventThrottle={16}
+                >
+                  {photos.map((uri, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      activeOpacity={0.9}
+                      onPress={() => {
+                        setPhotoViewIdx(idx);
+                        setPhotoViewVisible(true);
+                      }}
+                    >
+                      <Image
+                        source={{ uri }}
+                        style={[styles.galPhoto, { width: galWidth }]}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                {/* Overlay badge */}
+                <View style={styles.galOverlay}>
+                  <TouchableOpacity
+                    style={styles.galExpandBtn}
+                    onPress={() => {
+                      setPhotoViewIdx(0);
+                      setPhotoViewVisible(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="expand-outline" size={13} color="#fff" />
+                    <Text style={styles.galExpandText}>View</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {photos.length > 1 && (
+                <View style={styles.galDotRow}>
+                  {photos.map((_, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.galDot,
+                        idx === photoViewIdx && styles.galDotActive,
+                      ]}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })()}
+
+        {/* ─── LOCATION MAP ─── */}
+        {room.latitude != null && room.longitude != null && (
+          <TouchableOpacity
+            style={styles.card}
+            activeOpacity={0.8}
+            onPress={() => setShowFullMap(true)}
+          >
+            <View style={styles.cardTitleRow}>
+              <Ionicons name="location" size={18} color={colors.accent} />
+              <Text style={styles.cardTitle}>Location</Text>
+              <Ionicons
+                name="expand-outline"
+                size={16}
+                color={colors.accent}
+                style={{ marginLeft: "auto" }}
+              />
+            </View>
+            <View style={styles.mapPreviewWrap}>
+              <MapView
+                style={styles.mapPreview}
+                initialRegion={{
+                  latitude: parseFloat(room.latitude),
+                  longitude: parseFloat(room.longitude),
+                  latitudeDelta: 0.005,
+                  longitudeDelta: 0.005,
+                }}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                pitchEnabled={false}
+                rotateEnabled={false}
+                liteMode={true}
+              >
+                <Marker
+                  coordinate={{
+                    latitude: parseFloat(room.latitude),
+                    longitude: parseFloat(room.longitude),
+                  }}
+                />
+              </MapView>
+            </View>
+            {room.address ? (
+              <View style={styles.mapAddressRow}>
+                <Ionicons name="location" size={14} color={colors.accent} />
+                <Text style={styles.mapAddressText} numberOfLines={2}>
+                  {room.address}
+                </Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        )}
+
+        {/* ─── AMENITIES ─── */}
+        {(() => {
+          const amenities = Array.isArray(room.amenities) ? room.amenities : [];
+          if (amenities.length === 0) return null;
+          return (
+            <View style={styles.card}>
+              <View style={styles.cardTitleRow}>
+                <Ionicons name="sparkles" size={18} color={colors.accent} />
+                <Text style={styles.cardTitle}>Amenities</Text>
+              </View>
+              <View style={styles.amenitiesGrid}>
+                {amenities.map((key, idx) => {
+                  const a = AMENITY_MAP[key] || {
+                    icon: "ellipse",
+                    label: key,
+                    bg: colors.inputBg,
+                    color: colors.textTertiary,
+                  };
+                  return (
+                    <View key={idx} style={styles.amenityItem}>
+                      <View
+                        style={[styles.amenityIcon, { backgroundColor: a.bg }]}
+                      >
+                        <Ionicons name={a.icon} size={20} color={a.color} />
+                      </View>
+                      <Text style={styles.amenityLabel}>{a.label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })()}
+
+        {/* ─── HOUSE RULES ─── */}
+        {(() => {
+          const rules = Array.isArray(room.houseRules || room.house_rules)
+            ? room.houseRules || room.house_rules
+            : [];
+          if (rules.length === 0) return null;
+          return (
+            <View style={styles.card}>
+              <View style={styles.cardTitleRow}>
+                <Ionicons
+                  name="clipboard-outline"
+                  size={18}
+                  color={colors.accent}
+                />
+                <Text style={styles.cardTitle}>House Rules</Text>
+              </View>
+              {rules.map((rule, idx) => (
+                <View key={idx} style={styles.ruleRow}>
+                  <View style={styles.ruleCheck}>
+                    <Ionicons
+                      name="checkmark"
+                      size={12}
+                      color={colors.textOnAccent}
+                    />
+                  </View>
+                  <Text style={styles.ruleText}>{rule}</Text>
+                </View>
+              ))}
+            </View>
+          );
+        })()}
+
+        {/* ─── BILLING SUMMARY ─── */}
+        {billing?.billing?.start && billing?.billing?.end ? (
+          <View style={styles.card}>
+            <View style={styles.cardTitleRow}>
+              <Ionicons
+                name="receipt-outline"
+                size={18}
+                color={colors.accent}
+              />
+              <Text style={styles.cardTitle}>Billing Summary</Text>
+            </View>
+
+            {/* Period strip */}
+            <View style={styles.periodStrip}>
+              <Ionicons
+                name="calendar-outline"
+                size={14}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.periodText}>
+                {formatDate(billing.billing.start)} —{" "}
+                {formatDate(billing.billing.end)}
+              </Text>
+            </View>
+
+            {/* Bill rows */}
+            {[
+              {
+                label: "Rent",
+                icon: "home",
+                color: "#e65100",
+                value: billing.billing.rent,
+              },
+              {
+                label: "Electricity",
+                icon: "flash",
+                color: colors.electricityColor,
+                value: billing.billing.electricity,
+              },
+              {
+                label: "Water",
+                icon: "water",
+                color: colors.waterColor,
+                value: calculateTotalWaterBill(),
+              },
+              {
+                label: "Internet",
+                icon: "wifi",
+                color: colors.internetColor,
+                value: billing.billing.internet,
+              },
+            ].map((item, idx) => (
+              <View key={idx} style={styles.billRow}>
+                <View style={styles.billRowLeft}>
+                  <View
+                    style={[styles.billDot, { backgroundColor: item.color }]}
+                  />
+                  <Ionicons name={item.icon} size={16} color={item.color} />
+                  <Text style={styles.billLabel}>{item.label}</Text>
+                </View>
+                <Text style={styles.billValue}>
+                  ₱
+                  {parseFloat(item.value || 0).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </Text>
+              </View>
+            ))}
+
+            {/* Grand total */}
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Grand Total</Text>
+              <Text style={styles.totalValue}>
                 ₱
-                {parseFloat(item.value || 0).toLocaleString(undefined, {
+                {(
+                  parseFloat(billing.billing.rent || 0) +
+                  parseFloat(billing.billing.electricity || 0) +
+                  calculateTotalWaterBill() +
+                  parseFloat(billing.billing.internet || 0)
+                ).toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
               </Text>
             </View>
-          ))}
 
-          {/* Grand total */}
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Grand Total</Text>
-            <Text style={styles.totalValue}>
-              ₱
-              {(
-                parseFloat(billing.billing.rent || 0) +
-                parseFloat(billing.billing.electricity || 0) +
-                calculateTotalWaterBill() +
-                parseFloat(billing.billing.internet || 0)
-              ).toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </Text>
+            <TouchableOpacity
+              style={styles.detailsBtn}
+              onPress={() => navigation.navigate("BillsStack")}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={16}
+                color={colors.accent}
+              />
+              <Text style={styles.detailsBtnText}>
+                View Full Billing Details
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.accent}
+              />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <View style={styles.cardTitleRow}>
+              <Ionicons
+                name="receipt-outline"
+                size={18}
+                color={colors.accent}
+              />
+              <Text style={styles.cardTitle}>Billing Summary</Text>
+            </View>
+            <View style={styles.emptyState}>
+              <Ionicons
+                name="time-outline"
+                size={32}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.emptyText}>No Active Billing Cycle</Text>
+            </View>
+          </View>
+        )}
+
+        {/* ─── MEMBERS ─── */}
+        <View style={styles.card}>
+          <View style={styles.cardTitleRow}>
+            <Ionicons name="people" size={18} color={colors.accent} />
+            <Text style={styles.cardTitle}>Members</Text>
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>
+                {room.members?.length || 0}
+              </Text>
+            </View>
           </View>
 
+          {room.members && room.members.length > 0 ? (
+            room.members.map((member, index) => (
+              <View key={index}>
+                <View style={styles.memberRow}>
+                  <View style={styles.memberLeft}>
+                    {member.user?.avatar?.url ? (
+                      <Image
+                        source={{ uri: member.user.avatar.url }}
+                        style={styles.memberAvatar}
+                      />
+                    ) : (
+                      <View style={styles.memberAvatarFallback}>
+                        <Text style={styles.memberAvatarLetter}>
+                          {(member.user?.name || "U").charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <Text style={styles.memberName}>
+                      {member.user?.name || "Unknown"}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.rolePill,
+                      member.isPayer
+                        ? { backgroundColor: colors.successBg }
+                        : { backgroundColor: colors.inputBg },
+                    ]}
+                  >
+                    <Ionicons
+                      name={member.isPayer ? "checkmark-circle" : "person"}
+                      size={12}
+                      color={
+                        member.isPayer ? colors.success : colors.textTertiary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.rolePillText,
+                        member.isPayer
+                          ? { color: colors.success }
+                          : { color: colors.textTertiary },
+                      ]}
+                    >
+                      {member.isPayer ? "Payor" : "Non-Payor"}
+                    </Text>
+                  </View>
+                </View>
+                {index < room.members.length - 1 && (
+                  <View style={styles.divider} />
+                )}
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons
+                name="person-add-outline"
+                size={32}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.emptyText}>No members yet</Text>
+            </View>
+          )}
+        </View>
+
+        {/* ─── QUICK ACTIONS ─── */}
+        <View style={styles.actionsRow}>
           <TouchableOpacity
-            style={styles.detailsBtn}
+            style={styles.actionPrimary}
             onPress={() =>
-              navigation.navigate("Billing", { roomId: room.id || room._id })
+              navigation.navigate("Presence", { roomId: room.id || room._id })
             }
             activeOpacity={0.7}
           >
-            <Ionicons
-              name="document-text-outline"
-              size={16}
-              color={colors.accent}
-            />
-            <Text style={styles.detailsBtnText}>View Full Billing Details</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+            <Ionicons name="calendar" size={18} color={colors.textOnAccent} />
+            <Text style={styles.actionPrimaryText}>Mark Presence</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionOutline}
+            onPress={() => navigation.navigate("BillsStack")}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="receipt-outline" size={18} color={colors.accent} />
+            <Text style={styles.actionOutlineText}>View Billing</Text>
           </TouchableOpacity>
         </View>
-      ) : (
-        <View style={styles.card}>
-          <View style={styles.cardTitleRow}>
-            <Ionicons name="receipt-outline" size={18} color={colors.accent} />
-            <Text style={styles.cardTitle}>Billing Summary</Text>
-          </View>
-          <View style={styles.emptyState}>
-            <Ionicons
-              name="time-outline"
-              size={32}
-              color={colors.textSecondary}
-            />
-            <Text style={styles.emptyText}>No Active Billing Cycle</Text>
-          </View>
+
+        {/* ─── FOOTER INFO ─── */}
+        <View style={styles.footerInfo}>
+          <Ionicons name="time-outline" size={13} color={colors.textTertiary} />
+          <Text style={styles.footerText}>
+            Created {formatDate(room.created_at || room.createdAt)}
+          </Text>
         </View>
+
+        <View style={{ height: 30 }} />
+      </ScrollView>
+
+      {/* ─── FULL-SCREEN MAP MODAL ─── */}
+      {room.latitude != null && room.longitude != null && (
+        <Modal
+          visible={showFullMap}
+          animationType="slide"
+          onRequestClose={() => setShowFullMap(false)}
+        >
+          <View style={{ flex: 1 }}>
+            <MapView
+              style={StyleSheet.absoluteFillObject}
+              initialRegion={{
+                latitude: parseFloat(room.latitude),
+                longitude: parseFloat(room.longitude),
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              }}
+              showsUserLocation
+              showsMyLocationButton
+            >
+              <Marker
+                coordinate={{
+                  latitude: parseFloat(room.latitude),
+                  longitude: parseFloat(room.longitude),
+                }}
+                title={room.name}
+                description={room.address || ""}
+              />
+            </MapView>
+            {/* Floating Header */}
+            <View style={styles.fullMapHeader}>
+              <TouchableOpacity
+                style={styles.fullMapBackBtn}
+                onPress={() => setShowFullMap(false)}
+              >
+                <Ionicons name="arrow-back" size={22} color="#fff" />
+              </TouchableOpacity>
+              <Text style={styles.fullMapTitle} numberOfLines={1}>
+                {room.name}
+              </Text>
+            </View>
+            {/* Floating Address */}
+            {room.address ? (
+              <View style={styles.fullMapAddressBar}>
+                <Ionicons name="location" size={16} color={colors.accent} />
+                <Text style={styles.fullMapAddressText} numberOfLines={2}>
+                  {room.address}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </Modal>
       )}
 
-      {/* ─── MEMBERS ─── */}
-      <View style={styles.card}>
-        <View style={styles.cardTitleRow}>
-          <Ionicons name="people" size={18} color={colors.accent} />
-          <Text style={styles.cardTitle}>Members</Text>
-          <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>
-              {room.members?.length || 0}
+      {/* ─── FULL-SCREEN PHOTO VIEWER ─── */}
+      <Modal
+        visible={photoViewVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPhotoViewVisible(false)}
+      >
+        <View style={styles.pvBg}>
+          <View style={styles.pvHeader}>
+            <TouchableOpacity
+              style={styles.pvCloseBtn}
+              onPress={() => setPhotoViewVisible(false)}
+            >
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.pvTitle} numberOfLines={1}>
+              {room?.name || "Photos"}
+            </Text>
+            <Text style={styles.pvCount}>
+              {photoViewIdx + 1} / {(room?.photos || []).length}
             </Text>
           </View>
-        </View>
-
-        {room.members && room.members.length > 0 ? (
-          room.members.map((member, index) => (
-            <View key={index}>
-              <View style={styles.memberRow}>
-                <View style={styles.memberLeft}>
-                  {member.user?.avatar?.url ? (
-                    <Image
-                      source={{ uri: member.user.avatar.url }}
-                      style={styles.memberAvatar}
-                    />
-                  ) : (
-                    <View style={styles.memberAvatarFallback}>
-                      <Text style={styles.memberAvatarLetter}>
-                        {(member.user?.name || "U").charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  <Text style={styles.memberName}>
-                    {member.user?.name || "Unknown"}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.rolePill,
-                    member.isPayer
-                      ? { backgroundColor: colors.successBg }
-                      : { backgroundColor: colors.inputBg },
-                  ]}
-                >
-                  <Ionicons
-                    name={member.isPayer ? "checkmark-circle" : "person"}
-                    size={12}
-                    color={
-                      member.isPayer ? colors.success : colors.textTertiary
-                    }
-                  />
-                  <Text
-                    style={[
-                      styles.rolePillText,
-                      member.isPayer
-                        ? { color: colors.success }
-                        : { color: colors.textTertiary },
-                    ]}
-                  >
-                    {member.isPayer ? "Payor" : "Non-Payor"}
-                  </Text>
-                </View>
-              </View>
-              {index < room.members.length - 1 && (
-                <View style={styles.divider} />
-              )}
-            </View>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons
-              name="person-add-outline"
-              size={32}
-              color={colors.textSecondary}
-            />
-            <Text style={styles.emptyText}>No members yet</Text>
-          </View>
-        )}
-      </View>
-
-      {/* ─── AMENITIES ─── */}
-      <View style={styles.card}>
-        <View style={styles.cardTitleRow}>
-          <Ionicons name="sparkles" size={18} color={colors.accent} />
-          <Text style={styles.cardTitle}>Amenities</Text>
-        </View>
-        <View style={styles.amenitiesGrid}>
-          {[
-            {
-              icon: "wifi",
-              label: "WiFi",
-              bg: colors.infoBg,
-              color: colors.waterColor,
-            },
-            {
-              icon: "restaurant",
-              label: "Kitchen",
-              bg: colors.warningBg,
-              color: "#e65100",
-            },
-            {
-              icon: "water",
-              label: "Bathroom",
-              bg: colors.infoBg,
-              color: colors.waterColor,
-            },
-            {
-              icon: "bed",
-              label: "Bedroom",
-              bg: colors.errorBg,
-              color: colors.error,
-            },
-            {
-              icon: "flame",
-              label: "Hot Water",
-              bg: colors.accentSurface,
-              color: colors.electricityColor,
-            },
-            {
-              icon: "people",
-              label: "Common Area",
-              bg: colors.successBg,
-              color: colors.success,
-            },
-          ].map((item, idx) => (
-            <View key={idx} style={styles.amenityItem}>
-              <View style={[styles.amenityIcon, { backgroundColor: item.bg }]}>
-                <Ionicons name={item.icon} size={20} color={item.color} />
-              </View>
-              <Text style={styles.amenityLabel}>{item.label}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* ─── HOUSE RULES ─── */}
-      <View style={styles.card}>
-        <View style={styles.cardTitleRow}>
-          <Ionicons name="clipboard-outline" size={18} color={colors.accent} />
-          <Text style={styles.cardTitle}>House Rules</Text>
-        </View>
-        {[
-          "Quiet hours: 10 PM – 7 AM",
-          "Keep common areas clean at all times",
-          "Guests must be informed in advance",
-          "Share responsibility for utilities",
-          "No smoking inside the room",
-        ].map((rule, idx) => (
-          <View key={idx} style={styles.ruleRow}>
-            <View style={styles.ruleCheck}>
-              <Ionicons
-                name="checkmark"
-                size={12}
-                color={colors.textOnAccent}
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            style={{ flex: 1 }}
+            contentOffset={{ x: photoViewIdx * SCREEN_WIDTH, y: 0 }}
+            onScroll={(e) => {
+              const idx = Math.round(
+                e.nativeEvent.contentOffset.x / SCREEN_WIDTH,
+              );
+              setPhotoViewIdx(idx);
+            }}
+            scrollEventThrottle={16}
+          >
+            {(room?.photos || []).map((uri, idx) => (
+              <Image
+                key={idx}
+                source={{ uri }}
+                style={styles.pvImg}
+                resizeMode="contain"
               />
+            ))}
+          </ScrollView>
+          {(room?.photos?.length || 0) > 1 && (
+            <View style={styles.pvDotRow}>
+              {room.photos.map((_, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.pvDot,
+                    idx === photoViewIdx && styles.pvDotActive,
+                  ]}
+                />
+              ))}
             </View>
-            <Text style={styles.ruleText}>{rule}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* ─── QUICK ACTIONS ─── */}
-      <View style={styles.actionsRow}>
-        <TouchableOpacity
-          style={styles.actionPrimary}
-          onPress={() =>
-            navigation.navigate("Presence", { roomId: room.id || room._id })
-          }
-          activeOpacity={0.7}
-        >
-          <Ionicons name="calendar" size={18} color={colors.textOnAccent} />
-          <Text style={styles.actionPrimaryText}>Mark Presence</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionOutline}
-          onPress={() =>
-            navigation.navigate("Billing", { roomId: room.id || room._id })
-          }
-          activeOpacity={0.7}
-        >
-          <Ionicons name="receipt-outline" size={18} color={colors.accent} />
-          <Text style={styles.actionOutlineText}>View Billing</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ─── FOOTER INFO ─── */}
-      <View style={styles.footerInfo}>
-        <Ionicons name="time-outline" size={13} color={colors.textTertiary} />
-        <Text style={styles.footerText}>
-          Created {formatDate(room.created_at || room.createdAt)}
-        </Text>
-      </View>
-
-      <View style={{ height: 30 }} />
-    </ScrollView>
+          )}
+        </View>
+      </Modal>
+    </>
   );
 };
 
-const createStyles = (colors) =>
+const createStyles = (colors, insets = { bottom: 0 }) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -836,6 +1115,180 @@ const createStyles = (colors) =>
       fontSize: 13,
       color: colors.textTertiary,
       marginTop: 8,
+    },
+
+    /* ─── Map ─── */
+    mapPreviewWrap: {
+      borderRadius: 12,
+      overflow: "hidden",
+      marginTop: 10,
+    },
+    mapPreview: {
+      width: "100%",
+      height: 160,
+    },
+    mapAddressRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 8,
+    },
+    mapAddressText: {
+      flex: 1,
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    fullMapHeader: {
+      position: "absolute",
+      top: 50,
+      left: 16,
+      right: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    fullMapBackBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    fullMapTitle: {
+      flex: 1,
+      fontSize: 17,
+      fontWeight: "700",
+      color: "#fff",
+      textShadowColor: "rgba(0,0,0,0.6)",
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 4,
+    },
+    fullMapAddressBar: {
+      position: "absolute",
+      bottom: Math.max(30, insets.bottom + 12),
+      left: 16,
+      right: 16,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      gap: 8,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.15,
+          shadowOffset: { width: 0, height: 2 },
+          shadowRadius: 8,
+        },
+        android: { elevation: 6 },
+      }),
+    },
+    fullMapAddressText: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+
+    /* ─── Photo Gallery ─── */
+    galScroll: {
+      borderRadius: 10,
+      overflow: "hidden",
+    },
+    galPhoto: {
+      height: 200,
+      borderRadius: 10,
+    },
+    galOverlay: {
+      position: "absolute",
+      bottom: 8,
+      right: 8,
+      flexDirection: "row",
+      gap: 6,
+    },
+    galExpandBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+    },
+    galExpandText: {
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    galDotRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 5,
+      marginTop: 8,
+    },
+    galDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.border,
+    },
+    galDotActive: {
+      backgroundColor: colors.accent,
+      width: 14,
+    },
+
+    /* ─── Fullscreen Photo Viewer ─── */
+    pvBg: {
+      flex: 1,
+      backgroundColor: "#000",
+    },
+    pvHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingTop: Platform.OS === "ios" ? 54 : 38,
+      paddingHorizontal: 16,
+      paddingBottom: 10,
+      gap: 12,
+    },
+    pvCloseBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    pvTitle: {
+      flex: 1,
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    pvCount: {
+      color: "rgba(255,255,255,0.6)",
+      fontSize: 13,
+    },
+    pvImg: {
+      width: SCREEN_WIDTH,
+      height: "100%",
+    },
+    pvDotRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 5,
+      paddingBottom: Math.max(24, insets.bottom + 8),
+    },
+    pvDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: "rgba(255,255,255,0.35)",
+    },
+    pvDotActive: {
+      backgroundColor: "#fff",
+      width: 14,
     },
   });
 
