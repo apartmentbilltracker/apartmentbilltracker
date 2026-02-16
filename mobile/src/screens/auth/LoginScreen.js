@@ -6,6 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import Constants from "expo-constants";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View,
   Text,
@@ -44,6 +45,7 @@ WebBrowser.maybeCompleteAuthSession();
 const LoginScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,8 +54,14 @@ const LoginScreen = ({ navigation }) => {
   const [error, setError] = useState("");
   const [savedAccounts, setSavedAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState(null);
-  const { signIn, signInWithGoogle, signInWithFacebook } =
-    useContext(AuthContext);
+  const {
+    signIn,
+    signInWithGoogle,
+    signInWithFacebook,
+    state: authState,
+    clearSessionExpired,
+  } = useContext(AuthContext);
+  const sessionExpired = authState?.sessionExpiredReason === "inactivity";
 
   // Load saved accounts on mount
   useEffect(() => {
@@ -251,6 +259,23 @@ const LoginScreen = ({ navigation }) => {
       style={styles.container}
     >
       <AuthBubbles />
+
+      {/* ─── Session Expired Banner ─── */}
+      {sessionExpired && (
+        <View style={[styles.sessionBanner, { marginTop: insets.top + 8 }]}>
+          <Ionicons name="time-outline" size={18} color="#92400e" />
+          <Text style={styles.sessionBannerText}>
+            Your session expired due to inactivity. Please log in again.
+          </Text>
+          <TouchableOpacity
+            onPress={clearSessionExpired}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="close" size={18} color="#92400e" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -926,6 +951,27 @@ const createStyles = (colors) =>
       fontSize: 17,
       fontWeight: "700",
       color: colors.text,
+    },
+    sessionBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#fef3c7",
+      borderWidth: 1,
+      borderColor: "#f59e0b",
+      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      marginHorizontal: 20,
+      marginTop: 8,
+      gap: 8,
+      zIndex: 10,
+    },
+    sessionBannerText: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "500",
+      color: "#92400e",
+      lineHeight: 18,
     },
   });
 

@@ -5,7 +5,7 @@ const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
-const { isAuthenticated, isAdmin } = require("../middleware/auth");
+const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 
 // Helper: check if a payment method is enabled in app_settings
@@ -15,7 +15,8 @@ const isPaymentMethodEnabled = async (method) => {
     if (!rows || rows.length === 0) return true; // no settings row = all enabled
     const settings = rows[0];
     if (method === "gcash") return settings.gcash_enabled !== false;
-    if (method === "bank_transfer") return settings.bank_transfer_enabled !== false;
+    if (method === "bank_transfer")
+      return settings.bank_transfer_enabled !== false;
     return true;
   } catch {
     return true; // on error, don't block payments
@@ -28,7 +29,8 @@ const getMaintenanceMessage = async (method) => {
     if (!rows || rows.length === 0) return "";
     const settings = rows[0];
     if (method === "gcash") return settings.gcash_maintenance_message || "";
-    if (method === "bank_transfer") return settings.bank_transfer_maintenance_message || "";
+    if (method === "bank_transfer")
+      return settings.bank_transfer_maintenance_message || "";
     return "";
   } catch {
     return "";
@@ -153,11 +155,11 @@ router.get(
   }),
 );
 
-// Verify payment (admin only)
+// Verify payment
 router.post(
   "/verify/:paymentId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { paymentId } = req.params;
@@ -190,11 +192,11 @@ router.post(
   }),
 );
 
-// Reject payment (admin only)
+// Reject payment
 router.post(
   "/reject/:paymentId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { paymentId } = req.params;
@@ -351,7 +353,8 @@ router.post(
         const msg = await getMaintenanceMessage("gcash");
         return next(
           new ErrorHandler(
-            msg || "GCash payments are temporarily unavailable due to scheduled maintenance. Please try again later or use another payment method.",
+            msg ||
+              "GCash payments are temporarily unavailable due to scheduled maintenance. Please try again later or use another payment method.",
             503,
           ),
         );
@@ -465,7 +468,8 @@ router.post(
         const msg = await getMaintenanceMessage("bank_transfer");
         return next(
           new ErrorHandler(
-            msg || "Bank Transfer payments are temporarily unavailable due to scheduled maintenance. Please try again later or use another payment method.",
+            msg ||
+              "Bank Transfer payments are temporarily unavailable due to scheduled maintenance. Please try again later or use another payment method.",
             503,
           ),
         );
@@ -695,10 +699,12 @@ router.get(
       const { roomId } = req.params;
       const allPayments = await SupabaseService.getRoomPayments(roomId);
 
-      // Non-admin users only see their own payments
-      const payments = req.user.is_admin
-        ? allPayments
-        : (allPayments || []).filter((p) => p.paid_by === req.user.id);
+      // Non-admin/host users only see their own payments
+      const role = (req.user.role || "").toLowerCase();
+      const payments =
+        req.user.is_admin || role === "host"
+          ? allPayments
+          : (allPayments || []).filter((p) => p.paid_by === req.user.id);
 
       // Filter out cancelled/deleted payments and normalize snake_case to camelCase
       const transactions = (payments || [])

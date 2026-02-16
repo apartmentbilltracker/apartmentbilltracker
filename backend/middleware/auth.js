@@ -34,3 +34,15 @@ exports.isAdmin = catchAsyncErrors(async (req, res, next) => {
   }
   next();
 });
+
+exports.isAdminOrHost = catchAsyncErrors(async (req, res, next) => {
+  if (!req.user) {
+    return next(new ErrorHandler("Please login to continue", 401));
+  }
+
+  const role = (req.user.role || "").toLowerCase();
+  if (!req.user.is_admin && role !== "host") {
+    return next(new ErrorHandler("Admin or Host access required", 403));
+  }
+  next();
+});

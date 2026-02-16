@@ -29,7 +29,12 @@ import Svg, {
   Path,
 } from "react-native-svg";
 import { AuthContext } from "../../context/AuthContext";
-import { roomService, apiService } from "../../services/apiService";
+import {
+  roomService,
+  apiService,
+  chatService,
+} from "../../services/apiService";
+import chatReadTracker from "../../services/chatReadTracker";
 import { useTheme } from "../../theme/ThemeContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -43,6 +48,8 @@ const AdminDashboardScreen = ({ navigation }) => {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedRoomId, setSelectedRoomId] = useState(null); // null = All Rooms
+  const [roomDropdownOpen, setRoomDropdownOpen] = useState(false);
   const [paymentStats, setPaymentStats] = useState({
     totalCollected: 0,
     totalPending: 0,
@@ -50,10 +57,46 @@ const AdminDashboardScreen = ({ navigation }) => {
   });
   const [billingByMonth, setBillingByMonth] = useState([]);
   const [latestBillingCycle, setLatestBillingCycle] = useState(null);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const hostUserId = state?.user?.id || state?.user?._id;
 
   useEffect(() => {
-    fetchAll();
+    fetchRooms();
   }, []);
+
+  // Re-fetch filtered data when selectedRoomId changes
+  useEffect(() => {
+    fetchFilteredData(selectedRoomId);
+  }, [selectedRoomId]);
+
+  // Fetch unread chat count for selected room (only messages after last read)
+  const fetchChatBadge = async (targetRoomId) => {
+    try {
+      const rid = targetRoomId || rooms[0]?.id || rooms[0]?._id;
+      if (!rid) {
+        setUnreadChatCount(0);
+        return;
+      }
+      const status = await chatService.getChatStatus(rid);
+      if (!status.chatEnabled) {
+        setUnreadChatCount(0);
+        return;
+      }
+      const [res, lastRead] = await Promise.all([
+        chatService.getMessages(rid, { limit: 100 }),
+        chatReadTracker.getLastRead(rid),
+      ]);
+      const msgs = res.messages || [];
+      const unread = msgs.filter(
+        (m) =>
+          String(m.senderId) !== String(hostUserId) &&
+          new Date(m.createdAt).getTime() > lastRead,
+      );
+      setUnreadChatCount(unread.length);
+    } catch {
+      setUnreadChatCount(0);
+    }
+  };
 
   useEffect(() => {
     if (isFocused) {
@@ -62,22 +105,25 @@ const AdminDashboardScreen = ({ navigation }) => {
         totalPending: 0,
         collectionRate: 0,
       });
-      fetchAll();
+      fetchRooms();
+      fetchFilteredData(selectedRoomId);
+      fetchChatBadge(selectedRoomId);
     }
   }, [isFocused]);
 
-  const fetchAll = () => {
-    fetchRooms();
-    fetchBillingTotals();
-    fetchPaymentStats();
-    fetchLatestBillingCycle();
+  const fetchFilteredData = (roomId) => {
+    const roomQ = roomId ? `&roomId=${roomId}` : "";
+    fetchBillingTotals(6, roomId);
+    fetchPaymentStats(roomId);
+    fetchLatestBillingCycle(roomId);
   };
 
-  const fetchPaymentStats = async () => {
+  const fetchPaymentStats = async (roomId) => {
     try {
       const timestamp = Date.now();
+      const roomQ = roomId ? `&roomId=${roomId}` : "";
       const response = await apiService.get(
-        `/api/v2/admin/billing/payment-stats?t=${timestamp}`,
+        `/api/v2/admin/billing/payment-stats?t=${timestamp}${roomQ}`,
       );
       if (response?.success && response.data) {
         setPaymentStats(response.data);
@@ -100,10 +146,11 @@ const AdminDashboardScreen = ({ navigation }) => {
     }
   };
 
-  const fetchLatestBillingCycle = async () => {
+  const fetchLatestBillingCycle = async (roomId) => {
     try {
+      const roomQ = roomId ? `?roomId=${roomId}` : "";
       const response = await apiService.get(
-        "/api/v2/billing-cycles/totals/latest",
+        `/api/v2/billing-cycles/totals/latest${roomQ}`,
       );
       let cycleData = null;
       if (response?.success && response.stats) {
@@ -135,10 +182,11 @@ const AdminDashboardScreen = ({ navigation }) => {
     }
   };
 
-  const fetchBillingTotals = async (months = 6) => {
+  const fetchBillingTotals = async (months = 6, roomId) => {
     try {
+      const roomQ = roomId ? `&roomId=${roomId}` : "";
       const res = await apiService.get(
-        `/api/v2/billing-cycles/totals/month?months=${months}`,
+        `/api/v2/billing-cycles/totals/month?months=${months}${roomQ}`,
       );
       if (res?.success) setBillingByMonth(res.data || []);
     } catch (error) {
@@ -150,17 +198,18 @@ const AdminDashboardScreen = ({ navigation }) => {
     setRefreshing(true);
     await Promise.all([
       fetchRooms(),
-      fetchBillingTotals(),
-      fetchPaymentStats(),
-      fetchLatestBillingCycle(),
+      fetchBillingTotals(6, selectedRoomId),
+      fetchPaymentStats(selectedRoomId),
+      fetchLatestBillingCycle(selectedRoomId),
     ]);
     setRefreshing(false);
   };
 
-  const totalMembers = rooms.reduce(
-    (sum, room) => sum + (room.members?.length || 0),
-    0,
-  );
+  const totalMembers = (
+    selectedRoomId
+      ? rooms.filter((r) => (r.id || r._id) === selectedRoomId)
+      : rooms
+  ).reduce((sum, room) => sum + (room.members?.length || 0), 0);
   const totalBilledLastN = billingByMonth.reduce(
     (s, b) => s + (b.totalBilled || 0),
     0,
@@ -417,6 +466,26 @@ const AdminDashboardScreen = ({ navigation }) => {
       onPress: () =>
         navigation.navigate("BillingStack", { screen: "PaymentSettings" }),
     },
+    {
+      icon: "chatbubble-ellipses-outline",
+      label: "Chat",
+      color: "#1976d2",
+      bg: "#e3f2fd",
+      onPress: () => {
+        const room = selectedRoomId
+          ? rooms.find((r) => (r.id || r._id) === selectedRoomId)
+          : rooms[0];
+        if (!room) {
+          Alert.alert("No Room", "Create a room first to use chat.");
+          return;
+        }
+        navigation.navigate("ChatRoom", {
+          roomId: room.id || room._id,
+          roomName: room.name,
+          isHost: true,
+        });
+      },
+    },
   ];
 
   return (
@@ -447,6 +516,117 @@ const AdminDashboardScreen = ({ navigation }) => {
           </View>
         </View>
       </View>
+
+      {/* Room Selector Dropdown */}
+      {rooms.length > 1 && (
+        <View style={styles.roomSelectorWrap}>
+          <TouchableOpacity
+            style={styles.roomSelectorBtn}
+            activeOpacity={0.7}
+            onPress={() => setRoomDropdownOpen(!roomDropdownOpen)}
+          >
+            <View style={styles.roomSelectorIconBg}>
+              <Ionicons
+                name={selectedRoomId ? "home" : "apps"}
+                size={16}
+                color={colors.accent}
+              />
+            </View>
+            <Text style={styles.roomSelectorText} numberOfLines={1}>
+              {selectedRoomId
+                ? rooms.find((r) => (r.id || r._id) === selectedRoomId)?.name ||
+                  "Room"
+                : "All Rooms"}
+            </Text>
+            <Ionicons
+              name={roomDropdownOpen ? "chevron-up" : "chevron-down"}
+              size={16}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          {roomDropdownOpen && (
+            <View style={styles.roomDropdown}>
+              <TouchableOpacity
+                style={[
+                  styles.roomDropdownItem,
+                  !selectedRoomId && styles.roomDropdownItemActive,
+                ]}
+                onPress={() => {
+                  setSelectedRoomId(null);
+                  setRoomDropdownOpen(false);
+                }}
+              >
+                <Ionicons
+                  name="apps"
+                  size={16}
+                  color={!selectedRoomId ? colors.accent : colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.roomDropdownText,
+                    !selectedRoomId && styles.roomDropdownTextActive,
+                  ]}
+                >
+                  All Rooms
+                </Text>
+                {!selectedRoomId && (
+                  <Ionicons
+                    name="checkmark"
+                    size={16}
+                    color={colors.accent}
+                    style={{ marginLeft: "auto" }}
+                  />
+                )}
+              </TouchableOpacity>
+              {rooms.map((room) => {
+                const rid = room.id || room._id;
+                const isActive = selectedRoomId === rid;
+                return (
+                  <TouchableOpacity
+                    key={rid}
+                    style={[
+                      styles.roomDropdownItem,
+                      isActive && styles.roomDropdownItemActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedRoomId(rid);
+                      setRoomDropdownOpen(false);
+                    }}
+                  >
+                    <Ionicons
+                      name="home"
+                      size={16}
+                      color={isActive ? colors.accent : colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.roomDropdownText,
+                        isActive && styles.roomDropdownTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {room.name}
+                    </Text>
+                    <Text style={styles.roomDropdownMeta}>
+                      {room.members?.length || 0} member
+                      {(room.members?.length || 0) !== 1 ? "s" : ""}
+                    </Text>
+                    {isActive && (
+                      <Ionicons
+                        name="checkmark"
+                        size={16}
+                        color={colors.accent}
+                        style={{ marginLeft: 4 }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Payment Collection Card */}
       <View style={styles.sectionWrap}>
@@ -611,8 +791,17 @@ const AdminDashboardScreen = ({ navigation }) => {
             >
               <Ionicons name="home" size={20} color={colors.accent} />
             </View>
-            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{rooms.length}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Rooms</Text>
+            <Text
+              style={styles.statValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {selectedRoomId ? 1 : rooms.length}
+            </Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              Rooms
+            </Text>
           </View>
           <View style={styles.statCard}>
             <View
@@ -620,8 +809,17 @@ const AdminDashboardScreen = ({ navigation }) => {
             >
               <Ionicons name="people" size={20} color={colors.info} />
             </View>
-            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{totalMembers}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Members</Text>
+            <Text
+              style={styles.statValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {totalMembers}
+            </Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              Members
+            </Text>
           </View>
           <View style={styles.statCard}>
             <View
@@ -632,8 +830,17 @@ const AdminDashboardScreen = ({ navigation }) => {
             >
               <Ionicons name="cash" size={20} color={colors.success} />
             </View>
-            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{fmtShort(totalBilledLastN)}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Billed</Text>
+            <Text
+              style={styles.statValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {fmtShort(totalBilledLastN)}
+            </Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              Billed
+            </Text>
           </View>
           <View style={styles.statCard}>
             <View
@@ -648,8 +855,17 @@ const AdminDashboardScreen = ({ navigation }) => {
                 color={colors.internetColor}
               />
             </View>
-            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{overallCollectionRate}%</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Collected</Text>
+            <Text
+              style={styles.statValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {overallCollectionRate}%
+            </Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              Collected
+            </Text>
           </View>
         </View>
       </View>
@@ -669,8 +885,22 @@ const AdminDashboardScreen = ({ navigation }) => {
                 style={[styles.actionIconWrap, { backgroundColor: action.bg }]}
               >
                 <Ionicons name={action.icon} size={22} color={action.color} />
+                {action.label === "Chat" && unreadChatCount > 0 && (
+                  <View style={styles.chatBadge}>
+                    <Text style={styles.chatBadgeText}>
+                      {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                    </Text>
+                  </View>
+                )}
               </View>
-              <Text style={styles.actionLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{action.label}</Text>
+              <Text
+                style={styles.actionLabel}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {action.label}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -789,7 +1019,10 @@ const AdminDashboardScreen = ({ navigation }) => {
             </Text>
           </View>
         ) : (
-          rooms.slice(0, 4).map((room, index) => (
+          (selectedRoomId
+            ? rooms.filter((r) => (r.id || r._id) === selectedRoomId)
+            : rooms.slice(0, 4)
+          ).map((room, index) => (
             <TouchableOpacity
               key={room.id || room._id || `room-${index}`}
               style={styles.roomCard}
@@ -883,6 +1116,81 @@ const createStyles = (colors) =>
       backgroundColor: colors.accentSurface,
       justifyContent: "center",
       alignItems: "center",
+    },
+
+    // Room Selector
+    roomSelectorWrap: {
+      paddingHorizontal: 16,
+      marginTop: 12,
+      zIndex: 10,
+    },
+    roomSelectorBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    roomSelectorIconBg: {
+      width: 30,
+      height: 30,
+      borderRadius: 8,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    roomSelectorText: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    roomDropdown: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      marginTop: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+        },
+        android: { elevation: 6 },
+      }),
+    },
+    roomDropdownItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderLight,
+    },
+    roomDropdownItemActive: {
+      backgroundColor: colors.accentSurface,
+    },
+    roomDropdownText: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.text,
+    },
+    roomDropdownTextActive: {
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    roomDropdownMeta: {
+      fontSize: 11,
+      color: colors.textTertiary,
     },
 
     // Section
@@ -1109,6 +1417,26 @@ const createStyles = (colors) =>
       color: colors.textSecondary,
       textAlign: "center",
       width: "100%",
+    },
+    chatBadge: {
+      position: "absolute",
+      top: -6,
+      right: -8,
+      backgroundColor: "#e74c3c",
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 4,
+      borderWidth: 1.5,
+      borderColor: colors.card,
+    },
+    chatBadgeText: {
+      color: "#fff",
+      fontSize: 10,
+      fontWeight: "700",
+      lineHeight: 12,
     },
 
     // Chart

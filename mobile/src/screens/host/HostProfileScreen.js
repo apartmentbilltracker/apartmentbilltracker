@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useMemo } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import Constants from "expo-constants";
 import { AuthContext } from "../../context/AuthContext";
-import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 
 const THEME_OPTIONS = [
@@ -25,7 +24,7 @@ const THEME_OPTIONS = [
   { key: "system", label: "System", icon: "phone-portrait-outline" },
 ];
 
-const AdminProfileScreen = ({ navigation }) => {
+const HostProfileScreen = ({ navigation }) => {
   const { colors, preference, setTheme } = useTheme();
   const styles = createStyles(colors);
 
@@ -35,9 +34,9 @@ const AdminProfileScreen = ({ navigation }) => {
   const [editName, setEditName] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [unreadTickets, setUnreadTickets] = useState(0);
-  const [unreadBugReports, setUnreadBugReports] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const user = state.user || {};
 
   const handleLogout = async () => {
     try {
@@ -49,8 +48,6 @@ const AdminProfileScreen = ({ navigation }) => {
       setLoggingOut(false);
     }
   };
-
-  const user = state.user || {};
 
   const handleEditPress = () => {
     setEditName(user.name || "");
@@ -121,39 +118,6 @@ const AdminProfileScreen = ({ navigation }) => {
     return null;
   };
 
-  useEffect(() => {
-    const fetchUnreadCounts = async () => {
-      try {
-        const ticketsResponse = await supportService.getAllTickets();
-        const tickets = Array.isArray(ticketsResponse)
-          ? ticketsResponse
-          : ticketsResponse?.data || [];
-        const unreadTicketCount = tickets.filter(
-          (t) => !t.isReadByAdmin && t.replies && t.replies.length > 0,
-        ).length;
-        setUnreadTickets(unreadTicketCount);
-
-        const bugsResponse = await supportService.getAllBugReports();
-        const bugs = Array.isArray(bugsResponse)
-          ? bugsResponse
-          : bugsResponse?.data || [];
-        const unreadBugCount = bugs.filter(
-          (b) => !b.isReadByAdmin && b.responses && b.responses.length > 0,
-        ).length;
-        setUnreadBugReports(unreadBugCount);
-      } catch (error) {
-        console.error("Error fetching unread counts:", error);
-      }
-    };
-
-    const unsubscribe = navigation.addListener("focus", () => {
-      fetchUnreadCounts();
-    });
-
-    fetchUnreadCounts();
-    return unsubscribe;
-  }, [navigation]);
-
   return (
     <ScrollView style={styles.container}>
       {/* Profile Header Card */}
@@ -168,7 +132,7 @@ const AdminProfileScreen = ({ navigation }) => {
           ) : (
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
-                {(user.name || "A").charAt(0).toUpperCase()}
+                {(user.name || "H").charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
@@ -184,25 +148,12 @@ const AdminProfileScreen = ({ navigation }) => {
             />
           </TouchableOpacity>
         </View>
-        <Text style={styles.userName}>{user.name || "Admin"}</Text>
+        <Text style={styles.userName}>{user.name || "Host"}</Text>
         <Text style={styles.userEmail}>{user.email || "N/A"}</Text>
 
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            backgroundColor: "rgba(179,134,4,0.12)",
-            paddingHorizontal: 12,
-            paddingVertical: 5,
-            borderRadius: 8,
-            marginBottom: 12,
-          }}
-        >
-          <Ionicons name="shield-checkmark" size={13} color="#b38604" />
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#b38604" }}>
-            Super Admin
-          </Text>
+        <View style={styles.roleBadge}>
+          <Ionicons name="key" size={13} color="#b38604" />
+          <Text style={styles.roleBadgeText}>Room Host</Text>
         </View>
       </View>
 
@@ -224,8 +175,23 @@ const AdminProfileScreen = ({ navigation }) => {
         </View>
         <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
           <Text style={styles.infoLabel}>Role</Text>
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleBadgeText}>{user.role || "Admin"}</Text>
+          <View
+            style={{
+              backgroundColor: "rgba(179,134,4,0.12)",
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 8,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                color: colors.accent,
+              }}
+            >
+              Host
+            </Text>
           </View>
         </View>
       </View>
@@ -252,103 +218,6 @@ const AdminProfileScreen = ({ navigation }) => {
           <Text style={styles.infoLabel}>Build</Text>
           <Text style={styles.infoValue}>1</Text>
         </View>
-      </View>
-
-      {/* Support Management */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionIconWrap}>
-            <Ionicons name="headset-outline" size={16} color={colors.accent} />
-          </View>
-          <Text style={styles.sectionTitle}>Support Management</Text>
-          {(unreadTickets > 0 || unreadBugReports > 0) && (
-            <View style={styles.unreadDot} />
-          )}
-        </View>
-
-        <TouchableOpacity
-          style={styles.managementButton}
-          onPress={() => navigation.navigate("ProfileSupportTickets")}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.mgmtIconWrap,
-              { backgroundColor: "rgba(10,102,194,0.10)" },
-            ]}
-          >
-            <Ionicons name="ticket-outline" size={20} color={colors.info} />
-          </View>
-          <View style={styles.managementButtonContent}>
-            <View style={styles.titleRow}>
-              <Text style={styles.managementButtonTitle}>Support Tickets</Text>
-              {unreadTickets > 0 && <View style={styles.unreadDotSmall} />}
-            </View>
-            <Text style={styles.managementButtonDesc}>
-              Manage client support requests
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={colors.textSecondary}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.managementButton}
-          onPress={() => navigation.navigate("ProfileBugReports")}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.mgmtIconWrap,
-              { backgroundColor: "rgba(231,76,60,0.10)" },
-            ]}
-          >
-            <Ionicons name="bug-outline" size={20} color={colors.error} />
-          </View>
-          <View style={styles.managementButtonContent}>
-            <View style={styles.titleRow}>
-              <Text style={styles.managementButtonTitle}>Bug Reports</Text>
-              {unreadBugReports > 0 && <View style={styles.unreadDotSmall} />}
-            </View>
-            <Text style={styles.managementButtonDesc}>
-              Review and fix reported issues
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={colors.textSecondary}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.managementButton, { borderBottomWidth: 0 }]}
-          onPress={() => navigation.navigate("ProfileManageFAQs")}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.mgmtIconWrap,
-              { backgroundColor: "rgba(39,174,96,0.10)" },
-            ]}
-          >
-            <Ionicons name="help-circle-outline" size={20} color="#27ae60" />
-          </View>
-          <View style={styles.managementButtonContent}>
-            <Text style={styles.managementButtonTitle}>Manage FAQs</Text>
-            <Text style={styles.managementButtonDesc}>
-              Create and edit frequently asked questions
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={colors.textSecondary}
-          />
-        </TouchableOpacity>
       </View>
 
       {/* ─── Appearance ─── */}
@@ -381,88 +250,6 @@ const AdminProfileScreen = ({ navigation }) => {
             );
           })}
         </View>
-      </View>
-
-      {/* ─── MANAGEMENT SHORTCUTS ─── */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionIconWrap}>
-            <Ionicons
-              name="construct-outline"
-              size={16}
-              color={colors.accent}
-            />
-          </View>
-          <Text style={styles.sectionTitle}>Management</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.legalRow}
-          onPress={() =>
-            navigation
-              .getParent()
-              ?.navigate("ManageStack", { screen: "UserManagement" })
-          }
-          activeOpacity={0.7}
-        >
-          <Ionicons name="people-outline" size={18} color="#2980B9" />
-          <Text style={styles.legalRowText}>User Management</Text>
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color={colors.textTertiary}
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.legalRow}
-          onPress={() =>
-            navigation
-              .getParent()
-              ?.navigate("ManageStack", { screen: "AllRooms" })
-          }
-          activeOpacity={0.7}
-        >
-          <Ionicons name="home-outline" size={18} color="#27AE60" />
-          <Text style={styles.legalRowText}>All Rooms</Text>
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color={colors.textTertiary}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* ─── APP MANAGEMENT ─── */}
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.legalRow}
-          onPress={() => navigation.navigate("Broadcast")}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="megaphone-outline" size={18} color={colors.accent} />
-          <Text style={styles.legalRowText}>Send Notification</Text>
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color={colors.textTertiary}
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.legalRow}
-          onPress={() => navigation.navigate("VersionControl")}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="cloud-download-outline"
-            size={18}
-            color={colors.accent}
-          />
-          <Text style={styles.legalRowText}>Version Control</Text>
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color={colors.textTertiary}
-          />
-        </TouchableOpacity>
       </View>
 
       {/* ─── LEGAL ─── */}
@@ -503,7 +290,7 @@ const AdminProfileScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Switch View & Logout */}
+      {/* Switch to Client View */}
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.clientViewButton}
@@ -574,7 +361,6 @@ const AdminProfileScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Avatar Preview */}
             <View style={styles.modalAvatarSection}>
               {selectedImage?.uri ? (
                 <Image
@@ -589,7 +375,7 @@ const AdminProfileScreen = ({ navigation }) => {
               ) : (
                 <View style={styles.modalAvatar}>
                   <Text style={styles.modalAvatarText}>
-                    {editName.charAt(0).toUpperCase() || "A"}
+                    {editName.charAt(0).toUpperCase() || "H"}
                   </Text>
                 </View>
               )}
@@ -607,7 +393,6 @@ const AdminProfileScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Name Input */}
             <View style={styles.formSection}>
               <Text style={styles.formLabel}>Name</Text>
               <TextInput
@@ -620,7 +405,6 @@ const AdminProfileScreen = ({ navigation }) => {
               />
             </View>
 
-            {/* Save Button */}
             <TouchableOpacity
               style={[
                 styles.saveButton,
@@ -655,8 +439,6 @@ const createStyles = (colors) =>
       flex: 1,
       backgroundColor: colors.background,
     },
-
-    /* Profile Header Card */
     profileCard: {
       alignItems: "center",
       paddingVertical: 28,
@@ -675,15 +457,12 @@ const createStyles = (colors) =>
         android: { elevation: 2 },
       }),
     },
-    avatarContainer: {
-      marginBottom: 14,
-      position: "relative",
-    },
+    avatarContainer: { marginBottom: 14, position: "relative" },
     avatar: {
       width: 88,
       height: 88,
       borderRadius: 44,
-      backgroundColor: colors.accent,
+      backgroundColor: "#b38604",
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 3,
@@ -697,11 +476,7 @@ const createStyles = (colors) =>
       borderWidth: 3,
       borderColor: "rgba(179,134,4,0.18)",
     },
-    avatarText: {
-      fontSize: 34,
-      fontWeight: "700",
-      color: "#fff",
-    },
+    avatarText: { fontSize: 34, fontWeight: "700", color: "#fff" },
     editAvatarBtn: {
       position: "absolute",
       bottom: 2,
@@ -724,7 +499,22 @@ const createStyles = (colors) =>
     userEmail: {
       fontSize: 14,
       color: colors.textTertiary,
+      marginBottom: 12,
+    },
+    roleBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: "rgba(179,134,4,0.12)",
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 8,
       marginBottom: 16,
+    },
+    roleBadgeText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#b38604",
     },
     editButton: {
       flexDirection: "row",
@@ -734,23 +524,8 @@ const createStyles = (colors) =>
       paddingVertical: 10,
       alignItems: "center",
       gap: 6,
-      ...Platform.select({
-        ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.2,
-          shadowOffset: { width: 0, height: 2 },
-          shadowRadius: 4,
-        },
-        android: { elevation: 3 },
-      }),
     },
-    editButtonText: {
-      color: "#fff",
-      fontSize: 14,
-      fontWeight: "600",
-    },
-
-    /* Sections */
+    editButtonText: { color: "#fff", fontSize: 14, fontWeight: "600" },
     section: {
       marginHorizontal: 12,
       marginTop: 12,
@@ -789,8 +564,8 @@ const createStyles = (colors) =>
       flex: 1,
     },
     sectionAppearanceTitle: {
-      paddingBottom: 12,
       fontSize: 15,
+      marginBottom: 12,
       fontWeight: "700",
       color: colors.text,
       flex: 1,
@@ -803,329 +578,8 @@ const createStyles = (colors) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderLight,
     },
-    infoLabel: {
-      fontSize: 14,
-      color: colors.textTertiary,
-    },
-    infoValue: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.text,
-    },
-    roleBadge: {
-      backgroundColor: "rgba(179,134,4,0.12)",
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 8,
-    },
-    roleBadgeText: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: colors.accent,
-      textTransform: "capitalize",
-    },
-
-    /* Support Management */
-    managementButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingVertical: 14,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderLight,
-    },
-    mgmtIconWrap: {
-      width: 38,
-      height: 38,
-      borderRadius: 12,
-      justifyContent: "center",
-      alignItems: "center",
-      marginRight: 12,
-    },
-    managementButtonContent: {
-      flex: 1,
-    },
-    titleRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    managementButtonTitle: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: colors.text,
-      marginBottom: 2,
-    },
-    managementButtonDesc: {
-      fontSize: 12,
-      color: colors.textTertiary,
-      lineHeight: 16,
-    },
-    unreadDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: "#e74c3c",
-    },
-    unreadDotSmall: {
-      width: 7,
-      height: 7,
-      borderRadius: 4,
-      backgroundColor: "#e74c3c",
-    },
-
-    /* Client View Switch */
-    clientViewButton: {
-      backgroundColor: colors.accent,
-      borderRadius: 12,
-      padding: 14,
-      flexDirection: "row",
-      alignItems: "center",
-      ...Platform.select({
-        ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.2,
-          shadowOffset: { width: 0, height: 2 },
-          shadowRadius: 6,
-        },
-        android: { elevation: 3 },
-      }),
-    },
-    clientViewIconWrap: {
-      width: 38,
-      height: 38,
-      borderRadius: 12,
-      backgroundColor: "rgba(255,255,255,0.2)",
-      justifyContent: "center",
-      alignItems: "center",
-      marginRight: 12,
-    },
-    clientViewContent: {
-      flex: 1,
-    },
-    clientViewTitle: {
-      color: "#fff",
-      fontSize: 15,
-      fontWeight: "700",
-      marginBottom: 2,
-    },
-    clientViewSubtitle: {
-      color: "rgba(255,255,255,0.7)",
-      fontSize: 12,
-    },
-
-    /* Legal */
-    legalRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      paddingVertical: 11,
-      paddingHorizontal: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    legalRowText: {
-      flex: 1,
-      fontSize: 14,
-      fontWeight: "500",
-      color: colors.text,
-    },
-
-    /* Logout */
-    logoutSection: {
-      marginHorizontal: 12,
-      marginTop: 12,
-      marginBottom: 32,
-    },
-    logoutButton: {
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 16,
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: "rgba(231,76,60,0.2)",
-      ...Platform.select({
-        ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.04,
-          shadowOffset: { width: 0, height: 1 },
-          shadowRadius: 3,
-        },
-        android: { elevation: 1 },
-      }),
-    },
-    logoutButtonDisabled: {
-      opacity: 0.7,
-    },
-    logoutLoading: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    logoutButtonText: {
-      color: "#e74c3c",
-      fontSize: 15,
-      fontWeight: "700",
-    },
-
-    /* Modal */
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: "rgba(0, 0, 0, 0.45)",
-      justifyContent: "center",
-      paddingHorizontal: 20,
-    },
-    modalContent: {
-      backgroundColor: colors.card,
-      borderRadius: 18,
-      paddingBottom: 24,
-      paddingTop: 10,
-      maxHeight: "90%",
-      ...Platform.select({
-        ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.2,
-          shadowOffset: { width: 0, height: 8 },
-          shadowRadius: 20,
-        },
-        android: { elevation: 12 },
-      }),
-    },
-    modalIconHeader: {
-      alignItems: "center",
-      marginTop: 20,
-      marginBottom: 4,
-    },
-    modalIconWrap: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: "rgba(179,134,4,0.12)",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    modalHeaderRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: 20,
-      marginBottom: 16,
-      marginTop: 8,
-    },
-    modalTitle: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: colors.text,
-    },
-    modalCloseBtn: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: colors.background,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    modalAvatarSection: {
-      alignItems: "center",
-      marginBottom: 20,
-      paddingHorizontal: 20,
-    },
-    modalAvatar: {
-      width: 96,
-      height: 96,
-      borderRadius: 48,
-      backgroundColor: colors.accent,
-      justifyContent: "center",
-      alignItems: "center",
-      marginBottom: 12,
-      borderWidth: 3,
-      borderColor: "rgba(179,134,4,0.18)",
-    },
-    modalAvatarImage: {
-      width: 96,
-      height: 96,
-      borderRadius: 48,
-      backgroundColor: colors.inputBg,
-      marginBottom: 12,
-      borderWidth: 3,
-      borderColor: "rgba(179,134,4,0.18)",
-    },
-    modalAvatarText: {
-      fontSize: 38,
-      fontWeight: "700",
-      color: "#fff",
-    },
-    changeAvatarButton: {
-      flexDirection: "row",
-      backgroundColor: colors.accent,
-      borderRadius: 10,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      alignItems: "center",
-      gap: 6,
-      ...Platform.select({
-        ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.2,
-          shadowOffset: { width: 0, height: 2 },
-          shadowRadius: 4,
-        },
-        android: { elevation: 2 },
-      }),
-    },
-    changeAvatarText: {
-      color: "#fff",
-      fontSize: 13,
-      fontWeight: "600",
-    },
-    formSection: {
-      marginBottom: 18,
-      paddingHorizontal: 20,
-    },
-    formLabel: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: colors.text,
-      marginBottom: 6,
-    },
-    nameInput: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 14,
-      color: colors.text,
-      backgroundColor: colors.cardAlt,
-    },
-    saveButton: {
-      flexDirection: "row",
-      backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 14,
-      alignItems: "center",
-      justifyContent: "center",
-      marginHorizontal: 20,
-      gap: 8,
-      ...Platform.select({
-        ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.25,
-          shadowOffset: { width: 0, height: 3 },
-          shadowRadius: 6,
-        },
-        android: { elevation: 3 },
-      }),
-    },
-    saveButtonDisabled: {
-      opacity: 0.6,
-    },
-    saveButtonText: {
-      color: "#fff",
-      fontSize: 15,
-      fontWeight: "700",
-    },
-
-    /* ─── Theme Toggle ─── */
+    infoLabel: { fontSize: 14, color: colors.textTertiary },
+    infoValue: { fontSize: 14, fontWeight: "600", color: colors.text },
     themeRow: {
       flexDirection: "row",
       gap: 10,
@@ -1151,9 +605,181 @@ const createStyles = (colors) =>
       fontWeight: "600",
       color: colors.textTertiary,
     },
-    themeOptionLabelActive: {
-      color: colors.accent,
+    themeOptionLabelActive: { color: colors.accent },
+    legalRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 11,
+      paddingHorizontal: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
+    legalRowText: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.text,
+    },
+    clientViewButton: {
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      padding: 14,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    clientViewIconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    clientViewContent: { flex: 1 },
+    clientViewTitle: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+      marginBottom: 2,
+    },
+    clientViewSubtitle: {
+      color: "rgba(255,255,255,0.7)",
+      fontSize: 12,
+    },
+    logoutSection: {
+      marginHorizontal: 12,
+      marginTop: 12,
+      marginBottom: 32,
+    },
+    logoutButton: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "rgba(231,76,60,0.2)",
+    },
+    logoutButtonDisabled: { opacity: 0.7 },
+    logoutLoading: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    logoutButtonText: {
+      color: "#e74c3c",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.45)",
+      justifyContent: "center",
+      paddingHorizontal: 20,
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      paddingBottom: 24,
+      paddingTop: 10,
+      maxHeight: "90%",
+    },
+    modalIconHeader: {
+      alignItems: "center",
+      marginTop: 20,
+      marginBottom: 4,
+    },
+    modalIconWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: "rgba(179,134,4,0.12)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      marginBottom: 16,
+      marginTop: 8,
+    },
+    modalTitle: { fontSize: 18, fontWeight: "700", color: colors.text },
+    modalCloseBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalAvatarSection: {
+      alignItems: "center",
+      marginBottom: 20,
+      paddingHorizontal: 20,
+    },
+    modalAvatar: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: "#b38604",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+      borderWidth: 3,
+      borderColor: "rgba(179,134,4,0.18)",
+    },
+    modalAvatarImage: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: colors.inputBg,
+      marginBottom: 12,
+      borderWidth: 3,
+      borderColor: "rgba(179,134,4,0.18)",
+    },
+    modalAvatarText: { fontSize: 38, fontWeight: "700", color: "#fff" },
+    changeAvatarButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      alignItems: "center",
+      gap: 6,
+    },
+    changeAvatarText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+    formSection: { marginBottom: 18, paddingHorizontal: 20 },
+    formLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 6,
+    },
+    nameInput: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+      backgroundColor: colors.cardAlt,
+    },
+    saveButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginHorizontal: 20,
+      gap: 8,
+    },
+    saveButtonDisabled: { opacity: 0.6 },
+    saveButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   });
 
-export default AdminProfileScreen;
+export default HostProfileScreen;

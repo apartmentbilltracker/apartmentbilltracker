@@ -4,17 +4,17 @@ const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
-const { isAuthenticated, isAdmin } = require("../middleware/auth");
+const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { enrichBillingCycle } = require("../utils/enrichBillingCycle");
 
 /** Round to 2 decimal places (cents) */
 const r2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
 
-// Get financial dashboard summary for a room (admin only)
+// Get financial dashboard summary for a room
 router.get(
   "/dashboard/:roomId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId } = req.params;
@@ -190,11 +190,11 @@ router.get(
   }),
 );
 
-// Get financial trends (month-over-month) for a room (admin only)
+// Get financial trends (month-over-month) for a room
 router.get(
   "/trends/:roomId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId } = req.params;
@@ -237,11 +237,11 @@ router.get(
   }),
 );
 
-// Get member payment history (admin only)
+// Get member payment history
 router.get(
   "/member-history/:roomId/:memberId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId, memberId } = req.params;
@@ -312,11 +312,11 @@ router.get(
   }),
 );
 
-// Get collection status for active cycle (admin only)
+// Get collection status for active cycle
 router.get(
   "/collection-status/:roomId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId } = req.params;

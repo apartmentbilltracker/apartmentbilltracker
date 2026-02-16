@@ -55,9 +55,6 @@ class APIClient {
       }
 
       if (!response.ok) {
-        if (response.status === 401) {
-          await SecureStore.deleteItemAsync("authToken");
-        }
         const error = new Error(data?.message || "API Error");
         error.status = response.status;
         error.data = data;

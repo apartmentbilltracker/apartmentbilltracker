@@ -1,4 +1,11 @@
-import React, { useContext, useEffect, useState, useMemo } from "react";
+import React, {
+  useContext,
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -10,22 +17,47 @@ import {
   Alert,
   Modal,
   Image,
+  Dimensions,
+  Platform,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import MapView, { Marker } from "react-native-maps";
 import { AuthContext } from "../../context/AuthContext";
+import chatReadTracker from "../../services/chatReadTracker";
 import {
   roomService,
   memberService,
   billingCycleService,
   apiService,
+  chatService,
 } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// Same amenity map used by host — maps key to icon+label
+const AMENITY_MAP = {
+  wifi: { icon: "wifi", label: "WiFi", color: "#1976d2" },
+  kitchen: { icon: "restaurant", label: "Kitchen", color: "#e65100" },
+  bathroom: { icon: "water", label: "Bathroom", color: "#0288d1" },
+  bedroom: { icon: "bed", label: "Bedroom", color: "#c62828" },
+  hotwater: { icon: "flame", label: "Hot Water", color: "#ef6c00" },
+  parking: { icon: "car", label: "Parking", color: "#2e7d32" },
+  aircon: { icon: "snow", label: "Air-con", color: "#0277bd" },
+  laundry: { icon: "shirt", label: "Laundry", color: "#6a1b9a" },
+  tv: { icon: "tv", label: "TV", color: "#37474f" },
+  cctv: { icon: "videocam", label: "CCTV", color: "#455a64" },
+  common: { icon: "people", label: "Common Area", color: "#388e3c" },
+  gym: { icon: "barbell", label: "Gym", color: "#d84315" },
+};
+
 const ClientHomeScreen = ({ navigation }) => {
   const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
+  const styles = createStyles(colors, insets);
 
   const { state } = useContext(AuthContext);
   const [userJoinedRoom, setUserJoinedRoom] = useState(null);
@@ -41,6 +73,12 @@ const ClientHomeScreen = ({ navigation }) => {
   const [statusChangeNotifications, setStatusChangeNotifications] = useState(
     [],
   );
+  const [previewRoom, setPreviewRoom] = useState(null);
+  const [fullMapRoom, setFullMapRoom] = useState(null);
+  const [photoViewData, setPhotoViewData] = useState(null);
+  const [photoViewIdx, setPhotoViewIdx] = useState(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const initialLoadDone = useRef(false);
 
   const userId = state?.user?.id || state?.user?._id;
   const userName = state?.user?.name || "User";
@@ -344,10 +382,6 @@ const ClientHomeScreen = ({ navigation }) => {
     });
   };
 
-  useEffect(() => {
-    fetchRooms();
-  }, []);
-
   const fetchStatusChangeNotifications = async () => {
     try {
       const response = await apiService.get("/api/v2/notifications");
@@ -363,85 +397,101 @@ const ClientHomeScreen = ({ navigation }) => {
     }
   };
 
-  // Refresh room data when screen comes into focus to update payment status and billing cycle
-  useFocusEffect(
-    React.useCallback(() => {
-      fetchRooms();
-      fetchStatusChangeNotifications();
-    }, []),
-  );
-
-  // Fetch active billing cycle when room changes or when members/payments change
-  useEffect(() => {
-    if (userJoinedRoom?.id || userJoinedRoom?._id) {
-      fetchActiveBillingCycle(userJoinedRoom.id || userJoinedRoom._id);
-    }
-  }, [
-    userJoinedRoom?.id || userJoinedRoom?._id,
-    userJoinedRoom?.members?.length,
-    userJoinedRoom?.memberPayments?.length,
-  ]);
-
   const fetchActiveBillingCycle = async (roomId) => {
     try {
-      const response = await billingCycleService.getBillingCycles(roomId);
-      const cycles = Array.isArray(response)
-        ? response
-        : response?.billingCycles || response?.data || [];
-      const active = cycles.find((c) => c.status === "active");
-      if (active) {
+      // Use getActiveCycle instead of getBillingCycles to avoid fetching all cycles
+      const response = await billingCycleService.getActiveCycle(roomId);
+      const active = response?.billingCycle || response?.cycle || response;
+      if (active && active.id) {
         setActiveCycle(active);
+      } else {
+        setActiveCycle(null);
       }
     } catch (error) {
       console.error("Error fetching active billing cycle:", error);
+      setActiveCycle(null);
     }
   };
 
-  const fetchRooms = async () => {
+  // Fetch unread chat count for the joined room (only messages after last read)
+  const fetchChatBadge = async (roomId) => {
     try {
-      setLoading(true);
+      const status = await chatService.getChatStatus(roomId);
+      if (!status.chatEnabled) {
+        setUnreadChatCount(0);
+        return;
+      }
+      const [res, lastRead] = await Promise.all([
+        chatService.getMessages(roomId, { limit: 50 }),
+        chatReadTracker.getLastRead(roomId),
+      ]);
+      const msgs = res.messages || [];
+      const unread = msgs.filter(
+        (m) =>
+          String(m.senderId) !== String(userId) &&
+          new Date(m.createdAt).getTime() > lastRead,
+      );
+      setUnreadChatCount(unread.length);
+    } catch {
+      setUnreadChatCount(0);
+    }
+  };
 
-      // Fetch user's rooms (current and previous memberships) - use client endpoint
-      // to ensure even admins see only their joined rooms when in client view
-      const userRoomsResponse = await roomService.getClientRooms();
+  // Refresh room data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchRooms(!initialLoadDone.current);
+    }, []),
+  );
+
+  const fetchRooms = async (showSpinner = false) => {
+    try {
+      // Only show full-screen spinner on initial load, not on refocus
+      if (showSpinner) setLoading(true);
+
+      // ── Wave 1: fetch room data (this is all we need to show the UI) ──
+      const [userRoomsResponse, availableRoomsResponse] = await Promise.all([
+        roomService.getClientRooms(),
+        roomService.getAvailableRooms().catch((err) => {
+          console.error("Error fetching available rooms:", err);
+          return { rooms: [], pendingRoomIds: [] };
+        }),
+      ]);
+
+      // Process user's rooms
       const userRoomsData = userRoomsResponse.data || userRoomsResponse;
       const userRooms = userRoomsData.rooms || userRoomsData || [];
-
-      console.log("User rooms fetched:", userRooms.length);
       const firstRoom = userRooms[0] || null;
       setUserJoinedRoom(firstRoom);
 
-      // Refetch active billing cycle if room exists
-      if (firstRoom?.id || firstRoom?._id) {
-        await fetchActiveBillingCycle(firstRoom.id || firstRoom._id);
-      }
+      // Process available rooms
+      const availableRoomsData =
+        availableRoomsResponse.data || availableRoomsResponse;
+      const allRooms = availableRoomsData.rooms || availableRoomsData || [];
+      const pending = availableRoomsData.pendingRoomIds || [];
+      setPendingRoomIds(pending);
 
-      // Fetch ALL available rooms to browse
-      try {
-        const availableRoomsResponse = await roomService.getAvailableRooms();
-        const availableRoomsData =
-          availableRoomsResponse.data || availableRoomsResponse;
-        const allRooms = availableRoomsData.rooms || availableRoomsData || [];
-        const pending = availableRoomsData.pendingRoomIds || [];
-        setPendingRoomIds(pending);
+      const userRoomIds = userRooms.map((r) => r.id || r._id);
+      const notJoined = allRooms.filter(
+        (room) => !userRoomIds.includes(room.id || room._id),
+      );
+      setUnjoinedRooms(notJoined);
 
-        // Filter to get rooms user hasn't joined yet (but include pending ones)
-        const userRoomIds = userRooms.map((r) => r.id || r._id);
-        const notJoined = allRooms.filter(
-          (room) => !userRoomIds.includes(room.id || room._id),
-        );
+      // ── Show room UI immediately ──
+      setLoading(false);
+      initialLoadDone.current = true;
 
-        console.log("Available rooms to join:", notJoined.length);
-        setUnjoinedRooms(notJoined);
-      } catch (error) {
-        console.error("Error fetching available rooms:", error);
-        setUnjoinedRooms([]);
-      }
+      // ── Wave 2 (background, non-blocking): billing, notifications, chat ──
+      const roomId = firstRoom?.id || firstRoom?._id;
+      Promise.all([
+        roomId ? fetchActiveBillingCycle(roomId) : Promise.resolve(),
+        fetchStatusChangeNotifications(),
+        roomId ? fetchChatBadge(roomId) : Promise.resolve(),
+      ]).catch(() => {});
     } catch (error) {
       console.error("Error fetching rooms:", error);
       setUserJoinedRoom(null);
       setUnjoinedRooms([]);
-    } finally {
       setLoading(false);
     }
   };
@@ -568,6 +618,366 @@ const ClientHomeScreen = ({ navigation }) => {
           </TouchableOpacity>
         )}
       </View>
+    );
+  };
+
+  // ─── FULL-SCREEN MAP MODAL ───
+  const FullMapModal = () => {
+    if (!fullMapRoom) return null;
+    return (
+      <Modal
+        visible={!!fullMapRoom}
+        animationType="slide"
+        onRequestClose={() => setFullMapRoom(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <MapView
+            style={{ flex: 1 }}
+            initialRegion={{
+              latitude: fullMapRoom.latitude,
+              longitude: fullMapRoom.longitude,
+              latitudeDelta: 0.008,
+              longitudeDelta: 0.008,
+            }}
+            showsUserLocation
+            showsMyLocationButton
+          >
+            <Marker
+              coordinate={{
+                latitude: fullMapRoom.latitude,
+                longitude: fullMapRoom.longitude,
+              }}
+              title={fullMapRoom.name}
+              description={fullMapRoom.address || "Room location"}
+            />
+          </MapView>
+          {/* Floating header */}
+          <View style={styles.fullMapHeader}>
+            <TouchableOpacity
+              style={styles.fullMapBackBtn}
+              onPress={() => setFullMapRoom(null)}
+            >
+              <Ionicons name="arrow-back" size={22} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={styles.fullMapTitle} numberOfLines={1}>
+              {fullMapRoom.name}
+            </Text>
+          </View>
+          {/* Floating address bar */}
+          {fullMapRoom.address ? (
+            <View style={styles.fullMapAddressBar}>
+              <Ionicons name="location" size={16} color={colors.accent} />
+              <Text style={styles.fullMapAddressText} numberOfLines={2}>
+                {fullMapRoom.address}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
+    );
+  };
+
+  // ─── ROOM INFO PREVIEW MODAL ───
+  const RoomInfoModal = () => {
+    if (!previewRoom) return null;
+    const rid = previewRoom.id || previewRoom._id;
+    const isPending = pendingRoomIds.includes(rid);
+    const hasLocation =
+      previewRoom.latitude != null && previewRoom.longitude != null;
+    const amenities = Array.isArray(previewRoom.amenities)
+      ? previewRoom.amenities
+      : [];
+    const houseRules = Array.isArray(
+      previewRoom.houseRules || previewRoom.house_rules,
+    )
+      ? previewRoom.houseRules || previewRoom.house_rules
+      : [];
+    const previewPhotos = Array.isArray(previewRoom.photos)
+      ? previewRoom.photos
+      : [];
+    const [activePhotoIdx, setActivePhotoIdx] = React.useState(0);
+    const photoWidth = SCREEN_WIDTH - 48;
+
+    return (
+      <Modal
+        visible={!!previewRoom}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPreviewRoom(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.roomInfoModal}>
+            {/* Header */}
+            <View style={styles.roomInfoHeader}>
+              <View style={styles.roomInfoHeaderLeft}>
+                <View style={styles.roomInfoIconBg}>
+                  <Ionicons name="home" size={20} color={colors.accent} />
+                </View>
+                <Text style={styles.roomInfoTitle} numberOfLines={1}>
+                  {previewRoom.name}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setPreviewRoom(null)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.roomInfoBody}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Photo Gallery */}
+              {previewPhotos.length > 0 && (
+                <View>
+                  <View style={{ position: "relative" }}>
+                    <ScrollView
+                      horizontal
+                      pagingEnabled
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.roomInfoPhotoScroll}
+                      onScroll={(e) => {
+                        const idx = Math.round(
+                          e.nativeEvent.contentOffset.x / photoWidth,
+                        );
+                        setActivePhotoIdx(idx);
+                      }}
+                      scrollEventThrottle={16}
+                    >
+                      {previewPhotos.map((uri, idx) => (
+                        <Image
+                          key={idx}
+                          source={{ uri }}
+                          style={styles.roomInfoPhoto}
+                          resizeMode="cover"
+                        />
+                      ))}
+                    </ScrollView>
+                    {/* Overlay: photo count + full view button */}
+                    <View style={styles.photoModalOverlay}>
+                      <View style={styles.photoCountBadge}>
+                        <Ionicons name="images" size={12} color="#fff" />
+                        <Text style={styles.photoCountText}>
+                          {previewPhotos.length}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.photoFullViewBtn}
+                        onPress={() => {
+                          setPhotoViewIdx(0);
+                          setPhotoViewData({
+                            name: previewRoom.name,
+                            photos: previewPhotos,
+                          });
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name="expand-outline"
+                          size={13}
+                          color="#fff"
+                        />
+                        <Text style={styles.photoFullViewText}>View</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  {previewPhotos.length > 1 && (
+                    <View style={styles.photoDotRow}>
+                      {previewPhotos.map((_, idx) => (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.photoDot,
+                            idx === activePhotoIdx && styles.photoDotActive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Location Map — tappable to open full-screen */}
+              {hasLocation && (
+                <TouchableOpacity
+                  style={styles.roomInfoMapWrap}
+                  activeOpacity={0.8}
+                  onPress={() => setFullMapRoom(previewRoom)}
+                >
+                  <MapView
+                    style={styles.roomInfoMap}
+                    initialRegion={{
+                      latitude: previewRoom.latitude,
+                      longitude: previewRoom.longitude,
+                      latitudeDelta: 0.005,
+                      longitudeDelta: 0.005,
+                    }}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    pitchEnabled={false}
+                    rotateEnabled={false}
+                    liteMode={true}
+                  >
+                    <Marker
+                      coordinate={{
+                        latitude: previewRoom.latitude,
+                        longitude: previewRoom.longitude,
+                      }}
+                    />
+                  </MapView>
+                  <View style={styles.roomInfoAddressRow}>
+                    <Ionicons name="location" size={14} color={colors.accent} />
+                    <Text style={styles.roomInfoAddressText} numberOfLines={2}>
+                      {previewRoom.address || "Location pinned"}
+                    </Text>
+                    <Ionicons
+                      name="expand-outline"
+                      size={16}
+                      color={colors.accent}
+                    />
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Description */}
+              {previewRoom.description ? (
+                <View style={styles.roomInfoSection}>
+                  <View style={styles.roomInfoSectionHeader}>
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={16}
+                      color={colors.accent}
+                    />
+                    <Text style={styles.roomInfoSectionTitle}>About</Text>
+                  </View>
+                  <Text style={styles.roomInfoDescText}>
+                    {previewRoom.description}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Stats Row */}
+              <View style={styles.roomInfoStatsRow}>
+                <View style={styles.roomInfoStat}>
+                  <Ionicons name="people" size={18} color={colors.accent} />
+                  <Text style={styles.roomInfoStatValue}>
+                    {previewRoom.memberCount ??
+                      previewRoom.members?.length ??
+                      0}
+                  </Text>
+                  <Text style={styles.roomInfoStatLabel}>Members</Text>
+                </View>
+                <View style={styles.roomInfoStatDivider} />
+                <View style={styles.roomInfoStat}>
+                  <Ionicons
+                    name={hasLocation ? "location" : "location-outline"}
+                    size={18}
+                    color={hasLocation ? colors.success : colors.textTertiary}
+                  />
+                  <Text style={styles.roomInfoStatValue}>
+                    {hasLocation ? "Pinned" : "N/A"}
+                  </Text>
+                  <Text style={styles.roomInfoStatLabel}>Location</Text>
+                </View>
+                <View style={styles.roomInfoStatDivider} />
+                <View style={styles.roomInfoStat}>
+                  <Ionicons
+                    name="shield-checkmark"
+                    size={18}
+                    color={colors.accent}
+                  />
+                  <Text style={styles.roomInfoStatValue}>Verified</Text>
+                  <Text style={styles.roomInfoStatLabel}>Host</Text>
+                </View>
+              </View>
+
+              {/* Amenities — dynamic from host */}
+              {amenities.length > 0 && (
+                <View style={styles.roomInfoSection}>
+                  <View style={styles.roomInfoSectionHeader}>
+                    <Ionicons name="sparkles" size={16} color={colors.accent} />
+                    <Text style={styles.roomInfoSectionTitle}>Amenities</Text>
+                  </View>
+                  <View style={styles.roomInfoAmenitiesRow}>
+                    {amenities.map((key, i) => {
+                      const a = AMENITY_MAP[key] || {
+                        icon: "ellipse",
+                        label: key,
+                        color: colors.textTertiary,
+                      };
+                      return (
+                        <View key={i} style={styles.roomInfoAmenity}>
+                          <Ionicons name={a.icon} size={16} color={a.color} />
+                          <Text style={styles.roomInfoAmenityText}>
+                            {a.label}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* House Rules — dynamic from host */}
+              {houseRules.length > 0 && (
+                <View style={styles.roomInfoSection}>
+                  <View style={styles.roomInfoSectionHeader}>
+                    <Ionicons
+                      name="clipboard-outline"
+                      size={16}
+                      color={colors.accent}
+                    />
+                    <Text style={styles.roomInfoSectionTitle}>House Rules</Text>
+                  </View>
+                  {houseRules.map((rule, idx) => (
+                    <View key={idx} style={styles.roomInfoRuleRow}>
+                      <View style={styles.roomInfoRuleCheck}>
+                        <Ionicons name="checkmark" size={11} color="#fff" />
+                      </View>
+                      <Text style={styles.roomInfoRuleText}>{rule}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Bottom action */}
+            <View style={styles.roomInfoFooter}>
+              {isPending ? (
+                <View style={styles.roomInfoPendingBtn}>
+                  <Ionicons name="time-outline" size={18} color="#e67e22" />
+                  <Text style={styles.roomInfoPendingText}>
+                    Pending Approval
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.roomInfoJoinBtn}
+                  onPress={() => {
+                    setPreviewRoom(null);
+                    handleJoinRoom(rid);
+                  }}
+                  disabled={joiningRoomId === rid}
+                  activeOpacity={0.7}
+                >
+                  {joiningRoomId === rid ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="add-circle" size={18} color="#fff" />
+                      <Text style={styles.roomInfoJoinText}>
+                        Join This Room
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     );
   };
 
@@ -876,6 +1286,67 @@ const ClientHomeScreen = ({ navigation }) => {
     <>
       <StatusModal />
       <ExpenseModal />
+      <RoomInfoModal />
+      <FullMapModal />
+      {/* Full-screen photo viewer */}
+      <Modal
+        visible={!!photoViewData}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPhotoViewData(null)}
+      >
+        <View style={styles.pvBg}>
+          <View style={styles.pvHeader}>
+            <TouchableOpacity
+              style={styles.pvBackBtn}
+              onPress={() => setPhotoViewData(null)}
+            >
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.pvTitle} numberOfLines={1}>
+              {photoViewData?.name || "Photos"}
+            </Text>
+            <Text style={styles.pvCount}>
+              {photoViewIdx + 1} / {photoViewData?.photos?.length || 0}
+            </Text>
+          </View>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            style={{ flex: 1 }}
+            onScroll={(e) => {
+              const idx = Math.round(
+                e.nativeEvent.contentOffset.x / SCREEN_WIDTH,
+              );
+              setPhotoViewIdx(idx);
+            }}
+            scrollEventThrottle={16}
+          >
+            {(photoViewData?.photos || []).map((uri, idx) => (
+              <Image
+                key={idx}
+                source={{ uri }}
+                style={styles.pvImg}
+                resizeMode="contain"
+              />
+            ))}
+          </ScrollView>
+          {(photoViewData?.photos?.length || 0) > 1 && (
+            <View style={styles.pvDotRow}>
+              {photoViewData.photos.map((_, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.pvDot,
+                    idx === photoViewIdx && styles.pvDotActive,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </Modal>
       <View style={styles.container}>
         {/* ─── HEADER ─── */}
         <View style={styles.header}>
@@ -1311,6 +1782,39 @@ const ClientHomeScreen = ({ navigation }) => {
                     </View>
                     <Text style={styles.actionLabel}>Room Info</Text>
                   </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionCard}
+                    onPress={() =>
+                      navigation.navigate("ChatRoom", {
+                        roomId: userJoinedRoom.id || userJoinedRoom._id,
+                        roomName: userJoinedRoom.name,
+                        isHost: false,
+                      })
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.actionIconBg,
+                        { backgroundColor: "#e3f2fd" },
+                      ]}
+                    >
+                      <Ionicons
+                        name="chatbubble-ellipses"
+                        size={20}
+                        color="#1976d2"
+                      />
+                      {unreadChatCount > 0 && (
+                        <View style={styles.chatBadge}>
+                          <Text style={styles.chatBadgeText}>
+                            {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.actionLabel}>Chat</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* ─── PAYORS PAYMENT STATUS ─── */}
@@ -1459,8 +1963,55 @@ const ClientHomeScreen = ({ navigation }) => {
                 {unjoinedRooms.map((room) => {
                   const roomId = room.id || room._id;
                   const isPending = pendingRoomIds.includes(roomId);
+                  const hasLoc =
+                    room.latitude != null && room.longitude != null;
+                  const roomPhotos = Array.isArray(room.photos)
+                    ? room.photos
+                    : [];
                   return (
-                    <View key={roomId} style={styles.availCard}>
+                    <TouchableOpacity
+                      key={roomId}
+                      style={styles.availCard}
+                      activeOpacity={0.7}
+                      onPress={() => setPreviewRoom(room)}
+                    >
+                      {/* Room Photo Banner */}
+                      {roomPhotos.length > 0 && (
+                        <View style={{ position: "relative" }}>
+                          <Image
+                            source={{ uri: roomPhotos[0] }}
+                            style={styles.availPhotoBanner}
+                            resizeMode="cover"
+                          />
+                          <View style={styles.photoOverlay}>
+                            <View style={styles.photoCountBadge}>
+                              <Ionicons name="images" size={12} color="#fff" />
+                              <Text style={styles.photoCountText}>
+                                {roomPhotos.length}
+                              </Text>
+                            </View>
+                            <TouchableOpacity
+                              style={styles.photoFullViewBtn}
+                              onPress={(e) => {
+                                e.stopPropagation?.();
+                                setPhotoViewIdx(0);
+                                setPhotoViewData({
+                                  name: room.name,
+                                  photos: roomPhotos,
+                                });
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Ionicons
+                                name="expand-outline"
+                                size={13}
+                                color="#fff"
+                              />
+                              <Text style={styles.photoFullViewText}>View</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
                       <View style={styles.availHeader}>
                         <View style={styles.availIconBg}>
                           <Ionicons
@@ -1472,8 +2023,12 @@ const ClientHomeScreen = ({ navigation }) => {
                         <View style={{ flex: 1 }}>
                           <Text style={styles.availName}>{room.name}</Text>
                           <Text style={styles.availMembers}>
-                            {room.members?.length || 0} member
-                            {(room.members?.length || 0) !== 1 ? "s" : ""}
+                            {room.memberCount ?? room.members?.length ?? 0}{" "}
+                            member
+                            {(room.memberCount ?? room.members?.length ?? 0) !==
+                            1
+                              ? "s"
+                              : ""}
                           </Text>
                         </View>
                         {isPending ? (
@@ -1488,7 +2043,10 @@ const ClientHomeScreen = ({ navigation }) => {
                         ) : (
                           <TouchableOpacity
                             style={styles.joinBtn}
-                            onPress={() => handleJoinRoom(roomId)}
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              handleJoinRoom(roomId);
+                            }}
                             disabled={joiningRoomId === roomId}
                             activeOpacity={0.7}
                           >
@@ -1510,12 +2068,68 @@ const ClientHomeScreen = ({ navigation }) => {
                           </TouchableOpacity>
                         )}
                       </View>
+                      {/* Location row — below header so it won't overlap Join */}
+                      {hasLoc && (
+                        <View style={styles.availLocRow}>
+                          <Ionicons
+                            name="location"
+                            size={13}
+                            color={colors.accent}
+                          />
+                          <Text
+                            style={styles.availLocFullText}
+                            numberOfLines={1}
+                          >
+                            {room.address
+                              ? room.address.split(",").slice(0, 2).join(", ")
+                              : "Location pinned"}
+                          </Text>
+                        </View>
+                      )}
                       {room.description && (
                         <Text style={styles.availDesc} numberOfLines={2}>
                           {room.description}
                         </Text>
                       )}
-                    </View>
+                      {/* Amenity preview chips */}
+                      {Array.isArray(room.amenities) &&
+                        room.amenities.length > 0 && (
+                          <View style={styles.availAmenityRow}>
+                            {room.amenities.slice(0, 4).map((key, idx) => {
+                              const a = AMENITY_MAP[key];
+                              if (!a) return null;
+                              return (
+                                <View key={idx} style={styles.availAmenityChip}>
+                                  <Ionicons
+                                    name={a.icon}
+                                    size={11}
+                                    color={a.color}
+                                  />
+                                  <Text style={styles.availAmenityText}>
+                                    {a.label}
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                            {room.amenities.length > 4 && (
+                              <Text style={styles.availAmenityMore}>
+                                +{room.amenities.length - 4}
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                      {/* Tap to view info hint */}
+                      <View style={styles.availInfoHint}>
+                        <Ionicons
+                          name="eye-outline"
+                          size={12}
+                          color={colors.accent}
+                        />
+                        <Text style={styles.availInfoHintText}>
+                          Tap to view details
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
@@ -1541,7 +2155,7 @@ const ClientHomeScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) =>
+const createStyles = (colors, insets = { bottom: 0 }) =>
   StyleSheet.create({
     // ─── LAYOUT ───
     container: { flex: 1, backgroundColor: colors.background },
@@ -1794,6 +2408,26 @@ const createStyles = (colors) =>
       fontWeight: "600",
       color: colors.textSecondary,
     },
+    chatBadge: {
+      position: "absolute",
+      top: -6,
+      right: -10,
+      backgroundColor: "#e74c3c",
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 4,
+      borderWidth: 1.5,
+      borderColor: colors.card,
+    },
+    chatBadgeText: {
+      color: "#fff",
+      fontSize: 10,
+      fontWeight: "700",
+      lineHeight: 12,
+    },
 
     // ─── PAYORS STATUS ───
     payorsCard: {
@@ -1995,6 +2629,355 @@ const createStyles = (colors) =>
     },
     allJoinedText: { fontSize: 13, fontWeight: "600", color: colors.success },
 
+    // ─── AVAILABLE ROOM EXTRAS ───
+    availLocRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingBottom: 6,
+      marginTop: -4,
+    },
+    availLocFullText: {
+      flex: 1,
+      fontSize: 11,
+      fontWeight: "500",
+      color: colors.accent,
+    },
+    availInfoHint: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      paddingVertical: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+    },
+    availInfoHintText: {
+      fontSize: 11,
+      fontWeight: "500",
+      color: colors.accent,
+    },
+    availAmenityRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingBottom: 10,
+    },
+    availAmenityChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 8,
+      backgroundColor: colors.inputBg,
+    },
+    availAmenityText: {
+      fontSize: 10,
+      fontWeight: "500",
+      color: colors.textSecondary,
+    },
+    availAmenityMore: {
+      fontSize: 10,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+
+    // ─── ROOM INFO MODAL ───
+    roomInfoModal: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: "90%",
+    },
+    roomInfoHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    roomInfoHeaderLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      flex: 1,
+    },
+    roomInfoIconBg: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    roomInfoTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+      flex: 1,
+    },
+    roomInfoBody: {
+      paddingHorizontal: 20,
+      paddingTop: 14,
+      paddingBottom: 8,
+    },
+    roomInfoPhotoScroll: {
+      marginHorizontal: 2,
+      borderRadius: 12,
+      overflow: "hidden",
+      marginTop: 10,
+      marginBottom: 14,
+      maxHeight: 180,
+    },
+    roomInfoPhoto: {
+      width: SCREEN_WIDTH - 48,
+      height: 180,
+    },
+    photoDotRow: {
+      position: "absolute",
+      bottom: 18,
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: 8,
+      marginBottom: 4,
+      gap: 6,
+    },
+    photoDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: colors.border,
+    },
+    photoDotActive: {
+      width: 9,
+      height: 9,
+      borderRadius: 5,
+      backgroundColor: colors.accent,
+    },
+    availPhotoBanner: {
+      width: "100%",
+      height: 200,
+    },
+    roomInfoMapWrap: {
+      borderRadius: 12,
+      overflow: "hidden",
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    roomInfoMap: {
+      width: "100%",
+      height: 180,
+    },
+    roomInfoAddressRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      backgroundColor: colors.cardAlt,
+    },
+    roomInfoAddressText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      flex: 1,
+      lineHeight: 17,
+    },
+    roomInfoSection: {
+      marginBottom: 14,
+    },
+    roomInfoSectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 8,
+    },
+    roomInfoSectionTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    roomInfoDescText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 20,
+    },
+    roomInfoStatsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-around",
+      backgroundColor: colors.cardAlt,
+      borderRadius: 12,
+      paddingVertical: 16,
+      marginBottom: 14,
+    },
+    roomInfoStat: {
+      alignItems: "center",
+      gap: 4,
+    },
+    roomInfoStatValue: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    roomInfoStatLabel: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      fontWeight: "500",
+    },
+    roomInfoStatDivider: {
+      width: 1,
+      height: 30,
+      backgroundColor: colors.border,
+    },
+    roomInfoAmenitiesRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    roomInfoAmenity: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: colors.cardAlt,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    roomInfoAmenityText: {
+      fontSize: 11,
+      fontWeight: "500",
+      color: colors.textSecondary,
+    },
+    roomInfoFooter: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: Math.max(16, insets.bottom + 8),
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+    },
+    roomInfoJoinBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: colors.accent,
+    },
+    roomInfoJoinText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    roomInfoPendingBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: colors.warningBg,
+      borderWidth: 1,
+      borderColor: "#ffe0b2",
+    },
+    roomInfoPendingText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: "#e67e22",
+    },
+    roomInfoRuleRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+      marginBottom: 8,
+    },
+    roomInfoRuleCheck: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: colors.success,
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: 1,
+    },
+    roomInfoRuleText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      flex: 1,
+      lineHeight: 18,
+    },
+
+    // ─── FULL MAP MODAL ───
+    fullMapHeader: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingTop: 16,
+      paddingHorizontal: 16,
+      paddingBottom: 12,
+      backgroundColor: "rgba(255,255,255,0.92)",
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    fullMapBackBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    fullMapTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+      flex: 1,
+    },
+    fullMapAddressBar: {
+      position: "absolute",
+      bottom: 30,
+      left: 16,
+      right: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.12,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+    fullMapAddressText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      flex: 1,
+      lineHeight: 18,
+    },
+
     // ─── MODALS ───
     modalOverlay: {
       flex: 1,
@@ -2040,7 +3023,7 @@ const createStyles = (colors) =>
       justifyContent: "center",
       gap: 6,
       marginHorizontal: 20,
-      marginBottom: 24,
+      marginBottom: Math.max(24, insets.bottom + 12),
       paddingVertical: 13,
       borderRadius: 10,
       backgroundColor: colors.accent,
@@ -2125,6 +3108,97 @@ const createStyles = (colors) =>
     expenseRowRight: { alignItems: "flex-end" },
     expenseRowAmount: { fontSize: 14, fontWeight: "700", color: colors.text },
     expenseRowPct: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
+    /* Photo overlay & full-screen viewer */
+    photoOverlay: {
+      position: "absolute",
+      bottom: 8,
+      left: 8,
+      right: 8,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    photoModalOverlay: {
+      position: "absolute",
+      bottom: 20,
+      left: 8,
+      right: 8,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    photoCountBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    photoCountText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    photoFullViewBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 10,
+    },
+    photoFullViewText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    pvBg: { flex: 1, backgroundColor: "#000" },
+    pvHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingTop: Platform.OS === "ios" ? 54 : 36,
+      paddingHorizontal: 16,
+      paddingBottom: 12,
+    },
+    pvBackBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    pvTitle: { flex: 1, fontSize: 16, fontWeight: "700", color: "#fff" },
+    pvCount: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "rgba(255,255,255,0.7)",
+    },
+    pvImg: { width: SCREEN_WIDTH, height: "100%" },
+    pvDotRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingBottom: Platform.OS === "ios" ? 40 : 24,
+      paddingTop: 12,
+      gap: 6,
+    },
+    pvDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: "rgba(255,255,255,0.35)",
+    },
+    pvDotActive: {
+      width: 9,
+      height: 9,
+      borderRadius: 5,
+      backgroundColor: "#fff",
+    },
   });
 
 export default ClientHomeScreen;

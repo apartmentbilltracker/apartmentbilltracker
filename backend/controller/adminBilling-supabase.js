@@ -4,7 +4,7 @@ const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
-const { isAuthenticated, isAdmin } = require("../middleware/auth");
+const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { enrichBillingCycle } = require("../utils/enrichBillingCycle");
 
 // Helper: compute a fallback charge for a member when member_charges is empty
@@ -43,11 +43,11 @@ function computeFallbackCharge(member, billingCycle, payerCount) {
   };
 }
 
-// Get detailed billing breakdown for a cycle (admin only)
+// Get detailed billing breakdown for a cycle
 router.get(
   "/breakdown/:cycleId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { cycleId } = req.params;
@@ -227,11 +227,11 @@ router.get(
   }),
 );
 
-// Get collection status for billing cycle (admin only)
+// Get collection status for billing cycle
 router.get(
   "/collection-status/:cycleId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { cycleId } = req.params;
@@ -379,11 +379,11 @@ router.get(
   }),
 );
 
-// Get export data for billing cycle (admin only)
+// Get export data for billing cycle
 router.get(
   "/export/:cycleId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { cycleId } = req.params;
@@ -445,13 +445,20 @@ router.get(
 router.get(
   "/payment-stats",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
+      const { roomId } = req.query;
+
       // Get all rooms created by admin
-      const adminRooms =
+      let adminRooms =
         (await SupabaseService.selectAll("rooms", "created_by", req.user.id)) ||
         [];
+
+      // If roomId provided, narrow down to that single room
+      if (roomId) {
+        adminRooms = adminRooms.filter((r) => r.id === roomId);
+      }
 
       if (!adminRooms || adminRooms.length === 0) {
         return res.status(200).json({

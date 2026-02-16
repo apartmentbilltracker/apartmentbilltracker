@@ -19,6 +19,7 @@ const normalizeBugReport = (report) => ({
   createdAt: report.created_at,
   userId: report.user_id,
   assignedTo: report.assigned_to,
+  isReadByAdmin: report.is_read || report.is_read_by_admin || false,
   responses: (report.responses || []).map(normalizeResponse),
 });
 

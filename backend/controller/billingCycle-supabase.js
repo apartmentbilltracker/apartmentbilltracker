@@ -231,6 +231,8 @@ router.get("/room/:roomId", isAuthenticated, async (req, res, next) => {
 // ============================================================
 router.get("/totals/latest", isAuthenticated, async (req, res, next) => {
   try {
+    const { roomId } = req.query;
+
     // Get all billing cycles
     const cycles = await SupabaseService.selectAllRecords(
       "billing_cycles",
@@ -239,9 +241,14 @@ router.get("/totals/latest", isAuthenticated, async (req, res, next) => {
 
     // Filter to only cycles belonging to rooms created by the current admin
     const allRooms = await SupabaseService.selectAllRecords("rooms", "*");
-    const adminRoomIds = (allRooms || [])
+    let adminRoomIds = (allRooms || [])
       .filter((r) => r.created_by === req.user.id)
       .map((r) => r.id);
+
+    // If roomId provided, narrow down to that single room
+    if (roomId && adminRoomIds.includes(roomId)) {
+      adminRoomIds = [roomId];
+    }
 
     const adminCycles = (cycles || []).filter((c) =>
       adminRoomIds.includes(c.room_id),
@@ -320,7 +327,7 @@ router.get("/totals/latest", isAuthenticated, async (req, res, next) => {
 // ============================================================
 router.get("/totals/month", isAuthenticated, async (req, res, next) => {
   try {
-    const { months = 6 } = req.query;
+    const { months = 6, roomId } = req.query;
     const monthCount = parseInt(months) || 6;
 
     // Get all billing cycles
@@ -331,9 +338,14 @@ router.get("/totals/month", isAuthenticated, async (req, res, next) => {
 
     // Filter to only cycles belonging to rooms created by the current admin
     const allRooms = await SupabaseService.selectAllRecords("rooms", "*");
-    const adminRoomIds = (allRooms || [])
+    let adminRoomIds = (allRooms || [])
       .filter((r) => r.created_by === req.user.id)
       .map((r) => r.id);
+
+    // If roomId provided, narrow down to that single room
+    if (roomId && adminRoomIds.includes(roomId)) {
+      adminRoomIds = [roomId];
+    }
 
     const adminCycles = (allCycles || []).filter((c) =>
       adminRoomIds.includes(c.room_id),

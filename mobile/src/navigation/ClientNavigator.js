@@ -21,8 +21,10 @@ import BankTransferPaymentScreen from "../screens/client/BankTransferPaymentScre
 import CashPaymentScreen from "../screens/client/CashPaymentScreen";
 import PaymentHistoryScreen from "../screens/client/PaymentHistoryScreen";
 import SettlementScreen from "../screens/client/SettlementScreen";
+import ChatRoomScreen from "../screens/chat/ChatRoomScreen";
 import NotificationsInboxScreen from "../screens/NotificationsInboxScreen";
 import AnnouncementsScreen from "../screens/client/AnnouncementsScreen";
+import ChatNotificationBanner from "../components/ChatNotificationBanner";
 import {
   apiService,
   announcementService,
@@ -85,6 +87,11 @@ const ClientHomeStack = () => {
         name="Presence"
         component={PresenceScreen}
         options={{ title: "Mark Presence" }}
+      />
+      <Stack.Screen
+        name="ChatRoom"
+        component={ChatRoomScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -342,137 +349,140 @@ const ClientNavigator = () => {
   );
 
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-          if (route.name === "HomeStack") {
-            iconName = focused ? "home" : "home-outline";
-          } else if (route.name === "PresenceStack") {
-            iconName = focused ? "checkbox" : "checkbox-outline";
-          } else if (route.name === "BillsStack") {
-            iconName = focused ? "document-text" : "document-text-outline";
-          } else if (route.name === "AnnouncementsStack") {
-            iconName = focused ? "megaphone" : "megaphone-outline";
-          } else if (route.name === "NotificationsStack") {
-            iconName = focused ? "notifications" : "notifications-outline";
-          } else if (route.name === "ProfileStack") {
-            iconName = focused ? "person" : "person-outline";
-          }
-          return (
-            <View style={{ alignItems: "center", justifyContent: "center" }}>
-              {focused && (
-                <View
-                  style={{
-                    position: "absolute",
-                    top: -4,
-                    width: 48,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: colors.accentLight,
-                  }}
-                />
-              )}
-              <Ionicons name={iconName} size={22} color={color} />
-            </View>
-          );
-        },
-        tabBarActiveTintColor: colors.tabBarActive,
-        tabBarInactiveTintColor: colors.tabBarInactive,
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "600",
-          marginTop: 2,
-        },
-        tabBarStyle: {
-          backgroundColor: colors.tabBarBg,
-          borderTopWidth: 0,
-          elevation: 12,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-          paddingTop: 4,
-        },
-        tabBarBadgeStyle: {
-          backgroundColor: "#e74c3c",
-          fontSize: 10,
-          fontWeight: "700",
-          minWidth: 18,
-          height: 18,
-          borderRadius: 9,
-          lineHeight: 17,
-          top: -2,
-        },
-      })}
-    >
-      <Tab.Screen
-        name="HomeStack"
-        component={ClientHomeStack}
-        options={{ title: "Home" }}
-      />
-      <Tab.Screen
-        name="PresenceStack"
-        component={PresenceStack}
-        options={{ title: "Presence" }}
-      />
-      <Tab.Screen
-        name="BillsStack"
-        component={BillsStack}
-        options={{ title: "Bills" }}
-      />
-      <Tab.Screen
-        name="AnnouncementsStack"
-        component={AnnouncementsStack}
-        options={{
-          title: "News",
-          tabBarBadge: announcementCount > 0 ? announcementCount : null,
-        }}
-        listeners={({ navigation }) => ({
-          focus: () => {
-            fetchAnnouncementCount();
+    <View style={{ flex: 1 }}>
+      <ChatNotificationBanner role="client" />
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName;
+            if (route.name === "HomeStack") {
+              iconName = focused ? "home" : "home-outline";
+            } else if (route.name === "PresenceStack") {
+              iconName = focused ? "checkbox" : "checkbox-outline";
+            } else if (route.name === "BillsStack") {
+              iconName = focused ? "document-text" : "document-text-outline";
+            } else if (route.name === "AnnouncementsStack") {
+              iconName = focused ? "megaphone" : "megaphone-outline";
+            } else if (route.name === "NotificationsStack") {
+              iconName = focused ? "notifications" : "notifications-outline";
+            } else if (route.name === "ProfileStack") {
+              iconName = focused ? "person" : "person-outline";
+            }
+            return (
+              <View style={{ alignItems: "center", justifyContent: "center" }}>
+                {focused && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -4,
+                      width: 48,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: colors.accentLight,
+                    }}
+                  />
+                )}
+                <Ionicons name={iconName} size={22} color={color} />
+              </View>
+            );
           },
-        })}
-      />
-      <Tab.Screen
-        name="NotificationsStack"
-        component={NotificationsStackWrapper}
-        options={{
-          title: "Alerts",
-          tabBarBadge: unreadCount > 0 ? unreadCount : null,
-        }}
-        listeners={({ navigation }) => ({
-          focus: () => {
-            fetchUnreadCount();
+          tabBarActiveTintColor: colors.tabBarActive,
+          tabBarInactiveTintColor: colors.tabBarInactive,
+          tabBarLabelStyle: {
+            fontSize: 10,
+            fontWeight: "600",
+            marginTop: 2,
           },
-          blur: () => {
-            fetchUnreadCount();
+          tabBarStyle: {
+            backgroundColor: colors.tabBarBg,
+            borderTopWidth: 0,
+            elevation: 12,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: -3 },
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            paddingTop: 4,
           },
-        })}
-      />
-      <Tab.Screen
-        name="ProfileStack"
-        component={ProfileStack}
-        options={{
-          title: "Profile",
-          tabBarBadge: unreadSupportCount > 0 ? "" : null,
           tabBarBadgeStyle: {
             backgroundColor: "#e74c3c",
-            minWidth: 8,
-            height: 8,
-            borderRadius: 4,
-            top: 0,
-            right: 2,
-          },
-        }}
-        listeners={({ navigation }) => ({
-          focus: () => {
-            fetchUnreadSupportCount();
+            fontSize: 10,
+            fontWeight: "700",
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+            lineHeight: 17,
+            top: -2,
           },
         })}
-      />
-    </Tab.Navigator>
+      >
+        <Tab.Screen
+          name="HomeStack"
+          component={ClientHomeStack}
+          options={{ title: "Home" }}
+        />
+        <Tab.Screen
+          name="PresenceStack"
+          component={PresenceStack}
+          options={{ title: "Presence" }}
+        />
+        <Tab.Screen
+          name="BillsStack"
+          component={BillsStack}
+          options={{ title: "Bills" }}
+        />
+        <Tab.Screen
+          name="AnnouncementsStack"
+          component={AnnouncementsStack}
+          options={{
+            title: "News",
+            tabBarBadge: announcementCount > 0 ? announcementCount : null,
+          }}
+          listeners={({ navigation }) => ({
+            focus: () => {
+              fetchAnnouncementCount();
+            },
+          })}
+        />
+        <Tab.Screen
+          name="NotificationsStack"
+          component={NotificationsStackWrapper}
+          options={{
+            title: "Alerts",
+            tabBarBadge: unreadCount > 0 ? unreadCount : null,
+          }}
+          listeners={({ navigation }) => ({
+            focus: () => {
+              fetchUnreadCount();
+            },
+            blur: () => {
+              fetchUnreadCount();
+            },
+          })}
+        />
+        <Tab.Screen
+          name="ProfileStack"
+          component={ProfileStack}
+          options={{
+            title: "Profile",
+            tabBarBadge: unreadSupportCount > 0 ? "" : null,
+            tabBarBadgeStyle: {
+              backgroundColor: "#e74c3c",
+              minWidth: 8,
+              height: 8,
+              borderRadius: 4,
+              top: 0,
+              right: 2,
+            },
+          }}
+          listeners={({ navigation }) => ({
+            focus: () => {
+              fetchUnreadSupportCount();
+            },
+          })}
+        />
+      </Tab.Navigator>
+    </View>
   );
 };
 

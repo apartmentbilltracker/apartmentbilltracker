@@ -4,16 +4,16 @@ const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
-const { isAuthenticated, isAdmin } = require("../middleware/auth");
+const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const sendMail = require("../utils/sendMail");
 const { sendPushNotification } = require("../utils/sendPushNotification");
 const { enrichBillingCycle } = require("../utils/enrichBillingCycle");
 
-// Get list of overdue payments (admin only)
+// Get list of overdue payments
 router.get(
   "/overdue/:roomId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId } = req.params;
@@ -124,11 +124,11 @@ router.get(
   }),
 );
 
-// Get reminder history for a member (admin only)
+// Get reminder history for a member
 router.get(
   "/history/:roomId/:memberId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId, memberId } = req.params;
@@ -214,11 +214,11 @@ router.get(
   }),
 );
 
-// Send payment reminder to single member (admin only)
+// Send payment reminder to single member
 router.post(
   "/send-reminder/:roomId/:memberId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId, memberId } = req.params;
@@ -348,11 +348,11 @@ router.post(
   }),
 );
 
-// Send bulk reminders to all overdue members (admin only)
+// Send bulk reminders to all overdue members
 router.post(
   "/send-bulk-reminders/:roomId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId } = req.params;
@@ -461,11 +461,11 @@ router.post(
   }),
 );
 
-// Get members without presence today (admin only)
+// Get members without presence today
 router.get(
   "/presence/:roomId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId } = req.params;
@@ -508,11 +508,11 @@ router.get(
   }),
 );
 
-// Send presence reminder to single member (admin only)
+// Send presence reminder to single member
 router.post(
   "/send-presence/:roomId/:memberId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId, memberId } = req.params;
@@ -616,11 +616,11 @@ router.post(
   }),
 );
 
-// Send bulk presence reminders (admin only)
+// Send bulk presence reminders
 router.post(
   "/send-presence-bulk/:roomId",
   isAuthenticated,
-  isAdmin,
+  isAdminOrHost,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { roomId } = req.params;

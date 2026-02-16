@@ -36,6 +36,7 @@ const AdminBillingScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [roomDropdownOpen, setRoomDropdownOpen] = useState(false);
 
   const isFocused = useIsFocused();
 
@@ -544,48 +545,116 @@ const AdminBillingScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {/* ─── ROOM PILLS ─── */}
-      {rooms.length > 0 && (
-        <View style={styles.roomPillBar}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.roomPillContent}
+      {/* ─── ROOM SELECTOR ─── */}
+      {rooms.length > 1 ? (
+        <View style={styles.roomDropdownContainer}>
+          <TouchableOpacity
+            style={styles.roomDropdownButton}
+            onPress={() => setRoomDropdownOpen(!roomDropdownOpen)}
+            activeOpacity={0.7}
           >
-            {rooms.map((room) => {
-              const active =
-                selectedRoom?.id === room.id || selectedRoom?._id === room._id;
-              return (
-                <TouchableOpacity
-                  key={room.id || room._id}
-                  style={[styles.roomPill, active && styles.roomPillActive]}
-                  onPress={() => setSelectedRoom(room)}
-                  activeOpacity={0.7}
-                >
-                  <View
+            <View style={styles.roomDropdownLeft}>
+              <View
+                style={[
+                  styles.roomDropdownDot,
+                  { backgroundColor: colors.accent },
+                ]}
+              />
+              <Text style={styles.roomDropdownButtonText} numberOfLines={1}>
+                {selectedRoom?.name || "Select Room"}
+              </Text>
+            </View>
+            <View style={styles.roomDropdownRight}>
+              <Text style={styles.roomDropdownCount}>{rooms.length} rooms</Text>
+              <Ionicons
+                name={roomDropdownOpen ? "chevron-up" : "chevron-down"}
+                size={18}
+                color={colors.textSecondary}
+              />
+            </View>
+          </TouchableOpacity>
+
+          {roomDropdownOpen && (
+            <View style={styles.roomDropdownList}>
+              {rooms.map((room) => {
+                const active =
+                  selectedRoom?.id === room.id ||
+                  selectedRoom?._id === room._id;
+                const memberCount = room.members?.length || 0;
+                return (
+                  <TouchableOpacity
+                    key={room.id || room._id}
                     style={[
-                      styles.roomPillDot,
-                      {
-                        backgroundColor: active
-                          ? colors.textOnAccent
-                          : colors.textTertiary,
-                      },
+                      styles.roomDropdownItem,
+                      active && styles.roomDropdownItemActive,
                     ]}
-                  />
-                  <Text
-                    style={[
-                      styles.roomPillText,
-                      active && styles.roomPillTextActive,
-                    ]}
+                    onPress={() => {
+                      setSelectedRoom(room);
+                      setRoomDropdownOpen(false);
+                    }}
+                    activeOpacity={0.7}
                   >
-                    {room.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    <View style={styles.roomDropdownItemLeft}>
+                      <View
+                        style={[
+                          styles.roomDropdownItemDot,
+                          {
+                            backgroundColor: active
+                              ? colors.accent
+                              : colors.textTertiary,
+                          },
+                        ]}
+                      />
+                      <View>
+                        <Text
+                          style={[
+                            styles.roomDropdownItemText,
+                            active && styles.roomDropdownItemTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {room.name}
+                        </Text>
+                        <Text style={styles.roomDropdownItemSub}>
+                          {memberCount} member{memberCount !== 1 ? "s" : ""}
+                          {room.cycleStatus === "active"
+                            ? " • Active cycle"
+                            : room.cycleStatus === "completed"
+                              ? " • Cycle completed"
+                              : " • No cycle"}
+                        </Text>
+                      </View>
+                    </View>
+                    {active && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color={colors.accent}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
-      )}
+      ) : rooms.length === 1 ? (
+        <View style={styles.roomPillBar}>
+          <View style={styles.roomPillContent}>
+            <View style={[styles.roomPill, styles.roomPillActive]}>
+              <View
+                style={[
+                  styles.roomPillDot,
+                  { backgroundColor: colors.textOnAccent },
+                ]}
+              />
+              <Text style={[styles.roomPillText, styles.roomPillTextActive]}>
+                {rooms[0].name}
+              </Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
 
       <ScrollView
         style={{ flex: 1 }}
@@ -1383,14 +1452,111 @@ const createStyles = (colors) =>
     },
     headerSubtitle: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
 
-    // ─── ROOM PILLS ───
+    // ─── ROOM DROPDOWN ───
+    roomDropdownContainer: {
+      backgroundColor: colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      zIndex: 10,
+    },
+    roomDropdownButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: colors.background,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    roomDropdownLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      flex: 1,
+    },
+    roomDropdownDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    roomDropdownButtonText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      flex: 1,
+    },
+    roomDropdownRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    roomDropdownCount: {
+      fontSize: 12,
+      fontWeight: "500",
+      color: colors.textTertiary,
+      backgroundColor: colors.card,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 10,
+      overflow: "hidden",
+    },
+    roomDropdownList: {
+      marginTop: 8,
+      backgroundColor: colors.background,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    roomDropdownItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    roomDropdownItemActive: {
+      backgroundColor: colors.accentLight || colors.accent + "15",
+    },
+    roomDropdownItemLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      flex: 1,
+    },
+    roomDropdownItemDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    roomDropdownItemText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    roomDropdownItemTextActive: {
+      color: colors.accent,
+    },
+    roomDropdownItemSub: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 1,
+    },
+
+    // ─── ROOM PILL (single room) ───
     roomPillBar: {
       backgroundColor: colors.card,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
       paddingVertical: 10,
     },
-    roomPillContent: { paddingHorizontal: 16, gap: 8 },
+    roomPillContent: { paddingHorizontal: 16, flexDirection: "row", gap: 8 },
     roomPill: {
       flexDirection: "row",
       alignItems: "center",
