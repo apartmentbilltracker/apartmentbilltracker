@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo} from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { apiService } from "../services/apiService";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme/ThemeContext";
 
-const NotificationsInboxScreen = ({ navigation }) => {
+const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
 
@@ -67,6 +67,8 @@ const NotificationsInboxScreen = ({ navigation }) => {
           ),
         );
         setUnreadCount((prev) => Math.max(0, prev - 1));
+        // Notify navigator to refresh tab badge
+        onBadgeRefresh?.();
       } else {
         throw new Error(response.message || "Failed to mark as read");
       }
@@ -86,6 +88,8 @@ const NotificationsInboxScreen = ({ navigation }) => {
           prev.map((n) => ({ ...n, isRead: true, readAt: new Date() })),
         );
         setUnreadCount(0);
+        // Notify navigator to refresh tab badge
+        onBadgeRefresh?.();
       } else {
         throw new Error(response.message || "Failed to mark all as read");
       }
@@ -209,7 +213,11 @@ const NotificationsInboxScreen = ({ navigation }) => {
             ])
           }
         >
-          <Ionicons name="trash-outline" size={16} color={colors.textTertiary} />
+          <Ionicons
+            name="trash-outline"
+            size={16}
+            color={colors.textTertiary}
+          />
         </TouchableOpacity>
       </TouchableOpacity>
     );
@@ -239,7 +247,11 @@ const NotificationsInboxScreen = ({ navigation }) => {
           onPress={handleMarkAllRead}
           activeOpacity={0.7}
         >
-          <Ionicons name="checkmark-done-outline" size={15} color={colors.accent} />
+          <Ionicons
+            name="checkmark-done-outline"
+            size={15}
+            color={colors.accent}
+          />
           <Text style={styles.markAllText}>Mark all as read</Text>
         </TouchableOpacity>
       )}
@@ -248,7 +260,11 @@ const NotificationsInboxScreen = ({ navigation }) => {
       {notifications.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconWrap}>
-            <Ionicons name="notifications-off-outline" size={48} color={colors.textSecondary} />
+            <Ionicons
+              name="notifications-off-outline"
+              size={48}
+              color={colors.textSecondary}
+            />
           </View>
           <Text style={styles.emptyTitle}>No Notifications</Text>
           <Text style={styles.emptyText}>
@@ -325,7 +341,11 @@ const NotificationsInboxScreen = ({ navigation }) => {
                 {selectedNotification?.message}
               </Text>
               <View style={styles.modalTimeRow}>
-                <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
+                <Ionicons
+                  name="time-outline"
+                  size={13}
+                  color={colors.textSecondary}
+                />
                 <Text style={styles.modalTime}>
                   {selectedNotification?.sentAt
                     ? new Date(selectedNotification.sentAt).toLocaleString(
@@ -359,294 +379,296 @@ const NotificationsInboxScreen = ({ navigation }) => {
 };
 
 /* ═══════════════════════ STYLES ═══════════════════════ */
-const createStyles = (colors) => StyleSheet.create({
-  /* Layout */
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 13,
-    color: colors.textTertiary,
-  },
+const createStyles = (colors) =>
+  StyleSheet.create({
+    /* Layout */
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centerContent: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
 
-  /* Header */
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
-  },
-  headerCenter: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  badge: {
-    backgroundColor: "#ef4444",
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 6,
-  },
-  badgeText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 11,
-  },
+    /* Header */
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.divider,
+    },
+    headerCenter: {
+      flex: 1,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    badge: {
+      backgroundColor: "#ef4444",
+      borderRadius: 10,
+      minWidth: 20,
+      height: 20,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 6,
+    },
+    badgeText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 11,
+    },
 
-  /* Mark All */
-  markAllBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 14,
-    marginTop: 12,
-    paddingVertical: 9,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#b38604",
-    gap: 6,
-  },
-  markAllText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.accent,
-  },
+    /* Mark All */
+    markAllBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      marginHorizontal: 14,
+      marginTop: 12,
+      paddingVertical: 9,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: "#b38604",
+      gap: 6,
+    },
+    markAllText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.accent,
+    },
 
-  /* Empty */
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 40,
-  },
-  emptyIconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.inputBg,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 6,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    textAlign: "center",
-    lineHeight: 19,
-  },
-  emptyRefresh: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#b38604",
-    gap: 6,
-  },
-  emptyRefreshText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.accent,
-  },
+    /* Empty */
+    emptyContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 40,
+    },
+    emptyIconWrap: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.inputBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    emptyTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 6,
+    },
+    emptyText: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      textAlign: "center",
+      lineHeight: 19,
+    },
+    emptyRefresh: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 20,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: "#b38604",
+      gap: 6,
+    },
+    emptyRefreshText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.accent,
+    },
 
-  /* List */
-  listContent: {
-    padding: 14,
-    paddingBottom: 24,
-  },
+    /* List */
+    listContent: {
+      padding: 14,
+      paddingBottom: 24,
+    },
 
-  /* Card */
-  card: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  cardUnread: {
-    backgroundColor: colors.warningBg,
-    borderLeftWidth: 3,
-    borderLeftColor: "#b38604",
-  },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-    marginTop: 2,
-  },
-  iconUnread: {
-    backgroundColor: colors.warningBg,
-  },
-  iconRead: {
-    backgroundColor: colors.background,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 3,
-  },
-  cardTitle: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.textSecondary,
-  },
-  cardTitleUnread: {
-    fontWeight: "700",
-    color: colors.text,
-  },
-  unreadDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
-    marginLeft: 6,
-  },
-  cardMessage: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    lineHeight: 17,
-    marginBottom: 4,
-  },
-  cardTime: {
-    fontSize: 10,
-    color: colors.textTertiary,
-    fontWeight: "500",
-  },
-  deleteBtn: {
-    padding: 6,
-    marginLeft: 4,
-    marginTop: 2,
-  },
+    /* Card */
+    card: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 8,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      elevation: 1,
+    },
+    cardUnread: {
+      backgroundColor: colors.warningBg,
+      borderLeftWidth: 3,
+      borderLeftColor: "#b38604",
+    },
+    iconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
+      marginTop: 2,
+    },
+    iconUnread: {
+      backgroundColor: colors.warningBg,
+    },
+    iconRead: {
+      backgroundColor: colors.background,
+    },
+    cardContent: {
+      flex: 1,
+    },
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 3,
+    },
+    cardTitle: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    cardTitleUnread: {
+      fontWeight: "700",
+      color: colors.text,
+    },
+    unreadDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: colors.accent,
+      marginLeft: 6,
+    },
+    cardMessage: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 17,
+      marginBottom: 4,
+    },
+    cardTime: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      fontWeight: "500",
+    },
+    deleteBtn: {
+      padding: 6,
+      marginLeft: 4,
+      marginTop: 2,
+    },
 
-  /* Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    maxHeight: "75%",
-    paddingBottom: 28,
-  },
-  dragHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.skeleton,
-    alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
-  },
-  modalIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: colors.warningBg,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-  },
-  modalTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  modalCloseBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-    marginLeft: 8,
-  },
-  modalBody: {
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  modalMessage: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 22,
-    marginBottom: 14,
-  },
-  modalTimeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    marginBottom: 8,
-  },
-  modalTime: {
-    fontSize: 12,
-    color: colors.textTertiary,
-  },
-  modalDoneBtn: {
-    marginHorizontal: 18,
-    marginTop: 8,
-    paddingVertical: 13,
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  modalDoneText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-});
+    /* Modal */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 22,
+      borderTopRightRadius: 22,
+      maxHeight: "75%",
+      paddingBottom: 28,
+    },
+    dragHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.skeleton,
+      alignSelf: "center",
+      marginTop: 10,
+      marginBottom: 6,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderLight,
+    },
+    modalIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      backgroundColor: colors.warningBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
+    },
+    modalTitle: {
+      flex: 1,
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    modalCloseBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+      marginLeft: 8,
+    },
+    modalBody: {
+      paddingHorizontal: 18,
+      paddingTop: 16,
+      paddingBottom: 8,
+    },
+    modalMessage: {
+      fontSize: 14,
+      color: colors.text,
+      lineHeight: 22,
+      marginBottom: 14,
+    },
+    modalTimeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      marginBottom: 8,
+    },
+    modalTime: {
+      fontSize: 12,
+      color: colors.textTertiary,
+    },
+    modalDoneBtn: {
+      marginHorizontal: 18,
+      marginTop: 8,
+      marginBottom: 18,
+      paddingVertical: 13,
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      alignItems: "center",
+    },
+    modalDoneText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 14,
+    },
+  });
 
 export default NotificationsInboxScreen;

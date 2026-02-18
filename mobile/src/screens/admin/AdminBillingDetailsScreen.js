@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -108,13 +114,20 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
     }
   }, [actualCycleId, cycleId, room?.id || room?._id]);
 
+  const mountedRef = useRef(false);
+
   useEffect(() => {
     fetchBillingDetails();
   }, [fetchBillingDetails]);
 
   // Refetch data when screen comes into focus (handles new cycle creation)
+  // Skip initial mount — useEffect above handles first load
   useFocusEffect(
     useCallback(() => {
+      if (!mountedRef.current) {
+        mountedRef.current = true;
+        return;
+      }
       // Reset actualCycleId so it fetches the active cycle fresh
       setActualCycleId(null);
       // Small delay to ensure backend is updated

@@ -29,7 +29,8 @@ exports.isAdmin = catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler("Please login to continue", 401));
   }
 
-  if (!req.user.is_admin) {
+  const role = (req.user.role || "").toLowerCase();
+  if (!req.user.is_admin && role !== "admin") {
     return next(new ErrorHandler("Admin access required", 403));
   }
   next();

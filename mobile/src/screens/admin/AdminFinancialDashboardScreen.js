@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -113,12 +119,16 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
     }
   }, [room?.id, room?._id, room]);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+  const hasLoaded = useRef(false);
 
   useEffect(() => {
-    if (isFocused) fetchDashboardData();
+    fetchDashboardData();
+    hasLoaded.current = true;
+  }, [fetchDashboardData]);
+
+  // Re-fetch on screen re-focus (skip initial mount — useEffect above handles it)
+  useEffect(() => {
+    if (isFocused && hasLoaded.current) fetchDashboardData();
   }, [isFocused, fetchDashboardData]);
 
   const onRefresh = useCallback(() => {

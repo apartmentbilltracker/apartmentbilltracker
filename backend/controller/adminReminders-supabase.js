@@ -8,6 +8,8 @@ const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const sendMail = require("../utils/sendMail");
 const { sendPushNotification } = require("../utils/sendPushNotification");
 const { enrichBillingCycle } = require("../utils/enrichBillingCycle");
+const PaymentReminderContent = require("../utils/PaymentReminderContent");
+const PresenceReminderContent = require("../utils/PresenceReminderContent");
 
 // Get list of overdue payments
 router.get(
@@ -267,9 +269,14 @@ router.post(
       );
       const billingPeriod = `${new Date(activeCycle.start_date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} – ${new Date(activeCycle.end_date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
 
-      const defaultMessage = `Dear ${member?.name || "Valued Resident"},\n\nWe hope this message finds you well. This is a formal reminder regarding your outstanding payment obligation for Room ${room.name}.\n\nOur records indicate that the following bill(s) remain unpaid:\n• ${unpaidBills.join("\n• ")}\n\nBilling Period: ${billingPeriod}\nDays Overdue: ${daysOverdue > 0 ? daysOverdue + " day(s)" : "Due now"}\n\nWe kindly request that you settle the above balance at your earliest convenience to avoid any further delays. Timely payments help us maintain quality services and ensure smooth operations for all residents.\n\nIf you have already made the payment, please disregard this notice. Should you have any questions or concerns, please do not hesitate to reach out to your room administrator.\n\nThank you for your prompt attention to this matter.\n\nWarm regards,\n${room.name} Management`;
-
-      const reminderMessage = customMessage || defaultMessage;
+      const reminderMessage = PaymentReminderContent({
+        recipientName: member?.name || "Valued Resident",
+        roomName: room.name,
+        unpaidBills,
+        billingPeriod,
+        daysOverdue,
+        customMessage,
+      });
 
       // Send email
       try {
@@ -421,7 +428,13 @@ router.post(
         );
         const bulkBillingPeriod = `${new Date(activeCycle.start_date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} – ${new Date(activeCycle.end_date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
 
-        const message = `Dear ${member.name || "Valued Resident"},\n\nWe hope this message finds you well. This is a formal reminder regarding your outstanding payment obligation for Room ${room.name}.\n\nOur records indicate that the following bill(s) remain unpaid:\n• ${unpaidBills.join("\n• ")}\n\nBilling Period: ${bulkBillingPeriod}\nDays Overdue: ${bulkDaysOverdue > 0 ? bulkDaysOverdue + " day(s)" : "Due now"}\n\nWe kindly request that you settle the above balance at your earliest convenience to avoid any further delays. Timely payments help us maintain quality services and ensure smooth operations for all residents.\n\nIf you have already made the payment, please disregard this notice. Should you have any questions or concerns, please do not hesitate to reach out to your room administrator.\n\nThank you for your prompt attention to this matter.\n\nWarm regards,\n${room.name} Management`;
+        const message = PaymentReminderContent({
+          recipientName: member.name || "Valued Resident",
+          roomName: room.name,
+          unpaidBills,
+          billingPeriod: bulkBillingPeriod,
+          daysOverdue: bulkDaysOverdue,
+        });
 
         try {
           await sendMail({
@@ -541,9 +554,12 @@ router.post(
         year: "numeric",
       });
 
-      const defaultMessage = `Dear ${member.name || user.name || "Valued Resident"},\n\nWe hope you are doing well. This is a friendly reminder to please mark your daily presence for today, ${todayFormatted}, in the Apartment Bill Tracker application.\n\nRoom: ${room.name}\n\nAccurate attendance records are essential for computing fair and transparent billing among all room occupants. Marking your presence each day ensures that utility costs are distributed proportionally based on actual occupancy.\n\nIf you have already recorded your attendance for today, please disregard this notice. Should you encounter any issues with the app, feel free to contact your room administrator for assistance.\n\nThank you for your cooperation.\n\nBest regards,\n${room.name} Management`;
-
-      const reminderMessage = customMessage || defaultMessage;
+      const reminderMessage = PresenceReminderContent({
+        recipientName: member.name || user.name || "Valued Resident",
+        roomName: room.name,
+        todayFormatted,
+        customMessage,
+      });
 
       // Send email
       try {
@@ -657,9 +673,12 @@ router.post(
           year: "numeric",
         });
 
-        const defaultMessage = `Dear ${member.name || user.name || "Valued Resident"},\n\nWe hope you are doing well. This is a friendly reminder to please mark your daily presence for today, ${bulkTodayFormatted}, in the Apartment Bill Tracker application.\n\nRoom: ${room.name}\n\nAccurate attendance records are essential for computing fair and transparent billing among all room occupants. Marking your presence each day ensures that utility costs are distributed proportionally based on actual occupancy.\n\nIf you have already recorded your attendance for today, please disregard this notice. Should you encounter any issues with the app, feel free to contact your room administrator for assistance.\n\nThank you for your cooperation.\n\nBest regards,\n${room.name} Management`;
-
-        const reminderMessage = customMessage || defaultMessage;
+        const reminderMessage = PresenceReminderContent({
+          recipientName: member.name || user.name || "Valued Resident",
+          roomName: room.name,
+          todayFormatted: bulkTodayFormatted,
+          customMessage,
+        });
 
         try {
           await sendMail({

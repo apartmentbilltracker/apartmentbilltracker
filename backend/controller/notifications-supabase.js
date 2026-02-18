@@ -6,6 +6,7 @@ const SupabaseService = require("../db/SupabaseService");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated } = require("../middleware/auth");
+const cache = require("../utils/MemoryCache");
 
 /**
  * Helper: map DB row → client-friendly shape
@@ -133,6 +134,9 @@ router.patch(
 
       if (error) throw error;
 
+      // Invalidate badge cache so tab badge updates immediately
+      cache.del(`badges:${req.user.id}`);
+
       res.status(200).json({
         success: true,
         message: "Notification marked as read",
@@ -140,6 +144,8 @@ router.patch(
       });
     } catch (error) {
       console.log("Mark as read error:", error.message);
+      // Still invalidate cache on error — the DB update may have succeeded
+      cache.del(`badges:${req.user.id}`);
       res.status(200).json({
         success: true,
         message: "Notification marked as read",
@@ -167,6 +173,9 @@ router.patch(
 
       const modifiedCount = data ? data.length : 0;
 
+      // Invalidate badge cache so tab badge updates immediately
+      cache.del(`badges:${req.user.id}`);
+
       res.status(200).json({
         success: true,
         message: `${modifiedCount} notifications marked as read`,
@@ -174,6 +183,7 @@ router.patch(
       });
     } catch (error) {
       console.log("Mark all read error:", error.message);
+      cache.del(`badges:${req.user.id}`);
       res.status(200).json({
         success: true,
         message: "0 notifications marked as read",

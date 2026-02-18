@@ -47,10 +47,6 @@ const AdminBillingCycleScreen = ({ route }) => {
     new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
   );
 
-  useEffect(() => {
-    fetchCycles();
-  }, [roomId]);
-
   useFocusEffect(
     React.useCallback(() => {
       fetchCycles();
@@ -407,7 +403,10 @@ const AdminBillingCycleScreen = ({ route }) => {
                   </View>
                   <View style={styles.billCell}>
                     <View
-                      style={[styles.billDot, { backgroundColor: colors.electricityColor }]}
+                      style={[
+                        styles.billDot,
+                        { backgroundColor: colors.electricityColor },
+                      ]}
                     />
                     <Text style={styles.billCellLabel}>Electricity</Text>
                     <Text style={styles.billCellAmount}>
@@ -416,7 +415,10 @@ const AdminBillingCycleScreen = ({ route }) => {
                   </View>
                   <View style={styles.billCell}>
                     <View
-                      style={[styles.billDot, { backgroundColor: colors.waterColor }]}
+                      style={[
+                        styles.billDot,
+                        { backgroundColor: colors.waterColor },
+                      ]}
                     />
                     <Text style={styles.billCellLabel}>Water</Text>
                     <Text style={styles.billCellAmount}>
@@ -427,7 +429,10 @@ const AdminBillingCycleScreen = ({ route }) => {
                   </View>
                   <View style={styles.billCell}>
                     <View
-                      style={[styles.billDot, { backgroundColor: colors.internetColor }]}
+                      style={[
+                        styles.billDot,
+                        { backgroundColor: colors.internetColor },
+                      ]}
                     />
                     <Text style={styles.billCellLabel}>Internet</Text>
                     <Text style={styles.billCellAmount}>
@@ -1000,7 +1005,11 @@ const createStyles = (colors) =>
       borderTopColor: colors.border,
     },
     totalStripLabel: { fontSize: 13, fontWeight: "600", color: colors.success },
-    totalStripAmount: { fontSize: 17, fontWeight: "800", color: colors.success },
+    totalStripAmount: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.success,
+    },
 
     // CARD ACTIONS
     closeCycleBtn: {

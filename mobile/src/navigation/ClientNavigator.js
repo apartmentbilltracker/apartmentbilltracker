@@ -29,6 +29,7 @@ import {
   apiService,
   announcementService,
   roomService,
+  badgeService,
 } from "../services/apiService";
 import { useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
@@ -216,15 +217,24 @@ const AnnouncementsStack = () => {
 
 const NotificationsStack = ({ onNotificationsStatusChange }) => {
   const headerOptions = useHeaderOptions();
+  // Use a wrapper to pass the callback as a prop instead of navigation params
+  const InboxScreen = React.useCallback(
+    (props) => (
+      <NotificationsInboxScreen
+        {...props}
+        onBadgeRefresh={onNotificationsStatusChange}
+      />
+    ),
+    [onNotificationsStatusChange],
+  );
   return (
     <Stack.Navigator screenOptions={headerOptions}>
       <Stack.Screen
         name="NotificationsInbox"
-        component={NotificationsInboxScreen}
+        component={InboxScreen}
         options={{ title: "Notifications" }}
-        listeners={({ navigation }) => ({
+        listeners={() => ({
           beforeRemove: () => {
-            // Refresh count when leaving NotificationsStack
             onNotificationsStatusChange?.();
           },
         })}
@@ -242,100 +252,34 @@ const ClientNavigator = () => {
   const userId = state?.user?.id || state?.user?._id;
   const notificationRefreshRef = React.useRef(null);
   const announcementRefreshRef = React.useRef(null);
+  const lastBadgeFetchRef = React.useRef(0);
 
-  const fetchUnreadCount = async () => {
+  // Single consolidated badge fetch — replaces 3-6 separate API calls
+  const fetchAllBadges = async (force = false) => {
+    // Throttle: skip if called within the last 10 seconds (unless forced)
+    const now = Date.now();
+    if (!force && now - lastBadgeFetchRef.current < 10000) return;
+    lastBadgeFetchRef.current = now;
+
     try {
-      const response = await apiService.get("/api/v2/notifications");
-      const newCount = response.unreadCount || 0;
-      setUnreadCount(newCount);
-      console.log("Unread count updated:", newCount);
+      const counts = await badgeService.getCounts();
+      setUnreadCount(counts.unreadNotifications);
+      setAnnouncementCount(counts.unreadAnnouncements);
+      setUnreadSupportCount(counts.unreadSupport > 0 ? 1 : 0);
     } catch (error) {
-      console.error("Error fetching unread count:", error);
+      console.error("Error fetching badge counts:", error);
     }
   };
 
-  const fetchAnnouncementCount = async () => {
-    try {
-      const roomsResponse = await roomService.getClientRooms();
-      let rooms = [];
-      if (Array.isArray(roomsResponse)) {
-        rooms = roomsResponse;
-      } else if (roomsResponse?.data) {
-        rooms = Array.isArray(roomsResponse.data)
-          ? roomsResponse.data
-          : [roomsResponse.data];
-      } else if (roomsResponse?.rooms) {
-        rooms = Array.isArray(roomsResponse.rooms)
-          ? roomsResponse.rooms
-          : [roomsResponse.rooms];
-      }
-
-      // Find user's joined room
-      const joinedRoom = rooms.find((r) =>
-        r.members?.some(
-          (m) => String(m.user?._id || m.user) === String(userId),
-        ),
-      );
-
-      if (joinedRoom) {
-        // Get announcements for the room
-        const announcementsResponse =
-          await announcementService.getRoomAnnouncements(joinedRoom._id);
-        const announcements = Array.isArray(announcementsResponse)
-          ? announcementsResponse
-          : announcementsResponse?.data || [];
-
-        // Count only unread announcements (where current user is not in readBy array)
-        const unreadCount = announcements.filter(
-          (announcement) =>
-            !announcement.readBy ||
-            !announcement.readBy.some(
-              (readUserId) => String(readUserId) === String(userId),
-            ),
-        ).length;
-
-        setAnnouncementCount(unreadCount);
-        console.log("Announcement unread count updated:", unreadCount);
-      } else {
-        setAnnouncementCount(0);
-      }
-    } catch (error) {
-      console.error("Error fetching announcement count:", error);
-    }
-  };
-
-  const fetchUnreadSupportCount = async () => {
-    try {
-      const { supportService } = require("../services/apiService");
-      const ticketsResponse = await supportService.getUserTickets();
-      const tickets = Array.isArray(ticketsResponse)
-        ? ticketsResponse
-        : ticketsResponse?.data || [];
-      const unreadTickets = tickets.filter(
-        (t) => !t.isReadByUser && t.replies && t.replies.length > 0,
-      ).length;
-
-      const bugsResponse = await supportService.getUserBugReports();
-      const bugs = Array.isArray(bugsResponse)
-        ? bugsResponse
-        : bugsResponse?.data || [];
-      const unreadBugs = bugs.filter(
-        (b) => !b.isReadByUser && b.responses && b.responses.length > 0,
-      ).length;
-
-      const totalUnread = unreadTickets + unreadBugs;
-      setUnreadSupportCount(totalUnread > 0 ? 1 : 0); // Show dot if any unread
-      console.log("Support unread count updated:", totalUnread);
-    } catch (error) {
-      console.error("Error fetching support unread count:", error);
-    }
-  };
+  // Keep individual functions as thin wrappers for backward compatibility
+  // Always force-refresh when called from user actions (mark-as-read etc.)
+  const fetchUnreadCount = () => fetchAllBadges(true);
+  const fetchAnnouncementCount = () => fetchAllBadges(true);
+  const fetchUnreadSupportCount = () => fetchAllBadges(true);
 
   React.useEffect(() => {
-    // Fetch unread count when component mounts
-    fetchUnreadCount();
-    fetchAnnouncementCount();
-    fetchUnreadSupportCount();
+    // Fetch all badge counts once on mount
+    fetchAllBadges(true);
 
     // Store function reference to be called from other components
     notificationRefreshRef.current = fetchUnreadCount;

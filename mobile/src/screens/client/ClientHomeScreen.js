@@ -23,7 +23,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
-import MapView, { Marker } from "react-native-maps";
+import SafeMapView from "../../components/SafeMapView";
 import { AuthContext } from "../../context/AuthContext";
 import chatReadTracker from "../../services/chatReadTracker";
 import {
@@ -79,6 +79,7 @@ const ClientHomeScreen = ({ navigation }) => {
   const [photoViewIdx, setPhotoViewIdx] = useState(0);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const initialLoadDone = useRef(false);
+  const lastFocusFetch = useRef(0);
 
   const userId = state?.user?.id || state?.user?._id;
   const userName = state?.user?.name || "User";
@@ -437,10 +438,16 @@ const ClientHomeScreen = ({ navigation }) => {
     }
   };
 
-  // Refresh room data when screen comes into focus
+  // Refresh room data when screen comes into focus (throttled: max once per 30s)
   useFocusEffect(
     useCallback(() => {
-      fetchRooms(!initialLoadDone.current);
+      const now = Date.now();
+      if (!initialLoadDone.current) {
+        fetchRooms(true);
+      } else if (now - lastFocusFetch.current > 30000) {
+        lastFocusFetch.current = now;
+        fetchRooms(false);
+      }
     }, []),
   );
 
@@ -631,26 +638,13 @@ const ClientHomeScreen = ({ navigation }) => {
         onRequestClose={() => setFullMapRoom(null)}
       >
         <View style={{ flex: 1, backgroundColor: colors.background }}>
-          <MapView
+          <SafeMapView
+            latitude={fullMapRoom.latitude}
+            longitude={fullMapRoom.longitude}
+            title={fullMapRoom.name}
+            interactive
             style={{ flex: 1 }}
-            initialRegion={{
-              latitude: fullMapRoom.latitude,
-              longitude: fullMapRoom.longitude,
-              latitudeDelta: 0.008,
-              longitudeDelta: 0.008,
-            }}
-            showsUserLocation
-            showsMyLocationButton
-          >
-            <Marker
-              coordinate={{
-                latitude: fullMapRoom.latitude,
-                longitude: fullMapRoom.longitude,
-              }}
-              title={fullMapRoom.name}
-              description={fullMapRoom.address || "Room location"}
-            />
-          </MapView>
+          />
           {/* Floating header */}
           <View style={styles.fullMapHeader}>
             <TouchableOpacity
@@ -806,27 +800,11 @@ const ClientHomeScreen = ({ navigation }) => {
                   activeOpacity={0.8}
                   onPress={() => setFullMapRoom(previewRoom)}
                 >
-                  <MapView
+                  <SafeMapView
+                    latitude={previewRoom.latitude}
+                    longitude={previewRoom.longitude}
                     style={styles.roomInfoMap}
-                    initialRegion={{
-                      latitude: previewRoom.latitude,
-                      longitude: previewRoom.longitude,
-                      latitudeDelta: 0.005,
-                      longitudeDelta: 0.005,
-                    }}
-                    scrollEnabled={false}
-                    zoomEnabled={false}
-                    pitchEnabled={false}
-                    rotateEnabled={false}
-                    liteMode={true}
-                  >
-                    <Marker
-                      coordinate={{
-                        latitude: previewRoom.latitude,
-                        longitude: previewRoom.longitude,
-                      }}
-                    />
-                  </MapView>
+                  />
                   <View style={styles.roomInfoAddressRow}>
                     <Ionicons name="location" size={14} color={colors.accent} />
                     <Text style={styles.roomInfoAddressText} numberOfLines={2}>
@@ -1296,7 +1274,7 @@ const ClientHomeScreen = ({ navigation }) => {
         onRequestClose={() => setPhotoViewData(null)}
       >
         <View style={styles.pvBg}>
-          <View style={styles.pvHeader}>
+          <View style={[styles.pvHeader, { paddingTop: insets.top + 10 }]}>
             <TouchableOpacity
               style={styles.pvBackBtn}
               onPress={() => setPhotoViewData(null)}
@@ -2155,7 +2133,7 @@ const ClientHomeScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors, insets = { bottom: 0 }) =>
+const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
   StyleSheet.create({
     // ─── LAYOUT ───
     container: { flex: 1, backgroundColor: colors.background },
@@ -2928,7 +2906,7 @@ const createStyles = (colors, insets = { bottom: 0 }) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
-      paddingTop: 16,
+      paddingTop: Math.max(16, insets.top + 6),
       paddingHorizontal: 16,
       paddingBottom: 12,
       backgroundColor: "rgba(255,255,255,0.92)",
@@ -3081,6 +3059,7 @@ const createStyles = (colors, insets = { bottom: 0 }) =>
       justifyContent: "space-between",
       alignItems: "center",
       paddingVertical: 14,
+      marginBottom: 14,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
@@ -3107,7 +3086,11 @@ const createStyles = (colors, insets = { bottom: 0 }) =>
     expenseBarFill: { height: "100%", borderRadius: 2 },
     expenseRowRight: { alignItems: "flex-end" },
     expenseRowAmount: { fontSize: 14, fontWeight: "700", color: colors.text },
-    expenseRowPct: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
+    expenseRowPct: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
     /* Photo overlay & full-screen viewer */
     photoOverlay: {
       position: "absolute",
@@ -3159,7 +3142,6 @@ const createStyles = (colors, insets = { bottom: 0 }) =>
     pvHeader: {
       flexDirection: "row",
       alignItems: "center",
-      paddingTop: Platform.OS === "ios" ? 54 : 36,
       paddingHorizontal: 16,
       paddingBottom: 12,
     },

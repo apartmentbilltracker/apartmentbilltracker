@@ -74,15 +74,13 @@ const PresenceScreen = () => {
           }
         } catch (error) {
           console.error("Error refreshing rooms:", error);
+        } finally {
+          setLoading(false);
         }
       };
       refresh();
     }, []),
   );
-
-  useEffect(() => {
-    fetchRooms();
-  }, []);
 
   useEffect(() => {
     if (selectedRoom && (selectedRoom.id || selectedRoom._id)) {

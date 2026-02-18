@@ -186,8 +186,12 @@ const ProfileStack = () => {
 const HostNavigator = () => {
   const [pendingMemberCount, setPendingMemberCount] = React.useState(0);
   const { colors } = useTheme();
+  const lastPendingFetch = React.useRef(0);
 
   const fetchPendingMemberCount = async () => {
+    // Debounce: skip if fetched within last 30 seconds
+    if (Date.now() - lastPendingFetch.current < 30000) return;
+    lastPendingFetch.current = Date.now();
     try {
       const response = await roomService.getRooms();
       const rooms = response.rooms || response.data?.rooms || [];

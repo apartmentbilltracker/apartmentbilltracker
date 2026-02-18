@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useMemo } from "react";
+import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
 import { useIsFocused } from "@react-navigation/native";
 import {
   View,
@@ -40,18 +40,19 @@ const AdminMembersScreen = ({ navigation, route }) => {
   const [isPayer, setIsPayer] = useState(true);
   const [pendingMembers, setPendingMembers] = useState([]);
 
-  useEffect(() => {
-    fetchRooms();
-  }, []);
+  const hasLoaded = useRef(false);
 
-  // Re-fetch when screen gains focus or user profile changes
+  // Re-fetch when screen gains focus (handles initial load too)
   useEffect(() => {
-    if (isFocused) fetchRooms();
+    if (isFocused) {
+      fetchRooms();
+      hasLoaded.current = true;
+    }
   }, [isFocused]);
 
-  // Refetch whenever user profile changes (name or avatar)
+  // Refetch when user profile changes (name or avatar) — skip initial render
   useEffect(() => {
-    fetchRooms();
+    if (hasLoaded.current) fetchRooms();
   }, [state.user?.name, state.user?.avatar?.url]);
 
   useEffect(() => {

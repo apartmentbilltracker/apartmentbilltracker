@@ -15,7 +15,7 @@ import { AuthContext } from "../context/AuthContext";
 import { chatService, roomService } from "../services/apiService";
 import { useTheme } from "../theme/ThemeContext";
 
-const POLL_INTERVAL = 8000; // 8 seconds
+const POLL_INTERVAL = 60000; // 60 seconds (was 8s — reduced to save Supabase egress)
 const BANNER_DURATION = 4500; // 4.5 seconds visible
 const BANNER_HEIGHT = 76;
 
@@ -132,6 +132,9 @@ const ChatNotificationBanner = ({ role = "client" }) => {
   useEffect(() => {
     if (!roomId) return;
 
+    // On first mount, seed lastMsgIdRef so we don't banner old messages
+    let seeded = false;
+
     const checkMessages = async () => {
       // Skip if user is on the chat screen
       if (isChatActive.current) return;
@@ -146,6 +149,13 @@ const ChatNotificationBanner = ({ role = "client" }) => {
         if (msgs.length === 0) return;
 
         const latest = msgs[msgs.length - 1];
+
+        // First poll: just record the current latest ID, don't show banner
+        if (!seeded) {
+          lastMsgIdRef.current = latest.id;
+          seeded = true;
+          return;
+        }
 
         // Skip own messages
         if (String(latest.senderId) === String(userId)) {
@@ -169,7 +179,7 @@ const ChatNotificationBanner = ({ role = "client" }) => {
       }
     };
 
-    // Initial check after a short delay
+    // Initial seed after a short delay (silent — no banner)
     const initTimer = setTimeout(checkMessages, 2000);
     pollRef.current = setInterval(checkMessages, POLL_INTERVAL);
 

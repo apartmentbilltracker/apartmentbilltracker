@@ -26,7 +26,7 @@ import { chatService } from "../../services/apiService";
 import chatReadTracker from "../../services/chatReadTracker";
 import { useTheme } from "../../theme/ThemeContext";
 
-const POLL_INTERVAL = 5000; // 5 seconds
+const POLL_INTERVAL = 15000; // 15 seconds (was 5s — reduced to save Supabase egress)
 
 const ChatRoomScreen = ({ route, navigation }) => {
   const { roomId, roomName, isHost } = route.params;
@@ -134,7 +134,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
     const tempId = `temp_${Date.now()}`;
     const now = new Date();
     const expiresAt = new Date(now);
-    expiresAt.setDate(expiresAt.getDate() + 3);
+    expiresAt.setDate(expiresAt.getDate() + 1);
 
     const optimisticMsg = {
       id: tempId,
@@ -432,9 +432,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
           {/* Info banner */}
           <View style={styles.ttlBanner}>
             <Ionicons name="time-outline" size={14} color={colors.accent} />
-            <Text style={styles.ttlText}>
-              Messages auto-delete after 3 days
-            </Text>
+            <Text style={styles.ttlText}>Messages auto-delete after 1 day</Text>
           </View>
 
           <FlatList
@@ -515,6 +513,7 @@ const createStyles = (colors) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
       backgroundColor: colors.card,
+      marginTop: -32,
     },
     backBtn: {
       width: 36,

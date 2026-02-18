@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useContext, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useContext,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -60,18 +66,18 @@ const AdminManageHubScreen = ({ navigation }) => {
     }
   };
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      await fetchStats();
-      setLoading(false);
-    };
-    load();
-  }, []);
+  const hasLoaded = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", () => {
-      fetchStats();
+    const unsubscribe = navigation.addListener("focus", async () => {
+      if (!hasLoaded.current) {
+        setLoading(true);
+        await fetchStats();
+        setLoading(false);
+        hasLoaded.current = true;
+      } else {
+        fetchStats();
+      }
     });
     return unsubscribe;
   }, [navigation]);
@@ -84,7 +90,7 @@ const AdminManageHubScreen = ({ navigation }) => {
 
   if (loading && !refreshing) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Loading...</Text>
@@ -95,7 +101,7 @@ const AdminManageHubScreen = ({ navigation }) => {
 
   return (
     <ScrollView
-      style={[styles.container, { paddingTop: insets.top }]}
+      style={styles.container}
       contentContainerStyle={styles.contentContainer}
       refreshControl={
         <RefreshControl

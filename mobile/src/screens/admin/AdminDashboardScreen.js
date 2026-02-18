@@ -4,6 +4,7 @@ import React, {
   useState,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import {
   View,
@@ -13,6 +14,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Alert,
   Dimensions,
   Platform,
 } from "react-native";
@@ -59,14 +61,13 @@ const AdminDashboardScreen = ({ navigation }) => {
   const [latestBillingCycle, setLatestBillingCycle] = useState(null);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const hostUserId = state?.user?.id || state?.user?._id;
+  const hasLoaded = useRef(false);
 
+  // Re-fetch filtered data when selectedRoomId changes (skip initial — isFocused handles it)
   useEffect(() => {
-    fetchRooms();
-  }, []);
-
-  // Re-fetch filtered data when selectedRoomId changes
-  useEffect(() => {
-    fetchFilteredData(selectedRoomId);
+    if (hasLoaded.current) {
+      fetchFilteredData(selectedRoomId);
+    }
   }, [selectedRoomId]);
 
   // Fetch unread chat count for selected room (only messages after last read)
@@ -83,7 +84,7 @@ const AdminDashboardScreen = ({ navigation }) => {
         return;
       }
       const [res, lastRead] = await Promise.all([
-        chatService.getMessages(rid, { limit: 100 }),
+        chatService.getMessages(rid, { limit: 5 }),
         chatReadTracker.getLastRead(rid),
       ]);
       const msgs = res.messages || [];
@@ -108,6 +109,7 @@ const AdminDashboardScreen = ({ navigation }) => {
       fetchRooms();
       fetchFilteredData(selectedRoomId);
       fetchChatBadge(selectedRoomId);
+      hasLoaded.current = true;
     }
   }, [isFocused]);
 
