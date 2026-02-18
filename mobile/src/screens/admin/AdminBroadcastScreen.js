@@ -549,7 +549,7 @@ const createStyles = (colors) =>
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 16,
-      paddingTop: 50,
+      paddingTop: 14,
       paddingBottom: 14,
       backgroundColor: colors.card,
       borderBottomWidth: StyleSheet.hairlineWidth,

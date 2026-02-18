@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -43,18 +43,18 @@ const AdminAllRoomsScreen = ({ navigation }) => {
     }
   };
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      await fetchRooms();
-      setLoading(false);
-    };
-    load();
-  }, []);
+  const hasLoaded = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", () => {
-      fetchRooms();
+    const unsubscribe = navigation.addListener("focus", async () => {
+      if (!hasLoaded.current) {
+        setLoading(true);
+        await fetchRooms();
+        setLoading(false);
+        hasLoaded.current = true;
+      } else {
+        fetchRooms();
+      }
     });
     return unsubscribe;
   }, [navigation]);
@@ -310,7 +310,7 @@ const AdminAllRoomsScreen = ({ navigation }) => {
 
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Loading rooms...</Text>
@@ -320,7 +320,7 @@ const AdminAllRoomsScreen = ({ navigation }) => {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity

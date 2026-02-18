@@ -1313,4 +1313,99 @@ router.delete(
   }),
 );
 
+/**
+ * Get avatars for saved accounts (public — no auth required)
+ * POST /api/v2/user/avatars
+ * Body: { emails: ["a@b.com", ...] }
+ * Returns: { avatars: { "a@b.com": "https://..." | "/api/v2/user/avatar/email@..." | null } }
+ *
+ * For external URLs (Google/Facebook), returns the URL directly.
+ * For base64 data URLs (uploaded photos), returns a server URL that
+ * serves the image as binary so the mobile Image component can cache it.
+ */
+router.post(
+  "/avatars",
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { emails } = req.body;
+      if (!Array.isArray(emails) || emails.length === 0) {
+        return res.status(200).json({ success: true, avatars: {} });
+      }
+
+      // Limit to 10 emails max to prevent abuse
+      const limitedEmails = emails.slice(0, 10).map((e) => e.toLowerCase());
+
+      const avatars = {};
+      for (const email of limitedEmails) {
+        try {
+          const user = await SupabaseService.findUserByEmail(email);
+          if (user && user.avatar && user.avatar.url) {
+            if (user.avatar.url.startsWith("http")) {
+              // External URL (Google/Facebook) — return directly
+              avatars[email] = user.avatar.url;
+            } else {
+              // Base64 data URL — return a server endpoint URL instead
+              avatars[email] =
+                `/api/v2/user/avatar-image/${encodeURIComponent(email)}`;
+            }
+          } else {
+            avatars[email] = null;
+          }
+        } catch {
+          avatars[email] = null;
+        }
+      }
+
+      res.status(200).json({ success: true, avatars });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+/**
+ * Serve user avatar as binary image (public — no auth required)
+ * GET /api/v2/user/avatar-image/:email
+ * Returns the image directly as binary with proper Content-Type
+ */
+router.get(
+  "/avatar-image/:email",
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const email = decodeURIComponent(req.params.email).toLowerCase();
+      const user = await SupabaseService.findUserByEmail(email);
+
+      if (!user || !user.avatar || !user.avatar.url) {
+        return res.status(404).send("No avatar");
+      }
+
+      const avatarUrl = user.avatar.url;
+
+      // If it's an external URL, redirect to it
+      if (avatarUrl.startsWith("http")) {
+        return res.redirect(avatarUrl);
+      }
+
+      // Parse base64 data URL: "data:image/jpeg;base64,/9j/4AAQ..."
+      const match = avatarUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+      if (!match) {
+        return res.status(404).send("Invalid avatar format");
+      }
+
+      const contentType = match[1]; // e.g. "image/jpeg"
+      const base64Data = match[2];
+      const imgBuffer = Buffer.from(base64Data, "base64");
+
+      res.set({
+        "Content-Type": contentType,
+        "Content-Length": imgBuffer.length,
+        "Cache-Control": "public, max-age=86400", // Cache for 1 day
+      });
+      res.send(imgBuffer);
+    } catch (error) {
+      return res.status(500).send("Error loading avatar");
+    }
+  }),
+);
+
 module.exports = router;

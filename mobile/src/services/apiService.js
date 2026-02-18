@@ -55,6 +55,10 @@ export const authService = {
   updateProfile: (data) =>
     api.put("/api/v2/user/update-profile", data).then(extractData),
   logout: () => api.get("/api/v2/user/logout").then(extractData),
+
+  // Fetch avatars for saved accounts (public, no auth)
+  getAvatars: (emails) =>
+    api.post("/api/v2/user/avatars", { emails }).then(extractData),
 };
 
 // Host Role Services
@@ -424,6 +428,19 @@ export const apiService = {
   getTransaction: (transactionId) =>
     paymentProcessingService.getTransaction(transactionId),
   getAnalytics: (roomId) => paymentProcessingService.getAnalytics(roomId),
+};
+
+// Badge counts — single API call for all badge counts
+export const badgeService = {
+  getCounts: () =>
+    api
+      .get("/api/v2/badges")
+      .then(extractData)
+      .then((r) => ({
+        unreadNotifications: r?.unreadNotifications || 0,
+        unreadAnnouncements: r?.unreadAnnouncements || 0,
+        unreadSupport: r?.unreadSupport || 0,
+      })),
 };
 
 // Support Services (Support Tickets, FAQs, Bug Reports)

@@ -16,6 +16,8 @@ const normalizeResponse = (response) => ({
 // Helper to normalize a bug report object for mobile compatibility
 const normalizeBugReport = (report) => ({
   ...report,
+  // DB uses 'priority' but mobile expects 'severity'
+  severity: report.severity || report.priority || "medium",
   createdAt: report.created_at,
   userId: report.user_id,
   assignedTo: report.assigned_to,
@@ -34,14 +36,19 @@ router.post("/create-bug-report", isAuthenticated, async (req, res, next) => {
       return next(new ErrorHandler("Title and description are required", 400));
     }
 
+    // DB schema: title (NOT NULL), description (NOT NULL), user_name (NOT NULL),
+    // user_email (NOT NULL), status, priority, app_version, device_info,
+    // screenshot_urls, assigned_to. Note: no 'severity' column — map to 'priority'.
     const bugReport = await SupabaseService.insert("bug_reports", {
       user_id: req.user.id,
+      user_name: req.user.name || req.user.email || "Unknown",
+      user_email: req.user.email || "unknown@app.com",
       title,
       description,
-      severity: severity || "low",
-      category: category || "general",
-      device: device || "unknown",
+      priority: severity || "medium",
       status: "open",
+      device_info: device || null,
+      app_version: null,
       created_at: new Date(),
     });
 

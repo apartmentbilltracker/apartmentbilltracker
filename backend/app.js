@@ -3,6 +3,7 @@ const ErrorHandler = require("./middleware/error");
 const app = express();
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+const compression = require("compression");
 const cloudinary = require("cloudinary").v2;
 const fileUpload = require("express-fileupload");
 const path = require("path");
@@ -57,6 +58,9 @@ app.use(
   }),
 );
 
+// Gzip/Brotli compress all responses (typically 70-90% size reduction)
+app.use(compression());
+
 // Ensure temp directory exists and is writable
 const tempDir = path.join(__dirname, "temp");
 if (!fs.existsSync(tempDir)) {
@@ -106,18 +110,27 @@ const faqRoutes = require("./controller/faq-supabase");
 const settingsRoutes = require("./controller/settings-supabase");
 const adminBroadcastRoutes = require("./controller/adminBroadcast-supabase");
 const chatRoutes = require("./controller/chat-supabase");
+const badgesRoutes = require("./controller/badges-supabase");
 
-// App Version Check Endpoint — reads from app_settings DB table
+// App Version Check Endpoint — reads from app_settings DB table (cached 5 min)
 app.get("/api/app-version", async (req, res) => {
   try {
     const SupabaseService = require("./db/SupabaseService");
-    let settings = null;
-    try {
-      const rows = await SupabaseService.selectAllRecords("app_settings");
-      if (rows && rows.length > 0) settings = rows[0];
-    } catch (err) {
-      console.error("app_settings read error for version check:", err.message);
-    }
+    const cache = require("./utils/MemoryCache");
+
+    const settings = await cache.getOrSet(
+      "app_settings",
+      async () => {
+        try {
+          const rows = await SupabaseService.selectAllRecords("app_settings");
+          return rows && rows.length > 0 ? rows[0] : null;
+        } catch (err) {
+          console.error("app_settings read error:", err.message);
+          return null;
+        }
+      },
+      300, // Cache for 5 minutes
+    );
 
     const minVersion =
       settings?.min_app_version || process.env.MIN_APP_VERSION || "1.0.0";
@@ -172,6 +185,7 @@ app.use("/api/v2/faqs", faqRoutes);
 app.use("/api/v2/settings", settingsRoutes);
 app.use("/api/v2/admin/broadcast", adminBroadcastRoutes);
 app.use("/api/v2/chat", chatRoutes);
+app.use("/api/v2/badges", badgesRoutes);
 
 // Logout route - ensures the token cookie is properly removed
 app.get("/api/v2/user/logout", async (req, res, next) => {

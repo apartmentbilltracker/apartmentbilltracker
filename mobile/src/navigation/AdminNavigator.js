@@ -4,7 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { supportService } from "../services/apiService";
+import { supportService, badgeService } from "../services/apiService";
 import SuperAdminDashboardScreen from "../screens/admin/SuperAdminDashboardScreen";
 import AdminProfileScreen from "../screens/admin/AdminProfileScreen";
 import AdminVersionControlScreen from "../screens/admin/AdminVersionControlScreen";
@@ -250,25 +250,8 @@ const AdminNavigator = () => {
 
   const fetchUnreadSupportCount = async () => {
     try {
-      const ticketsResponse = await supportService.getAllTickets();
-      const tickets = Array.isArray(ticketsResponse)
-        ? ticketsResponse
-        : ticketsResponse?.data || [];
-      const unreadTickets = tickets.filter(
-        (t) => !t.isReadByAdmin && t.replies && t.replies.length > 0,
-      ).length;
-
-      const bugsResponse = await supportService.getAllBugReports();
-      const bugs = Array.isArray(bugsResponse)
-        ? bugsResponse
-        : bugsResponse?.data || [];
-      const unreadBugs = bugs.filter(
-        (b) => !b.isReadByAdmin && b.responses && b.responses.length > 0,
-      ).length;
-
-      const totalUnread = unreadTickets + unreadBugs;
-      setUnreadSupportCount(totalUnread > 0 ? 1 : 0);
-      console.log("Admin support unread count updated:", totalUnread);
+      const counts = await badgeService.getCounts();
+      setUnreadSupportCount(counts.unreadSupport > 0 ? 1 : 0);
     } catch (error) {
       console.error("Error fetching admin support unread count:", error);
     }

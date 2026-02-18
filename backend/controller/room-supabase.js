@@ -9,6 +9,26 @@ const WelcomeRoomContent = require("../utils/WelcomeRoomContent");
 const PDFDocument = require("pdfkit");
 const { enrichBillingCycle } = require("../utils/enrichBillingCycle");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
+const cache = require("../utils/MemoryCache");
+
+// Invalidate room caches on any mutating request
+router.use((req, res, next) => {
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    // Use response hook to invalidate AFTER successful mutation
+    const originalJson = res.json.bind(res);
+    res.json = function (body) {
+      if (res.statusCode < 400) {
+        cache.invalidatePrefix("roomlist:");
+        cache.invalidatePrefix("browse:");
+        cache.invalidatePrefix("room_members:");
+        cache.invalidatePrefix("room:");
+        cache.del("admin_all_rooms");
+      }
+      return originalJson(body);
+    };
+  }
+  next();
+});
 
 // Helper to normalize snake_case Supabase fields to camelCase for mobile clients
 const normalizeMember = (member) => ({
@@ -61,26 +81,32 @@ const normalizeRoom = (room) => {
   return room;
 };
 
-// Helper: fetch approved members for a room with user details (batch lookup)
+// Helper: fetch approved members for a room with user details (cached 30s)
 const enrichRoomMembers = async (roomId) => {
-  const members = await SupabaseService.getRoomMembers(roomId);
-  const userMap = await SupabaseService.findUsersByIds(
-    (members || []).map((m) => m.user_id),
+  return cache.getOrSet(
+    `room_members:${roomId}`,
+    async () => {
+      const members = await SupabaseService.getRoomMembers(roomId);
+      const userMap = await SupabaseService.findUsersByIds(
+        (members || []).map((m) => m.user_id),
+      );
+      return (members || []).map((member) => {
+        const user = userMap.get(member.user_id);
+        return {
+          ...normalizeMember(member),
+          user: user
+            ? {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                avatar: user.avatar,
+              }
+            : null,
+        };
+      });
+    },
+    30,
   );
-  return (members || []).map((member) => {
-    const user = userMap.get(member.user_id);
-    return {
-      ...normalizeMember(member),
-      user: user
-        ? {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            avatar: user.avatar,
-          }
-        : null,
-    };
-  });
 };
 
 // ============================================================
@@ -140,6 +166,14 @@ router.get("/", isAuthenticated, async (req, res, next) => {
   try {
     let rooms = [];
     const role = (req.user.role || "").toLowerCase();
+    const userId = req.user.id;
+
+    // Cache room list for 30 seconds per user
+    const cacheKey = `roomlist:${userId}:${role}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json({ success: true, rooms: cached });
+    }
 
     if (role === "admin") {
       rooms = await SupabaseService.selectAllRecords("rooms");
@@ -183,6 +217,7 @@ router.get("/", isAuthenticated, async (req, res, next) => {
       }
     }
 
+    cache.set(cacheKey, rooms, 30);
     res.status(200).json({ success: true, rooms });
   } catch (error) {
     next(new ErrorHandler(error.message, 500));
@@ -371,6 +406,13 @@ router.get("/admin/all", isAuthenticated, async (req, res, next) => {
       return next(new ErrorHandler("Admin access required", 403));
     }
 
+    // Cache admin room list for 30 seconds
+    const cacheKey = `admin_all_rooms`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return res.status(200).json({ success: true, rooms: cached });
+    }
+
     const allRooms = await SupabaseService.selectAllRecords("rooms");
 
     // Parallel: members + billing cycles + creator IDs for all rooms
@@ -458,6 +500,7 @@ router.get("/admin/all", isAuthenticated, async (req, res, next) => {
       };
     });
 
+    cache.set(cacheKey, rooms, 30);
     res.status(200).json({ success: true, rooms });
   } catch (error) {
     next(new ErrorHandler(error.message, 500));
@@ -582,19 +625,28 @@ router.delete("/admin/:roomId", isAuthenticated, async (req, res, next) => {
 // ============================================================
 router.get("/browse/available", isAuthenticated, async (req, res, next) => {
   try {
-    // Parallel: all rooms + user's own memberships + member counts per room
-    const [rooms, userMemberships, allMembers] = await Promise.all([
-      SupabaseService.selectAllRecords("rooms"),
-      SupabaseService.selectAll(
-        "room_members",
-        "user_id",
-        req.user.id,
-        "*",
-        "joined_at",
+    // Cache the full rooms + members lists for 60 seconds (shared across users)
+    const [rooms, allMembers] = await Promise.all([
+      cache.getOrSet(
+        "browse:rooms",
+        () => SupabaseService.selectAllRecords("rooms"),
+        60,
       ),
-      // Single query for all room_members to get counts (lightweight)
-      SupabaseService.selectAllRecords("room_members"),
+      cache.getOrSet(
+        "browse:members",
+        () => SupabaseService.selectAllRecords("room_members"),
+        60,
+      ),
     ]);
+
+    // User-specific: pending memberships (lightweight, not cached)
+    const userMemberships = await SupabaseService.selectAll(
+      "room_members",
+      "user_id",
+      req.user.id,
+      "room_id, status",
+      "joined_at",
+    );
 
     const userPendingRoomIds = (userMemberships || [])
       .filter((m) => m.status === "pending")

@@ -16,7 +16,8 @@ import {
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import MapView, { Marker } from "react-native-maps";
+import SafeMapView from "../../components/SafeMapView";
+import MapPickerView from "../../components/MapPickerView";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import { roomService } from "../../services/apiService";
@@ -539,27 +540,11 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
         {/* Mini Map Preview */}
         {room.latitude != null && room.longitude != null && (
           <View style={styles.cardMapWrap}>
-            <MapView
+            <SafeMapView
+              latitude={parseFloat(room.latitude)}
+              longitude={parseFloat(room.longitude)}
               style={styles.cardMap}
-              region={{
-                latitude: parseFloat(room.latitude),
-                longitude: parseFloat(room.longitude),
-                latitudeDelta: 0.004,
-                longitudeDelta: 0.004,
-              }}
-              scrollEnabled={false}
-              zoomEnabled={false}
-              pitchEnabled={false}
-              rotateEnabled={false}
-              liteMode={Platform.OS === "android"}
-            >
-              <Marker
-                coordinate={{
-                  latitude: parseFloat(room.latitude),
-                  longitude: parseFloat(room.longitude),
-                }}
-              />
-            </MapView>
+            />
             {room.address ? (
               <Text style={styles.cardMapAddress} numberOfLines={2}>
                 {room.address}
@@ -832,27 +817,11 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
                   <Text style={styles.fieldLabel}>Location</Text>
                   {roomLatitude != null && roomLongitude != null ? (
                     <View style={styles.locationPreview}>
-                      <MapView
+                      <SafeMapView
+                        latitude={roomLatitude}
+                        longitude={roomLongitude}
                         style={styles.miniMap}
-                        region={{
-                          latitude: roomLatitude,
-                          longitude: roomLongitude,
-                          latitudeDelta: 0.005,
-                          longitudeDelta: 0.005,
-                        }}
-                        scrollEnabled={false}
-                        zoomEnabled={false}
-                        pitchEnabled={false}
-                        rotateEnabled={false}
-                        liteMode={Platform.OS === "android"}
-                      >
-                        <Marker
-                          coordinate={{
-                            latitude: roomLatitude,
-                            longitude: roomLongitude,
-                          }}
-                        />
-                      </MapView>
+                      />
                       {roomAddress ? (
                         <Text style={styles.locationAddress} numberOfLines={2}>
                           {roomAddress}
@@ -1112,25 +1081,13 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
         onRequestClose={() => setMapModalVisible(false)}
       >
         <View style={styles.mapModalContainer}>
-          <MapView
+          <MapPickerView
             ref={mapRef}
             style={styles.fullMap}
-            initialRegion={defaultRegion}
-            onPress={handleMapPress}
-            showsUserLocation
-            showsMyLocationButton={false}
-          >
-            {roomLatitude != null && roomLongitude != null && (
-              <Marker
-                coordinate={{
-                  latitude: roomLatitude,
-                  longitude: roomLongitude,
-                }}
-                draggable
-                onDragEnd={handleMapPress}
-              />
-            )}
-          </MapView>
+            latitude={roomLatitude || defaultRegion.latitude}
+            longitude={roomLongitude || defaultRegion.longitude}
+            onLocationSelect={handleMapPress}
+          />
 
           {/* Map Header */}
           <View style={styles.mapHeader}>
@@ -1198,7 +1155,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
   );
 };
 
-const createStyles = (colors, insets = { bottom: 0 }) =>
+const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -1664,7 +1621,7 @@ const createStyles = (colors, insets = { bottom: 0 }) =>
     },
     mapHeader: {
       position: "absolute",
-      top: Platform.OS === "ios" ? 54 : 16,
+      top: Math.max(16, insets.top + 6),
       left: 16,
       right: 16,
       flexDirection: "row",

@@ -40,10 +40,6 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
   const [processingId, setProcessingId] = useState(null);
 
   useEffect(() => {
-    fetchAll();
-  }, []);
-
-  useEffect(() => {
     if (isFocused) fetchAll();
   }, [isFocused]);
 
@@ -423,7 +419,7 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             onPress={() =>
               navigation
                 .getParent()
-                ?.navigate("ProfileStack", { screen: "SupportTickets" })
+                ?.navigate("SupportStack", { screen: "SupportTickets" })
             }
           >
             <View
@@ -449,7 +445,7 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             onPress={() =>
               navigation
                 .getParent()
-                ?.navigate("ProfileStack", { screen: "BugReports" })
+                ?.navigate("SupportStack", { screen: "BugReports" })
             }
           >
             <View

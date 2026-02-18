@@ -2,7 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
-const { isAdmin } = require("../middleware/auth");
+const { isAuthenticated, isAdmin } = require("../middleware/auth");
 
 // Get all active FAQs
 router.get("/", async (req, res) => {
@@ -17,9 +17,17 @@ router.get("/", async (req, res) => {
     }
 
     faqs = faqs.sort((a, b) => {
-      if (a.order !== b.order) return a.order - b.order;
+      const orderA = a.order_index ?? a.order ?? 0;
+      const orderB = b.order_index ?? b.order ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
       return new Date(b.created_at) - new Date(a.created_at);
     });
+
+    // Map order_index → order for mobile compatibility
+    faqs = faqs.map((f) => ({
+      ...f,
+      order: f.order_index ?? f.order ?? 0,
+    }));
 
     res.status(200).json({
       success: true,
@@ -64,10 +72,16 @@ router.post("/:faqId/helpful", async (req, res) => {
         message: "FAQ not found",
       });
     }
-    const updated = await SupabaseService.update("faqs", faqId, {
-      helpful: (faq.helpful || 0) + 1,
-      views: (faq.views || 0) + 1,
-    });
+    // helpful/views columns may not exist — update silently, ignore errors
+    let updated = faq;
+    try {
+      updated = await SupabaseService.update("faqs", faqId, {
+        helpful: (faq.helpful || 0) + 1,
+        views: (faq.views || 0) + 1,
+      });
+    } catch (_e) {
+      // columns don't exist, just return the faq as-is
+    }
 
     res.status(200).json({
       success: true,
@@ -95,10 +109,16 @@ router.post("/:faqId/not-helpful", async (req, res) => {
       });
     }
 
-    const updated = await SupabaseService.update("faqs", faqId, {
-      not_helpful: (faq.not_helpful || 0) + 1,
-      views: (faq.views || 0) + 1,
-    });
+    // not_helpful/views columns may not exist — update silently, ignore errors
+    let updated = faq;
+    try {
+      updated = await SupabaseService.update("faqs", faqId, {
+        not_helpful: (faq.not_helpful || 0) + 1,
+        views: (faq.views || 0) + 1,
+      });
+    } catch (_e) {
+      // columns don't exist, just return the faq as-is
+    }
 
     res.status(200).json({
       success: true,
@@ -114,7 +134,7 @@ router.post("/:faqId/not-helpful", async (req, res) => {
 });
 
 // Create FAQ (admin only)
-router.post("/", isAdmin, async (req, res) => {
+router.post("/", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { question, answer, category, order } = req.body;
 
@@ -125,15 +145,14 @@ router.post("/", isAdmin, async (req, res) => {
       });
     }
 
+    // DB schema: question, answer, category, order_index, is_active
+    // Note: column is 'order_index' not 'order'; no helpful/not_helpful/views columns
     const faq = await SupabaseService.insert("faqs", {
       question,
       answer,
       category: category || "general",
-      order: order || 0,
+      order_index: order || 0,
       is_active: true,
-      helpful: 0,
-      not_helpful: 0,
-      views: 0,
     });
 
     res.status(201).json({
@@ -151,7 +170,7 @@ router.post("/", isAdmin, async (req, res) => {
 });
 
 // Update FAQ (admin only)
-router.put("/:faqId", isAdmin, async (req, res) => {
+router.put("/:faqId", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { faqId } = req.params;
     const { question, answer, category, is_active, order } = req.body;
@@ -169,7 +188,8 @@ router.put("/:faqId", isAdmin, async (req, res) => {
       answer: answer !== undefined ? answer : faq.answer,
       category: category !== undefined ? category : faq.category,
       is_active: is_active !== undefined ? is_active : faq.is_active,
-      order: order !== undefined ? order : faq.order,
+      order_index:
+        order !== undefined ? order : faq.order_index || faq.order || 0,
       updated_at: new Date().toISOString(),
     });
 
@@ -188,7 +208,7 @@ router.put("/:faqId", isAdmin, async (req, res) => {
 });
 
 // Delete FAQ (admin only)
-router.delete("/:faqId", isAdmin, async (req, res) => {
+router.delete("/:faqId", isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { faqId } = req.params;
 

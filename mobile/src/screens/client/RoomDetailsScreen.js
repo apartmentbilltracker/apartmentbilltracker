@@ -15,8 +15,8 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import MapView, { Marker } from "react-native-maps";
 import { AuthContext } from "../../context/AuthContext";
+import SafeMapView from "../../components/SafeMapView";
 import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -307,27 +307,12 @@ const RoomDetailsScreen = ({ route, navigation }) => {
               />
             </View>
             <View style={styles.mapPreviewWrap}>
-              <MapView
+              <SafeMapView
                 style={styles.mapPreview}
-                initialRegion={{
-                  latitude: parseFloat(room.latitude),
-                  longitude: parseFloat(room.longitude),
-                  latitudeDelta: 0.005,
-                  longitudeDelta: 0.005,
-                }}
-                scrollEnabled={false}
-                zoomEnabled={false}
-                pitchEnabled={false}
-                rotateEnabled={false}
-                liteMode={true}
-              >
-                <Marker
-                  coordinate={{
-                    latitude: parseFloat(room.latitude),
-                    longitude: parseFloat(room.longitude),
-                  }}
-                />
-              </MapView>
+                latitude={room.latitude}
+                longitude={room.longitude}
+                title={room.name}
+              />
             </View>
             {room.address ? (
               <View style={styles.mapAddressRow}>
@@ -652,26 +637,13 @@ const RoomDetailsScreen = ({ route, navigation }) => {
           onRequestClose={() => setShowFullMap(false)}
         >
           <View style={{ flex: 1 }}>
-            <MapView
-              style={StyleSheet.absoluteFillObject}
-              initialRegion={{
-                latitude: parseFloat(room.latitude),
-                longitude: parseFloat(room.longitude),
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-              showsUserLocation
-              showsMyLocationButton
-            >
-              <Marker
-                coordinate={{
-                  latitude: parseFloat(room.latitude),
-                  longitude: parseFloat(room.longitude),
-                }}
-                title={room.name}
-                description={room.address || ""}
-              />
-            </MapView>
+            <SafeMapView
+              style={{ flex: 1 }}
+              latitude={room.latitude}
+              longitude={room.longitude}
+              title={room.name}
+              interactive
+            />
             {/* Floating Header */}
             <View style={styles.fullMapHeader}>
               <TouchableOpacity
@@ -761,7 +733,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
   );
 };
 
-const createStyles = (colors, insets = { bottom: 0 }) =>
+const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -1140,7 +1112,7 @@ const createStyles = (colors, insets = { bottom: 0 }) =>
     },
     fullMapHeader: {
       position: "absolute",
-      top: 50,
+      top: Math.max(16, insets.top + 6),
       left: 16,
       right: 16,
       flexDirection: "row",
@@ -1247,7 +1219,7 @@ const createStyles = (colors, insets = { bottom: 0 }) =>
     pvHeader: {
       flexDirection: "row",
       alignItems: "center",
-      paddingTop: Platform.OS === "ios" ? 54 : 38,
+      paddingTop: insets.top + 10,
       paddingHorizontal: 16,
       paddingBottom: 10,
       gap: 12,

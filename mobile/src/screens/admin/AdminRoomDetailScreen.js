@@ -15,8 +15,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import MapView, { Marker } from "react-native-maps";
 import { roomService } from "../../services/apiService";
+import SafeMapView from "../../components/SafeMapView";
 import { useTheme } from "../../theme/ThemeContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -38,8 +38,8 @@ const AMENITY_MAP = {
 
 const AdminRoomDetailScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
-  const styles = createStyles(colors);
   const insets = useSafeAreaInsets();
+  const styles = createStyles(colors, insets);
 
   const [room, setRoom] = useState(route.params?.room || null);
   const [refreshing, setRefreshing] = useState(false);
@@ -127,7 +127,7 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
 
   if (!room) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.container}>
         <View style={styles.centerWrap}>
           <Ionicons
             name="alert-circle-outline"
@@ -157,7 +157,7 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -342,27 +342,13 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
               activeOpacity={0.8}
               onPress={() => setFullMapRoom(room)}
             >
-              <MapView
+              <SafeMapView
                 style={styles.mapView}
-                initialRegion={{
-                  latitude: room.latitude,
-                  longitude: room.longitude,
-                  latitudeDelta: 0.005,
-                  longitudeDelta: 0.005,
-                }}
-                scrollEnabled={false}
-                zoomEnabled={false}
-                pitchEnabled={false}
-                rotateEnabled={false}
-                liteMode={true}
-              >
-                <Marker
-                  coordinate={{
-                    latitude: room.latitude,
-                    longitude: room.longitude,
-                  }}
-                />
-              </MapView>
+                latitude={room.latitude}
+                longitude={room.longitude}
+                title={room.name}
+                onPress={() => setFullMapRoom(room)}
+              />
               <View style={styles.mapExpandHint}>
                 <Ionicons
                   name="expand-outline"
@@ -847,26 +833,13 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
             onRequestClose={() => setFullMapRoom(null)}
           >
             <View style={{ flex: 1, backgroundColor: colors.background }}>
-              <MapView
+              <SafeMapView
                 style={{ flex: 1 }}
-                initialRegion={{
-                  latitude: fullMapRoom.latitude,
-                  longitude: fullMapRoom.longitude,
-                  latitudeDelta: 0.008,
-                  longitudeDelta: 0.008,
-                }}
-                showsUserLocation
-                showsMyLocationButton
-              >
-                <Marker
-                  coordinate={{
-                    latitude: fullMapRoom.latitude,
-                    longitude: fullMapRoom.longitude,
-                  }}
-                  title={fullMapRoom.name}
-                  description={fullMapRoom.address || "Room location"}
-                />
-              </MapView>
+                latitude={fullMapRoom.latitude}
+                longitude={fullMapRoom.longitude}
+                title={fullMapRoom.name}
+                interactive
+              />
               {/* Floating header */}
               <View style={styles.fullMapHeader}>
                 <TouchableOpacity
@@ -895,7 +868,7 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
   );
 };
 
-const createStyles = (colors) =>
+const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -1400,7 +1373,7 @@ const createStyles = (colors) =>
       right: 0,
       flexDirection: "row",
       alignItems: "center",
-      paddingTop: 50,
+      paddingTop: Math.max(16, insets.top + 6),
       paddingHorizontal: 16,
       paddingBottom: 12,
       backgroundColor: "rgba(255,255,255,0.92)",

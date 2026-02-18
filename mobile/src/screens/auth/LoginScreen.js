@@ -28,7 +28,8 @@ import * as Facebook from "expo-auth-session/providers/facebook";
 import { makeRedirectUri } from "expo-auth-session";
 import * as Notifications from "expo-notifications";
 import { AuthContext } from "../../context/AuthContext";
-import { apiService } from "../../services/apiService";
+import { apiService, authService } from "../../services/apiService";
+import { getAPIBaseURL } from "../../config/config";
 import { useTheme } from "../../theme/ThemeContext";
 import savedAccountsService from "../../services/savedAccountsService";
 import AuthBubbles from "../../components/AuthBubbles";
@@ -54,6 +55,7 @@ const LoginScreen = ({ navigation }) => {
   const [error, setError] = useState("");
   const [savedAccounts, setSavedAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState(null);
+  const [failedAvatars, setFailedAvatars] = useState(new Set());
   const {
     signIn,
     signInWithGoogle,
@@ -63,11 +65,32 @@ const LoginScreen = ({ navigation }) => {
   } = useContext(AuthContext);
   const sessionExpired = authState?.sessionExpiredReason === "inactivity";
 
-  // Load saved accounts on mount
+  // Load saved accounts on mount and fetch fresh avatars
   useEffect(() => {
     const loadAccounts = async () => {
       const accounts = await savedAccountsService.getAccounts();
       setSavedAccounts(accounts);
+
+      // Fetch fresh avatars from the API for all saved accounts
+      if (accounts.length > 0) {
+        try {
+          const emails = accounts.map((a) => a.email);
+          const res = await authService.getAvatars(emails);
+          const avatarMap = res?.avatars || {};
+          const baseUrl = getAPIBaseURL();
+          const updated = accounts.map((a) => {
+            let avatar = avatarMap[a.email.toLowerCase()] || a.avatar || null;
+            // Convert relative server paths to full URLs
+            if (avatar && avatar.startsWith("/api/")) {
+              avatar = `${baseUrl}${avatar}`;
+            }
+            return { ...a, avatar };
+          });
+          setSavedAccounts(updated);
+        } catch {
+          // Silent fail — keep locally stored avatars
+        }
+      }
     };
     loadAccounts();
   }, []);
@@ -317,10 +340,17 @@ const LoginScreen = ({ navigation }) => {
                 disabled={loading}
               >
                 <View style={styles.savedAvatarWrap}>
-                  {account.avatar && typeof account.avatar === "string" ? (
+                  {account.avatar &&
+                  typeof account.avatar === "string" &&
+                  !failedAvatars.has(account.email) ? (
                     <Image
                       source={{ uri: account.avatar }}
                       style={styles.savedAvatar}
+                      onError={() =>
+                        setFailedAvatars((prev) =>
+                          new Set(prev).add(account.email),
+                        )
+                      }
                     />
                   ) : (
                     <View
@@ -405,10 +435,16 @@ const LoginScreen = ({ navigation }) => {
               <View style={styles.selectedHeader}>
                 <View style={styles.selectedAvatarWrap}>
                   {selectedAccount.avatar &&
-                  typeof selectedAccount.avatar === "string" ? (
+                  typeof selectedAccount.avatar === "string" &&
+                  !failedAvatars.has(selectedAccount.email) ? (
                     <Image
                       source={{ uri: selectedAccount.avatar }}
                       style={styles.selectedAvatar}
+                      onError={() =>
+                        setFailedAvatars((prev) =>
+                          new Set(prev).add(selectedAccount.email),
+                        )
+                      }
                     />
                   ) : (
                     <View

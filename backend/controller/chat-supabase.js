@@ -1,13 +1,14 @@
 // Chat Controller (Supabase Version)
-// Messages auto-expire after 3 days for storage management
+// Messages auto-expire after 1 day for storage management
 const express = require("express");
 const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated } = require("../middleware/auth");
 const { sendPushNotification } = require("../utils/sendPushNotification");
+const cache = require("../utils/MemoryCache");
 
-const MESSAGE_TTL_DAYS = 3;
+const MESSAGE_TTL_DAYS = 1;
 
 // Helper: normalize chat message for mobile
 const normalizeMessage = (msg) => ({
@@ -59,6 +60,10 @@ router.post("/room/:roomId/enable", isAuthenticated, async (req, res, next) => {
       .eq("id", roomId);
     if (error) throw new Error(error.message);
 
+    // Invalidate cached status
+    cache.del(`chat_status:${roomId}`);
+    cache.del(`room:${roomId}`);
+
     res.status(200).json({
       success: true,
       message: "Chat enabled for this room. All members can now chat.",
@@ -95,6 +100,10 @@ router.post(
         .eq("id", roomId);
       if (error) throw new Error(error.message);
 
+      // Invalidate cached status
+      cache.del(`chat_status:${roomId}`);
+      cache.del(`room:${roomId}`);
+
       res.status(200).json({
         success: true,
         message: "Chat disabled for this room.",
@@ -112,14 +121,20 @@ router.get("/room/:roomId/status", isAuthenticated, async (req, res, next) => {
   try {
     const { roomId } = req.params;
 
-    const room = await SupabaseService.findRoomById(roomId);
-    if (!room) return next(new ErrorHandler("Room not found", 404));
+    // Cache chat status for 30 seconds — avoids hammering DB on every poll
+    const status = await cache.getOrSet(
+      `chat_status:${roomId}`,
+      async () => {
+        const room = await SupabaseService.findRoomById(roomId);
+        if (!room) return null;
+        return { chatEnabled: !!room.chat_enabled, roomId };
+      },
+      30,
+    );
 
-    res.status(200).json({
-      success: true,
-      chatEnabled: !!room.chat_enabled,
-      roomId,
-    });
+    if (!status) return next(new ErrorHandler("Room not found", 404));
+
+    res.status(200).json({ success: true, ...status });
   } catch (error) {
     next(new ErrorHandler(error.message, 500));
   }
@@ -252,15 +267,23 @@ router.get(
       const { roomId } = req.params;
       const { before, limit = 50 } = req.query;
 
-      // Verify room exists and chat is enabled
-      const room = await SupabaseService.findRoomById(roomId);
+      // Cache room lookup for 30s to avoid re-querying on every poll
+      const room = await cache.getOrSet(
+        `room:${roomId}`,
+        () => SupabaseService.findRoomById(roomId),
+        30,
+      );
       if (!room) return next(new ErrorHandler("Room not found", 404));
       if (!room.chat_enabled) {
         return next(new ErrorHandler("Chat is not enabled for this room", 403));
       }
 
-      // Auto-purge expired messages
-      await purgeExpired(roomId);
+      // Purge expired messages at most once per 5 minutes per room
+      const purgeKey = `chat_purge:${roomId}`;
+      if (!cache.get(purgeKey)) {
+        await purgeExpired(roomId);
+        cache.set(purgeKey, true, 300); // 5 minutes
+      }
 
       // Fetch messages
       const supabase = SupabaseService.getClient();
@@ -279,17 +302,16 @@ router.get(
       const { data: messages, error } = await query;
       if (error) throw new Error(error.message);
 
-      // Enrich with sender info — batch unique sender IDs
+      // Enrich with sender info — batch fetch all unique senders in ONE query
       const senderIds = [...new Set((messages || []).map((m) => m.sender_id))];
+      const userMap =
+        senderIds.length > 0
+          ? await SupabaseService.findUsersByIds(senderIds)
+          : new Map();
       const senderMap = {};
-      for (const sid of senderIds) {
-        const user = await SupabaseService.findUserById(sid);
+      for (const [id, user] of userMap) {
         if (user) {
-          senderMap[sid] = {
-            id: user.id,
-            name: user.name,
-            avatar: user.avatar,
-          };
+          senderMap[id] = { id: user.id, name: user.name, avatar: user.avatar };
         }
       }
 

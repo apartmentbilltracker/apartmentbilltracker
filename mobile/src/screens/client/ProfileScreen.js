@@ -45,16 +45,17 @@ const ProfileScreen = ({ navigation }) => {
   const [faqModalVisible, setFAQModalVisible] = useState(false);
   const [bugModalVisible, setBugModalVisible] = useState(false);
   const [supportTicketForm, setSupportTicketForm] = useState({
-    subject: "",
-    message: "",
+    title: "",
+    description: "",
     category: "general",
   });
   const [bugReportForm, setBugReportForm] = useState({
     title: "",
     description: "",
     severity: "medium",
-    module: "general",
+    category: "general",
   });
+  const [userRoomId, setUserRoomId] = useState(null);
   const [faqs, setFAQs] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [unreadTickets, setUnreadTickets] = useState(0);
@@ -147,6 +148,7 @@ const ProfileScreen = ({ navigation }) => {
         });
 
         if (joinedRoom) {
+          setUserRoomId(joinedRoom.id || joinedRoom._id);
           const userMember = joinedRoom.members.find(
             (m) =>
               String(m.user?.id || m.user?._id || m.user) === String(userId),
@@ -283,8 +285,8 @@ const ProfileScreen = ({ navigation }) => {
   // Support Service Handlers
   const handleContactSupport = async () => {
     if (
-      !supportTicketForm.subject.trim() ||
-      !supportTicketForm.message.trim()
+      !supportTicketForm.title.trim() ||
+      !supportTicketForm.description.trim()
     ) {
       Alert.alert("Validation", "Please fill in all fields");
       return;
@@ -292,10 +294,13 @@ const ProfileScreen = ({ navigation }) => {
 
     setIsSubmitting(true);
     try {
-      await supportService.createTicket(supportTicketForm);
+      await supportService.createTicket({
+        ...supportTicketForm,
+        roomId: userRoomId || undefined,
+      });
       Alert.alert("Success", "Support ticket created successfully!");
       setSupportModalVisible(false);
-      setSupportTicketForm({ subject: "", message: "", category: "general" });
+      setSupportTicketForm({ title: "", description: "", category: "general" });
     } catch (error) {
       console.error("Error creating ticket:", error);
       Alert.alert("Error", "Failed to create support ticket");
@@ -333,7 +338,7 @@ const ProfileScreen = ({ navigation }) => {
         title: "",
         description: "",
         severity: "medium",
-        module: "general",
+        category: "general",
       });
     } catch (error) {
       console.error("Error creating bug report:", error);
@@ -924,9 +929,9 @@ const ProfileScreen = ({ navigation }) => {
               <TextInput
                 style={styles.formInput}
                 placeholder="Enter subject"
-                value={supportTicketForm.subject}
+                value={supportTicketForm.title}
                 onChangeText={(text) =>
-                  setSupportTicketForm({ ...supportTicketForm, subject: text })
+                  setSupportTicketForm({ ...supportTicketForm, title: text })
                 }
                 placeholderTextColor={colors.textTertiary}
               />
@@ -935,9 +940,12 @@ const ProfileScreen = ({ navigation }) => {
               <TextInput
                 style={[styles.formInput, styles.textArea]}
                 placeholder="Describe your issue..."
-                value={supportTicketForm.message}
+                value={supportTicketForm.description}
                 onChangeText={(text) =>
-                  setSupportTicketForm({ ...supportTicketForm, message: text })
+                  setSupportTicketForm({
+                    ...supportTicketForm,
+                    description: text,
+                  })
                 }
                 multiline
                 numberOfLines={6}
@@ -1042,7 +1050,7 @@ const ProfileScreen = ({ navigation }) => {
               style={styles.modalBody}
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.formLabel}>Module</Text>
+              <Text style={styles.formLabel}>Category</Text>
               <View style={styles.chipRow}>
                 {[
                   "general",
@@ -1054,17 +1062,17 @@ const ProfileScreen = ({ navigation }) => {
                   <TouchableOpacity
                     key={mod}
                     onPress={() =>
-                      setBugReportForm({ ...bugReportForm, module: mod })
+                      setBugReportForm({ ...bugReportForm, category: mod })
                     }
                     style={[
                       styles.chip,
-                      bugReportForm.module === mod && styles.chipActive,
+                      bugReportForm.category === mod && styles.chipActive,
                     ]}
                   >
                     <Text
                       style={[
                         styles.chipText,
-                        bugReportForm.module === mod && styles.chipTextActive,
+                        bugReportForm.category === mod && styles.chipTextActive,
                       ]}
                     >
                       {mod.charAt(0).toUpperCase() + mod.slice(1)}

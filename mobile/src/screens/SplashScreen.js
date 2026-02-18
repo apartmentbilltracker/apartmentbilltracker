@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingBottom: 40,
+    paddingBottom: 60,
     gap: 10,
   },
   versionText: { fontSize: 11, fontWeight: "500", letterSpacing: 0.5 },

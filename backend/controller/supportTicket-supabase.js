@@ -8,7 +8,9 @@ const { isAuthenticated } = require("../middleware/auth");
 // Helper to normalize ticket responses for mobile compatibility
 const normalizeResponse = (response) => ({
   ...response,
-  createdAt: response.created_at,
+  // DB uses response_time, mobile expects createdAt
+  createdAt: response.response_time || response.created_at,
+  message: response.response_text || response.message || "",
   responderId: response.responder_id,
   ticketId: response.ticket_id,
 });
@@ -16,6 +18,9 @@ const normalizeResponse = (response) => ({
 // Helper to normalize a ticket object for mobile compatibility
 const normalizeTicket = (ticket) => ({
   ...ticket,
+  // Map DB column variants to consistent names for the mobile app
+  title: ticket.title || ticket.subject || "",
+  description: ticket.description || ticket.message || "",
   createdAt: ticket.created_at,
   userId: ticket.user_id,
   roomId: ticket.room_id,
@@ -31,25 +36,30 @@ router.post("/", isAuthenticated, async (req, res, next) => {
   try {
     const { roomId, title, description, category, priority } = req.body;
 
-    if (!roomId || !title || !description) {
-      return next(
-        new ErrorHandler("Room ID, title, and description are required", 400),
-      );
+    if (!title || !description) {
+      return next(new ErrorHandler("Title and description are required", 400));
     }
 
-    const room = await SupabaseService.findRoomById(roomId);
-    if (!room) {
-      return next(new ErrorHandler("Room not found", 404));
+    // roomId is optional — validate only if provided
+    if (roomId) {
+      const room = await SupabaseService.findRoomById(roomId);
+      if (!room) {
+        return next(new ErrorHandler("Room not found", 404));
+      }
     }
 
+    // DB schema: subject (NOT NULL), message (NOT NULL), user_name (NOT NULL),
+    // user_email (NOT NULL), status, priority, category, room_id, user_id
     const ticket = await SupabaseService.insert("support_tickets", {
-      room_id: roomId,
+      room_id: roomId || null,
       user_id: req.user.id,
-      title,
-      description,
-      category: category || "general",
-      priority: priority || "normal",
+      user_name: req.user.name || req.user.email || "Unknown",
+      user_email: req.user.email || "unknown@app.com",
+      subject: title,
+      message: description,
       status: "open",
+      priority: priority || "medium",
+      category: category || "general",
       created_at: new Date(),
     });
 
@@ -98,7 +108,7 @@ router.get("/room/:roomId", isAuthenticated, async (req, res, next) => {
         "ticket_id",
         ticket.id,
         "*",
-        "created_at",
+        "response_time",
         true,
       );
 
@@ -153,7 +163,7 @@ router.get("/my-tickets", isAuthenticated, async (req, res, next) => {
         "ticket_id",
         ticket.id,
         "*",
-        "created_at",
+        "response_time",
         true,
       );
 
@@ -209,7 +219,7 @@ router.get("/ticket/:ticketId", isAuthenticated, async (req, res, next) => {
       "ticket_id",
       ticketId,
       "*",
-      "created_at",
+      "response_time",
       true,
     );
 
@@ -295,8 +305,9 @@ router.post(
         {
           ticket_id: ticketId,
           responder_id: req.user.id,
-          message,
-          created_at: new Date(),
+          responder_name: req.user.name || req.user.email || "Unknown",
+          response_text: message,
+          response_time: new Date(),
         },
       );
 
@@ -331,7 +342,7 @@ router.get(
           "ticket_id",
           ticketId,
           "*",
-          "created_at",
+          "response_time",
           true,
         )) || [];
 
@@ -344,7 +355,9 @@ router.get(
       }
 
       const sorted = responses.sort(
-        (a, b) => new Date(a.created_at) - new Date(b.created_at),
+        (a, b) =>
+          new Date(a.response_time || a.created_at) -
+          new Date(b.response_time || b.created_at),
       );
 
       res.status(200).json({
@@ -416,6 +429,9 @@ router.get("/all-tickets", isAuthenticated, async (req, res, next) => {
           "support_ticket_responses",
           "ticket_id",
           ticket.id,
+          "*",
+          "response_time",
+          true,
         )) || [];
 
       enrichedTickets.push(
