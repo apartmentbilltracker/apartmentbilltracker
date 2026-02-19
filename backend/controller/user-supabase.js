@@ -16,6 +16,7 @@ const sendMail = require("../utils/sendMail");
 const { isAuthenticated } = require("../middleware/auth");
 const ActivationContent = require("../utils/ActivationContent");
 const ResetPasswordEmail = require("../utils/ResetPasswordEmail");
+const avatarCache = require("../utils/MemoryCache");
 
 // In-memory store for pending users (10-minute expiry)
 const pendingUsers = new Map();
@@ -303,8 +304,10 @@ router.post(
     }
 
     try {
-      // Find user
-      const user = await SupabaseService.findUserByEmail(email);
+      // Find user (need password_hash for bcrypt + avatar for response)
+      const user = await SupabaseService.findUserByEmail(email, {
+        withPassword: true,
+      });
       if (!user) {
         return next(new ErrorHandler("Invalid email or password", 401));
       }
@@ -330,6 +333,16 @@ router.post(
       );
       if (!isPasswordMatch) {
         return next(new ErrorHandler("Invalid email or password", 401));
+      }
+
+      // Block deactivated accounts
+      if (user.is_active === false) {
+        return next(
+          new ErrorHandler(
+            "Your account has been deactivated. Please contact support.",
+            403,
+          ),
+        );
       }
 
       // Generate token
@@ -419,7 +432,9 @@ router.post(
       }
 
       // ── Find or create user ──
-      let user = await SupabaseService.findUserByEmail(email);
+      let user = await SupabaseService.findUserByEmail(email, {
+        withAvatar: true,
+      });
 
       if (!user) {
         // New user — create account
@@ -477,6 +492,16 @@ router.post(
             /* column may not exist yet */
           }
         }
+
+        // Block deactivated accounts
+        if (user.is_active === false) {
+          return next(
+            new ErrorHandler(
+              "Your account has been deactivated. Please contact support.",
+              403,
+            ),
+          );
+        }
       }
 
       const token = signUserToken(user);
@@ -528,7 +553,9 @@ router.post(
       }
 
       // ── Find or create user ──
-      let user = await SupabaseService.findUserByEmail(email);
+      let user = await SupabaseService.findUserByEmail(email, {
+        withAvatar: true,
+      });
 
       if (!user) {
         const userData = {
@@ -580,6 +607,16 @@ router.post(
           } catch (_) {
             /* column may not exist yet */
           }
+        }
+
+        // Block deactivated accounts
+        if (user.is_active === false) {
+          return next(
+            new ErrorHandler(
+              "Your account has been deactivated. Please contact support.",
+              403,
+            ),
+          );
         }
       }
 
@@ -778,7 +815,9 @@ router.get(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const user = await SupabaseService.findUserById(req.user.id);
+      const user = await SupabaseService.findUserById(req.user.id, {
+        withAvatar: true,
+      });
       if (!user) {
         return next(new ErrorHandler("User not found", 404));
       }
@@ -802,7 +841,9 @@ router.get(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const user = await SupabaseService.findUserById(req.user.id);
+      const user = await SupabaseService.findUserById(req.user.id, {
+        withAvatar: true,
+      });
       if (!user) {
         return next(new ErrorHandler("User not found", 404));
       }
@@ -1116,6 +1157,7 @@ router.get(
         avatar: u.avatar,
         role: u.role,
         is_admin: u.is_admin,
+        is_active: u.is_active,
         host_request_status: u.host_request_status,
         created_at: u.created_at,
       }));
@@ -1338,7 +1380,9 @@ router.post(
       const avatars = {};
       for (const email of limitedEmails) {
         try {
-          const user = await SupabaseService.findUserByEmail(email);
+          const user = await SupabaseService.findUserByEmail(email, {
+            withAvatar: true,
+          });
           if (user && user.avatar && user.avatar.url) {
             if (user.avatar.url.startsWith("http")) {
               // External URL (Google/Facebook) — return directly
@@ -1373,13 +1417,26 @@ router.get(
   catchAsyncErrors(async (req, res, next) => {
     try {
       const email = decodeURIComponent(req.params.email).toLowerCase();
-      const user = await SupabaseService.findUserByEmail(email);
 
-      if (!user || !user.avatar || !user.avatar.url) {
-        return res.status(404).send("No avatar");
+      // Check cache first (avoid re-fetching base64 from Supabase)
+      const cacheKey = `avatar:${email}`;
+      let avatarUrl = avatarCache.get(cacheKey);
+
+      if (avatarUrl === undefined) {
+        const user = await SupabaseService.findUserByEmail(email, {
+          withAvatar: true,
+        });
+        if (!user || !user.avatar || !user.avatar.url) {
+          return res.status(404).send("No avatar");
+        }
+        avatarUrl = user.avatar.url;
+        // Cache avatar URL/data for 1 hour
+        avatarCache.set(cacheKey, avatarUrl, 3600);
       }
 
-      const avatarUrl = user.avatar.url;
+      if (!avatarUrl) {
+        return res.status(404).send("No avatar");
+      }
 
       // If it's an external URL, redirect to it
       if (avatarUrl.startsWith("http")) {

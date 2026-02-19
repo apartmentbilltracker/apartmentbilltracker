@@ -3,9 +3,9 @@
     "name": "Apartment Bill Tracker",
     "slug": "apartment-bill-tracker",
     "icon": "./src/assets/icon.png",
-    "version": "1.1.5",
+    "version": "1.1.6",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "scheme": "aptbilltracker",
     "splash": {
       "resizeMode": "contain",
@@ -15,11 +15,13 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apartmentbilltracker.ios",
-      "scheme": "aptbilltracker"
+      "scheme": "aptbilltracker",
+      "userInterfaceStyle": "automatic"
     },
     "android": {
       "package": "com.apartmentbilltracker",
-      "scheme": "aptbilltracker"
+      "scheme": "aptbilltracker",
+      "userInterfaceStyle": "automatic"
     },
     "plugins": [
       [

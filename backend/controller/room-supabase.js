@@ -206,7 +206,12 @@ router.get("/", isAuthenticated, async (req, res, next) => {
           end: activeCycle.end_date,
           rent: activeCycle.rent || 0,
           electricity: activeCycle.electricity || 0,
-          water: activeCycle.water_bill_amount || 0,
+          water: computeDynamicWater(
+            rooms[i].members,
+            activeCycle.start_date,
+            activeCycle.end_date,
+            activeCycle.water_bill_amount || 0,
+          ),
           internet: activeCycle.internet || 0,
           previousReading: activeCycle.previous_meter_reading ?? null,
           currentReading: activeCycle.current_meter_reading ?? null,
@@ -299,7 +304,12 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
           end: activeCycle.end_date,
           rent: activeCycle.rent || 0,
           electricity: activeCycle.electricity || 0,
-          water: activeCycle.water_bill_amount || 0,
+          water: computeDynamicWater(
+            membersPerRoom[i],
+            activeCycle.start_date,
+            activeCycle.end_date,
+            activeCycle.water_bill_amount || 0,
+          ),
           internet: activeCycle.internet || 0,
           previousReading: activeCycle.previous_meter_reading ?? null,
           currentReading: activeCycle.current_meter_reading ?? null,
@@ -399,6 +409,32 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
 // ============================================================
 // ADMIN: ALL ROOMS OVERVIEW (with member counts & owner info)
 // ============================================================
+
+/**
+ * Compute the total water bill for a billing cycle.
+ * If the cycle already has a stored water_bill_amount > 0, use that (admin set it).
+ * Otherwise compute dynamically from member presence data (₱5/day).
+ */
+function computeDynamicWater(
+  members,
+  cycleStartDate,
+  cycleEndDate,
+  storedAmount,
+) {
+  if (storedAmount > 0) return storedAmount;
+  const start = new Date(cycleStartDate);
+  const end = new Date(cycleEndDate);
+  const total = (members || []).reduce((sum, m) => {
+    const presenceArr = Array.isArray(m.presence) ? m.presence : [];
+    const days = presenceArr.filter((d) => {
+      const day = new Date(d);
+      return day >= start && day <= end;
+    }).length;
+    return sum + days * 5;
+  }, 0);
+  return Math.round(total * 100) / 100;
+}
+
 router.get("/admin/all", isAuthenticated, async (req, res, next) => {
   try {
     const requester = await SupabaseService.findUserById(req.user.id);
@@ -480,7 +516,12 @@ router.get("/admin/all", isAuthenticated, async (req, res, next) => {
               endDate: activeCycle.end_date,
               rent: activeCycle.rent || 0,
               electricity: activeCycle.electricity || 0,
-              water: activeCycle.water_bill_amount || 0,
+              water: computeDynamicWater(
+                members,
+                activeCycle.start_date,
+                activeCycle.end_date,
+                activeCycle.water_bill_amount || 0,
+              ),
               internet: activeCycle.internet || 0,
             }
           : null,
@@ -722,7 +763,12 @@ router.get("/:id", async (req, res, next) => {
         end: activeCycle.end_date,
         rent: activeCycle.rent || 0,
         electricity: activeCycle.electricity || 0,
-        water: activeCycle.water_bill_amount || 0,
+        water: computeDynamicWater(
+          members,
+          activeCycle.start_date,
+          activeCycle.end_date,
+          activeCycle.water_bill_amount || 0,
+        ),
         internet: activeCycle.internet || 0,
         previousReading: activeCycle.previous_meter_reading ?? null,
         currentReading: activeCycle.current_meter_reading ?? null,
