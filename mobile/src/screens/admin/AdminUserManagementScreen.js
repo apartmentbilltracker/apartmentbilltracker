@@ -241,7 +241,13 @@ const AdminUserManagementScreen = ({ navigation }) => {
               )}
               {isInactive && (
                 <View style={styles.inactiveBadge}>
-                  <Text style={styles.inactiveBadgeText}>Inactive</Text>
+                  <Ionicons
+                    name="ban-outline"
+                    size={9}
+                    color="#E74C3C"
+                    style={{ marginRight: 2 }}
+                  />
+                  <Text style={styles.inactiveBadgeText}>Deactivated</Text>
                 </View>
               )}
             </View>
@@ -883,10 +889,14 @@ const createStyles = (colors) =>
       color: "#b38604",
     },
     inactiveBadge: {
+      flexDirection: "row",
+      alignItems: "center",
       paddingHorizontal: 6,
       paddingVertical: 2,
       borderRadius: 4,
-      backgroundColor: "rgba(231,76,60,0.12)",
+      backgroundColor: "rgba(231,76,60,0.15)",
+      borderWidth: 1,
+      borderColor: "rgba(231,76,60,0.3)",
     },
     inactiveBadgeText: {
       fontSize: 9,

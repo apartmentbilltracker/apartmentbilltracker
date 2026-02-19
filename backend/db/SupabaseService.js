@@ -232,6 +232,18 @@ class SupabaseService {
   // ============ USER OPERATIONS ============
 
   /**
+   * Columns to select for user queries — excludes `avatar` (2-5MB base64)
+   * and `password_hash` to reduce Supabase egress.
+   * Use USER_COLS_WITH_AVATAR only when avatar is explicitly needed.
+   */
+  static USER_COLS =
+    "id, name, email, username, role, is_admin, auth_provider, expo_push_token, phone_number, gender, date_of_birth, is_active, host_request_status, created_at, updated_at";
+  static USER_COLS_WITH_AVATAR =
+    "id, name, email, username, role, is_admin, avatar, auth_provider, expo_push_token, phone_number, gender, date_of_birth, is_active, host_request_status, created_at, updated_at";
+  static USER_COLS_AUTH =
+    "id, name, email, password_hash, username, role, is_admin, avatar, auth_provider, expo_push_token, phone_number, gender, date_of_birth, is_active, host_request_status, created_at, updated_at";
+
+  /**
    * Parse user data to ensure avatar is properly formatted
    * @param {object} user - User object from database
    * @returns {object} Formatted user object
@@ -256,26 +268,44 @@ class SupabaseService {
     return this.insert("users", userData);
   }
 
-  static async findUserByEmail(email) {
-    const user = await this.selectByColumn("users", "email", email);
+  /**
+   * Find user by email — default: no avatar (lightweight)
+   * Pass { withAvatar: true } for login/profile endpoints that need it
+   */
+  static async findUserByEmail(
+    email,
+    { withAvatar = false, withPassword = false } = {},
+  ) {
+    const cols = withPassword
+      ? this.USER_COLS_AUTH
+      : withAvatar
+        ? this.USER_COLS_WITH_AVATAR
+        : this.USER_COLS;
+    const user = await this.selectByColumn("users", "email", email, cols);
     return this.formatUserData(user);
   }
 
-  static async findUserById(id) {
-    const user = await this.selectByColumn("users", "id", id);
+  /**
+   * Find user by ID — default: no avatar (lightweight)
+   * Pass { withAvatar: true } for profile endpoints that need it
+   */
+  static async findUserById(id, { withAvatar = false } = {}) {
+    const cols = withAvatar ? this.USER_COLS_WITH_AVATAR : this.USER_COLS;
+    const user = await this.selectByColumn("users", "id", id, cols);
     return this.formatUserData(user);
   }
 
   /**
    * Batch-fetch multiple users by IDs in a single query
-   * Returns a Map of userId → formatted user data
+   * Returns a Map of userId → formatted user data (no avatar by default)
    */
-  static async findUsersByIds(ids) {
+  static async findUsersByIds(ids, { withAvatar = false } = {}) {
     if (!ids || ids.length === 0) return new Map();
     const uniqueIds = [...new Set(ids)];
+    const cols = withAvatar ? this.USER_COLS_WITH_AVATAR : this.USER_COLS;
     const { data, error } = await supabase
       .from("users")
-      .select("*")
+      .select(cols)
       .in("id", uniqueIds);
     if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
     const map = new Map();
@@ -290,6 +320,7 @@ class SupabaseService {
       "users",
       "phone_number",
       phoneNumber,
+      this.USER_COLS,
     );
     return this.formatUserData(user);
   }
@@ -300,7 +331,7 @@ class SupabaseService {
   }
 
   static async getAllUsers() {
-    return this.selectAllRecords("users");
+    return this.selectAllRecords("users", this.USER_COLS);
   }
 
   // ============ ADDRESS OPERATIONS ============

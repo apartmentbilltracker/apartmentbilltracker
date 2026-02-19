@@ -18,6 +18,16 @@ exports.isAuthenticated = catchAsyncErrors(async (req, res, next) => {
       return next(new ErrorHandler("Please login to continue", 401));
     }
 
+    // Block deactivated accounts from all API calls
+    if (req.user.is_active === false) {
+      return next(
+        new ErrorHandler(
+          "Your account has been deactivated. Please contact support.",
+          403,
+        ),
+      );
+    }
+
     next();
   } catch (error) {
     return next(new ErrorHandler("Please login to continue", 401));

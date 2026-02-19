@@ -12,6 +12,7 @@ import {
   Image,
   Modal,
   Dimensions,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -39,6 +40,19 @@ const AMENITY_MAP = {
 const AdminRoomDetailScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+
+  const openInMaps = (r) => {
+    const lat = r.latitude;
+    const lng = r.longitude;
+    const label = encodeURIComponent(r.name || "Location");
+    const url =
+      Platform.OS === "ios"
+        ? `maps:0,0?q=${label}@${lat},${lng}`
+        : `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
+    Linking.openURL(url).catch(() =>
+      Linking.openURL(`https://maps.google.com/?q=${lat},${lng}`),
+    );
+  };
   const styles = createStyles(colors, insets);
 
   const [room, setRoom] = useState(route.params?.room || null);
@@ -832,13 +846,14 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
             animationType="slide"
             onRequestClose={() => setFullMapRoom(null)}
           >
-            <View style={{ flex: 1, backgroundColor: colors.background }}>
+            <View style={{ flex: 1, backgroundColor: "#000" }}>
               <SafeMapView
                 style={{ flex: 1 }}
                 latitude={fullMapRoom.latitude}
                 longitude={fullMapRoom.longitude}
                 title={fullMapRoom.name}
                 interactive
+                hideOpenBtn
               />
               {/* Floating header */}
               <View style={styles.fullMapHeader}>
@@ -846,19 +861,32 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
                   style={styles.fullMapBackBtn}
                   onPress={() => setFullMapRoom(null)}
                 >
-                  <Ionicons name="arrow-back" size={22} color={colors.text} />
+                  <Ionicons name="arrow-back" size={20} color="#fff" />
                 </TouchableOpacity>
-                <Text style={styles.fullMapTitle} numberOfLines={1}>
-                  {fullMapRoom.name}
-                </Text>
+                <View style={styles.fullMapTitleWrap}>
+                  <Text style={styles.fullMapTitle} numberOfLines={1}>
+                    {fullMapRoom.name}
+                  </Text>
+                  <Text style={styles.fullMapSubtitle}>
+                    Tap & drag to explore
+                  </Text>
+                </View>
               </View>
               {/* Floating address bar */}
               {fullMapRoom.address ? (
                 <View style={styles.fullMapAddressBar}>
-                  <Ionicons name="location" size={16} color={colors.accent} />
+                  <Ionicons name="location" size={17} color={colors.accent} />
                   <Text style={styles.fullMapAddressText} numberOfLines={2}>
                     {fullMapRoom.address}
                   </Text>
+                  <TouchableOpacity
+                    style={styles.fullMapOpenBtn}
+                    onPress={() => openInMaps(fullMapRoom)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="navigate" size={14} color="#fff" />
+                    <Text style={styles.fullMapOpenBtnText}>Maps</Text>
+                  </TouchableOpacity>
                 </View>
               ) : null}
             </View>
@@ -1368,67 +1396,96 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     /* Full Map Modal */
     fullMapHeader: {
       position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
+      top: Math.max(16, insets.top + 8),
+      left: 16,
+      right: 16,
       flexDirection: "row",
       alignItems: "center",
-      paddingTop: Math.max(16, insets.top + 6),
-      paddingHorizontal: 16,
-      paddingBottom: 12,
-      backgroundColor: "rgba(255,255,255,0.92)",
-      gap: 12,
+      gap: 10,
+      backgroundColor: "rgba(15,15,15,0.85)",
+      borderRadius: 20,
+      paddingVertical: 8,
+      paddingLeft: 8,
+      paddingRight: 14,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.1)",
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.35,
+          shadowOffset: { width: 0, height: 4 },
+          shadowRadius: 12,
+        },
+        android: { elevation: 14 },
+      }),
     },
     fullMapBackBtn: {
       width: 38,
       height: 38,
       borderRadius: 19,
-      backgroundColor: colors.card,
+      backgroundColor: "rgba(255,255,255,0.12)",
       justifyContent: "center",
       alignItems: "center",
-      ...Platform.select({
-        ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.1,
-          shadowOffset: { width: 0, height: 2 },
-          shadowRadius: 4,
-        },
-        android: { elevation: 3 },
-      }),
+    },
+    fullMapTitleWrap: {
+      flex: 1,
     },
     fullMapTitle: {
       flex: 1,
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: "700",
-      color: colors.text,
+      color: "#fff",
+      letterSpacing: 0.1,
+    },
+    fullMapSubtitle: {
+      fontSize: 11,
+      color: "rgba(255,255,255,0.5)",
+      marginTop: 1,
     },
     fullMapAddressBar: {
       position: "absolute",
-      bottom: 24,
+      bottom: Math.max(24, insets.bottom + 16),
       left: 16,
       right: 16,
       flexDirection: "row",
       alignItems: "center",
-      gap: 8,
-      backgroundColor: "rgba(255,255,255,0.95)",
-      borderRadius: 12,
+      gap: 10,
       paddingHorizontal: 14,
       paddingVertical: 12,
+      backgroundColor: "rgba(15,15,15,0.85)",
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.1)",
       ...Platform.select({
         ios: {
           shadowColor: "#000",
-          shadowOpacity: 0.1,
-          shadowOffset: { width: 0, height: 2 },
-          shadowRadius: 6,
+          shadowOpacity: 0.35,
+          shadowOffset: { width: 0, height: 4 },
+          shadowRadius: 12,
         },
-        android: { elevation: 4 },
+        android: { elevation: 14 },
       }),
     },
     fullMapAddressText: {
       flex: 1,
       fontSize: 13,
-      color: colors.text,
-      lineHeight: 18,
+      color: "rgba(255,255,255,0.88)",
+      fontWeight: "500",
+      lineHeight: 20,
+    },
+    fullMapOpenBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+    },
+    fullMapOpenBtnText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#fff",
     },
   });
 

@@ -126,6 +126,7 @@ const SafeMapView = ({
   style: containerStyle,
   markerColor = "#e74c3c",
   onPress,
+  hideOpenBtn = false,
   children, // ignored – kept for compat
 }) => {
   const webRef = useRef(null);
@@ -170,7 +171,7 @@ const SafeMapView = ({
   <style>
     * { margin: 0; padding: 0; }
     html, body, #map { width: 100%; height: 100%; }
-    .leaflet-control-zoom { margin-top: 60px !important; margin-right: 12px !important; }
+    .leaflet-control-zoom { margin-top: 130px !important; margin-right: 14px !important; }
     .leaflet-control-zoom a { width: 36px !important; height: 36px !important; line-height: 36px !important; font-size: 20px !important; border-radius: 10px !important; }
     .leaflet-control-zoom a:first-child { border-radius: 10px 10px 0 0 !important; }
     .leaflet-control-zoom a:last-child { border-radius: 0 0 10px 10px !important; }
@@ -231,14 +232,16 @@ const SafeMapView = ({
         showsHorizontalScrollIndicator={false}
         overScrollMode="never"
       />
-      <TouchableOpacity
-        style={styles.openBtn}
-        activeOpacity={0.8}
-        onPress={openInMaps}
-      >
-        <Ionicons name="navigate-outline" size={16} color="#fff" />
-        <Text style={styles.openBtnText}>Open in Maps</Text>
-      </TouchableOpacity>
+      {!hideOpenBtn && (
+        <TouchableOpacity
+          style={styles.openBtn}
+          activeOpacity={0.8}
+          onPress={openInMaps}
+        >
+          <Ionicons name="navigate-outline" size={16} color="#fff" />
+          <Text style={styles.openBtnText}>Open in Maps</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
