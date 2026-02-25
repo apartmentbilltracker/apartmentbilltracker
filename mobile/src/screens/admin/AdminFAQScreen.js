@@ -18,12 +18,6 @@ import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 
 const GOLD = "#b38604";
-const BG = "#f5f6fa";
-const TEXT = "#1a1a2e";
-const CARD = "#fff";
-const MUTED = "#6b7280";
-const BORDER = "#e5e7eb";
-
 const getCategoryColor = (category) => {
   switch (category) {
     case "billing":
@@ -254,7 +248,7 @@ const AdminFAQScreen = () => {
           <Ionicons
             name="grid-outline"
             size={13}
-            color={categoryFilter === "all" ? "#fff" : MUTED}
+            color={categoryFilter === "all" ? "#fff" : colors.textSecondary}
             style={{ marginRight: 5 }}
           />
           <Text
@@ -279,7 +273,7 @@ const AdminFAQScreen = () => {
               <Ionicons
                 name={getCategoryIcon(category)}
                 size={13}
-                color={active ? "#fff" : MUTED}
+                color={active ? "#fff" : colors.textSecondary}
                 style={{ marginRight: 5 }}
               />
               <Text
@@ -393,7 +387,7 @@ const AdminFAQScreen = () => {
 
                   <View style={styles.statsRow}>
                     <View style={styles.statItem}>
-                      <Ionicons name="eye-outline" size={13} color={MUTED} />
+                      <Ionicons name="eye-outline" size={13} color={colors.textSecondary} />
                       <Text style={styles.statText}>{item.views || 0}</Text>
                     </View>
                     <View style={styles.statItem}>
@@ -455,7 +449,7 @@ const AdminFAQScreen = () => {
                 onPress={() => setModalVisible(false)}
                 style={styles.modalClose}
               >
-                <Ionicons name="close" size={22} color={MUTED} />
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -646,12 +640,12 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    loadingText: { marginTop: 12, color: MUTED, fontSize: 14 },
+    loadingText: { marginTop: 12, color: colors.textSecondary, fontSize: 14 },
 
     /* Summary */
     summaryStrip: {
       flexDirection: "row",
-      backgroundColor: CARD,
+      backgroundColor: colors.card,
       marginHorizontal: 16,
       marginTop: 12,
       borderRadius: 14,
@@ -672,14 +666,14 @@ const createStyles = (colors) =>
     summaryValue: { fontSize: 20, fontWeight: "800", color: GOLD },
     summaryLabel: {
       fontSize: 11,
-      color: MUTED,
+      color: colors.textSecondary,
       marginTop: 2,
       fontWeight: "500",
     },
     summaryDivider: {
       width: StyleSheet.hairlineWidth,
       height: 28,
-      backgroundColor: BORDER,
+      backgroundColor: colors.border,
     },
     createBtn: {
       flex: 1,
@@ -709,9 +703,9 @@ const createStyles = (colors) =>
       marginBottom: 16,
       minHeight: 50,
       borderRadius: 20,
-      backgroundColor: CARD,
+      backgroundColor: colors.card,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: colors.border,
       marginVertical: 0,
     },
     filterChipActive: {
@@ -720,7 +714,7 @@ const createStyles = (colors) =>
     },
     filterChipText: {
       fontSize: 13,
-      color: MUTED,
+      color: colors.textSecondary,
       fontWeight: "600",
       textAlignVertical: "center",
     },
@@ -732,7 +726,7 @@ const createStyles = (colors) =>
       marginHorizontal: 16,
       marginBottom: 18,
       borderRadius: 18,
-      backgroundColor: CARD,
+      backgroundColor: colors.card,
       overflow: "hidden",
       ...Platform.select({
         ios: {
@@ -744,7 +738,7 @@ const createStyles = (colors) =>
         android: { elevation: 5 },
       }),
       borderWidth: 1,
-      borderColor: BORDER + "80",
+      borderColor: colors.border + "80",
     },
     cardAccent: { width: 4 },
     cardBody: { flex: 1, paddingHorizontal: 14, paddingVertical: 12 },
@@ -768,10 +762,10 @@ const createStyles = (colors) =>
       flex: 1,
       fontSize: 14,
       fontWeight: "700",
-      color: TEXT,
+      color: colors.text,
       lineHeight: 20,
     },
-    faqAnswer: { flex: 1, fontSize: 13, color: MUTED, lineHeight: 18 },
+    faqAnswer: { flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
     faqActions: {
       position: "absolute",
       top: 8,
@@ -795,7 +789,7 @@ const createStyles = (colors) =>
     },
     cardSeparator: {
       height: 1,
-      backgroundColor: BORDER + "60",
+      backgroundColor: colors.border + "60",
       marginVertical: 12,
     },
     cardMetaRow: {
@@ -811,8 +805,8 @@ const createStyles = (colors) =>
       borderRadius: 12,
       gap: 5,
       borderWidth: 1,
-      borderColor: BORDER,
-      backgroundColor: CARD,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
       shadowColor: "#000",
       shadowOpacity: 0.04,
       shadowRadius: 2,
@@ -821,7 +815,7 @@ const createStyles = (colors) =>
     categoryChipText: { fontSize: 12, fontWeight: "700" },
     statsRow: { flexDirection: "row", gap: 16 },
     statItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-    statText: { fontSize: 12, color: MUTED, fontWeight: "600" },
+    statText: { fontSize: 12, color: colors.textSecondary, fontWeight: "600" },
 
     /* Empty */
     emptyWrap: {
@@ -838,8 +832,8 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginBottom: 16,
     },
-    emptyTitle: { fontSize: 16, fontWeight: "700", color: TEXT },
-    emptySub: { fontSize: 13, color: MUTED, marginTop: 4 },
+    emptyTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+    emptySub: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
 
     /* Modal */
     modalOverlay: {
@@ -854,7 +848,7 @@ const createStyles = (colors) =>
       maxWidth: 420,
       alignSelf: "center",
       maxHeight: "92%",
-      backgroundColor: CARD,
+      backgroundColor: colors.card,
       borderRadius: 22,
       overflow: "hidden",
       ...Platform.select({
@@ -867,7 +861,7 @@ const createStyles = (colors) =>
         android: { elevation: 12 },
       }),
       borderWidth: 1,
-      borderColor: BORDER + "80",
+      borderColor: colors.border + "80",
     },
     modalHeader: {
       flexDirection: "row",
@@ -875,7 +869,7 @@ const createStyles = (colors) =>
       paddingHorizontal: 16,
       paddingVertical: 14,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: BORDER,
+      borderBottomColor: colors.border,
     },
     modalIconWrap: {
       width: 36,
@@ -886,7 +880,7 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginRight: 10,
     },
-    modalTitle: { flex: 1, fontSize: 17, fontWeight: "700", color: TEXT },
+    modalTitle: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.text },
     modalClose: {
       width: 34,
       height: 34,
@@ -913,15 +907,15 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    formLabel: { fontSize: 13, fontWeight: "700", color: TEXT },
+    formLabel: { fontSize: 13, fontWeight: "700", color: colors.text },
     formInput: {
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: colors.border,
       borderRadius: 12,
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 14,
-      color: TEXT,
+      color: colors.text,
       backgroundColor: colors.background,
     },
     formTextarea: { minHeight: 100, textAlignVertical: "top" },
@@ -933,11 +927,11 @@ const createStyles = (colors) =>
       paddingVertical: 9,
       borderRadius: 20,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: colors.border,
       backgroundColor: colors.background,
       gap: 6,
     },
-    categoryPickerText: { fontSize: 12, color: MUTED, fontWeight: "600" },
+    categoryPickerText: { fontSize: 12, color: colors.textSecondary, fontWeight: "600" },
 
     /* Save Button */
     saveBtn: {

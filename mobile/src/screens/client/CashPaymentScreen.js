@@ -1,4 +1,4 @@
-import React, { useState, useMemo} from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as MediaLibrary from "expo-media-library";
+import { captureRef } from "react-native-view-shot";
 import apiService from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 
@@ -27,6 +29,8 @@ const CashPaymentScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const [transactionId, setTransactionId] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const receiptRef = React.useRef(null);
 
   const handleRecordCash = async () => {
     if (!receiptNumber.trim()) {
@@ -70,6 +74,27 @@ const CashPaymentScreen = ({ navigation, route }) => {
       Alert.alert("Error", error.message || "Failed to record cash payment");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadReceipt = async () => {
+    try {
+      setReceiptLoading(true);
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please allow gallery access to save the receipt.",
+        );
+        return;
+      }
+      const uri = await captureRef(receiptRef, { format: "png", quality: 1 });
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert("Saved!", "Receipt image saved to your gallery.");
+    } catch (error) {
+      Alert.alert("Error", "Failed to save receipt. Please try again.");
+    } finally {
+      setReceiptLoading(false);
     }
   };
 
@@ -243,50 +268,75 @@ const CashPaymentScreen = ({ navigation, route }) => {
 
         {step === "success" && (
           <View style={styles.successContainer}>
-            <View style={styles.successIconCircle}>
-              <Ionicons name="checkmark-circle" size={56} color="#43a047" />
-            </View>
+            <View
+              ref={receiptRef}
+              collapsable={false}
+              style={styles.receiptCapture}
+            >
+              <View style={styles.successIconCircle}>
+                <Ionicons name="checkmark-circle" size={56} color="#43a047" />
+              </View>
 
-            <Text style={styles.successTitle}>Payment Recorded!</Text>
-            <Text style={styles.successSubtitle}>
-              Awaiting admin verification
-            </Text>
+              <Text style={styles.successTitle}>Payment Recorded!</Text>
+              <Text style={styles.successSubtitle}>
+                Awaiting admin verification
+              </Text>
 
-            <View style={styles.successCard}>
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Amount</Text>
-                <Text style={styles.successValue}>₱{amount.toFixed(2)}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Receipt No.</Text>
-                <Text style={styles.successValue}>{receiptNumber}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Received By</Text>
-                <Text style={styles.successValue}>{receivedBy}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Witness</Text>
-                <Text style={styles.successValue}>{witnessName}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Bill Type</Text>
-                <Text style={styles.successValue}>
-                  {billType.charAt(0).toUpperCase() + billType.slice(1)}
-                </Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Room</Text>
-                <Text style={styles.successValue}>{roomName}</Text>
+              <View style={styles.successCard}>
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Amount</Text>
+                  <Text style={styles.successValue}>₱{amount.toFixed(2)}</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Receipt No.</Text>
+                  <Text style={styles.successValue}>{receiptNumber}</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Received By</Text>
+                  <Text style={styles.successValue}>{receivedBy}</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Witness</Text>
+                  <Text style={styles.successValue}>{witnessName}</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Bill Type</Text>
+                  <Text style={styles.successValue}>
+                    {billType.charAt(0).toUpperCase() + billType.slice(1)}
+                  </Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Room</Text>
+                  <Text style={styles.successValue}>{roomName}</Text>
+                </View>
               </View>
             </View>
 
             <View style={styles.successButtons}>
+              <TouchableOpacity
+                style={styles.downloadReceiptBtn}
+                onPress={handleDownloadReceipt}
+                disabled={receiptLoading}
+                activeOpacity={0.8}
+              >
+                {receiptLoading ? (
+                  <ActivityIndicator color={colors.accent} size="small" />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="download-outline"
+                      size={18}
+                      color={colors.accent}
+                    />
+                    <Text style={styles.downloadReceiptText}>Save Receipt</Text>
+                  </>
+                )}
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.historyButton}
                 onPress={() =>
@@ -307,7 +357,11 @@ const CashPaymentScreen = ({ navigation, route }) => {
                   navigation.navigate("BillsMain", { refresh: true })
                 }
               >
-                <Ionicons name="receipt-outline" size={18} color={colors.textOnAccent} />
+                <Ionicons
+                  name="receipt-outline"
+                  size={18}
+                  color={colors.textOnAccent}
+                />
                 <Text style={styles.billsButtonText}>Back to Bills</Text>
               </TouchableOpacity>
             </View>
@@ -395,438 +449,460 @@ const CashPaymentScreen = ({ navigation, route }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerContent: {
-    flex: 1,
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    marginTop: 2,
-  },
-  content: {
-    flex: 1,
-    padding: 14,
-  },
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: colors.card,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.divider,
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerContent: {
+      flex: 1,
+      alignItems: "center",
+    },
+    title: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    content: {
+      flex: 1,
+      padding: 14,
+    },
 
-  /* Amount Card */
-  amountCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    paddingVertical: 22,
-    paddingHorizontal: 20,
-    marginBottom: 14,
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#b38604",
-    shadowColor: "#b38604",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  amountLabel: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  amountValue: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: colors.accent,
-    marginTop: 6,
-  },
-  billTypeText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 6,
-    fontWeight: "500",
-  },
+    /* Amount Card */
+    amountCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      paddingVertical: 22,
+      paddingHorizontal: 20,
+      marginBottom: 14,
+      alignItems: "center",
+      borderWidth: 1.5,
+      borderColor: "#b38604",
+      shadowColor: "#b38604",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    amountLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    amountValue: {
+      fontSize: 34,
+      fontWeight: "800",
+      color: colors.accent,
+      marginTop: 6,
+    },
+    billTypeText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 6,
+      fontWeight: "500",
+    },
 
-  /* Step Badge */
-  stepBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.warningBg,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 8,
-  },
-  stepBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.accent,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
+    /* Step Badge */
+    stepBadge: {
+      alignSelf: "flex-start",
+      backgroundColor: colors.warningBg,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      marginBottom: 8,
+    },
+    stepBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
 
-  /* Cards */
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 16,
-  },
+    /* Cards */
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 16,
+    },
 
-  /* Form */
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.textTertiary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  required: {
-    color: "#e53935",
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    backgroundColor: colors.cardAlt,
-    paddingHorizontal: 12,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  inputWithIcon: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.text,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.text,
-    backgroundColor: colors.cardAlt,
-  },
-  multilineInput: {
-    textAlignVertical: "top",
-    paddingTop: 12,
-    minHeight: 100,
-  },
-  inputHint: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    marginTop: 6,
-  },
+    /* Form */
+    formGroup: {
+      marginBottom: 16,
+    },
+    label: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 6,
+    },
+    required: {
+      color: "#e53935",
+    },
+    inputWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.cardAlt,
+      paddingHorizontal: 12,
+    },
+    inputIcon: {
+      marginRight: 10,
+    },
+    inputWithIcon: {
+      flex: 1,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+      backgroundColor: colors.cardAlt,
+    },
+    multilineInput: {
+      textAlignVertical: "top",
+      paddingTop: 12,
+      minHeight: 100,
+    },
+    inputHint: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 6,
+    },
 
-  /* Info Card */
-  infoCard: {
-    flexDirection: "row",
-    backgroundColor: colors.warningBg,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-    gap: 12,
-    alignItems: "flex-start",
-  },
-  infoIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: colors.accentSurface,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 1,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.accent,
-  },
-  infoText: {
-    fontSize: 12,
-    color: colors.accent,
-    marginTop: 3,
-    lineHeight: 17,
-  },
+    /* Info Card */
+    infoCard: {
+      flexDirection: "row",
+      backgroundColor: colors.warningBg,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 14,
+      gap: 12,
+      alignItems: "flex-start",
+    },
+    infoIconCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: 1,
+    },
+    infoContent: {
+      flex: 1,
+    },
+    infoTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    infoText: {
+      fontSize: 12,
+      color: colors.accent,
+      marginTop: 3,
+      lineHeight: 17,
+    },
 
-  /* Submit Button */
-  submitButton: {
-    flexDirection: "row",
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  disabled: {
-    opacity: 0.6,
-  },
+    /* Submit Button */
+    submitButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+    },
+    submitButtonText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    disabled: {
+      opacity: 0.6,
+    },
 
-  /* Success */
-  successContainer: {
-    alignItems: "center",
-    paddingVertical: 30,
-  },
-  successIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.successBg,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  successTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.text,
-    marginBottom: 4,
-  },
-  successSubtitle: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    marginBottom: 24,
-  },
-  successCard: {
-    width: "100%",
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  successRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-  },
-  successLabel: {
-    fontSize: 13,
-    color: colors.textTertiary,
-  },
-  successValue: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.skeleton,
-    marginVertical: 4,
-  },
-  successButtons: {
-    width: "100%",
-    gap: 10,
-  },
-  historyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingVertical: 13,
-    gap: 6,
-  },
-  historyButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.accent,
-  },
-  billsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 13,
-    gap: 6,
-  },
-  billsButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#fff",
-  },
+    /* Success */
+    successContainer: {
+      alignItems: "center",
+      paddingVertical: 30,
+    },
+    successIconCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.successBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    successTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    successSubtitle: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginBottom: 24,
+    },
+    successCard: {
+      width: "100%",
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 24,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    successRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingVertical: 8,
+    },
+    successLabel: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+    successValue: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.skeleton,
+      marginVertical: 4,
+    },
+    successButtons: {
+      width: "100%",
+      gap: 10,
+    },
+    receiptCapture: {
+      width: "100%",
+      alignItems: "center",
+      backgroundColor: colors.background,
+      paddingTop: 4,
+    },
+    downloadReceiptBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 13,
+      gap: 6,
+    },
+    downloadReceiptText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+    historyButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingVertical: 13,
+      gap: 6,
+    },
+    historyButtonText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+    billsButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 13,
+      gap: 6,
+    },
+    billsButtonText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#fff",
+    },
 
-  /* Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    maxHeight: "80%",
-  },
-  modalDragHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.skeleton,
-    alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  modalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalAmountRow: {
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  modalAmountLabel: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  modalAmountValue: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: colors.accent,
-    marginTop: 4,
-  },
-  confirmationDetails: {
-    backgroundColor: colors.background,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 20,
-  },
-  confirmRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  confirmLabel: {
-    fontSize: 13,
-    color: colors.textTertiary,
-  },
-  confirmValue: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: "700",
-  },
-  confirmDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.skeleton,
-    marginVertical: 4,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  modalCancelButton: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalCancelButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.textSecondary,
-  },
-  modalConfirmButton: {
-    flex: 1,
-    flexDirection: "row",
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalConfirmButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#fff",
-  },
-});
+    /* Modal */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.4)",
+      justifyContent: "flex-end",
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingHorizontal: 20,
+      paddingBottom: 24,
+      maxHeight: "80%",
+    },
+    modalDragHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.skeleton,
+      alignSelf: "center",
+      marginTop: 10,
+      marginBottom: 6,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.divider,
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    modalCloseButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalAmountRow: {
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    modalAmountLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    modalAmountValue: {
+      fontSize: 28,
+      fontWeight: "800",
+      color: colors.accent,
+      marginTop: 4,
+    },
+    confirmationDetails: {
+      backgroundColor: colors.background,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 20,
+    },
+    confirmRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 8,
+    },
+    confirmLabel: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+    confirmValue: {
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: "700",
+    },
+    confirmDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.skeleton,
+      marginVertical: 4,
+    },
+    modalButtons: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    modalCancelButton: {
+      flex: 1,
+      paddingVertical: 13,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalCancelButtonText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    modalConfirmButton: {
+      flex: 1,
+      flexDirection: "row",
+      paddingVertical: 13,
+      borderRadius: 12,
+      backgroundColor: colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalConfirmButtonText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#fff",
+    },
+  });
 
 export default CashPaymentScreen;

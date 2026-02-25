@@ -178,24 +178,37 @@ const BillsScreen = ({ navigation }) => {
       ? r2(billing.internet / payorCount)
       : 0;
 
-    // Calculate water share inline in fallback to avoid timing issues
+    // Check water billing mode
+    const isFixedWater =
+      selectedRoom.waterBillingMode === "fixed_monthly" ||
+      selectedRoom.water_billing_mode === "fixed_monthly";
+
     // Get current user's member object
     const currentUserMember = selectedRoom.members.find(
       (m) => String(m.user?.id || m.user?._id || m.user) === String(userId),
     );
 
     let waterShare = 0;
-    if (
+    if (isFixedWater) {
+      // Fixed monthly: split total fixed amount among payors
+      const fixedTotal =
+        parseFloat(
+          selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || 0,
+        ) || 0;
+      if (currentUserMember?.isPayer) {
+        waterShare = r2(fixedTotal / payorCount);
+      }
+    } else if (
       currentUserMember?.isPayer &&
       memberPresence[currentUserMember.id || currentUserMember._id]
     ) {
-      // Current user's own water consumption (filtered by billing dates)
+      // Presence-based: current user's own water consumption
       const userPresenceDays = getFilteredPresence(
         currentUserMember.id || currentUserMember._id,
       ).length;
       const userOwnWater = userPresenceDays * WATER_BILL_PER_DAY;
 
-      // Non-payors' water to split (filtered by billing dates)
+      // Non-payors' water to split
       let nonPayorWater = 0;
       members.forEach((m) => {
         if (!m.isPayer) {
@@ -232,7 +245,20 @@ const BillsScreen = ({ navigation }) => {
   };
 
   const calculateTotalWaterBill = () => {
-    // Total water = members' presence days within billing period × ₱5
+    // Fixed monthly: return fixed amount directly
+    if (
+      selectedRoom?.waterBillingMode === "fixed_monthly" ||
+      selectedRoom?.water_billing_mode === "fixed_monthly"
+    ) {
+      return (
+        parseFloat(
+          selectedRoom?.waterFixedAmount ||
+            selectedRoom?.water_fixed_amount ||
+            0,
+        ) || 0
+      );
+    }
+    // Presence-based: total members' presence days within billing period × ₱5
     if (!selectedRoom?.members || selectedRoom.members.length === 0) return 0;
     let totalDays = 0;
     selectedRoom.members.forEach((member) => {
@@ -261,9 +287,22 @@ const BillsScreen = ({ navigation }) => {
 
   // Calculate individual member's water consumption (for "Room Members & Water Bill" section)
   const calculateMemberWaterBill = (memberId) => {
-    // Show INDIVIDUAL water consumption (days within billing period × ₱5)
     if (!selectedRoom?.members) return 0;
 
+    // Fixed monthly: split total evenly per member (all members, for display)
+    if (
+      selectedRoom.waterBillingMode === "fixed_monthly" ||
+      selectedRoom.water_billing_mode === "fixed_monthly"
+    ) {
+      const fixedTotal =
+        parseFloat(
+          selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || 0,
+        ) || 0;
+      const memberCount = Math.max(1, selectedRoom.members.length);
+      return r2(fixedTotal / memberCount);
+    }
+
+    // Presence-based: per member's own days
     const member = selectedRoom.members.find(
       (m) => (m.id || m._id) === memberId,
     );
@@ -301,6 +340,20 @@ const BillsScreen = ({ navigation }) => {
     // FALLBACK: Manual calculation from room data (filtered by billing dates)
     const payorCount =
       selectedRoom.members.filter((m) => m.isPayer).length || 1;
+
+    // Fixed monthly fallback
+    if (
+      selectedRoom.waterBillingMode === "fixed_monthly" ||
+      selectedRoom.water_billing_mode === "fixed_monthly"
+    ) {
+      const fixedTotal =
+        parseFloat(
+          selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || 0,
+        ) || 0;
+      return r2(fixedTotal / payorCount);
+    }
+
+    // Presence-based fallback
     let nonPayorWater = 0;
 
     selectedRoom.members.forEach((member) => {

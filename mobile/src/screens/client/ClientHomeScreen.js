@@ -26,6 +26,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import SafeMapView from "../../components/SafeMapView";
 import { AuthContext } from "../../context/AuthContext";
+import AnimatedAmount from "../../components/AnimatedAmount";
 import chatReadTracker from "../../services/chatReadTracker";
 import {
   roomService,
@@ -294,8 +295,19 @@ const ClientHomeScreen = ({ navigation }) => {
     const rent = r2(billing.rent / payorCount);
     const electricity = r2(billing.electricity / payorCount);
     const internet = r2(billing.internet / payorCount);
-    // Water: calculate from member presence data (each day = ₱5)
-    const water = calcWaterFromPresence(members, payorCount);
+    // Water: fixed monthly or presence-based
+    const isFixedWater =
+      userJoinedRoom?.waterBillingMode === "fixed_monthly" ||
+      userJoinedRoom?.water_billing_mode === "fixed_monthly";
+    const water = isFixedWater
+      ? r2(
+          (parseFloat(
+            userJoinedRoom?.waterFixedAmount ||
+              userJoinedRoom?.water_fixed_amount ||
+              0,
+          ) || 0) / payorCount,
+        )
+      : calcWaterFromPresence(members, payorCount);
 
     const total = r2(rent + electricity + internet + water);
     const perPayor = total;
@@ -1211,7 +1223,11 @@ const ClientHomeScreen = ({ navigation }) => {
                     data: getExpenseBreakdown().electricity,
                   },
                   {
-                    name: "Water",
+                    name:
+                      userJoinedRoom?.waterBillingMode === "fixed_monthly" ||
+                      userJoinedRoom?.water_billing_mode === "fixed_monthly"
+                        ? "Water (Fixed)"
+                        : "Water",
                     icon: "water",
                     color: colors.waterColor,
                     data: getExpenseBreakdown().water,
@@ -1518,9 +1534,11 @@ const ClientHomeScreen = ({ navigation }) => {
                     <View style={styles.billingCardTop}>
                       <View>
                         <Text style={styles.billingCardLabel}>Your Share</Text>
-                        <Text style={styles.billingCardAmount}>
-                          {fmtShort(getExpenseBreakdown()?.perPayor || 0)}
-                        </Text>
+                        <AnimatedAmount
+                          value={getExpenseBreakdown()?.perPayor || 0}
+                          formatter={fmtShort}
+                          style={styles.billingCardAmount}
+                        />
                       </View>
                       <View style={styles.billingBadge}>
                         <Text style={styles.billingBadgeText}>
@@ -1549,7 +1567,13 @@ const ClientHomeScreen = ({ navigation }) => {
                           color: colors.electricityColor,
                         },
                         {
-                          label: "Water",
+                          label:
+                            userJoinedRoom?.waterBillingMode ===
+                              "fixed_monthly" ||
+                            userJoinedRoom?.water_billing_mode ===
+                              "fixed_monthly"
+                              ? "Fixed"
+                              : "Water",
                           icon: "water",
                           amount: getExpenseBreakdown()?.water?.amount,
                           color: colors.waterColor,
@@ -1570,9 +1594,11 @@ const ClientHomeScreen = ({ navigation }) => {
                           <Text style={styles.billingMiniLabel}>
                             {item.label}
                           </Text>
-                          <Text style={styles.billingMiniAmount}>
-                            {fmtShort(item.amount || 0)}
-                          </Text>
+                          <AnimatedAmount
+                            value={item.amount || 0}
+                            formatter={fmtShort}
+                            style={styles.billingMiniAmount}
+                          />
                         </View>
                       ))}
                     </View>
@@ -1732,32 +1758,35 @@ const ClientHomeScreen = ({ navigation }) => {
                     </TouchableOpacity>
                   )}
 
-                  <TouchableOpacity
-                    style={styles.actionCard}
-                    onPress={() =>
-                      navigation.navigate("PresenceStack", {
-                        screen: "PresenceMain",
-                        params: {
-                          roomId: userJoinedRoom.id || userJoinedRoom._id,
-                        },
-                      })
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={[
-                        styles.actionIconBg,
-                        { backgroundColor: colors.successBg },
-                      ]}
-                    >
-                      <Ionicons
-                        name="calendar"
-                        size={20}
-                        color={colors.success}
-                      />
-                    </View>
-                    <Text style={styles.actionLabel}>Presence</Text>
-                  </TouchableOpacity>
+                  {userJoinedRoom?.waterBillingMode !== "fixed_monthly" &&
+                    userJoinedRoom?.water_billing_mode !== "fixed_monthly" && (
+                      <TouchableOpacity
+                        style={styles.actionCard}
+                        onPress={() =>
+                          navigation.navigate("PresenceStack", {
+                            screen: "PresenceMain",
+                            params: {
+                              roomId: userJoinedRoom.id || userJoinedRoom._id,
+                            },
+                          })
+                        }
+                        activeOpacity={0.7}
+                      >
+                        <View
+                          style={[
+                            styles.actionIconBg,
+                            { backgroundColor: colors.successBg },
+                          ]}
+                        >
+                          <Ionicons
+                            name="calendar"
+                            size={20}
+                            color={colors.success}
+                          />
+                        </View>
+                        <Text style={styles.actionLabel}>Presence</Text>
+                      </TouchableOpacity>
+                    )}
 
                   <TouchableOpacity
                     style={styles.actionCard}
@@ -3239,7 +3268,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       width: 9,
       height: 9,
       borderRadius: 5,
-      backgroundColor: "#fff",
+      backgroundColor: colors.card,
     },
   });
 

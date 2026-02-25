@@ -78,6 +78,9 @@ const normalizeRoom = (room) => {
   room.photos = room.photos || [];
   // Chat enabled flag
   room.chatEnabled = !!room.chat_enabled;
+  // Water billing mode
+  room.waterBillingMode = room.water_billing_mode || "presence";
+  room.waterFixedAmount = parseFloat(room.water_fixed_amount) || 0;
   return room;
 };
 
@@ -211,6 +214,7 @@ router.get("/", isAuthenticated, async (req, res, next) => {
             activeCycle.start_date,
             activeCycle.end_date,
             activeCycle.water_bill_amount || 0,
+            rooms[i],
           ),
           internet: activeCycle.internet || 0,
           previousReading: activeCycle.previous_meter_reading ?? null,
@@ -309,6 +313,7 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
             activeCycle.start_date,
             activeCycle.end_date,
             activeCycle.water_bill_amount || 0,
+            room,
           ),
           internet: activeCycle.internet || 0,
           previousReading: activeCycle.previous_meter_reading ?? null,
@@ -420,7 +425,10 @@ function computeDynamicWater(
   cycleStartDate,
   cycleEndDate,
   storedAmount,
+  room = {},
 ) {
+  if (room.water_billing_mode === "fixed_monthly")
+    return parseFloat(room.water_fixed_amount) || 0;
   if (storedAmount > 0) return storedAmount;
   const start = new Date(cycleStartDate);
   const end = new Date(cycleEndDate);
@@ -521,6 +529,7 @@ router.get("/admin/all", isAuthenticated, async (req, res, next) => {
                 activeCycle.start_date,
                 activeCycle.end_date,
                 activeCycle.water_bill_amount || 0,
+                room,
               ),
               internet: activeCycle.internet || 0,
             }
@@ -768,6 +777,7 @@ router.get("/:id", async (req, res, next) => {
           activeCycle.start_date,
           activeCycle.end_date,
           activeCycle.water_bill_amount || 0,
+          room,
         ),
         internet: activeCycle.internet || 0,
         previousReading: activeCycle.previous_meter_reading ?? null,
@@ -981,6 +991,8 @@ router.put("/:id", isAuthenticated, async (req, res, next) => {
       amenities,
       house_rules,
       photos,
+      water_billing_mode,
+      water_fixed_amount,
     } = req.body;
     if (!name) return next(new ErrorHandler("Name is required", 400));
 
@@ -1007,6 +1019,10 @@ router.put("/:id", isAuthenticated, async (req, res, next) => {
       );
     if (photos !== undefined)
       updateData.photos = JSON.stringify(Array.isArray(photos) ? photos : []);
+    if (water_billing_mode !== undefined)
+      updateData.water_billing_mode = water_billing_mode;
+    if (water_fixed_amount !== undefined)
+      updateData.water_fixed_amount = parseFloat(water_fixed_amount) || 0;
 
     // Update room
     const updatedRoom = await SupabaseService.update(

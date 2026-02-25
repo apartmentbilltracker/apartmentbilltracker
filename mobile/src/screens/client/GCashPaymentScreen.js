@@ -14,7 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { File, Paths } from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
+import { captureRef } from "react-native-view-shot";
 import apiService from "../../services/apiService";
+import { settingsService } from "../../services/apiService";
+import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
 
 const GCashPaymentScreen = ({ navigation, route }) => {
@@ -24,6 +27,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const { roomId, roomName, amount, billType } = route.params;
   const [loading, setLoading] = useState(true);
   const [qrData, setQrData] = useState(null);
+  const [hostQrUri, setHostQrUri] = useState(null); // host-uploaded QR image
   const [referenceNumber, setReferenceNumber] = useState("");
   const [transactionId, setTransactionId] = useState("");
   const [step, setStep] = useState("qr"); // qr, verify, success
@@ -31,6 +35,12 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const receiptRef = React.useRef(null);
+
+  // Input focus / validation state
+  const [mobileNumberFocused, setMobileNumberFocused] = useState(false);
+  const [mobileNumberError, setMobileNumberError] = useState(false);
 
   // Use refs for cleanup to avoid stale closures
   const stepRef = React.useRef(step);
@@ -44,6 +54,24 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     initiateGCashPayment();
+    // Fetch the host's uploaded GCash QR code (cache-first, 10-min TTL)
+    const pmtKey = "pmt_methods_" + roomId;
+    screenCache.read(pmtKey).then((cached) => {
+      const qrUrl = cached?.gcash?.qrUrl;
+      if (qrUrl) {
+        setHostQrUri(qrUrl);
+        return;
+      }
+      settingsService
+        .getPaymentMethods(roomId)
+        .then((res) => {
+          if (res?.paymentMethods)
+            screenCache.write(pmtKey, res.paymentMethods);
+          const url = res?.paymentMethods?.gcash?.qrUrl;
+          if (url) setHostQrUri(url);
+        })
+        .catch(() => {});
+    });
   }, []);
 
   const handleBack = async () => {
@@ -85,6 +113,27 @@ const GCashPaymentScreen = ({ navigation, route }) => {
     );
   };
 
+  const handleDownloadReceipt = async () => {
+    try {
+      setReceiptLoading(true);
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please allow gallery access to save the receipt.",
+        );
+        return;
+      }
+      const uri = await captureRef(receiptRef, { format: "png", quality: 1 });
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert("Saved!", "Receipt image saved to your gallery.");
+    } catch (error) {
+      Alert.alert("Error", "Failed to save receipt. Please try again.");
+    } finally {
+      setReceiptLoading(false);
+    }
+  };
+
   const handleDownloadQR = async () => {
     try {
       setDownloadLoading(true);
@@ -99,19 +148,27 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         return;
       }
 
-      const asset = Image.resolveAssetSource(
-        require("../../assets/gcash-qr.png"),
-      );
-
       const destFile = new File(Paths.cache, "gcash-qr-" + Date.now() + ".png");
 
-      // Fetch the asset and write to cache
-      const response = await fetch(asset.uri);
-      const arrayBuffer = await response.arrayBuffer();
-      destFile.create();
-      destFile.write(new Uint8Array(arrayBuffer));
+      if (hostQrUri && hostQrUri.startsWith("data:")) {
+        // Base64 data URI — decode and write directly
+        const base64 = hostQrUri.split(",")[1];
+        destFile.create();
+        destFile.write(Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)));
+      } else {
+        if (!hostQrUri) {
+          Alert.alert(
+            "No QR Available",
+            "No QR code has been configured for this host.",
+          );
+          return;
+        }
+        const response = await fetch(hostQrUri);
+        const arrayBuffer = await response.arrayBuffer();
+        destFile.create();
+        destFile.write(new Uint8Array(arrayBuffer));
+      }
 
-      // Save to gallery
       await MediaLibrary.saveToLibraryAsync(destFile.uri);
       Alert.alert("Saved!", "QR code has been saved to your gallery.");
     } catch (error) {
@@ -162,9 +219,11 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
   const handleVerifyPayment = async () => {
     if (!mobileNumber.trim()) {
+      setMobileNumberError(true);
       Alert.alert("Required", "Please enter your GCash mobile number");
       return;
     }
+    setMobileNumberError(false);
 
     try {
       setVerifyLoading(true);
@@ -175,24 +234,6 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
       if (response.success) {
         setStep("success");
-        setTimeout(() => {
-          Alert.alert("Success", "Payment recorded successfully!", [
-            {
-              text: "View History",
-              onPress: () =>
-                navigation.navigate("PaymentHistory", {
-                  roomId,
-                  roomName,
-                  refresh: true,
-                }),
-            },
-            {
-              text: "Back to Bills",
-              onPress: () =>
-                navigation.navigate("BillsMain", { refresh: true }),
-            },
-          ]);
-        }, 500);
       }
     } catch (error) {
       Alert.alert(
@@ -265,10 +306,32 @@ const GCashPaymentScreen = ({ navigation, route }) => {
               <Text style={styles.sectionTitle}>Scan QR Code</Text>
               <View style={styles.qrContainer}>
                 {qrData ? (
-                  <Image
-                    source={require("../../assets/gcash-qr.png")}
-                    style={styles.qrImage}
-                  />
+                  hostQrUri ? (
+                    <Image source={{ uri: hostQrUri }} style={styles.qrImage} />
+                  ) : (
+                    <View
+                      style={[
+                        styles.qrPlaceholder,
+                        { alignItems: "center", justifyContent: "center" },
+                      ]}
+                    >
+                      <Ionicons
+                        name="qr-code-outline"
+                        size={56}
+                        color={colors.textMuted || "#999"}
+                      />
+                      <Text
+                        style={{
+                          color: colors.textMuted || "#999",
+                          fontSize: 12,
+                          marginTop: 8,
+                          textAlign: "center",
+                        }}
+                      >
+                        QR code not{"\n"}configured
+                      </Text>
+                    </View>
+                  )
                 ) : (
                   <View style={styles.qrPlaceholder}>
                     <Ionicons
@@ -383,10 +446,22 @@ const GCashPaymentScreen = ({ navigation, route }) => {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Your GCash Mobile Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    mobileNumberFocused && styles.inputFocused,
+                    mobileNumberError &&
+                      !mobileNumber.trim() &&
+                      styles.inputError,
+                  ]}
                   placeholder="09XX XXX XXXX"
                   value={mobileNumber}
-                  onChangeText={setMobileNumber}
+                  onChangeText={(v) => {
+                    setMobileNumber(v);
+                    if (mobileNumberError && v.trim())
+                      setMobileNumberError(false);
+                  }}
+                  onFocus={() => setMobileNumberFocused(true)}
+                  onBlur={() => setMobileNumberFocused(false)}
                   keyboardType="phone-pad"
                   editable={!verifyLoading}
                   placeholderTextColor={colors.textTertiary}
@@ -424,40 +499,65 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
         {step === "success" && (
           <View style={styles.successContainer}>
-            <View style={styles.successIconCircle}>
-              <Ionicons name="checkmark-circle" size={56} color="#43a047" />
-            </View>
+            <View
+              ref={receiptRef}
+              collapsable={false}
+              style={styles.receiptCapture}
+            >
+              <View style={styles.successIconCircle}>
+                <Ionicons name="checkmark-circle" size={56} color="#43a047" />
+              </View>
 
-            <Text style={styles.successTitle}>Payment Recorded!</Text>
-            <Text style={styles.successSubtitle}>
-              Awaiting admin verification
-            </Text>
+              <Text style={styles.successTitle}>Payment Recorded!</Text>
+              <Text style={styles.successSubtitle}>
+                Awaiting admin verification
+              </Text>
 
-            <View style={styles.successCard}>
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Amount</Text>
-                <Text style={styles.successValue}>₱{amount.toFixed(2)}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Reference</Text>
-                <Text style={styles.successValue}>{referenceNumber}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Bill Type</Text>
-                <Text style={styles.successValue}>
-                  {billType.charAt(0).toUpperCase() + billType.slice(1)}
-                </Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Room</Text>
-                <Text style={styles.successValue}>{roomName}</Text>
+              <View style={styles.successCard}>
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Amount</Text>
+                  <Text style={styles.successValue}>₱{amount.toFixed(2)}</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Reference</Text>
+                  <Text style={styles.successValue}>{referenceNumber}</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Bill Type</Text>
+                  <Text style={styles.successValue}>
+                    {billType.charAt(0).toUpperCase() + billType.slice(1)}
+                  </Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Room</Text>
+                  <Text style={styles.successValue}>{roomName}</Text>
+                </View>
               </View>
             </View>
 
             <View style={styles.successButtons}>
+              <TouchableOpacity
+                style={styles.downloadReceiptBtn}
+                onPress={handleDownloadReceipt}
+                disabled={receiptLoading}
+                activeOpacity={0.8}
+              >
+                {receiptLoading ? (
+                  <ActivityIndicator color={colors.accent} size="small" />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="download-outline"
+                      size={18}
+                      color={colors.accent}
+                    />
+                    <Text style={styles.downloadReceiptText}>Save Receipt</Text>
+                  </>
+                )}
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.historyButton}
                 onPress={() =>
@@ -774,6 +874,15 @@ const createStyles = (colors) =>
       color: colors.text,
       backgroundColor: colors.cardAlt,
     },
+    inputFocused: {
+      borderColor: colors.accent,
+      borderWidth: 1.5,
+    },
+    inputError: {
+      borderColor: colors.error,
+      borderWidth: 1.5,
+      backgroundColor: colors.errorBg,
+    },
     verifyButton: {
       flexDirection: "row",
       backgroundColor: colors.accent,
@@ -857,6 +966,27 @@ const createStyles = (colors) =>
     successButtons: {
       width: "100%",
       gap: 10,
+    },
+    receiptCapture: {
+      width: "100%",
+      alignItems: "center",
+      backgroundColor: colors.background,
+      paddingTop: 4,
+    },
+    downloadReceiptBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 13,
+      gap: 6,
+    },
+    downloadReceiptText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accent,
     },
     historyButton: {
       flexDirection: "row",

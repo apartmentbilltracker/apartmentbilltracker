@@ -37,6 +37,8 @@ import {
   chatService,
 } from "../../services/apiService";
 import chatReadTracker from "../../services/chatReadTracker";
+import { screenCache } from "../../hooks/useScreenCache";
+import AnimatedAmount from "../../components/AnimatedAmount";
 import { useTheme } from "../../theme/ThemeContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -101,10 +103,15 @@ const AdminDashboardScreen = ({ navigation }) => {
 
   useEffect(() => {
     if (isFocused) {
-      setPaymentStats({
-        totalCollected: 0,
-        totalPending: 0,
-        collectionRate: 0,
+      // Restore cached values immediately so cards are never blank
+      screenCache.read("admin_dash_" + hostUserId).then((cached) => {
+        if (cached) {
+          if (cached.paymentStats) setPaymentStats(cached.paymentStats);
+          if (cached.rooms) setRooms(cached.rooms);
+          if (cached.latestBillingCycle !== undefined)
+            setLatestBillingCycle(cached.latestBillingCycle);
+          if (cached.billingByMonth) setBillingByMonth(cached.billingByMonth);
+        }
       });
       fetchRooms();
       fetchFilteredData(selectedRoomId);
@@ -127,17 +134,21 @@ const AdminDashboardScreen = ({ navigation }) => {
       const response = await apiService.get(
         `/api/v2/admin/billing/payment-stats?t=${timestamp}${roomQ}`,
       );
+      let stats = null;
       if (response?.success && response.data) {
-        setPaymentStats(response.data);
+        stats = response.data;
       } else if (response?.data) {
-        setPaymentStats(response.data);
+        stats = response.data;
       } else {
-        setPaymentStats({
-          totalCollected: 0,
-          totalPending: 0,
-          collectionRate: 0,
-        });
+        stats = { totalCollected: 0, totalPending: 0, collectionRate: 0 };
       }
+      setPaymentStats(stats);
+      // Persist for stale-while-revalidate
+      const prev = (await screenCache.read("admin_dash_" + hostUserId)) || {};
+      screenCache.write("admin_dash_" + hostUserId, {
+        ...prev,
+        paymentStats: stats,
+      });
     } catch (error) {
       console.log("Error fetching payment stats:", error);
       setPaymentStats({
@@ -167,6 +178,11 @@ const AdminDashboardScreen = ({ navigation }) => {
         cycleData = response;
       }
       setLatestBillingCycle(cycleData);
+      const prev = (await screenCache.read("admin_dash_" + hostUserId)) || {};
+      screenCache.write("admin_dash_" + hostUserId, {
+        ...prev,
+        latestBillingCycle: cycleData,
+      });
     } catch (error) {
       console.log("Error fetching latest billing cycle:", error);
       setLatestBillingCycle(null);
@@ -176,7 +192,13 @@ const AdminDashboardScreen = ({ navigation }) => {
   const fetchRooms = async () => {
     try {
       const response = await roomService.getRooms();
-      setRooms(response.rooms || response.data?.rooms || []);
+      const fetched = response.rooms || response.data?.rooms || [];
+      setRooms(fetched);
+      const prev = (await screenCache.read("admin_dash_" + hostUserId)) || {};
+      screenCache.write("admin_dash_" + hostUserId, {
+        ...prev,
+        rooms: fetched,
+      });
     } catch (error) {
       console.log("Error fetching rooms:", error);
     } finally {
@@ -190,7 +212,14 @@ const AdminDashboardScreen = ({ navigation }) => {
       const res = await apiService.get(
         `/api/v2/billing-cycles/totals/month?months=${months}${roomQ}`,
       );
-      if (res?.success) setBillingByMonth(res.data || []);
+      if (res?.success) {
+        setBillingByMonth(res.data || []);
+        const prev = (await screenCache.read("admin_dash_" + hostUserId)) || {};
+        screenCache.write("admin_dash_" + hostUserId, {
+          ...prev,
+          billingByMonth: res.data || [],
+        });
+      }
     } catch (error) {
       console.error("Error fetching billing totals:", error);
     }
@@ -664,9 +693,11 @@ const AdminDashboardScreen = ({ navigation }) => {
               )}
             </View>
             <View style={styles.rateCircle}>
-              <Text style={styles.rateValue}>
-                {(latestBillingCycle?.collectionRate || 0).toFixed(0)}%
-              </Text>
+              <AnimatedAmount
+                value={latestBillingCycle?.collectionRate || 0}
+                formatter={(n) => `${Math.round(n)}%`}
+                style={styles.rateValue}
+              />
               <Text style={styles.rateLabel}>Rate</Text>
             </View>
           </View>
@@ -683,9 +714,11 @@ const AdminDashboardScreen = ({ navigation }) => {
                 </View>
                 <Text style={styles.metricLabel}>Collected</Text>
               </View>
-              <Text style={[styles.metricAmount, { color: colors.success }]}>
-                {fmt(latestBillingCycle?.totalCollected || 0)}
-              </Text>
+              <AnimatedAmount
+                value={latestBillingCycle?.totalCollected || 0}
+                formatter={fmt}
+                style={[styles.metricAmount, { color: colors.success }]}
+              />
             </View>
             <View style={styles.collectionDivider} />
             <View style={[styles.collectionMetric, styles.pendingMetric]}>
@@ -700,9 +733,11 @@ const AdminDashboardScreen = ({ navigation }) => {
                 </View>
                 <Text style={styles.metricLabel}>Pending</Text>
               </View>
-              <Text style={[styles.metricAmount, { color: "#c62828" }]}>
-                {fmt(latestBillingCycle?.totalPending || 0)}
-              </Text>
+              <AnimatedAmount
+                value={latestBillingCycle?.totalPending || 0}
+                formatter={fmt}
+                style={[styles.metricAmount, { color: "#c62828" }]}
+              />
             </View>
           </View>
 
@@ -857,14 +892,14 @@ const AdminDashboardScreen = ({ navigation }) => {
                 color={colors.internetColor}
               />
             </View>
-            <Text
+            <AnimatedAmount
+              value={overallCollectionRate}
+              formatter={(n) => `${Math.round(n)}%`}
               style={styles.statValue}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.7}
-            >
-              {overallCollectionRate}%
-            </Text>
+            />
             <Text style={styles.statLabel} numberOfLines={1}>
               Collected
             </Text>
@@ -957,9 +992,11 @@ const AdminDashboardScreen = ({ navigation }) => {
                 </View>
                 <View>
                   <Text style={styles.chartSumLabel}>Total Billed</Text>
-                  <Text style={styles.chartSumValue}>
-                    {fmt(totalBilledLastN)}
-                  </Text>
+                  <AnimatedAmount
+                    value={totalBilledLastN}
+                    formatter={fmt}
+                    style={styles.chartSumValue}
+                  />
                 </View>
               </View>
               <View style={styles.chartSumDivider} />
@@ -978,9 +1015,11 @@ const AdminDashboardScreen = ({ navigation }) => {
                 </View>
                 <View>
                   <Text style={styles.chartSumLabel}>Total Collected</Text>
-                  <Text style={styles.chartSumValue}>
-                    {fmt(totalCollectedLastN)}
-                  </Text>
+                  <AnimatedAmount
+                    value={totalCollectedLastN}
+                    formatter={fmt}
+                    style={styles.chartSumValue}
+                  />
                 </View>
               </View>
             </View>

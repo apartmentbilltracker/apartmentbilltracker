@@ -52,7 +52,12 @@ const PresenceScreen = () => {
   }, [selectedRoom, userId, selectedRoom?.memberPayments?.length]);
 
   // Individual user can mark presence only if they have NOT paid for this cycle
-  const canMarkPresence = hasActiveCycle && !userPaidStatus;
+  // and the room is NOT using fixed monthly water billing
+  const isFixedMonthlyWater =
+    selectedRoom?.waterBillingMode === "fixed_monthly" ||
+    selectedRoom?.water_billing_mode === "fixed_monthly";
+  const canMarkPresence =
+    hasActiveCycle && !userPaidStatus && !isFixedMonthlyWater;
 
   const [markedDates, setMarkedDates] = useState([]);
   const markedDatesSet = useMemo(() => new Set(markedDates), [markedDates]);
@@ -128,12 +133,26 @@ const PresenceScreen = () => {
     if (!selectedRoom || !userId) return;
 
     try {
-      // Fetch full room data directly to get presence (list endpoint excludes presence)
+      // Fetch full room data directly to get presence AND fresh payment status
       const roomResponse = await roomService.getRoomById(
         selectedRoom.id || selectedRoom._id,
       );
       const roomData = roomResponse.data || roomResponse;
       const room = roomData.room || roomData;
+
+      // Sync fresh memberPayments into selectedRoom so userPaidStatus updates immediately
+      if (room.memberPayments) {
+        setSelectedRoom((prev) =>
+          prev
+            ? {
+                ...prev,
+                memberPayments: room.memberPayments,
+                billing: room.billing ?? prev.billing,
+                cycleStatus: room.cycleStatus ?? prev.cycleStatus,
+              }
+            : prev,
+        );
+      }
 
       // Find current user's member record in the room
       const currentUserMember = room.members?.find(
@@ -158,10 +177,17 @@ const PresenceScreen = () => {
     if (!selectedRoom || !userId) return;
 
     if (!canMarkPresence) {
-      Alert.alert(
-        "No active billing cycle or billing period",
-        "Unable to mark presence because there is no active billing cycle or billing period, or you have already paid all your bills. Please contact your admin.",
-      );
+      if (isFixedMonthlyWater) {
+        Alert.alert(
+          "Fixed Water Billing",
+          "Your host has set a fixed monthly water bill. Presence tracking is not required for this room.",
+        );
+      } else {
+        Alert.alert(
+          "No active billing cycle or billing period",
+          "Unable to mark presence because there is no active billing cycle or billing period, or you have already paid all your bills. Please contact your admin.",
+        );
+      }
       return;
     }
 
@@ -989,6 +1015,20 @@ const PresenceScreen = () => {
           <Text style={styles.emptySub}>
             You have paid all your bills for this billing period. Attendance
             marking is locked.
+          </Text>
+        </View>
+      ) : selectedRoom && isFixedMonthlyWater ? (
+        <View style={styles.emptyCard}>
+          <View
+            style={[styles.emptyIconWrap, { backgroundColor: colors.infoBg }]}
+          >
+            <Ionicons name="water" size={36} color={colors.info} />
+          </View>
+          <Text style={styles.emptyTitle}>Fixed Monthly Billing</Text>
+          <Text style={styles.emptySub}>
+            Your host has set a fixed monthly water bill for this room.
+            Attendance tracking is not required — your water charge is already
+            calculated.
           </Text>
         </View>
       ) : selectedRoom ? (

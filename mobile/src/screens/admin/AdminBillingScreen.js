@@ -20,7 +20,9 @@ import {
   presenceService,
 } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
+import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
+import AnimatedAmount from "../../components/AnimatedAmount";
 
 const WATER_RATE = 5; // ₱5 per day
 const ELECTRICITY_RATE = 16; // ₱16 per kW (per unit)
@@ -48,10 +50,24 @@ const AdminBillingScreen = ({ navigation }) => {
   const [prevReading, setPrevReading] = useState("");
   const [currReading, setCurrReading] = useState("");
   const [cycleCompleted, setCycleCompleted] = useState(false);
+  const [waterMode, setWaterMode] = useState("presence");
+  const [waterFixed, setWaterFixed] = useState("");
+  const [savingWaterMode, setSavingWaterMode] = useState(false);
 
   // Fetch rooms on mount and when screen regains focus
   useEffect(() => {
     if (isFocused) {
+      // Show cached rooms instantly while fresh data loads
+      screenCache.read("admin_billing_rooms").then((cached) => {
+        if (cached?.rooms && cached.rooms.length > 0) {
+          setRooms(cached.rooms);
+          const current = selectedRoom?.id || selectedRoom?._id;
+          const match = current
+            ? cached.rooms.find((r) => r.id === current || r._id === current)
+            : null;
+          if (!selectedRoom) setSelectedRoom(match || cached.rooms[0] || null);
+        }
+      });
       fetchRooms();
     }
   }, [isFocused]);
@@ -59,13 +75,67 @@ const AdminBillingScreen = ({ navigation }) => {
   // Load billing state whenever the selected room changes
   useEffect(() => {
     if (selectedRoom) {
+      // Preload from cache for instant display
+      const roomId = selectedRoom.id || selectedRoom._id;
+      screenCache.read("admin_billing_cycle_" + roomId).then((cached) => {
+        if (cached) {
+          if (cached.rent !== undefined) setRent(cached.rent);
+          if (cached.electricity !== undefined)
+            setElectricity(cached.electricity);
+          if (cached.internet !== undefined) setInternet(cached.internet);
+          if (cached.startDate !== undefined) setStartDate(cached.startDate);
+          if (cached.endDate !== undefined) setEndDate(cached.endDate);
+          if (cached.prevReading !== undefined)
+            setPrevReading(cached.prevReading);
+          if (cached.currReading !== undefined)
+            setCurrReading(cached.currReading);
+          if (cached.cycleCompleted !== undefined)
+            setCycleCompleted(cached.cycleCompleted);
+          if (cached.members !== undefined) setMembers(cached.members);
+        }
+      });
       checkAndResetIfCycleClosed();
+      // Load water billing mode from current room
+      if (selectedRoom) {
+        setWaterMode(
+          selectedRoom.waterBillingMode ||
+            selectedRoom.water_billing_mode ||
+            "presence",
+        );
+        setWaterFixed(
+          String(
+            selectedRoom.waterFixedAmount ||
+              selectedRoom.water_fixed_amount ||
+              "",
+          ),
+        );
+      }
     }
   }, [selectedRoom]);
 
   // Check if current billing cycle is closed and update state accordingly
   const checkAndResetIfCycleClosed = async () => {
     if (!selectedRoom) return;
+
+    const roomId = selectedRoom.id || selectedRoom._id;
+    const writeCycleCache = (billing, cycleCompleted, roomMembers) => {
+      if (!billing) return;
+      screenCache.write("admin_billing_cycle_" + roomId, {
+        cycleCompleted,
+        rent: String(billing.rent || ""),
+        electricity: String(billing.electricity || ""),
+        internet: String(billing.internet || ""),
+        startDate: billing.start
+          ? new Date(billing.start).toISOString().split("T")[0]
+          : "",
+        endDate: billing.end
+          ? new Date(billing.end).toISOString().split("T")[0]
+          : "",
+        prevReading: String(billing.previousReading || ""),
+        currReading: String(billing.currentReading || ""),
+        members: roomMembers || [],
+      });
+    };
 
     try {
       // First refetch the latest room data
@@ -92,6 +162,7 @@ const AdminBillingScreen = ({ navigation }) => {
         setPrevReading(String(billing.previousReading || ""));
         setCurrReading(String(billing.currentReading || ""));
         setMembers(latestRoom.members || []);
+        writeCycleCache(billing, true, latestRoom.members || []);
         return;
       }
 
@@ -106,6 +177,7 @@ const AdminBillingScreen = ({ navigation }) => {
         setPrevReading("");
         setCurrReading("");
         setMembers([]);
+        screenCache.clear("admin_billing_cycle_" + roomId);
         return;
       }
 
@@ -136,6 +208,7 @@ const AdminBillingScreen = ({ navigation }) => {
             setPrevReading(String(billing.previousReading || ""));
             setCurrReading(String(billing.currentReading || ""));
             setMembers(latestRoom.members || []);
+            writeCycleCache(billing, true, latestRoom.members || []);
           }
           return;
         }
@@ -160,6 +233,7 @@ const AdminBillingScreen = ({ navigation }) => {
       setPrevReading(String(billing.previousReading || ""));
       setCurrReading(String(billing.currentReading || ""));
       setMembers(latestRoom.members || []);
+      writeCycleCache(billing, false, latestRoom.members || []);
     } catch (error) {
       console.error("Error checking cycle status:", error);
       const billing = selectedRoom.billing;
@@ -189,6 +263,7 @@ const AdminBillingScreen = ({ navigation }) => {
       const response = await roomService.getRooms();
       const allRooms = response.rooms || response.data?.rooms || [];
       setRooms(allRooms);
+      screenCache.write("admin_billing_rooms", { rooms: allRooms });
 
       // Always update selectedRoom to the latest data so billing state refreshes on focus
       const currentId = selectedRoom?.id || selectedRoom?._id;
@@ -219,13 +294,47 @@ const AdminBillingScreen = ({ navigation }) => {
   };
 
   const calculateTotalWaterBill = () => {
+    if (waterMode === "fixed_monthly") return parseFloat(waterFixed) || 0;
     return members.reduce((total, member) => {
       const presenceDays = getFilteredPresenceDays(member);
       return total + calculateWaterBill(presenceDays);
     }, 0);
   };
 
-  // Filter presence days to only count those within the current cycle dates
+  const handleSaveWaterMode = async () => {
+    if (!selectedRoom) return;
+    if (
+      waterMode === "fixed_monthly" &&
+      (!waterFixed || parseFloat(waterFixed) <= 0)
+    ) {
+      Alert.alert(
+        "Validation",
+        "Please enter a valid fixed water amount greater than 0.",
+      );
+      return;
+    }
+    try {
+      setSavingWaterMode(true);
+      await roomService.updateRoom(selectedRoom.id || selectedRoom._id, {
+        name: selectedRoom.name,
+        water_billing_mode: waterMode,
+        water_fixed_amount: parseFloat(waterFixed) || 0,
+      });
+      setSelectedRoom((prev) => ({
+        ...prev,
+        waterBillingMode: waterMode,
+        water_billing_mode: waterMode,
+        waterFixedAmount: parseFloat(waterFixed) || 0,
+        water_fixed_amount: parseFloat(waterFixed) || 0,
+      }));
+      Alert.alert("Saved", "Water billing settings updated successfully.");
+    } catch (err) {
+      Alert.alert("Error", "Failed to save water settings. Please try again.");
+    } finally {
+      setSavingWaterMode(false);
+    }
+  };
+
   const getFilteredPresenceDays = (member) => {
     if (!member.presence || !Array.isArray(member.presence)) return 0;
     if (!startDate || !endDate) return member.presence.length; // no dates set yet, show all
@@ -396,6 +505,37 @@ const AdminBillingScreen = ({ navigation }) => {
       }
 
       await fetchRooms();
+
+      // Also save water billing mode if it changed
+      const origWaterMode =
+        selectedRoom.waterBillingMode ||
+        selectedRoom.water_billing_mode ||
+        "presence";
+      const origWaterFixed = String(
+        selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || "",
+      );
+      if (
+        waterMode !== origWaterMode ||
+        (waterMode === "fixed_monthly" && String(waterFixed) !== origWaterFixed)
+      ) {
+        try {
+          await roomService.updateRoom(selectedRoom.id || selectedRoom._id, {
+            name: selectedRoom.name,
+            water_billing_mode: waterMode,
+            water_fixed_amount: parseFloat(waterFixed) || 0,
+          });
+          setSelectedRoom((prev) => ({
+            ...prev,
+            waterBillingMode: waterMode,
+            water_billing_mode: waterMode,
+            waterFixedAmount: parseFloat(waterFixed) || 0,
+            water_fixed_amount: parseFloat(waterFixed) || 0,
+          }));
+        } catch (e) {
+          console.error("Failed to save water mode:", e);
+        }
+      }
+
       setEditMode(false);
     } catch (error) {
       console.error("Error saving billing:", error);
@@ -479,6 +619,32 @@ const AdminBillingScreen = ({ navigation }) => {
           currentReading: null,
         });
 
+        // Step 6: Save water billing mode if changed
+        const origWaterModeA =
+          selectedRoom.waterBillingMode ||
+          selectedRoom.water_billing_mode ||
+          "presence";
+        const origWaterFixedA = String(
+          selectedRoom.waterFixedAmount ||
+            selectedRoom.water_fixed_amount ||
+            "",
+        );
+        if (
+          waterMode !== origWaterModeA ||
+          (waterMode === "fixed_monthly" &&
+            String(waterFixed) !== origWaterFixedA)
+        ) {
+          try {
+            await roomService.updateRoom(selectedRoom.id || selectedRoom._id, {
+              name: selectedRoom.name,
+              water_billing_mode: waterMode,
+              water_fixed_amount: parseFloat(waterFixed) || 0,
+            });
+          } catch (e) {
+            console.error("Failed to save water mode on archive:", e);
+          }
+        }
+
         // Reset form
         setStartDate("");
         setEndDate("");
@@ -509,7 +675,8 @@ const AdminBillingScreen = ({ navigation }) => {
     }
   };
 
-  if (loading && !refreshing) {
+  // Only block the screen on first ever load (before any cache exists)
+  if (loading && !refreshing && rooms.length === 0) {
     return (
       <View style={styles.centerLoader}>
         <ActivityIndicator size="large" color={colors.accent} />
@@ -818,7 +985,11 @@ const AdminBillingScreen = ({ navigation }) => {
                     style={[styles.summaryDot, { backgroundColor: "#e65100" }]}
                   />
                   <Text style={styles.summaryCellLabel}>Rent</Text>
-                  <Text style={styles.summaryCellAmount}>{fmt(rent)}</Text>
+                  <AnimatedAmount
+                    value={parseFloat(rent) || 0}
+                    formatter={fmt}
+                    style={styles.summaryCellAmount}
+                  />
                 </View>
                 <View style={styles.summaryCell}>
                   <View
@@ -828,9 +999,11 @@ const AdminBillingScreen = ({ navigation }) => {
                     ]}
                   />
                   <Text style={styles.summaryCellLabel}>Electricity</Text>
-                  <Text style={styles.summaryCellAmount}>
-                    {fmt(electricity)}
-                  </Text>
+                  <AnimatedAmount
+                    value={parseFloat(electricity) || 0}
+                    formatter={fmt}
+                    style={styles.summaryCellAmount}
+                  />
                 </View>
                 <View style={styles.summaryCell}>
                   <View
@@ -840,9 +1013,11 @@ const AdminBillingScreen = ({ navigation }) => {
                     ]}
                   />
                   <Text style={styles.summaryCellLabel}>Water</Text>
-                  <Text style={styles.summaryCellAmount}>
-                    {fmt(calculateTotalWaterBill())}
-                  </Text>
+                  <AnimatedAmount
+                    value={calculateTotalWaterBill()}
+                    formatter={fmt}
+                    style={styles.summaryCellAmount}
+                  />
                 </View>
                 <View style={styles.summaryCell}>
                   <View
@@ -852,14 +1027,20 @@ const AdminBillingScreen = ({ navigation }) => {
                     ]}
                   />
                   <Text style={styles.summaryCellLabel}>Internet</Text>
-                  <Text style={styles.summaryCellAmount}>{fmt(internet)}</Text>
+                  <AnimatedAmount
+                    value={parseFloat(internet) || 0}
+                    formatter={fmt}
+                    style={styles.summaryCellAmount}
+                  />
                 </View>
               </View>
               <View style={styles.totalBar}>
                 <Text style={styles.totalBarLabel}>Total Billing</Text>
-                <Text style={styles.totalBarAmount}>
-                  {fmt(getTotalBilling())}
-                </Text>
+                <AnimatedAmount
+                  value={getTotalBilling()}
+                  formatter={fmt}
+                  style={styles.totalBarAmount}
+                />
               </View>
             </View>
 
@@ -1252,6 +1433,113 @@ const AdminBillingScreen = ({ navigation }) => {
                 </Text>
               </View>
 
+              {/* Water Billing Mode */}
+              <Text style={[styles.formSectionLabel, { marginTop: 4 }]}>
+                WATER BILLING MODE
+              </Text>
+              <View style={styles.waterModeToggleRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.waterModeBtn,
+                    waterMode === "presence" && styles.waterModeBtnActive,
+                  ]}
+                  onPress={() =>
+                    editMode && !saving && setWaterMode("presence")
+                  }
+                  disabled={!editMode || saving}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="partly-sunny"
+                    size={14}
+                    color={
+                      waterMode === "presence"
+                        ? colors.textOnAccent
+                        : colors.textSecondary
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.waterModeBtnText,
+                      waterMode === "presence" && styles.waterModeBtnTextActive,
+                    ]}
+                  >
+                    {"\u20B1"}5/day Presence
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.waterModeBtn,
+                    waterMode === "fixed_monthly" && styles.waterModeBtnActive,
+                  ]}
+                  onPress={() =>
+                    editMode && !saving && setWaterMode("fixed_monthly")
+                  }
+                  disabled={!editMode || saving}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="lock-closed"
+                    size={14}
+                    color={
+                      waterMode === "fixed_monthly"
+                        ? colors.textOnAccent
+                        : colors.textSecondary
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.waterModeBtnText,
+                      waterMode === "fixed_monthly" &&
+                        styles.waterModeBtnTextActive,
+                    ]}
+                  >
+                    Fixed Monthly
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {editMode && waterMode === "fixed_monthly" && (
+                <View style={[styles.fieldWrapper, { marginHorizontal: 16 }]}>
+                  <Text style={styles.pesoPrefix}>{"\u20B1"}</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="Fixed monthly water total"
+                    value={waterFixed}
+                    onChangeText={setWaterFixed}
+                    keyboardType="decimal-pad"
+                    editable={!saving}
+                    placeholderTextColor={colors.textTertiary}
+                  />
+                </View>
+              )}
+              {!editMode && (
+                <View style={[styles.electricityStrip, { marginTop: 0 }]}>
+                  <View style={styles.electricityStripLeft}>
+                    <Ionicons name="water" size={16} color={colors.info} />
+                    <Text
+                      style={[
+                        styles.electricityStripLabel,
+                        { color: colors.info },
+                      ]}
+                    >
+                      Water (
+                      {waterMode === "fixed_monthly"
+                        ? `${"\u20B1"}${parseFloat(waterFixed) || 0}/mo Fixed`
+                        : `${"\u20B1"}${WATER_RATE}/day Presence`}
+                      )
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.electricityStripAmount,
+                      { color: colors.info },
+                    ]}
+                  >
+                    {fmt(calculateTotalWaterBill())}
+                  </Text>
+                </View>
+              )}
+
               {/* Action Buttons */}
               {editMode && (
                 <View style={styles.formActions}>
@@ -1324,7 +1612,48 @@ const AdminBillingScreen = ({ navigation }) => {
             )}
 
             {/* ─── PER-MEMBER WATER BILLS ─── */}
-            {startDate && endDate && (
+            {startDate && endDate && waterMode === "fixed_monthly" && (
+              <View style={styles.waterCard}>
+                <View style={styles.waterCardHeader}>
+                  <Ionicons name="water" size={18} color={colors.info} />
+                  <Text style={styles.waterCardTitle}>Fixed Water Bill</Text>
+                </View>
+                <View style={{ padding: 16, alignItems: "center", gap: 6 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 13,
+                      textAlign: "center",
+                    }}
+                  >
+                    Fixed monthly water amount for this room
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "800",
+                      fontSize: 26,
+                      marginTop: 4,
+                    }}
+                  >
+                    {fmt(parseFloat(waterFixed) || 0)}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                    {fmt(
+                      r2(
+                        (parseFloat(waterFixed) || 0) /
+                          Math.max(
+                            1,
+                            members.filter((m) => m.isPayer !== false).length,
+                          ),
+                      ),
+                    )}{" "}
+                    per payor
+                  </Text>
+                </View>
+              </View>
+            )}
+            {startDate && endDate && waterMode !== "fixed_monthly" && (
               <View style={styles.waterCard}>
                 <View style={styles.waterCardHeader}>
                   <Ionicons name="water" size={18} color={colors.info} />
@@ -1806,6 +2135,39 @@ const createStyles = (colors) =>
       fontSize: 15,
       fontWeight: "700",
       color: "#e65100",
+    },
+
+    // ─── WATER MODE TOGGLE ───
+    waterModeToggleRow: {
+      flexDirection: "row",
+      marginHorizontal: 16,
+      marginTop: 6,
+      marginBottom: 8,
+      gap: 8,
+    },
+    waterModeBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      paddingVertical: 9,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    waterModeBtnActive: {
+      backgroundColor: colors.info,
+      borderColor: colors.info,
+    },
+    waterModeBtnText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    waterModeBtnTextActive: {
+      color: colors.textOnAccent,
     },
 
     // ─── FORM ACTIONS ───

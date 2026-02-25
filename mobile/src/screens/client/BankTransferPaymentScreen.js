@@ -14,7 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { File, Paths } from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
+import { captureRef } from "react-native-view-shot";
 import apiService from "../../services/apiService";
+import { settingsService } from "../../services/apiService";
+import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
 
 const BankTransferPaymentScreen = ({ navigation, route }) => {
@@ -23,19 +26,22 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
 
   const { roomId, roomName, amount, billType } = route.params;
   const [step, setStep] = useState("bankDetails"); // bankDetails, qr, success
-  const [bankName, setBankName] = useState("BPI");
+  const [bankName, setBankName] = useState("");
   const [showBankSelector, setShowBankSelector] = useState(false);
+  const [hostBankAccounts, setHostBankAccounts] = useState(null); // null = loading
   const [qrData, setQrData] = useState(null);
   const [referenceNumber, setReferenceNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
+  const [receiptLoading, setReceiptLoading] = useState(false);
   const [transactionId, setTransactionId] = useState("");
 
   // Use refs for cleanup to avoid stale closures
   const stepRef = React.useRef(step);
   const transactionIdRef = React.useRef(transactionId);
+  const receiptRef = React.useRef(null);
   useEffect(() => {
     stepRef.current = step;
   }, [step]);
@@ -94,15 +100,28 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
         return;
       }
 
-      const asset = Image.resolveAssetSource(
-        require("../../assets/bpi-qr.png"),
-      );
+      const bankQrUri = selectedBank?.qrUrl;
+      if (!bankQrUri) {
+        Alert.alert(
+          "No QR Available",
+          "No QR code has been configured for this bank account.",
+        );
+        return;
+      }
 
-      const destFile = new File(Paths.cache, "bpi-qr-" + Date.now() + ".png");
-      const response = await fetch(asset.uri);
-      const arrayBuffer = await response.arrayBuffer();
-      destFile.create();
-      destFile.write(new Uint8Array(arrayBuffer));
+      const destFile = new File(Paths.cache, "bank-qr-" + Date.now() + ".png");
+
+      if (bankQrUri.startsWith("data:")) {
+        // Base64 data URI — decode and write directly
+        const base64 = bankQrUri.split(",")[1];
+        destFile.create();
+        destFile.write(Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)));
+      } else {
+        const response = await fetch(bankQrUri);
+        const arrayBuffer = await response.arrayBuffer();
+        destFile.create();
+        destFile.write(new Uint8Array(arrayBuffer));
+      }
 
       await MediaLibrary.saveToLibraryAsync(destFile.uri);
       Alert.alert("Saved!", "QR code has been saved to your gallery.");
@@ -113,22 +132,60 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
     }
   };
 
-  const banks = [
-    {
-      name: "BPI",
-      accountName: "Apartment Management Account",
-      accountNumber: "9079376194",
-      details: "Bank of the Philippine Islands",
-    },
-  ];
+  // Use host-configured bank accounts only — no hardcoded fallback
+  const availableBanks = (() => {
+    if (!hostBankAccounts || hostBankAccounts.length === 0) return [];
+    const enabled = hostBankAccounts.filter((a) => a.enabled !== false);
+    if (enabled.length === 0) return [];
+    return enabled.map((a) => ({
+      name: a.bankName,
+      accountName: a.accountName,
+      accountNumber: a.accountNumber,
+      details: a.bankName,
+      qrUrl: a.qrUrl || null,
+    }));
+  })();
 
-  const selectedBank = banks.find((b) => b.name === bankName);
+  const selectedBank =
+    availableBanks.find((b) => b.name === bankName) || availableBanks[0];
 
   useEffect(() => {
     if (step === "bankDetails") {
       setLoading(false);
     }
   }, [step]);
+
+  // Fetch host-configured bank accounts for this room (cache-first, 10-min TTL)
+  useEffect(() => {
+    const pmtKey = "pmt_methods_" + roomId;
+    screenCache.read(pmtKey).then((cached) => {
+      if (cached?.bank_transfer?.accounts) {
+        const accounts = cached.bank_transfer.accounts.filter(
+          (a) => a.enabled !== false,
+        );
+        setHostBankAccounts(cached.bank_transfer.accounts);
+        if (accounts.length > 0) setBankName(accounts[0].bankName);
+        return;
+      }
+      settingsService
+        .getPaymentMethods(roomId)
+        .then((res) => {
+          if (res?.paymentMethods)
+            screenCache.write(pmtKey, res.paymentMethods);
+          const accounts = res?.paymentMethods?.bank_transfer?.accounts;
+          if (Array.isArray(accounts) && accounts.length > 0) {
+            setHostBankAccounts(accounts);
+            const first = accounts.find((a) => a.enabled !== false);
+            if (first) setBankName(first.bankName);
+          } else {
+            setHostBankAccounts([]);
+          }
+        })
+        .catch(() => {
+          setHostBankAccounts([]);
+        });
+    });
+  }, []);
 
   // Cancel pending transaction if user leaves before completing payment
   useEffect(() => {
@@ -180,24 +237,6 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
 
       if (response.success) {
         setStep("success");
-        setTimeout(() => {
-          Alert.alert("Success", "Bank transfer recorded successfully!", [
-            {
-              text: "View History",
-              onPress: () =>
-                navigation.navigate("PaymentHistory", {
-                  roomId,
-                  roomName,
-                  refresh: true,
-                }),
-            },
-            {
-              text: "Back to Bills",
-              onPress: () =>
-                navigation.navigate("BillsMain", { refresh: true }),
-            },
-          ]);
-        }, 500);
       }
     } catch (error) {
       Alert.alert(
@@ -206,6 +245,27 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       );
     } finally {
       setVerifyLoading(false);
+    }
+  };
+
+  const handleDownloadReceipt = async () => {
+    try {
+      setReceiptLoading(true);
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please allow gallery access to save the receipt.",
+        );
+        return;
+      }
+      const uri = await captureRef(receiptRef, { format: "png", quality: 1 });
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert("Saved!", "Receipt image saved to your gallery.");
+    } catch (error) {
+      Alert.alert("Error", "Failed to save receipt. Please try again.");
+    } finally {
+      setReceiptLoading(false);
     }
   };
 
@@ -263,36 +323,75 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
             </View>
 
             {/* Bank Selection */}
-            <View style={styles.card}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>Step 1</Text>
-              </View>
-              <Text style={styles.sectionTitle}>Select Bank</Text>
-              <TouchableOpacity
-                style={styles.bankSelector}
-                onPress={() => setShowBankSelector(true)}
-                activeOpacity={0.7}
+            {hostBankAccounts !== null && availableBanks.length === 0 ? (
+              <View
+                style={[
+                  styles.card,
+                  { alignItems: "center", paddingVertical: 28 },
+                ]}
               >
-                <View style={styles.bankSelectorLeft}>
-                  <View style={styles.bankIconContainer}>
-                    <Ionicons
-                      name="business-outline"
-                      size={18}
-                      color={colors.accent}
-                    />
-                  </View>
-                  <View>
-                    <Text style={styles.bankSelectorLabel}>Bank</Text>
-                    <Text style={styles.bankSelectorValue}>{bankName}</Text>
-                  </View>
-                </View>
                 <Ionicons
-                  name="chevron-down"
-                  size={20}
-                  color={colors.textTertiary}
+                  name="business-outline"
+                  size={40}
+                  color={colors.textMuted || "#999"}
                 />
-              </TouchableOpacity>
-            </View>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontWeight: "700",
+                    fontSize: 15,
+                    marginTop: 12,
+                    marginBottom: 6,
+                  }}
+                >
+                  No Bank Accounts Configured
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary || "#666",
+                    fontSize: 13,
+                    textAlign: "center",
+                    lineHeight: 20,
+                  }}
+                >
+                  Your host has not set up bank transfer accounts yet. Please
+                  contact your host or use a different payment method.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.card}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>Step 1</Text>
+                </View>
+                <Text style={styles.sectionTitle}>Select Bank</Text>
+                <TouchableOpacity
+                  style={styles.bankSelector}
+                  onPress={() => setShowBankSelector(true)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.bankSelectorLeft}>
+                    <View style={styles.bankIconContainer}>
+                      <Ionicons
+                        name="business-outline"
+                        size={18}
+                        color={colors.accent}
+                      />
+                    </View>
+                    <View>
+                      <Text style={styles.bankSelectorLabel}>Bank</Text>
+                      <Text style={styles.bankSelectorValue}>
+                        {selectedBank?.name || bankName || "Loading…"}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons
+                    name="chevron-down"
+                    size={20}
+                    color={colors.textTertiary}
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Bank Details */}
             {selectedBank && (
@@ -373,20 +472,22 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
               </View>
             </View>
 
-            {/* Proceed Button */}
-            <TouchableOpacity
-              style={styles.proceedButton}
-              onPress={initiateBankTransfer}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="arrow-forward-circle-outline"
-                size={18}
-                color={colors.textOnAccent}
-                style={{ marginRight: 6 }}
-              />
-              <Text style={styles.proceedButtonText}>Proceed to QR Code</Text>
-            </TouchableOpacity>
+            {/* Proceed Button — only show when banks are configured */}
+            {availableBanks.length > 0 && (
+              <TouchableOpacity
+                style={styles.proceedButton}
+                onPress={initiateBankTransfer}
+                activeOpacity={0.85}
+              >
+                <Ionicons
+                  name="arrow-forward-circle-outline"
+                  size={18}
+                  color={colors.textOnAccent}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.proceedButtonText}>Proceed to QR Code</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
 
@@ -408,30 +509,68 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
               </View>
               <Text style={styles.sectionTitle}>Transfer via QR Code</Text>
               <View style={styles.qrContainer}>
-                <Image
-                  source={require("../../assets/bpi-qr.png")}
-                  style={styles.qrImage}
-                />
-              </View>
-              <TouchableOpacity
-                style={styles.downloadButton}
-                onPress={handleDownloadQR}
-                disabled={downloadLoading}
-                activeOpacity={0.7}
-              >
-                {downloadLoading ? (
-                  <ActivityIndicator size="small" color={colors.textOnAccent} />
+                {selectedBank?.qrUrl ? (
+                  <Image
+                    source={{ uri: selectedBank.qrUrl }}
+                    style={styles.qrImage}
+                    resizeMode="contain"
+                  />
                 ) : (
-                  <>
+                  <View
+                    style={[
+                      styles.qrImage,
+                      {
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: colors.inputBg,
+                        borderRadius: 8,
+                      },
+                    ]}
+                  >
                     <Ionicons
-                      name="download-outline"
-                      size={18}
+                      name="qr-code-outline"
+                      size={56}
+                      color={colors.textMuted || "#999"}
+                    />
+                    <Text
+                      style={{
+                        color: colors.textMuted || "#999",
+                        fontSize: 12,
+                        marginTop: 8,
+                        textAlign: "center",
+                      }}
+                    >
+                      QR code not{"\n"}configured
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {selectedBank?.qrUrl && (
+                <TouchableOpacity
+                  style={styles.downloadButton}
+                  onPress={handleDownloadQR}
+                  disabled={downloadLoading}
+                  activeOpacity={0.7}
+                >
+                  {downloadLoading ? (
+                    <ActivityIndicator
+                      size="small"
                       color={colors.textOnAccent}
                     />
-                    <Text style={styles.downloadButtonText}>Save QR Code</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="download-outline"
+                        size={18}
+                        color={colors.textOnAccent}
+                      />
+                      <Text style={styles.downloadButtonText}>
+                        Save QR Code
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
               <Text style={styles.qrHint}>
                 Use your {bankName} mobile app to scan and transfer
               </Text>
@@ -518,45 +657,70 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
 
         {step === "success" && (
           <View style={styles.successContainer}>
-            <View style={styles.successIconCircle}>
-              <Ionicons name="checkmark-circle" size={56} color="#43a047" />
-            </View>
+            <View
+              ref={receiptRef}
+              collapsable={false}
+              style={styles.receiptCapture}
+            >
+              <View style={styles.successIconCircle}>
+                <Ionicons name="checkmark-circle" size={56} color="#43a047" />
+              </View>
 
-            <Text style={styles.successTitle}>Transfer Confirmed!</Text>
-            <Text style={styles.successSubtitle}>
-              Awaiting admin verification
-            </Text>
+              <Text style={styles.successTitle}>Transfer Confirmed!</Text>
+              <Text style={styles.successSubtitle}>
+                Awaiting admin verification
+              </Text>
 
-            <View style={styles.successCard}>
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Amount</Text>
-                <Text style={styles.successValue}>₱{amount.toFixed(2)}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Bank</Text>
-                <Text style={styles.successValue}>{bankName}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Reference</Text>
-                <Text style={styles.successValue}>{referenceNumber}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Bill Type</Text>
-                <Text style={styles.successValue}>
-                  {billType.charAt(0).toUpperCase() + billType.slice(1)}
-                </Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.successRow}>
-                <Text style={styles.successLabel}>Room</Text>
-                <Text style={styles.successValue}>{roomName}</Text>
+              <View style={styles.successCard}>
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Amount</Text>
+                  <Text style={styles.successValue}>₱{amount.toFixed(2)}</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Bank</Text>
+                  <Text style={styles.successValue}>{bankName}</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Reference</Text>
+                  <Text style={styles.successValue}>{referenceNumber}</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Bill Type</Text>
+                  <Text style={styles.successValue}>
+                    {billType.charAt(0).toUpperCase() + billType.slice(1)}
+                  </Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.successRow}>
+                  <Text style={styles.successLabel}>Room</Text>
+                  <Text style={styles.successValue}>{roomName}</Text>
+                </View>
               </View>
             </View>
 
             <View style={styles.successButtons}>
+              <TouchableOpacity
+                style={styles.downloadReceiptBtn}
+                onPress={handleDownloadReceipt}
+                disabled={receiptLoading}
+                activeOpacity={0.8}
+              >
+                {receiptLoading ? (
+                  <ActivityIndicator color={colors.accent} size="small" />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="download-outline"
+                      size={18}
+                      color={colors.accent}
+                    />
+                    <Text style={styles.downloadReceiptText}>Save Receipt</Text>
+                  </>
+                )}
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.historyButton}
                 onPress={() =>
@@ -608,7 +772,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
             </View>
 
             <ScrollView style={styles.bankList}>
-              {banks.map((bank) => (
+              {availableBanks.map((bank) => (
                 <TouchableOpacity
                   key={bank.name}
                   style={[
@@ -1107,6 +1271,27 @@ const createStyles = (colors) =>
     successButtons: {
       width: "100%",
       gap: 10,
+    },
+    receiptCapture: {
+      width: "100%",
+      alignItems: "center",
+      backgroundColor: colors.background,
+      paddingTop: 4,
+    },
+    downloadReceiptBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 13,
+      gap: 6,
+    },
+    downloadReceiptText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accent,
     },
     historyButton: {
       flexDirection: "row",
