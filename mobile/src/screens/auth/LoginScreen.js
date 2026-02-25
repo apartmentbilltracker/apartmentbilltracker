@@ -31,6 +31,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { apiService, authService } from "../../services/apiService";
 import { getAPIBaseURL } from "../../config/config";
 import { useTheme } from "../../theme/ThemeContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import savedAccountsService from "../../services/savedAccountsService";
 import AuthBubbles from "../../components/AuthBubbles";
 
@@ -56,6 +57,7 @@ const LoginScreen = ({ navigation }) => {
   const [savedAccounts, setSavedAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [failedAvatars, setFailedAvatars] = useState(new Set());
+  const [rememberMe, setRememberMe] = useState(true); // default ON
   const {
     signIn,
     signInWithGoogle,
@@ -68,6 +70,14 @@ const LoginScreen = ({ navigation }) => {
   // Load saved accounts on mount and fetch fresh avatars
   useEffect(() => {
     const loadAccounts = async () => {
+      // Restore the user's last "keep me logged in" preference
+      try {
+        const saved = await AsyncStorage.getItem("@remember_me");
+        if (saved !== null) setRememberMe(saved === "1");
+      } catch {
+        /* silent */
+      }
+
       const accounts = await savedAccountsService.getAccounts();
       setSavedAccounts(accounts);
 
@@ -254,7 +264,7 @@ const LoginScreen = ({ navigation }) => {
     }
     setLoading(true);
     setError("");
-    const result = await signIn(email, password);
+    const result = await signIn(email, password, rememberMe);
     setLoading(false);
     if (!result.success) {
       setError(result.error);
@@ -571,6 +581,28 @@ const LoginScreen = ({ navigation }) => {
                     style={styles.forgotRow}
                   >
                     <Text style={styles.forgotText}>Forgot Password?</Text>
+                  </TouchableOpacity>
+
+                  {/* ─── Keep me logged in toggle ─── */}
+                  <TouchableOpacity
+                    style={styles.rememberRow}
+                    onPress={() => setRememberMe((v) => !v)}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.rememberCheckbox,
+                        rememberMe && {
+                          backgroundColor: colors.accent,
+                          borderColor: colors.accent,
+                        },
+                      ]}
+                    >
+                      {rememberMe && (
+                        <Ionicons name="checkmark" size={13} color="#fff" />
+                      )}
+                    </View>
+                    <Text style={styles.rememberText}>Keep me logged in</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1008,6 +1040,25 @@ const createStyles = (colors) =>
       fontWeight: "500",
       color: "#92400e",
       lineHeight: 18,
+    },
+    rememberRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    rememberCheckbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 5,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
+    },
+    rememberText: {
+      fontSize: 14,
+      color: colors.textSecondary,
     },
   });
 

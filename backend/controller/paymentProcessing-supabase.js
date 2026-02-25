@@ -8,33 +8,36 @@ const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 
-// Helper: check if a payment method is enabled in app_settings
-const isPaymentMethodEnabled = async (method) => {
+// Helper: get payment settings for a specific host (falls back to all-enabled if not found)
+const getHostSettings = async (hostUserId) => {
   try {
-    const rows = await SupabaseService.selectAllRecords("app_settings");
-    if (!rows || rows.length === 0) return true; // no settings row = all enabled
-    const settings = rows[0];
-    if (method === "gcash") return settings.gcash_enabled !== false;
-    if (method === "bank_transfer")
-      return settings.bank_transfer_enabled !== false;
-    return true;
+    if (!hostUserId) return {};
+    const rows = await SupabaseService.selectAll(
+      "app_settings",
+      "user_id",
+      hostUserId,
+    );
+    return rows && rows.length > 0 ? rows[0] : {};
   } catch {
-    return true; // on error, don't block payments
+    return {};
   }
 };
 
-const getMaintenanceMessage = async (method) => {
-  try {
-    const rows = await SupabaseService.selectAllRecords("app_settings");
-    if (!rows || rows.length === 0) return "";
-    const settings = rows[0];
-    if (method === "gcash") return settings.gcash_maintenance_message || "";
-    if (method === "bank_transfer")
-      return settings.bank_transfer_maintenance_message || "";
-    return "";
-  } catch {
-    return "";
-  }
+// Helper: check if a payment method is enabled for a specific host
+const isPaymentMethodEnabled = async (method, hostUserId) => {
+  const settings = await getHostSettings(hostUserId);
+  if (method === "gcash") return settings.gcash_enabled !== false;
+  if (method === "bank_transfer")
+    return settings.bank_transfer_enabled !== false;
+  return true;
+};
+
+const getMaintenanceMessage = async (method, hostUserId) => {
+  const settings = await getHostSettings(hostUserId);
+  if (method === "gcash") return settings.gcash_maintenance_message || "";
+  if (method === "bank_transfer")
+    return settings.bank_transfer_maintenance_message || "";
+  return "";
 };
 
 // Helper: Calculate water charges from presence marking
@@ -347,19 +350,6 @@ router.post(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      // Check if GCash is enabled
-      const enabled = await isPaymentMethodEnabled("gcash");
-      if (!enabled) {
-        const msg = await getMaintenanceMessage("gcash");
-        return next(
-          new ErrorHandler(
-            msg ||
-              "GCash payments are temporarily unavailable due to scheduled maintenance. Please try again later or use another payment method.",
-            503,
-          ),
-        );
-      }
-
       const { roomId, amount, billType } = req.body;
 
       if (!roomId || !amount || !billType) {
@@ -371,6 +361,19 @@ router.post(
       const room = await SupabaseService.findRoomById(roomId);
       if (!room) {
         return next(new ErrorHandler("Room not found", 404));
+      }
+
+      // Check if GCash is enabled for this room's host
+      const enabled = await isPaymentMethodEnabled("gcash", room.created_by);
+      if (!enabled) {
+        const msg = await getMaintenanceMessage("gcash", room.created_by);
+        return next(
+          new ErrorHandler(
+            msg ||
+              "GCash payments are temporarily unavailable due to scheduled maintenance. Please try again later or use another payment method.",
+            503,
+          ),
+        );
       }
 
       const cycles = await SupabaseService.getRoomBillingCycles(roomId);
@@ -462,19 +465,6 @@ router.post(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      // Check if Bank Transfer is enabled
-      const enabled = await isPaymentMethodEnabled("bank_transfer");
-      if (!enabled) {
-        const msg = await getMaintenanceMessage("bank_transfer");
-        return next(
-          new ErrorHandler(
-            msg ||
-              "Bank Transfer payments are temporarily unavailable due to scheduled maintenance. Please try again later or use another payment method.",
-            503,
-          ),
-        );
-      }
-
       const { roomId, amount, billType } = req.body;
 
       if (!roomId || !amount || !billType) {
@@ -486,6 +476,25 @@ router.post(
       const room = await SupabaseService.findRoomById(roomId);
       if (!room) {
         return next(new ErrorHandler("Room not found", 404));
+      }
+
+      // Check if Bank Transfer is enabled for this room's host
+      const enabled = await isPaymentMethodEnabled(
+        "bank_transfer",
+        room.created_by,
+      );
+      if (!enabled) {
+        const msg = await getMaintenanceMessage(
+          "bank_transfer",
+          room.created_by,
+        );
+        return next(
+          new ErrorHandler(
+            msg ||
+              "Bank Transfer payments are temporarily unavailable due to scheduled maintenance. Please try again later or use another payment method.",
+            503,
+          ),
+        );
       }
 
       const cycles = await SupabaseService.getRoomBillingCycles(roomId);

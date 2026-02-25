@@ -6,8 +6,11 @@ import { authService } from "../services/apiService";
 import notificationService from "../services/notificationService";
 import savedAccountsService from "../services/savedAccountsService";
 
-// Inactivity timeout in milliseconds (15 minutes)
+// Inactivity timeout in milliseconds (5 minutes)
 const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+
+// AsyncStorage key for the "keep me logged in" preference
+const REMEMBER_ME_KEY = "@remember_me";
 
 export const AuthContext = React.createContext();
 
@@ -148,8 +151,35 @@ export const AuthProvider = ({ children }) => {
   const clearCachedData = async () => {
     try {
       await SecureStore.deleteItemAsync("authToken");
-      await AsyncStorage.multiRemove(["cachedUser", "lastActivityTime"]);
+      await AsyncStorage.multiRemove([
+        "cachedUser",
+        "lastActivityTime",
+        REMEMBER_ME_KEY,
+      ]);
     } catch (e) {
+      // Silently fail
+    }
+  };
+
+  // Read the persisted remember-me flag
+  const getRememberMe = async () => {
+    try {
+      const val = await AsyncStorage.getItem(REMEMBER_ME_KEY);
+      return val === "1";
+    } catch {
+      return false;
+    }
+  };
+
+  // Persist the remember-me flag
+  const saveRememberMe = async (value) => {
+    try {
+      if (value) {
+        await AsyncStorage.setItem(REMEMBER_ME_KEY, "1");
+      } else {
+        await AsyncStorage.removeItem(REMEMBER_ME_KEY);
+      }
+    } catch {
       // Silently fail
     }
   };
@@ -164,16 +194,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Reset the inactivity timer
-  const resetInactivityTimer = useCallback(() => {
+  // Reset the inactivity timer — skipped if user has "remember me" enabled
+  const resetInactivityTimer = useCallback(async () => {
     lastActivityRef.current = Date.now();
-    // Save to SecureStore periodically (debounced via timer reset)
+    // If remember-me is set, never start the inactivity timer
+    const remembered = await getRememberMe();
+    if (remembered) return;
+    // Save to AsyncStorage periodically (debounced via timer reset)
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
     }
     inactivityTimerRef.current = setTimeout(async () => {
       // Time expired — auto logout
-      console.log("Session expired due to inactivity");
+      const stillRemembered = await getRememberMe();
+      if (stillRemembered) return; // user enabled remember-me while timer was running
       await notificationService.cancelAllNotifications();
       await clearCachedData();
       dispatch({ type: "SIGN_OUT", payload: { reason: "inactivity" } });
@@ -191,16 +225,21 @@ export const AuthProvider = ({ children }) => {
         ) {
           // App came to foreground — check if inactivity timeout elapsed
           if (state.userToken) {
-            const lastActivity = lastActivityRef.current;
-            const elapsed = Date.now() - lastActivity;
-            if (elapsed >= INACTIVITY_TIMEOUT_MS) {
-              console.log("Session expired while app was in background");
-              await notificationService.cancelAllNotifications();
-              await clearCachedData();
-              dispatch({ type: "SIGN_OUT", payload: { reason: "inactivity" } });
-            } else {
-              // Resume timer with remaining time
-              resetInactivityTimer();
+            const remembered = await getRememberMe();
+            if (!remembered) {
+              const lastActivity = lastActivityRef.current;
+              const elapsed = Date.now() - lastActivity;
+              if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+                await notificationService.cancelAllNotifications();
+                await clearCachedData();
+                dispatch({
+                  type: "SIGN_OUT",
+                  payload: { reason: "inactivity" },
+                });
+              } else {
+                // Resume timer with remaining time
+                resetInactivityTimer();
+              }
             }
           }
         } else if (nextAppState.match(/inactive|background/)) {
@@ -243,28 +282,27 @@ export const AuthProvider = ({ children }) => {
         const token = await SecureStore.getItemAsync("authToken");
 
         if (token) {
-          // Check if inactivity timeout elapsed while app was closed
-          const lastActivityStr =
-            await AsyncStorage.getItem("lastActivityTime");
-          if (lastActivityStr) {
-            const lastActivity = parseInt(lastActivityStr, 10);
-            const elapsed = Date.now() - lastActivity;
-            if (elapsed >= INACTIVITY_TIMEOUT_MS) {
-              console.log(
-                "Session expired while app was closed (inactive for",
-                Math.round(elapsed / 60000),
-                "min)",
-              );
-              await clearCachedData();
-              dispatch({
-                type: "SIGN_OUT",
-                payload: { reason: "inactivity" },
-              });
-              dispatch({
-                type: "RESTORE_TOKEN",
-                payload: { token: null, user: null },
-              });
-              return;
+          // Skip inactivity check if the user chose "keep me logged in"
+          const remembered = await getRememberMe();
+          if (!remembered) {
+            // Check if inactivity timeout elapsed while app was closed
+            const lastActivityStr =
+              await AsyncStorage.getItem("lastActivityTime");
+            if (lastActivityStr) {
+              const lastActivity = parseInt(lastActivityStr, 10);
+              const elapsed = Date.now() - lastActivity;
+              if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+                await clearCachedData();
+                dispatch({
+                  type: "SIGN_OUT",
+                  payload: { reason: "inactivity" },
+                });
+                dispatch({
+                  type: "RESTORE_TOKEN",
+                  payload: { token: null, user: null },
+                });
+                return;
+              }
             }
           }
 
@@ -336,14 +374,15 @@ export const AuthProvider = ({ children }) => {
     clearSessionExpired: useCallback(() => {
       dispatch({ type: "CLEAR_SESSION_EXPIRED" });
     }, []),
-    signIn: useCallback(async (email, password) => {
+    signIn: useCallback(async (email, password, rememberMe = false) => {
       try {
         const response = await authService.login({ email, password });
         const data = response.data || response;
         const { token, user } = data;
         await SecureStore.setItemAsync("authToken", token);
         await cacheUserData(user);
-        await saveLastActivity();
+        await saveRememberMe(rememberMe);
+        if (!rememberMe) await saveLastActivity();
         dispatch({ type: "SIGN_IN", payload: { token, user } });
 
         // Save account for quick login
@@ -398,7 +437,7 @@ export const AuthProvider = ({ children }) => {
       }
     }, []),
 
-    signInWithGoogle: useCallback(async (googleData) => {
+    signInWithGoogle: useCallback(async (googleData, rememberMe = false) => {
       try {
         const response = await authService.googleLogin(googleData);
         const data = response.data || response;
@@ -406,7 +445,8 @@ export const AuthProvider = ({ children }) => {
         if (!token) throw new Error("No token received from server");
         await SecureStore.setItemAsync("authToken", token);
         await cacheUserData(user);
-        await saveLastActivity();
+        await saveRememberMe(rememberMe);
+        if (!rememberMe) await saveLastActivity();
         dispatch({ type: "SIGN_IN", payload: { token, user } });
 
         // Save account for quick login
@@ -427,34 +467,38 @@ export const AuthProvider = ({ children }) => {
       }
     }, []),
 
-    signInWithFacebook: useCallback(async (facebookData) => {
-      try {
-        const response = await authService.facebookLogin(facebookData);
-        const data = response.data || response;
-        const { token, user } = data;
-        if (!token) throw new Error("No token received from server");
-        await SecureStore.setItemAsync("authToken", token);
-        await cacheUserData(user);
-        await saveLastActivity();
-        dispatch({ type: "SIGN_IN", payload: { token, user } });
+    signInWithFacebook: useCallback(
+      async (facebookData, rememberMe = false) => {
+        try {
+          const response = await authService.facebookLogin(facebookData);
+          const data = response.data || response;
+          const { token, user } = data;
+          if (!token) throw new Error("No token received from server");
+          await SecureStore.setItemAsync("authToken", token);
+          await cacheUserData(user);
+          await saveRememberMe(rememberMe);
+          if (!rememberMe) await saveLastActivity();
+          dispatch({ type: "SIGN_IN", payload: { token, user } });
 
-        // Save account for quick login
-        await savedAccountsService.saveAccount(user);
+          // Save account for quick login
+          await savedAccountsService.saveAccount(user);
 
-        // Schedule daily presence reminder
-        await notificationService.scheduleDailyPresenceReminder(20, 0);
+          // Schedule daily presence reminder
+          await notificationService.scheduleDailyPresenceReminder(20, 0);
 
-        return { success: true };
-      } catch (error) {
-        const message =
-          error.data?.message ||
-          error.response?.data?.message ||
-          error.message ||
-          "Facebook login failed";
-        dispatch({ type: "SET_ERROR", payload: message });
-        return { success: false, error: message };
-      }
-    }, []),
+          return { success: true };
+        } catch (error) {
+          const message =
+            error.data?.message ||
+            error.response?.data?.message ||
+            error.message ||
+            "Facebook login failed";
+          dispatch({ type: "SET_ERROR", payload: message });
+          return { success: false, error: message };
+        }
+      },
+      [],
+    ),
 
     refreshUser: useCallback(async () => {
       try {

@@ -18,12 +18,6 @@ import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 
 const GOLD = "#b38604";
-const BG = "#f5f6fa";
-const TEXT = "#1a1a2e";
-const CARD = "#fff";
-const MUTED = "#6b7280";
-const BORDER = "#e5e7eb";
-
 const AdminSupportTicketsScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -251,7 +245,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
               <Ionicons
                 name={tab.icon}
                 size={14}
-                color={active ? "#fff" : MUTED}
+                color={active ? "#fff" : colors.textSecondary}
                 style={{ marginRight: 5 }}
               />
               <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
@@ -288,7 +282,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                   <View style={{ flex: 1, marginRight: 10 }}>
                     <Text style={styles.ticketSubject} numberOfLines={2}>{item.subject}</Text>
                     <View style={styles.userRow}>
-                      <Ionicons name="person-outline" size={12} color={MUTED} />
+                      <Ionicons name="person-outline" size={12} color={colors.textSecondary} />
                       <Text style={styles.ticketUser}>{item.userName}</Text>
                     </View>
                   </View>
@@ -308,7 +302,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
 
                 <View style={styles.cardMetaRow}>
                   <View style={styles.metaChip}>
-                    <Ionicons name="pricetag-outline" size={12} color={MUTED} />
+                    <Ionicons name="pricetag-outline" size={12} color={colors.textSecondary} />
                     <Text style={styles.metaText}>{item.category}</Text>
                   </View>
                   <View style={styles.metaChip}>
@@ -352,7 +346,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                 onPress={() => setModalVisible(false)}
                 style={styles.modalClose}
               >
-                <Ionicons name="close" size={22} color={MUTED} />
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -482,7 +476,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                                   <Ionicons
                                     name={isAdmin ? "build-outline" : "person-outline"}
                                     size={12}
-                                    color={isAdmin ? "#fff" : TEXT}
+                                    color={isAdmin ? "#fff" : colors.text}
                                   />
                                   <Text style={[styles.bubbleSender, isAdmin && { color: colors.textOnAccent }]}>
                                     {isAdmin ? "You (Admin)" : "Customer"}
@@ -572,14 +566,14 @@ const createStyles = (colors) => StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: MUTED,
+    color: colors.textSecondary,
     fontSize: 14,
   },
 
   /* Summary Strip */
   summaryStrip: {
     flexDirection: "row",
-    backgroundColor: CARD,
+    backgroundColor: colors.card,
     marginHorizontal: 16,
     marginTop: 12,
     borderRadius: 14,
@@ -602,14 +596,14 @@ const createStyles = (colors) => StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.textSecondary,
     marginTop: 2,
     fontWeight: "500",
   },
   summaryDivider: {
     width: StyleSheet.hairlineWidth,
     height: 28,
-    backgroundColor: BORDER,
+    backgroundColor: colors.border,
   },
 
   /* Filter Tabs */
@@ -624,9 +618,9 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: CARD,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
   },
   filterChipActive: {
     backgroundColor: GOLD,
@@ -634,7 +628,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   filterChipText: {
     fontSize: 12,
-    color: MUTED,
+    color: colors.textSecondary,
     fontWeight: "600",
   },
   filterChipTextActive: {
@@ -647,7 +641,7 @@ const createStyles = (colors) => StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 10,
     borderRadius: 14,
-    backgroundColor: CARD,
+    backgroundColor: colors.card,
     overflow: "hidden",
     ...Platform.select({
       ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
@@ -669,7 +663,7 @@ const createStyles = (colors) => StyleSheet.create({
   ticketSubject: {
     fontSize: 15,
     fontWeight: "700",
-    color: TEXT,
+    color: colors.text,
     marginBottom: 4,
   },
   userRow: {
@@ -679,7 +673,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   ticketUser: {
     fontSize: 12,
-    color: MUTED,
+    color: colors.textSecondary,
   },
   badgeColumn: {
     alignItems: "flex-end",
@@ -703,11 +697,11 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#ef4444",
     borderWidth: 2,
-    borderColor: CARD,
+    borderColor: colors.card,
   },
   cardSeparator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: BORDER,
+    backgroundColor: colors.border,
     marginVertical: 10,
   },
   cardMetaRow: {
@@ -722,7 +716,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   metaText: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.textSecondary,
     fontWeight: "500",
   },
 
@@ -744,11 +738,11 @@ const createStyles = (colors) => StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: TEXT,
+    color: colors.text,
   },
   emptySub: {
     fontSize: 13,
-    color: MUTED,
+    color: colors.textSecondary,
     marginTop: 4,
   },
 
@@ -763,7 +757,7 @@ const createStyles = (colors) => StyleSheet.create({
   modalCard: {
     width: "100%",
     maxHeight: "92%",
-    backgroundColor: CARD,
+    backgroundColor: colors.card,
     borderRadius: 18,
     overflow: "hidden",
     ...Platform.select({
@@ -777,7 +771,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
+    borderBottomColor: colors.border,
   },
   modalIconWrap: {
     width: 36,
@@ -792,7 +786,7 @@ const createStyles = (colors) => StyleSheet.create({
     flex: 1,
     fontSize: 17,
     fontWeight: "700",
-    color: TEXT,
+    color: colors.text,
   },
   modalClose: {
     width: 34,
@@ -809,7 +803,7 @@ const createStyles = (colors) => StyleSheet.create({
   modalSubject: {
     fontSize: 16,
     fontWeight: "700",
-    color: TEXT,
+    color: colors.text,
     marginBottom: 14,
     lineHeight: 22,
   },
@@ -838,12 +832,12 @@ const createStyles = (colors) => StyleSheet.create({
   },
   infoCellLabel: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.textSecondary,
     fontWeight: "600",
   },
   infoCellValue: {
     fontSize: 12,
-    color: TEXT,
+    color: colors.text,
     fontWeight: "700",
     marginTop: 2,
     textAlign: "center",
@@ -870,7 +864,7 @@ const createStyles = (colors) => StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: TEXT,
+    color: colors.text,
   },
   messageBox: {
     backgroundColor: colors.background,
@@ -896,7 +890,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: BORDER,
+    borderColor: colors.border,
     backgroundColor: colors.background,
     alignItems: "center",
     justifyContent: "center",
@@ -905,7 +899,7 @@ const createStyles = (colors) => StyleSheet.create({
   statusOptionText: {
     fontSize: 12,
     fontWeight: "700",
-    color: MUTED,
+    color: colors.textSecondary,
   },
 
   /* Conversation Bubbles */
@@ -945,16 +939,16 @@ const createStyles = (colors) => StyleSheet.create({
   bubbleSender: {
     fontSize: 11,
     fontWeight: "700",
-    color: TEXT,
+    color: colors.text,
   },
   bubbleTime: {
     fontSize: 10,
-    color: MUTED,
+    color: colors.textSecondary,
   },
   bubbleText: {
     fontSize: 13,
     lineHeight: 19,
-    color: TEXT,
+    color: colors.text,
   },
   noRepliesWrap: {
     alignItems: "center",
@@ -964,7 +958,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   noRepliesText: {
     fontSize: 12,
-    color: MUTED,
+    color: colors.textSecondary,
     marginTop: 8,
     textAlign: "center",
     paddingHorizontal: 20,
@@ -974,12 +968,12 @@ const createStyles = (colors) => StyleSheet.create({
   replyInput: {
     backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 13,
-    color: TEXT,
+    color: colors.text,
     textAlignVertical: "top",
     minHeight: 80,
     marginBottom: 10,

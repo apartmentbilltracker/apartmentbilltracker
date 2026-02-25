@@ -290,8 +290,12 @@ export const paymentProcessingService = {
 
 // App Settings Services (payment method toggles, version control, etc.)
 export const settingsService = {
-  getPaymentMethods: () =>
-    api.get("/api/v2/settings/payment-methods").then(extractData),
+  getPaymentMethods: (roomId) =>
+    api
+      .get("/api/v2/settings/payment-methods", {
+        params: roomId ? { room_id: roomId } : undefined,
+      })
+      .then(extractData),
 
   updatePaymentMethods: (data) =>
     api.put("/api/v2/settings/payment-methods", data).then(extractData),

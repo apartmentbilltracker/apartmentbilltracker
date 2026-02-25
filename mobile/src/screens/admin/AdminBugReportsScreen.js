@@ -18,12 +18,6 @@ import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 
 const GOLD = "#b38604";
-const BG = "#f5f6fa";
-const TEXT = "#1a1a2e";
-const CARD = "#fff";
-const MUTED = "#6b7280";
-const BORDER = "#e5e7eb";
-
 const AdminBugReportsScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -292,7 +286,7 @@ const AdminBugReportsScreen = ({ navigation }) => {
               <Ionicons
                 name={tab.icon}
                 size={13}
-                color={active ? "#fff" : MUTED}
+                color={active ? "#fff" : colors.textSecondary}
                 style={{ marginRight: 4 }}
               />
               <Text
@@ -344,7 +338,7 @@ const AdminBugReportsScreen = ({ navigation }) => {
                       {item.title}
                     </Text>
                     <View style={styles.reporterRow}>
-                      <Ionicons name="person-outline" size={12} color={MUTED} />
+                      <Ionicons name="person-outline" size={12} color={colors.textSecondary} />
                       <Text style={styles.bugReporter}>{item.userName}</Text>
                     </View>
                   </View>
@@ -392,7 +386,7 @@ const AdminBugReportsScreen = ({ navigation }) => {
 
                 <View style={styles.cardMetaRow}>
                   <View style={styles.metaChip}>
-                    <Ionicons name="cube-outline" size={12} color={MUTED} />
+                    <Ionicons name="cube-outline" size={12} color={colors.textSecondary} />
                     <Text style={styles.metaText}>{item.module}</Text>
                   </View>
                   <View style={styles.metaChip}>
@@ -441,7 +435,7 @@ const AdminBugReportsScreen = ({ navigation }) => {
                 onPress={() => setModalVisible(false)}
                 style={styles.modalClose}
               >
-                <Ionicons name="close" size={22} color={MUTED} />
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -675,7 +669,7 @@ const AdminBugReportsScreen = ({ navigation }) => {
                                   isAdmin ? "build-outline" : "person-outline"
                                 }
                                 size={12}
-                                color={isAdmin ? "#fff" : TEXT}
+                                color={isAdmin ? "#fff" : colors.text}
                               />
                               <Text
                                 style={[
@@ -780,12 +774,12 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    loadingText: { marginTop: 12, color: MUTED, fontSize: 14 },
+    loadingText: { marginTop: 12, color: colors.textSecondary, fontSize: 14 },
 
     /* Summary */
     summaryStrip: {
       flexDirection: "row",
-      backgroundColor: CARD,
+      backgroundColor: colors.card,
       marginHorizontal: 16,
       marginTop: 12,
       borderRadius: 14,
@@ -806,14 +800,14 @@ const createStyles = (colors) =>
     summaryValue: { fontSize: 20, fontWeight: "800", color: GOLD },
     summaryLabel: {
       fontSize: 11,
-      color: MUTED,
+      color: colors.textSecondary,
       marginTop: 2,
       fontWeight: "500",
     },
     summaryDivider: {
       width: StyleSheet.hairlineWidth,
       height: 28,
-      backgroundColor: BORDER,
+      backgroundColor: colors.border,
     },
 
     /* Filters */
@@ -826,7 +820,7 @@ const createStyles = (colors) =>
     filterLabel: {
       fontSize: 12,
       fontWeight: "700",
-      color: TEXT,
+      color: colors.text,
       marginRight: 4,
     },
     filterChip: {
@@ -835,12 +829,12 @@ const createStyles = (colors) =>
       paddingHorizontal: 12,
       paddingVertical: 7,
       borderRadius: 20,
-      backgroundColor: CARD,
+      backgroundColor: colors.card,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: colors.border,
     },
     filterChipActive: { backgroundColor: GOLD, borderColor: GOLD },
-    filterChipText: { fontSize: 12, color: MUTED, fontWeight: "600" },
+    filterChipText: { fontSize: 12, color: colors.textSecondary, fontWeight: "600" },
     filterChipTextActive: { color: "#fff" },
 
     /* Bug Cards */
@@ -849,7 +843,7 @@ const createStyles = (colors) =>
       marginHorizontal: 16,
       marginBottom: 10,
       borderRadius: 14,
-      backgroundColor: CARD,
+      backgroundColor: colors.card,
       overflow: "hidden",
       ...Platform.select({
         ios: {
@@ -864,9 +858,9 @@ const createStyles = (colors) =>
     cardAccent: { width: 4 },
     cardBody: { flex: 1, paddingHorizontal: 14, paddingVertical: 12 },
     cardTopRow: { flexDirection: "row", alignItems: "flex-start" },
-    bugTitle: { fontSize: 15, fontWeight: "700", color: TEXT, marginBottom: 4 },
+    bugTitle: { fontSize: 15, fontWeight: "700", color: colors.text, marginBottom: 4 },
     reporterRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-    bugReporter: { fontSize: 12, color: MUTED },
+    bugReporter: { fontSize: 12, color: colors.textSecondary },
     badgeColumn: { alignItems: "flex-end", gap: 4 },
     badge: {
       flexDirection: "row",
@@ -883,16 +877,16 @@ const createStyles = (colors) =>
       borderRadius: 5,
       backgroundColor: "#ef4444",
       borderWidth: 2,
-      borderColor: CARD,
+      borderColor: colors.card,
     },
     cardSeparator: {
       height: StyleSheet.hairlineWidth,
-      backgroundColor: BORDER,
+      backgroundColor: colors.border,
       marginVertical: 10,
     },
     cardMetaRow: { flexDirection: "row", alignItems: "center", gap: 14 },
     metaChip: { flexDirection: "row", alignItems: "center", gap: 4 },
-    metaText: { fontSize: 11, color: MUTED, fontWeight: "500" },
+    metaText: { fontSize: 11, color: colors.textSecondary, fontWeight: "500" },
 
     /* Empty */
     emptyWrap: {
@@ -909,8 +903,8 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginBottom: 16,
     },
-    emptyTitle: { fontSize: 16, fontWeight: "700", color: TEXT },
-    emptySub: { fontSize: 13, color: MUTED, marginTop: 4 },
+    emptyTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+    emptySub: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
 
     /* Modal */
     modalOverlay: {
@@ -923,7 +917,7 @@ const createStyles = (colors) =>
     modalCard: {
       width: "100%",
       maxHeight: "92%",
-      backgroundColor: CARD,
+      backgroundColor: colors.card,
       borderRadius: 18,
       overflow: "hidden",
       ...Platform.select({
@@ -942,7 +936,7 @@ const createStyles = (colors) =>
       paddingHorizontal: 16,
       paddingVertical: 14,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: BORDER,
+      borderBottomColor: colors.border,
     },
     modalIconWrap: {
       width: 36,
@@ -953,7 +947,7 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginRight: 10,
     },
-    modalTitle: { flex: 1, fontSize: 17, fontWeight: "700", color: TEXT },
+    modalTitle: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.text },
     modalClose: {
       width: 34,
       height: 34,
@@ -966,7 +960,7 @@ const createStyles = (colors) =>
     modalSubject: {
       fontSize: 16,
       fontWeight: "700",
-      color: TEXT,
+      color: colors.text,
       marginBottom: 14,
       lineHeight: 22,
     },
@@ -993,10 +987,10 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginBottom: 6,
     },
-    infoCellLabel: { fontSize: 11, color: MUTED, fontWeight: "600" },
+    infoCellLabel: { fontSize: 11, color: colors.textSecondary, fontWeight: "600" },
     infoCellValue: {
       fontSize: 12,
-      color: TEXT,
+      color: colors.text,
       fontWeight: "700",
       marginTop: 2,
       textAlign: "center",
@@ -1018,7 +1012,7 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    sectionTitle: { fontSize: 14, fontWeight: "700", color: TEXT },
+    sectionTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
     messageBox: {
       backgroundColor: colors.background,
       borderRadius: 12,
@@ -1035,13 +1029,13 @@ const createStyles = (colors) =>
       paddingVertical: 10,
       borderRadius: 12,
       borderWidth: 1.5,
-      borderColor: BORDER,
+      borderColor: colors.border,
       backgroundColor: colors.background,
       alignItems: "center",
       justifyContent: "center",
       gap: 4,
     },
-    statusOptionText: { fontSize: 11, fontWeight: "700", color: MUTED },
+    statusOptionText: { fontSize: 11, fontWeight: "700", color: colors.textSecondary },
 
     /* Timeline */
     timelineItem: { flexDirection: "row", marginBottom: 16 },
@@ -1057,10 +1051,10 @@ const createStyles = (colors) =>
     timelineFrom: {
       fontSize: 12,
       fontWeight: "700",
-      color: TEXT,
+      color: colors.text,
       marginBottom: 4,
     },
-    timelineText: { fontSize: 13, color: MUTED, lineHeight: 19 },
+    timelineText: { fontSize: 13, color: colors.textSecondary, lineHeight: 19 },
     timelineTime: { fontSize: 11, color: colors.textTertiary, marginTop: 4 },
 
     /* Conversation Bubbles */
@@ -1084,20 +1078,20 @@ const createStyles = (colors) =>
       gap: 8,
     },
     bubbleSenderRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-    bubbleSender: { fontSize: 11, fontWeight: "700", color: TEXT },
-    bubbleTime: { fontSize: 10, color: MUTED },
-    bubbleText: { fontSize: 13, lineHeight: 19, color: TEXT },
+    bubbleSender: { fontSize: 11, fontWeight: "700", color: colors.text },
+    bubbleTime: { fontSize: 10, color: colors.textSecondary },
+    bubbleText: { fontSize: 13, lineHeight: 19, color: colors.text },
 
     /* Reply Input */
     replyInput: {
       backgroundColor: colors.background,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: colors.border,
       borderRadius: 12,
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 13,
-      color: TEXT,
+      color: colors.text,
       textAlignVertical: "top",
       minHeight: 80,
       marginBottom: 10,

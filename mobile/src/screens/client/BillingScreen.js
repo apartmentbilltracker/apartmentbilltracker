@@ -15,6 +15,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { billingCycleService, roomService } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
+import { screenCache } from "../../hooks/useScreenCache";
+import AnimatedAmount from "../../components/AnimatedAmount";
 import { useTheme } from "../../theme/ThemeContext";
 
 const WATER_BILL_PER_DAY = 5;
@@ -53,6 +55,12 @@ const BillingScreen = ({ route }) => {
 
   useFocusEffect(
     React.useCallback(() => {
+      // Restore cached billing data instantly
+      screenCache.read("client_billing_" + roomId).then((cached) => {
+        if (cached?.billing) setBilling(cached.billing);
+        if (cached?.activeCycle !== undefined)
+          setActiveCycle(cached.activeCycle);
+      });
       fetchBilling();
     }, [roomId]),
   );
@@ -64,12 +72,18 @@ const BillingScreen = ({ route }) => {
       const data = response.data || response;
       const room = data.room || data;
 
-      setBilling({
+      const billingData = {
         billing: room.billing,
         members: room.members,
-      });
+      };
+      setBilling(billingData);
 
-      await fetchActiveBillingCycle(roomId);
+      // Fetch cycle and cache both together
+      const cycleRes = await fetchActiveBillingCycle(roomId);
+      screenCache.write("client_billing_" + roomId, {
+        billing: billingData,
+        activeCycle: cycleRes,
+      });
     } catch (error) {
       Alert.alert("Error", "Failed to load billing information");
     } finally {
@@ -80,15 +94,16 @@ const BillingScreen = ({ route }) => {
   const fetchActiveBillingCycle = async (rid) => {
     try {
       const response = await billingCycleService.getBillingCycles(rid);
-      // FIX: response is { success, billingCycles: [...] } after extractData
       const cycles = Array.isArray(response)
         ? response
         : response?.billingCycles || response?.data || [];
 
-      const active = cycles.find((c) => c.status === "active");
-      setActiveCycle(active || null);
+      const active = cycles.find((c) => c.status === "active") || null;
+      setActiveCycle(active);
+      return active;
     } catch (error) {
       setActiveCycle(null);
+      return null;
     }
   };
 
@@ -113,7 +128,11 @@ const BillingScreen = ({ route }) => {
     const endDate = billing.billing?.end;
     let totalDays = 0;
     billing.members.forEach((member) => {
-      totalDays += filterPresenceByDates(member.presence, startDate, endDate).length;
+      totalDays += filterPresenceByDates(
+        member.presence,
+        startDate,
+        endDate,
+      ).length;
     });
     return totalDays * WATER_BILL_PER_DAY;
   };
@@ -159,12 +178,16 @@ const BillingScreen = ({ route }) => {
 
     if (!myMember || !myMember.isPayer) return 0;
 
-    const myOwnWater = filterPresenceByDates(myMember.presence, startDate, endDate).length * WATER_BILL_PER_DAY;
+    const myOwnWater =
+      filterPresenceByDates(myMember.presence, startDate, endDate).length *
+      WATER_BILL_PER_DAY;
 
     let nonPayorWater = 0;
     billing.members.forEach((member) => {
       if (!member.isPayer || member.isPayer === false) {
-        nonPayorWater += filterPresenceByDates(member.presence, startDate, endDate).length * WATER_BILL_PER_DAY;
+        nonPayorWater +=
+          filterPresenceByDates(member.presence, startDate, endDate).length *
+          WATER_BILL_PER_DAY;
       }
     });
 
@@ -207,22 +230,23 @@ const BillingScreen = ({ route }) => {
     const totalPayorCount =
       (billing.members || []).filter((m) => m.isPayer !== false).length || 1;
 
-    const myPresenceDays =
-      filterPresenceByDates(
-        billing.members.find(
-          (m) =>
-            String(m.user?.id || m.user?._id || m.user) ===
-            String(state?.user?.id || state?.user?._id),
-        )?.presence,
-        startDate,
-        endDate,
-      ).length;
+    const myPresenceDays = filterPresenceByDates(
+      billing.members.find(
+        (m) =>
+          String(m.user?.id || m.user?._id || m.user) ===
+          String(state?.user?.id || state?.user?._id),
+      )?.presence,
+      startDate,
+      endDate,
+    ).length;
     const myOwnWater = myPresenceDays * WATER_BILL_PER_DAY;
 
     let nonPayorWater = 0;
     billing.members.forEach((member) => {
       if (!member.isPayer || member.isPayer === false) {
-        nonPayorWater += filterPresenceByDates(member.presence, startDate, endDate).length * WATER_BILL_PER_DAY;
+        nonPayorWater +=
+          filterPresenceByDates(member.presence, startDate, endDate).length *
+          WATER_BILL_PER_DAY;
       }
     });
 
@@ -274,7 +298,8 @@ const BillingScreen = ({ route }) => {
     parseFloat(billing?.billing?.internet || 0);
 
   // ── render ──
-  if (loading) {
+  // Only show full-screen spinner on the very first load (no cached data yet)
+  if (loading && !billing) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.accent} />
@@ -388,15 +413,21 @@ const BillingScreen = ({ route }) => {
               />
               <Text style={styles.billLabel}>{item.label}</Text>
             </View>
-            <Text style={[styles.billAmount, { color: item.color }]}>
-              ₱{parseFloat(item.amount).toFixed(2)}
-            </Text>
+            <AnimatedAmount
+              value={parseFloat(item.amount) || 0}
+              formatter={(n) => `₱${n.toFixed(2)}`}
+              style={[styles.billAmount, { color: item.color }]}
+            />
           </View>
         ))}
 
         <View style={styles.grandTotalBar}>
           <Text style={styles.grandTotalLabel}>Grand Total</Text>
-          <Text style={styles.grandTotalAmount}>₱{grandTotal.toFixed(2)}</Text>
+          <AnimatedAmount
+            value={grandTotal}
+            formatter={(n) => `₱${n.toFixed(2)}`}
+            style={styles.grandTotalAmount}
+          />
         </View>
       </View>
 
@@ -429,15 +460,21 @@ const BillingScreen = ({ route }) => {
                 )}
               </View>
             </View>
-            <Text style={[styles.shareAmount, { color: item.color }]}>
-              ₱{item.amount.toFixed(2)}
-            </Text>
+            <AnimatedAmount
+              value={item.amount || 0}
+              formatter={(n) => `₱${n.toFixed(2)}`}
+              style={[styles.shareAmount, { color: item.color }]}
+            />
           </View>
         ))}
 
         <View style={styles.totalShareBar}>
           <Text style={styles.totalShareLabel}>Your Total</Text>
-          <Text style={styles.totalShareAmount}>₱{totalShare.toFixed(2)}</Text>
+          <AnimatedAmount
+            value={totalShare}
+            formatter={(n) => `₱${n.toFixed(2)}`}
+            style={styles.totalShareAmount}
+          />
         </View>
       </View>
 

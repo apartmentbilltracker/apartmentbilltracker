@@ -1326,7 +1326,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       backgroundColor: "rgba(255,255,255,0.35)",
     },
     pvDotActive: {
-      backgroundColor: "#fff",
+      backgroundColor: colors.card,
       width: 14,
     },
   });
