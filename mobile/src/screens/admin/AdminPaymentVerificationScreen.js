@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import {
   View,
   Text,
@@ -490,6 +491,7 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
                 )}
               </TouchableOpacity>
             </View>
+            <ModalBottomSpacer />
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -649,6 +651,7 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
                 )}
               </TouchableOpacity>
             </View>
+            <ModalBottomSpacer />
           </View>
         </KeyboardAvoidingView>
       </Modal>

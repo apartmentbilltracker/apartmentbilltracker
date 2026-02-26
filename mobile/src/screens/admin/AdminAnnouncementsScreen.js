@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState, useMemo} from "react";
+import React, { useContext, useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -288,7 +288,11 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.headerIconWrap}>
-            <Ionicons name="megaphone-outline" size={20} color={colors.accent} />
+            <Ionicons
+              name="megaphone-outline"
+              size={20}
+              color={colors.accent}
+            />
           </View>
           <View>
             <Text style={styles.headerTitle}>Announcements</Text>
@@ -308,7 +312,11 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
       {/* Summary Strip */}
       <View style={styles.summaryStrip}>
         <View style={styles.summaryItem}>
-          <Ionicons name="document-text-outline" size={16} color={colors.accent} />
+          <Ionicons
+            name="document-text-outline"
+            size={16}
+            color={colors.accent}
+          />
           <Text style={styles.summaryValue}>{announcements.length}</Text>
           <Text style={styles.summaryLabel}>Posts</Text>
         </View>
@@ -390,7 +398,11 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                     onPress={() => handleDeleteAnnouncement(annId)}
                     style={styles.deleteBtn}
                   >
-                    <Ionicons name="trash-outline" size={18} color={colors.error} />
+                    <Ionicons
+                      name="trash-outline"
+                      size={18}
+                      color={colors.error}
+                    />
                   </TouchableOpacity>
                 )}
               </View>
@@ -656,7 +668,11 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconWrap}>
-              <Ionicons name="megaphone-outline" size={40} color={colors.accent} />
+              <Ionicons
+                name="megaphone-outline"
+                size={40}
+                color={colors.accent}
+              />
             </View>
             <Text style={styles.emptyText}>No announcements yet</Text>
             <Text style={styles.emptySubtext}>
@@ -686,7 +702,11 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
           <View style={styles.modalContent}>
             <View style={styles.modalIconHeader}>
               <View style={styles.modalIconWrap}>
-                <Ionicons name="create-outline" size={24} color={colors.accent} />
+                <Ionicons
+                  name="create-outline"
+                  size={24}
+                  color={colors.accent}
+                />
               </View>
             </View>
             <View style={styles.modalHeaderRow}>
@@ -726,6 +746,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                 <Ionicons name="send" size={18} color={colors.textOnAccent} />
                 <Text style={styles.submitButtonText}>Create Announcement</Text>
               </TouchableOpacity>
+              <ModalBottomSpacer />
             </ScrollView>
           </View>
         </View>
@@ -778,6 +799,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                 <Ionicons name="send" size={18} color={colors.textOnAccent} />
                 <Text style={styles.submitButtonText}>Post Comment</Text>
               </TouchableOpacity>
+              <ModalBottomSpacer />
             </ScrollView>
           </View>
         </View>
@@ -786,539 +808,540 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: colors.background,
-  },
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+    },
 
-  /* Header */
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: colors.card,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.06,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 4,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  headerIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(179,134,4,0.12)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    marginTop: 1,
-  },
-  createButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.accent,
-    justifyContent: "center",
-    alignItems: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#b38604",
-        shadowOpacity: 0.25,
-        shadowOffset: { width: 0, height: 3 },
-        shadowRadius: 6,
-      },
-      android: { elevation: 4 },
-    }),
-  },
+    /* Header */
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      backgroundColor: colors.card,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.06,
+          shadowOffset: { width: 0, height: 2 },
+          shadowRadius: 4,
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    headerLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    headerIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(179,134,4,0.12)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    headerSubtitle: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 1,
+    },
+    createButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      ...Platform.select({
+        ios: {
+          shadowColor: "#b38604",
+          shadowOpacity: 0.25,
+          shadowOffset: { width: 0, height: 3 },
+          shadowRadius: 6,
+        },
+        android: { elevation: 4 },
+      }),
+    },
 
-  /* Summary Strip */
-  summaryStrip: {
-    flexDirection: "row",
-    backgroundColor: colors.card,
-    marginHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 4,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.06,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 6,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  summaryItem: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-  },
-  summaryValue: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: colors.textTertiary,
-  },
-  summarySep: {
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: colors.skeleton,
-    marginVertical: 2,
-  },
+    /* Summary Strip */
+    summaryStrip: {
+      flexDirection: "row",
+      backgroundColor: colors.card,
+      marginHorizontal: 12,
+      marginTop: 12,
+      marginBottom: 4,
+      borderRadius: 14,
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.06,
+          shadowOffset: { width: 0, height: 2 },
+          shadowRadius: 6,
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    summaryItem: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+    },
+    summaryValue: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    summaryLabel: {
+      fontSize: 12,
+      color: colors.textTertiary,
+    },
+    summarySep: {
+      width: StyleSheet.hairlineWidth,
+      backgroundColor: colors.skeleton,
+      marginVertical: 2,
+    },
 
-  /* Post List */
-  listContent: {
-    paddingTop: 8,
-    paddingBottom: 24,
-  },
-  postCard: {
-    backgroundColor: colors.card,
-    marginHorizontal: 12,
-    marginBottom: 12,
-    borderRadius: 14,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.07,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 6,
-      },
-      android: { elevation: 2 },
-    }),
-    overflow: "hidden",
-  },
-  postHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
-  },
-  creatorInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    marginRight: 10,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.accent,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  avatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-    backgroundColor: colors.inputBg,
-  },
-  avatarText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  creatorDetails: {
-    flex: 1,
-  },
-  creatorName: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 2,
-  },
-  createdAt: {
-    fontSize: 12,
-    color: colors.textTertiary,
-  },
-  deleteBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(231,76,60,0.08)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
+    /* Post List */
+    listContent: {
+      paddingTop: 8,
+      paddingBottom: 24,
+    },
+    postCard: {
+      backgroundColor: colors.card,
+      marginHorizontal: 12,
+      marginBottom: 12,
+      borderRadius: 14,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.07,
+          shadowOffset: { width: 0, height: 2 },
+          shadowRadius: 6,
+        },
+        android: { elevation: 2 },
+      }),
+      overflow: "hidden",
+    },
+    postHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderLight,
+    },
+    creatorInfo: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+      marginRight: 10,
+    },
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    avatarImage: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      marginRight: 12,
+      backgroundColor: colors.inputBg,
+    },
+    avatarText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 16,
+    },
+    creatorDetails: {
+      flex: 1,
+    },
+    creatorName: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 2,
+    },
+    createdAt: {
+      fontSize: 12,
+      color: colors.textTertiary,
+    },
+    deleteBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: "rgba(231,76,60,0.08)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
 
-  /* Post Content */
-  postContent: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  postTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 6,
-    lineHeight: 20,
-  },
-  postText: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-  },
+    /* Post Content */
+    postContent: {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    postTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 6,
+      lineHeight: 20,
+    },
+    postText: {
+      fontSize: 14,
+      color: colors.text,
+      lineHeight: 20,
+    },
 
-  /* Stats Bar */
-  statsBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
-  },
-  reactionStats: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  reactionEmoji: {
-    marginRight: -5,
-    fontSize: 15,
-  },
-  reactionCount: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    marginLeft: 6,
-    fontWeight: "500",
-  },
-  shareCount: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    fontWeight: "500",
-  },
+    /* Stats Bar */
+    statsBar: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderLight,
+    },
+    reactionStats: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    reactionEmoji: {
+      marginRight: -5,
+      fontSize: 15,
+    },
+    reactionCount: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginLeft: 6,
+      fontWeight: "500",
+    },
+    shareCount: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      fontWeight: "500",
+    },
 
-  /* Action Bar */
-  actionBar: {
-    flexDirection: "row",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
-    justifyContent: "space-around",
-  },
-  actionButtonGroup: {
-    flex: 1,
-    position: "relative",
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    gap: 5,
-  },
-  actionButtonEmoji: {
-    fontSize: 18,
-  },
-  actionButtonText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontWeight: "600",
-  },
-  reacted: {
-    color: colors.accent,
-    fontWeight: "700",
-  },
-  reactionPickerContainer: {
-    position: "absolute",
-    bottom: 45,
-    left: 0,
-    backgroundColor: colors.card,
-    flexDirection: "row",
-    borderRadius: 24,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.18,
-        shadowOffset: { width: 0, height: 4 },
-        shadowRadius: 12,
-      },
-      android: { elevation: 10 },
-    }),
-    zIndex: 100,
-  },
-  reactionOption: {
-    width: 42,
-    height: 42,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  reactionOptionEmoji: {
-    fontSize: 26,
-  },
+    /* Action Bar */
+    actionBar: {
+      flexDirection: "row",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderLight,
+      justifyContent: "space-around",
+    },
+    actionButtonGroup: {
+      flex: 1,
+      position: "relative",
+    },
+    actionButton: {
+      flex: 1,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingVertical: 10,
+      paddingHorizontal: 8,
+      gap: 5,
+    },
+    actionButtonEmoji: {
+      fontSize: 18,
+    },
+    actionButtonText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    reacted: {
+      color: colors.accent,
+      fontWeight: "700",
+    },
+    reactionPickerContainer: {
+      position: "absolute",
+      bottom: 45,
+      left: 0,
+      backgroundColor: colors.card,
+      flexDirection: "row",
+      borderRadius: 24,
+      paddingHorizontal: 6,
+      paddingVertical: 6,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.18,
+          shadowOffset: { width: 0, height: 4 },
+          shadowRadius: 12,
+        },
+        android: { elevation: 10 },
+      }),
+      zIndex: 100,
+    },
+    reactionOption: {
+      width: 42,
+      height: 42,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    reactionOptionEmoji: {
+      fontSize: 26,
+    },
 
-  /* Comments */
-  commentsContainer: {
-    paddingHorizontal: 14,
-    paddingBottom: 10,
-  },
-  viewCommentsButton: {
-    paddingVertical: 8,
-  },
-  viewCommentsText: {
-    fontSize: 13,
-    color: colors.accent,
-    fontWeight: "600",
-  },
-  commentsList: {
-    marginBottom: 8,
-    marginTop: 6,
-  },
-  comment: {
-    flexDirection: "row",
-    marginBottom: 14,
-  },
-  commentAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "rgba(179,134,4,0.15)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-    marginTop: 2,
-  },
-  commentAvatarImg: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 10,
-    marginTop: 2,
-    backgroundColor: colors.inputBg,
-  },
-  commentAvatarText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.accent,
-  },
-  commentBody: {
-    flex: 1,
-  },
-  commentHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 4,
-  },
-  commentAuthor: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  commentBubble: {
-    backgroundColor: colors.background,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-  commentText: {
-    fontSize: 13,
-    color: colors.text,
-    lineHeight: 18,
-  },
-  commentDate: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    marginTop: 5,
-    marginLeft: 4,
-  },
-  addCommentPrompt: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
-    marginTop: 4,
-  },
-  commentInputAvatar: {
-    marginRight: 10,
-  },
-  commentInputPlaceholder: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.textTertiary,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: colors.background,
-    borderRadius: 18,
-    fontWeight: "500",
-  },
+    /* Comments */
+    commentsContainer: {
+      paddingHorizontal: 14,
+      paddingBottom: 10,
+    },
+    viewCommentsButton: {
+      paddingVertical: 8,
+    },
+    viewCommentsText: {
+      fontSize: 13,
+      color: colors.accent,
+      fontWeight: "600",
+    },
+    commentsList: {
+      marginBottom: 8,
+      marginTop: 6,
+    },
+    comment: {
+      flexDirection: "row",
+      marginBottom: 14,
+    },
+    commentAvatar: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: "rgba(179,134,4,0.15)",
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
+      marginTop: 2,
+    },
+    commentAvatarImg: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      marginRight: 10,
+      marginTop: 2,
+      backgroundColor: colors.inputBg,
+    },
+    commentAvatarText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    commentBody: {
+      flex: 1,
+    },
+    commentHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 4,
+    },
+    commentAuthor: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    commentBubble: {
+      backgroundColor: colors.background,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 14,
+    },
+    commentText: {
+      fontSize: 13,
+      color: colors.text,
+      lineHeight: 18,
+    },
+    commentDate: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 5,
+      marginLeft: 4,
+    },
+    addCommentPrompt: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 8,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderLight,
+      marginTop: 4,
+    },
+    commentInputAvatar: {
+      marginRight: 10,
+    },
+    commentInputPlaceholder: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.textTertiary,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      backgroundColor: colors.background,
+      borderRadius: 18,
+      fontWeight: "500",
+    },
 
-  /* Empty State */
-  emptyContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 80,
-  },
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "rgba(179,134,4,0.10)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  emptyText: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  emptySubtext: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    marginTop: 6,
-  },
+    /* Empty State */
+    emptyContainer: {
+      justifyContent: "center",
+      alignItems: "center",
+      paddingVertical: 80,
+    },
+    emptyIconWrap: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: "rgba(179,134,4,0.10)",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    emptyText: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    emptySubtext: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 6,
+    },
 
-  /* Modals */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-  },
-  modalContent: {
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    paddingBottom: 20,
-    maxHeight: "85%",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.2,
-        shadowOffset: { width: 0, height: 8 },
-        shadowRadius: 20,
-      },
-      android: { elevation: 12 },
-    }),
-  },
-  modalIconHeader: {
-    alignItems: "center",
-    marginTop: 20,
-    marginBottom: 4,
-  },
-  modalIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(179,134,4,0.12)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    marginBottom: 14,
-    marginTop: 8,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  modalCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBody: {
-    paddingHorizontal: 20,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 14,
-    backgroundColor: colors.cardAlt,
-  },
-  contentInput: {
-    textAlignVertical: "top",
-    minHeight: 100,
-  },
-  submitButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 6,
-    marginBottom: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#b38604",
-        shadowOpacity: 0.25,
-        shadowOffset: { width: 0, height: 3 },
-        shadowRadius: 6,
-      },
-      android: { elevation: 3 },
-    }),
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-});
+    /* Modals */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.45)",
+      justifyContent: "center",
+      paddingHorizontal: 20,
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      paddingBottom: 20,
+      maxHeight: "85%",
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.2,
+          shadowOffset: { width: 0, height: 8 },
+          shadowRadius: 20,
+        },
+        android: { elevation: 12 },
+      }),
+    },
+    modalIconHeader: {
+      alignItems: "center",
+      marginTop: 20,
+      marginBottom: 4,
+    },
+    modalIconWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: "rgba(179,134,4,0.12)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      marginBottom: 14,
+      marginTop: 8,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    modalCloseBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalBody: {
+      paddingHorizontal: 20,
+    },
+    inputLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 6,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+      marginBottom: 14,
+      backgroundColor: colors.cardAlt,
+    },
+    contentInput: {
+      textAlignVertical: "top",
+      minHeight: 100,
+    },
+    submitButton: {
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginTop: 6,
+      marginBottom: 8,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#b38604",
+          shadowOpacity: 0.25,
+          shadowOffset: { width: 0, height: 3 },
+          shadowRadius: 6,
+        },
+        android: { elevation: 3 },
+      }),
+    },
+    submitButtonText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+  });
 
 export default AdminAnnouncementsScreen;

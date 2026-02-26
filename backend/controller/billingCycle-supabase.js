@@ -48,6 +48,61 @@ const normalizeBillingCycle = (cycle) => {
 };
 
 // ============================================================
+// HELPERS — server-side stats derived from live DB data
+// ============================================================
+
+/**
+ * Fetch the room's current members and compute:
+ *   membersCount    — number of approved members
+ *   waterBillAmount — total water charge based on billing mode
+ *
+ * For "fixed_monthly" rooms the caller-supplied fixedWaterAmount is used
+ * as-is.  For presence-based rooms the water is recomputed from actual
+ * presence records stored in Supabase (₱5 / member presence-day).
+ */
+const computeCycleStats = async (
+  roomId,
+  startDate,
+  endDate,
+  fixedWaterAmount,
+  waterBillingMode,
+) => {
+  try {
+    const members = (await SupabaseService.getRoomMembers(roomId)) || [];
+    const approvedMembers = members.filter(
+      (m) => !m.status || m.status === "approved",
+    );
+    const membersCount = approvedMembers.length;
+
+    let waterBillAmount;
+    if (waterBillingMode === "fixed_monthly" && Number(fixedWaterAmount) > 0) {
+      // Fixed monthly — respect the admin-set amount
+      waterBillAmount = Number(fixedWaterAmount);
+    } else {
+      // Presence-based — recompute from DB presence records
+      const sd = new Date(startDate);
+      const ed = new Date(endDate);
+      waterBillAmount = approvedMembers.reduce((total, member) => {
+        const presence = Array.isArray(member.presence) ? member.presence : [];
+        const days = presence.filter((dateStr) => {
+          const d = new Date(dateStr);
+          return d >= sd && d <= ed;
+        }).length;
+        return total + days * 5;
+      }, 0);
+      // Fallback: if presence yields 0 but admin sent a value, keep it
+      if (!waterBillAmount && Number(fixedWaterAmount) > 0) {
+        waterBillAmount = Number(fixedWaterAmount);
+      }
+    }
+
+    return { membersCount, waterBillAmount };
+  } catch (_err) {
+    return { membersCount: 0, waterBillAmount: Number(fixedWaterAmount) || 0 };
+  }
+};
+
+// ============================================================
 // CREATE A NEW BILLING CYCLE
 // ============================================================
 router.post("/", isAuthenticated, async (req, res, next) => {
@@ -89,9 +144,20 @@ router.post("/", isAuthenticated, async (req, res, next) => {
     if (activeCycle) {
       const updRent = rent || activeCycle.rent || 0;
       const updElec = electricity || activeCycle.electricity || 0;
-      const updWater =
+      const updWaterRaw =
         waterBillAmount || water || activeCycle.water_bill_amount || 0;
       const updInternet = internet || activeCycle.internet || 0;
+
+      // Recompute members_count and water from live DB data
+      const { membersCount: updMembersCount, waterBillAmount: updWater } =
+        await computeCycleStats(
+          roomId,
+          startDate,
+          endDate,
+          updWaterRaw,
+          room.water_billing_mode,
+        );
+
       const updatePayload = {
         start_date: new Date(startDate),
         end_date: new Date(endDate),
@@ -99,6 +165,7 @@ router.post("/", isAuthenticated, async (req, res, next) => {
         electricity: updElec,
         water_bill_amount: updWater,
         internet: updInternet,
+        members_count: updMembersCount,
         total_billed_amount:
           parseFloat(updRent) +
           parseFloat(updElec) +
@@ -133,8 +200,18 @@ router.post("/", isAuthenticated, async (req, res, next) => {
     // Create new billing cycle
     const rentVal = rent || 0;
     const elecVal = electricity || 0;
-    const waterVal = waterBillAmount || water || 0;
+    const waterValRaw = waterBillAmount || water || 0;
     const internetVal = internet || 0;
+
+    // Recompute members_count and water from live DB data
+    const { membersCount: newMembersCount, waterBillAmount: waterVal } =
+      await computeCycleStats(
+        roomId,
+        startDate,
+        endDate,
+        waterValRaw,
+        room.water_billing_mode,
+      );
 
     const billingCycle = await SupabaseService.createBillingCycle({
       room_id: roomId,
@@ -145,6 +222,7 @@ router.post("/", isAuthenticated, async (req, res, next) => {
       electricity: elecVal,
       water_bill_amount: waterVal,
       internet: internetVal,
+      members_count: newMembersCount,
       previous_meter_reading:
         previousMeterReading != null ? previousMeterReading : null,
       current_meter_reading:
@@ -492,10 +570,30 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
       const e = parseFloat(
         updateData.electricity ?? currentCycle?.electricity ?? 0,
       );
-      const w = parseFloat(
+      const i = parseFloat(updateData.internet ?? currentCycle?.internet ?? 0);
+
+      // Recompute members_count and water from live DB presence data
+      const cycleRoomId = currentCycle?.room_id;
+      const cycleRoom = cycleRoomId
+        ? await SupabaseService.findRoomById(cycleRoomId)
+        : null;
+      const waterRaw = parseFloat(
         updateData.water_bill_amount ?? currentCycle?.water_bill_amount ?? 0,
       );
-      const i = parseFloat(updateData.internet ?? currentCycle?.internet ?? 0);
+      const { membersCount: updMembersCount, waterBillAmount: computedWater } =
+        cycleRoomId
+          ? await computeCycleStats(
+              cycleRoomId,
+              currentCycle.start_date,
+              currentCycle.end_date,
+              waterRaw,
+              cycleRoom?.water_billing_mode,
+            )
+          : { membersCount: 0, waterBillAmount: waterRaw };
+
+      const w = computedWater;
+      updateData.water_bill_amount = w;
+      updateData.members_count = updMembersCount;
       updateData.total_billed_amount = r + e + w + i;
     }
 
@@ -509,6 +607,68 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
       success: true,
       message: "Billing cycle updated successfully",
       billingCycle: normalizeBillingCycle(updatedCycle),
+    });
+  } catch (error) {
+    next(new ErrorHandler(error.message, 500));
+  }
+});
+
+// ============================================================
+// BACKFILL — recalculate members_count & water_bill_amount
+//            for all existing billing cycles in the DB
+// POST /api/v1/billing-cycles/backfill-stats
+// ============================================================
+router.post("/backfill-stats", isAuthenticated, async (req, res, next) => {
+  try {
+    const allCycles =
+      (await SupabaseService.selectAllRecords(
+        "billing_cycles",
+        "id, room_id, status, start_date, end_date, rent, electricity, water_bill_amount, internet, members_count",
+      )) || [];
+
+    let updated = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const cycle of allCycles) {
+      try {
+        const room = await SupabaseService.findRoomById(cycle.room_id);
+        if (!room) {
+          skipped++;
+          continue;
+        }
+
+        const { membersCount, waterBillAmount } = await computeCycleStats(
+          cycle.room_id,
+          cycle.start_date,
+          cycle.end_date,
+          cycle.water_bill_amount,
+          room.water_billing_mode,
+        );
+
+        const r = parseFloat(cycle.rent || 0);
+        const e = parseFloat(cycle.electricity || 0);
+        const w = parseFloat(waterBillAmount || 0);
+        const i = parseFloat(cycle.internet || 0);
+
+        await SupabaseService.update("billing_cycles", cycle.id, {
+          members_count: membersCount,
+          water_bill_amount: w,
+          total_billed_amount: r + e + w + i,
+        });
+        updated++;
+      } catch (err) {
+        errors.push({ cycleId: cycle.id, error: err.message });
+        skipped++;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Backfill complete. Updated: ${updated}, Skipped: ${skipped}.`,
+      updated,
+      skipped,
+      errors,
     });
   } catch (error) {
     next(new ErrorHandler(error.message, 500));

@@ -75,6 +75,17 @@ const AdminBillingScreen = ({ navigation }) => {
   // Load billing state whenever the selected room changes
   useEffect(() => {
     if (selectedRoom) {
+      // Clear previous room's data immediately to prevent flash of wrong room's amounts
+      setRent("");
+      setElectricity("");
+      setInternet("");
+      setStartDate("");
+      setEndDate("");
+      setPrevReading("");
+      setCurrReading("");
+      setMembers([]);
+      setCycleCompleted(false);
+
       // Preload from cache for instant display
       const roomId = selectedRoom.id || selectedRoom._id;
       screenCache.read("admin_billing_cycle_" + roomId).then((cached) => {

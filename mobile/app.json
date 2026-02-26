@@ -21,7 +21,8 @@
     "android": {
       "package": "com.apartmentbilltracker",
       "scheme": "aptbilltracker",
-      "userInterfaceStyle": "automatic"
+      "userInterfaceStyle": "automatic",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "plugins": [
       [

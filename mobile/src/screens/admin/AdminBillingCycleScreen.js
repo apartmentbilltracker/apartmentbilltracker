@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useFocusEffect } from "@react-navigation/native";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import {
   View,
   Text,
@@ -175,6 +176,37 @@ const AdminBillingCycleScreen = ({ route }) => {
     );
   };
 
+  const handleBackfillStats = () => {
+    Alert.alert(
+      "Recalculate Existing Data",
+      "This will fix members_count and water_bill_amount for ALL billing cycles that were created before the fix. Run once to sync old records.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Recalculate",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await apiService.post(
+                "/api/v2/billing-cycles/backfill-stats",
+                {},
+              );
+              if (response.success) {
+                Alert.alert("Done", `${response.message}`);
+                fetchCycles();
+              }
+            } catch (error) {
+              console.error("Backfill error:", error);
+              Alert.alert("Error", "Failed to recalculate stats");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const resetForm = () => {
     const newStart = new Date();
     const newEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -271,13 +303,22 @@ const AdminBillingCycleScreen = ({ route }) => {
             </View>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.createFab}
-          onPress={() => setShowCreateModal(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="add" size={22} color={colors.textOnAccent} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            style={styles.recalcFab}
+            onPress={handleBackfillStats}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="refresh" size={18} color={colors.textOnAccent} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.createFab}
+            onPress={() => setShowCreateModal(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={22} color={colors.textOnAccent} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* STATS BAR */}
@@ -799,6 +840,7 @@ const AdminBillingCycleScreen = ({ route }) => {
                   )}
                 </TouchableOpacity>
               </View>
+              <ModalBottomSpacer />
             </ScrollView>
           </View>
         </View>
@@ -846,6 +888,19 @@ const createStyles = (colors) =>
       letterSpacing: -0.3,
     },
     headerSubtitle: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
+    recalcFab: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: colors.primary || "#4a90d9",
+      justifyContent: "center",
+      alignItems: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 4,
+    },
     createFab: {
       width: 40,
       height: 40,
