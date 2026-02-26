@@ -74,6 +74,8 @@ const BillsScreen = ({ navigation }) => {
 
   useEffect(() => {
     if (selectedRoom) {
+      // Clear previous room's billing data immediately to prevent flash
+      setActiveCycle(null);
       // Extract presence directly from already-loaded room members (no extra API call)
       extractMemberPresence(selectedRoom);
       fetchActiveBillingCycle(selectedRoom.id || selectedRoom._id);

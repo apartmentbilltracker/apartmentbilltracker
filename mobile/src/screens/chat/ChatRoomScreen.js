@@ -354,8 +354,8 @@ const ChatRoomScreen = ({ route, navigation }) => {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={0}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -464,7 +464,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
           <View
             style={[
               styles.inputBar,
-              { paddingBottom: Math.max(insets.bottom, 8) },
+              { paddingBottom: insets.bottom > 0 ? insets.bottom + 4 : 12 },
             ]}
           >
             <TextInput
@@ -686,10 +686,12 @@ const createStyles = (colors) =>
       backgroundColor: colors.background,
       borderRadius: 20,
       paddingHorizontal: 16,
-      paddingVertical: Platform.OS === "ios" ? 10 : 8,
+      paddingTop: 10,
+      paddingBottom: 10,
       fontSize: 14,
       color: colors.text,
       maxHeight: 100,
+      minHeight: 40,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
     },
@@ -700,7 +702,7 @@ const createStyles = (colors) =>
       backgroundColor: colors.accent,
       justifyContent: "center",
       alignItems: "center",
-      marginBottom: Platform.OS === "ios" ? 2 : 0,
+      marginBottom: 0,
     },
     sendBtnDisabled: {
       opacity: 0.4,

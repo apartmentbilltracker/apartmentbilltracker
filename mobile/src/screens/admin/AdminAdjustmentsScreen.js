@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import {
   View,
   Text,
@@ -533,6 +534,7 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
                   <Text style={styles.confirmBtnText}>Apply Adjustment</Text>
                 </TouchableOpacity>
               </View>
+              <ModalBottomSpacer />
             </View>
           </View>
         </View>
