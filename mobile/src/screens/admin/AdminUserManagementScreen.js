@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthContext } from "../../context/AuthContext";
 import { hostRoleService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const ROLE_FILTERS = [
   { key: "all", label: "All" },
@@ -667,6 +668,7 @@ const AdminUserManagementScreen = ({ navigation }) => {
                     )}
                   </View>
                 )}
+                <ModalBottomSpacer />
               </>
             )}
           </View>
@@ -927,7 +929,7 @@ const createStyles = (colors) =>
       backgroundColor: colors.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      paddingBottom: 32,
+      paddingBottom: 8,
       maxHeight: "80%",
       ...Platform.select({
         ios: {

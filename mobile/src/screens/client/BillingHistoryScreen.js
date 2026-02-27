@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { apiService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const BillingHistoryScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
@@ -357,7 +358,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
               <ScrollView
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 32 }}
+                contentContainerStyle={{ paddingBottom: 4 }}
               >
                 {/* Status Banner */}
                 <View
@@ -629,6 +630,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                     </View>
                   </View>
                 )}
+                <ModalBottomSpacer />
               </ScrollView>
             )}
           </View>

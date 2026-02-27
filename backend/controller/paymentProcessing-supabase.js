@@ -419,7 +419,7 @@ router.post(
   }),
 );
 
-// Verify GCash payment - mark as submitted (awaiting admin verification)
+// Verify GCash payment - mark as submitted (awaiting host verification)
 router.post(
   "/verify-gcash",
   isAuthenticated,
@@ -436,20 +436,16 @@ router.post(
         return next(new ErrorHandler("Payment not found", 404));
       }
 
-      // Update status to completed and append mobile number
-      const updateData = { status: "completed" };
+      // Mark as submitted — host must verify before it becomes completed
+      const updateData = { status: "submitted" };
       if (mobileNumber && payment.reference) {
         updateData.reference = `${payment.reference} (${mobileNumber})`;
       }
       await SupabaseService.updatePayment(transactionId, updateData);
 
-      // Auto-close cycle if all payors have paid
-      const autoClose = await checkAndAutoCloseCycle(payment.room_id);
-
       res.status(200).json({
         success: true,
-        message: "GCash payment verified and recorded.",
-        cycleClosed: autoClose.closed,
+        message: "GCash payment submitted. Awaiting host verification.",
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -540,7 +536,7 @@ router.post(
   }),
 );
 
-// Confirm bank transfer - mark as submitted
+// Confirm bank transfer - mark as submitted (awaiting host verification)
 router.post(
   "/confirm-bank-transfer",
   isAuthenticated,
@@ -557,20 +553,16 @@ router.post(
         return next(new ErrorHandler("Payment not found", 404));
       }
 
-      // Update status to completed and append bank reference
-      const updateData = { status: "completed" };
+      // Mark as submitted — host must verify before it becomes completed
+      const updateData = { status: "submitted" };
       if (bankReferenceNumber && payment.reference) {
         updateData.reference = `${payment.reference} | Bank: ${bankReferenceNumber}`;
       }
       await SupabaseService.updatePayment(transactionId, updateData);
 
-      // Auto-close cycle if all payors have paid
-      const autoClose = await checkAndAutoCloseCycle(payment.room_id);
-
       res.status(200).json({
         success: true,
-        message: "Bank transfer verified and recorded.",
-        cycleClosed: autoClose.closed,
+        message: "Bank transfer submitted. Awaiting host verification.",
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));

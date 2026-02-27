@@ -7,6 +7,7 @@ import {
   StatusBar,
   TouchableOpacity,
   Linking,
+  Platform,
 } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +27,16 @@ export default function App() {
 
   React.useEffect(() => {
     checkAppVersion();
+    // Android 8+ requires a notification channel for push notifications to display
+    if (Platform.OS === "android") {
+      Notifications.setNotificationChannelAsync("default", {
+        name: "Default",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#b38604",
+        sound: "default",
+      });
+    }
   }, []);
 
   const checkAppVersion = async () => {

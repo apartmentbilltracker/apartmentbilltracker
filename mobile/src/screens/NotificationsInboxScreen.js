@@ -15,6 +15,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { apiService } from "../services/apiService";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme/ThemeContext";
+import ModalBottomSpacer from "../components/ModalBottomSpacer";
 
 const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
   const { colors } = useTheme();
@@ -110,19 +111,32 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
   };
 
   /* ─── Helpers ─── */
-  const getNotifIcon = (title) => {
-    const t = (title || "").toLowerCase();
-    if (t.includes("payment") || t.includes("paid")) return "card-outline";
-    if (t.includes("bill") || t.includes("billing")) return "receipt-outline";
-    if (t.includes("room") || t.includes("join")) return "home-outline";
-    if (t.includes("water")) return "water-outline";
-    if (t.includes("electric")) return "flash-outline";
-    if (t.includes("announce")) return "megaphone-outline";
-    if (t.includes("approve") || t.includes("accept"))
-      return "checkmark-circle-outline";
-    if (t.includes("reject") || t.includes("denied"))
-      return "close-circle-outline";
-    return "notifications-outline";
+  const getNotifMeta = (item) => {
+    const type = item.type || "";
+    const t = (item.title || "").toLowerCase();
+    if (type === "payment_verified")
+      return { icon: "checkmark-circle", color: "#2e7d32" };
+    if (type === "payment_rejected")
+      return { icon: "close-circle", color: "#c62828" };
+    if (
+      t.includes("verified") ||
+      t.includes("approved") ||
+      t.includes("accept")
+    )
+      return { icon: "checkmark-circle-outline", color: "#2e7d32" };
+    if (t.includes("rejected") || t.includes("denied"))
+      return { icon: "close-circle-outline", color: "#c62828" };
+    if (t.includes("payment") || t.includes("paid"))
+      return { icon: "card-outline", color: null };
+    if (t.includes("bill") || t.includes("billing"))
+      return { icon: "receipt-outline", color: null };
+    if (t.includes("room") || t.includes("join"))
+      return { icon: "home-outline", color: null };
+    if (t.includes("water")) return { icon: "water-outline", color: null };
+    if (t.includes("electric")) return { icon: "flash-outline", color: null };
+    if (t.includes("announce"))
+      return { icon: "megaphone-outline", color: null };
+    return { icon: "notifications-outline", color: null };
   };
 
   const formatTimeAgo = (dateStr) => {
@@ -175,9 +189,11 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
           ]}
         >
           <Ionicons
-            name={getNotifIcon(item.title)}
+            name={getNotifMeta(item).icon}
             size={18}
-            color={isUnread ? "#b38604" : "#94a3b8"}
+            color={
+              getNotifMeta(item).color || (isUnread ? "#b38604" : "#94a3b8")
+            }
           />
         </View>
 
@@ -316,9 +332,12 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
             <View style={styles.modalHeader}>
               <View style={styles.modalIconWrap}>
                 <Ionicons
-                  name={getNotifIcon(selectedNotification?.title)}
+                  name={getNotifMeta(selectedNotification || {}).icon}
                   size={20}
-                  color={colors.accent}
+                  color={
+                    getNotifMeta(selectedNotification || {}).color ||
+                    colors.accent
+                  }
                 />
               </View>
               <Text style={styles.modalTitle} numberOfLines={2}>
@@ -361,6 +380,7 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
                     : ""}
                 </Text>
               </View>
+              <ModalBottomSpacer />
             </ScrollView>
 
             {/* Close button */}
@@ -591,7 +611,7 @@ const createStyles = (colors) =>
       borderTopLeftRadius: 22,
       borderTopRightRadius: 22,
       maxHeight: "75%",
-      paddingBottom: 28,
+      paddingBottom: 8,
     },
     dragHandle: {
       width: 36,

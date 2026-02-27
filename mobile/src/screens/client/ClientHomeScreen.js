@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import SafeMapView from "../../components/SafeMapView";
 import { AuthContext } from "../../context/AuthContext";
@@ -34,9 +35,11 @@ import {
   billingCycleService,
   apiService,
   chatService,
+  announcementService,
 } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -72,6 +75,7 @@ const ClientHomeScreen = ({ navigation }) => {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expandedStats, setExpandedStats] = useState(false);
   const [activeCycle, setActiveCycle] = useState(null);
+  const [announcementBanner, setAnnouncementBanner] = useState(null);
   const [statusChangeNotifications, setStatusChangeNotifications] = useState(
     [],
   );
@@ -411,6 +415,38 @@ const ClientHomeScreen = ({ navigation }) => {
     }
   };
 
+  const fetchAnnouncementBanner = async (roomId) => {
+    try {
+      const response = await announcementService.getRoomAnnouncements(roomId);
+      const currentUserId = state?.user?.id || state?.user?._id;
+      const pinned = (response.announcements || []).filter((a) => {
+        if (!(a.isPinned || a.is_pinned)) return false;
+        // If targeted to a specific user, only show to that user
+        const target = a.targetUserId || a.target_user_id;
+        if (target && String(target) !== String(currentUserId)) return false;
+        return true;
+      });
+      if (!pinned.length) return;
+      pinned.sort(
+        (a, b) =>
+          new Date(b.createdAt || b.created_at) -
+          new Date(a.createdAt || a.created_at),
+      );
+      const latest = pinned[0];
+      const dismissedKey = `banner_dismissed_${currentUserId}_${latest.id || latest._id}`;
+      const dismissed = await AsyncStorage.getItem(dismissedKey);
+      if (!dismissed) setAnnouncementBanner(latest);
+    } catch (_) {}
+  };
+
+  const dismissBanner = async () => {
+    if (!announcementBanner) return;
+    const id = announcementBanner.id || announcementBanner._id;
+    const currentUserId = state?.user?.id || state?.user?._id;
+    await AsyncStorage.setItem(`banner_dismissed_${currentUserId}_${id}`, "1");
+    setAnnouncementBanner(null);
+  };
+
   const fetchActiveBillingCycle = async (roomId) => {
     try {
       // Use getActiveCycle instead of getBillingCycles to avoid fetching all cycles
@@ -507,6 +543,7 @@ const ClientHomeScreen = ({ navigation }) => {
         roomId ? fetchActiveBillingCycle(roomId) : Promise.resolve(),
         fetchStatusChangeNotifications(),
         roomId ? fetchChatBadge(roomId) : Promise.resolve(),
+        roomId ? fetchAnnouncementBanner(roomId) : Promise.resolve(),
       ]).catch(() => {});
     } catch (error) {
       console.error("Error fetching rooms:", error);
@@ -956,6 +993,7 @@ const ClientHomeScreen = ({ navigation }) => {
                   ))}
                 </View>
               )}
+              <ModalBottomSpacer />
             </ScrollView>
 
             {/* Bottom action */}
@@ -1132,6 +1170,7 @@ const ClientHomeScreen = ({ navigation }) => {
                 ))}
               </View>
             )}
+            <ModalBottomSpacer />
           </ScrollView>
 
           <TouchableOpacity
@@ -1278,6 +1317,7 @@ const ClientHomeScreen = ({ navigation }) => {
                 ))}
               </View>
             )}
+            <ModalBottomSpacer />
           </ScrollView>
         </View>
       </View>
@@ -1386,6 +1426,33 @@ const ClientHomeScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
+
+        {/* ─── HOST BANNER ─── */}
+        {announcementBanner && (
+          <View style={styles.hostBanner}>
+            <Ionicons
+              name="bookmark"
+              size={16}
+              color={colors.accent}
+              style={{ marginTop: 1 }}
+            />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.hostBannerTitle} numberOfLines={1}>
+                {announcementBanner.title}
+              </Text>
+              <Text style={styles.hostBannerBody} numberOfLines={2}>
+                {announcementBanner.content}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={dismissBanner}
+              style={styles.hostBannerClose}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close" size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* ─── NOTIFICATION BANNER ─── */}
         {statusChangeNotifications.length > 0 && (
@@ -2224,6 +2291,36 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       width: 42,
       height: 42,
       borderRadius: 21,
+    },
+
+    // ─── HOST ANNOUNCEMENT BANNER ───
+    hostBanner: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginHorizontal: 16,
+      marginTop: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+      borderLeftWidth: 4,
+    },
+    hostBannerTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.accent,
+      marginBottom: 2,
+    },
+    hostBannerBody: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 17,
+    },
+    hostBannerClose: {
+      marginLeft: 8,
+      padding: 2,
     },
 
     // ─── NOTIFICATION BANNER ───

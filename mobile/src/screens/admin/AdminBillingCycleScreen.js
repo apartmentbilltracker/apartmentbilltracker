@@ -15,7 +15,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { apiService } from "../../services/apiService";
+import { apiService, announcementService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -128,6 +128,33 @@ const AdminBillingCycleScreen = ({ route }) => {
       }
       const response = await apiService.post("/api/v2/billing-cycles", payload);
       if (response.success) {
+        // Auto-post a pinned banner so clients see the new cycle immediately
+        try {
+          const fmtDate = (iso) =>
+            new Date(iso).toLocaleDateString("en-PH", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+          const bannerTitle = `📅 New Billing Cycle Started`;
+          const bannerContent =
+            `A new billing cycle has been created for ${roomName}.\n\n` +
+            `Period: ${fmtDate(payload.startDate)} – ${fmtDate(payload.endDate)}\n` +
+            `Rent: ₱${parseFloat(payload.rent).toLocaleString()}\n` +
+            `Electricity: ₱${parseFloat(payload.electricity).toLocaleString()}\n` +
+            `Water: ₱${parseFloat(payload.waterBillAmount).toLocaleString()}` +
+            (payload.internet
+              ? `\nInternet: ₱${parseFloat(payload.internet).toLocaleString()}`
+              : "");
+          await announcementService.createAnnouncement(
+            roomId,
+            bannerTitle,
+            bannerContent,
+            true,
+          );
+        } catch (_) {
+          // Banner creation is non-critical; don't block the user
+        }
         Alert.alert("Success", "Billing cycle created successfully");
         setShowCreateModal(false);
         resetForm();

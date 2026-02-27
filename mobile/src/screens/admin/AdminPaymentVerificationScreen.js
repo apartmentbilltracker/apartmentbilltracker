@@ -220,6 +220,34 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
           </View>
         </View>
 
+        {/* Payment Method + Reference */}
+        <View style={styles.metaRow}>
+          <View style={styles.metaItem}>
+            <Ionicons
+              name="card-outline"
+              size={12}
+              color={colors.textTertiary}
+            />
+            <Text style={styles.metaText}>
+              {(item.payment_method || "")
+                .replace("_", " ")
+                .replace(/\b\w/g, (c) => c.toUpperCase()) || "Unknown"}
+            </Text>
+          </View>
+          {!!item.reference && (
+            <View style={styles.metaItem}>
+              <Ionicons
+                name="receipt-outline"
+                size={12}
+                color={colors.textTertiary}
+              />
+              <Text style={styles.metaText} numberOfLines={1}>
+                {item.reference}
+              </Text>
+            </View>
+          )}
+        </View>
+
         {/* Action Buttons */}
         <View style={styles.cardActions}>
           <TouchableOpacity
@@ -276,7 +304,7 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
           </View>
           <View>
             <Text style={styles.summaryValue}>{pendingPayments.length}</Text>
-            <Text style={styles.summaryLabel}>Pending</Text>
+            <Text style={styles.summaryLabel}>Submitted</Text>
           </View>
         </View>
         <View style={styles.summaryDivider} />
@@ -831,6 +859,27 @@ const createStyles = (colors) =>
       fontSize: 11,
       fontWeight: "600",
       color: colors.electricityColor,
+    },
+
+    metaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginTop: 8,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    metaItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      flexShrink: 1,
+    },
+    metaText: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      flexShrink: 1,
     },
 
     cardActions: {

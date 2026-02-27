@@ -22,7 +22,7 @@
       "package": "com.apartmentbilltracker",
       "scheme": "aptbilltracker",
       "userInterfaceStyle": "automatic",
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
       [

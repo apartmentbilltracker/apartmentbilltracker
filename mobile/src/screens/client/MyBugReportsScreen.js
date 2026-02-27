@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const MyBugReportsScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -293,7 +294,11 @@ const MyBugReportsScreen = ({ navigation }) => {
 
             {/* Responses */}
             <View style={styles.metaItem}>
-              <Ionicons name="chatbubble-outline" size={11} color={colors.textSecondary} />
+              <Ionicons
+                name="chatbubble-outline"
+                size={11}
+                color={colors.textSecondary}
+              />
               <Text style={styles.metaText}>{item.responses?.length || 0}</Text>
             </View>
           </View>
@@ -401,7 +406,7 @@ const MyBugReportsScreen = ({ navigation }) => {
               <ScrollView
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 30 }}
+                contentContainerStyle={{ paddingBottom: 4 }}
               >
                 {/* Info pills */}
                 <View style={styles.infoPillRow}>
@@ -574,6 +579,7 @@ const MyBugReportsScreen = ({ navigation }) => {
                     </Text>
                   </TouchableOpacity>
                 </View>
+                <ModalBottomSpacer />
               </ScrollView>
             )}
           </View>

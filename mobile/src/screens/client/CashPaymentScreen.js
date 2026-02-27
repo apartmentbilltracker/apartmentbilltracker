@@ -15,6 +15,7 @@ import * as MediaLibrary from "expo-media-library";
 import { captureRef } from "react-native-view-shot";
 import apiService from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const CashPaymentScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -442,6 +443,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
                 <Text style={styles.modalConfirmButtonText}>Confirm</Text>
               </TouchableOpacity>
             </View>
+            <ModalBottomSpacer />
           </View>
         </View>
       </Modal>
@@ -793,7 +795,7 @@ const createStyles = (colors) =>
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
       paddingHorizontal: 20,
-      paddingBottom: 24,
+      paddingBottom: 8,
       maxHeight: "80%",
     },
     modalDragHandle: {

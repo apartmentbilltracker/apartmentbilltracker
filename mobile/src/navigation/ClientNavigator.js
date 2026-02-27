@@ -1,7 +1,8 @@
 import React from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { CommonActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ClientHomeScreen from "../screens/client/ClientHomeScreen";
@@ -246,6 +247,7 @@ const NotificationsStack = ({ onNotificationsStatusChange }) => {
 const ClientNavigator = () => {
   const { state } = useContext(AuthContext);
   const { colors } = useTheme();
+  const tabInsets = useSafeAreaInsets();
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [announcementCount, setAnnouncementCount] = React.useState(0);
   const [unreadSupportCount, setUnreadSupportCount] = React.useState(0);
@@ -296,6 +298,7 @@ const ClientNavigator = () => {
     <View style={{ flex: 1 }}>
       <ChatNotificationBanner role="client" />
       <Tab.Navigator
+        sceneContainerStyle={{ backgroundColor: colors.background }}
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarIcon: ({ focused, color, size }) => {
@@ -336,7 +339,7 @@ const ClientNavigator = () => {
           tabBarLabelStyle: {
             fontSize: 10,
             fontWeight: "600",
-            marginTop: 2,
+            marginTop: 0,
           },
           tabBarStyle: {
             backgroundColor: colors.tabBarBg,
@@ -347,6 +350,8 @@ const ClientNavigator = () => {
             shadowOpacity: 0.08,
             shadowRadius: 8,
             paddingTop: 4,
+            paddingBottom: Math.max(tabInsets.bottom, 8),
+            height: 56 + Math.max(tabInsets.bottom, 8),
           },
           tabBarBadgeStyle: {
             backgroundColor: "#e74c3c",
@@ -364,16 +369,58 @@ const ClientNavigator = () => {
           name="HomeStack"
           component={ClientHomeStack}
           options={{ title: "Home" }}
+          listeners={({ navigation }) => ({
+            tabPress: () =>
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "HomeStack",
+                      state: { routes: [{ name: "ClientHome" }] },
+                    },
+                  ],
+                }),
+              ),
+          })}
         />
         <Tab.Screen
           name="PresenceStack"
           component={PresenceStack}
           options={{ title: "Presence" }}
+          listeners={({ navigation }) => ({
+            tabPress: () =>
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "PresenceStack",
+                      state: { routes: [{ name: "PresenceMain" }] },
+                    },
+                  ],
+                }),
+              ),
+          })}
         />
         <Tab.Screen
           name="BillsStack"
           component={BillsStack}
           options={{ title: "Bills" }}
+          listeners={({ navigation }) => ({
+            tabPress: () =>
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "BillsStack",
+                      state: { routes: [{ name: "BillsMain" }] },
+                    },
+                  ],
+                }),
+              ),
+          })}
         />
         <Tab.Screen
           name="AnnouncementsStack"
@@ -383,8 +430,20 @@ const ClientNavigator = () => {
             tabBarBadge: announcementCount > 0 ? announcementCount : null,
           }}
           listeners={({ navigation }) => ({
-            focus: () => {
+            tabPress: () => {
+              setAnnouncementCount(0); // optimistic clear — markAsRead will confirm
               fetchAnnouncementCount();
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "AnnouncementsStack",
+                      state: { routes: [{ name: "AnnouncementsMain" }] },
+                    },
+                  ],
+                }),
+              );
             },
           })}
         />
@@ -396,8 +455,19 @@ const ClientNavigator = () => {
             tabBarBadge: unreadCount > 0 ? unreadCount : null,
           }}
           listeners={({ navigation }) => ({
-            focus: () => {
+            tabPress: () => {
               fetchUnreadCount();
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "NotificationsStack",
+                      state: { routes: [{ name: "NotificationsInbox" }] },
+                    },
+                  ],
+                }),
+              );
             },
             blur: () => {
               fetchUnreadCount();
@@ -420,8 +490,19 @@ const ClientNavigator = () => {
             },
           }}
           listeners={({ navigation }) => ({
-            focus: () => {
+            tabPress: () => {
               fetchUnreadSupportCount();
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "ProfileStack",
+                      state: { routes: [{ name: "Profile" }] },
+                    },
+                  ],
+                }),
+              );
             },
           })}
         />
