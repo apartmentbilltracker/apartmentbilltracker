@@ -5,6 +5,99 @@ const SupabaseService = require("../db/SupabaseService");
 const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
+const sendMail = require("../utils/sendMail");
+
+/**
+ * Build a styled HTML email for payment status notifications
+ */
+const buildPaymentEmail = ({
+  userName,
+  status,
+  billType,
+  amount,
+  note,
+  reason,
+}) => {
+  const isVerified = status === "completed";
+  const accentColor = isVerified ? "#2e7d32" : "#c62828";
+  const icon = isVerified ? "✅" : "❌";
+  const headline = isVerified ? "Payment Verified" : "Payment Rejected";
+  const bodyText = isVerified
+    ? `Your <strong>${(billType || "").toUpperCase()}</strong> payment of <strong>₱${Number(amount || 0).toFixed(2)}</strong> has been <strong style="color:${accentColor}">verified and confirmed</strong> by your host.${note ? `<br/><br/>Note from host: <em>${note}</em>` : ""}`
+    : `Your <strong>${(billType || "").toUpperCase()}</strong> payment of <strong>₱${Number(amount || 0).toFixed(2)}</strong> has been <strong style="color:${accentColor}">rejected</strong> by your host.${reason ? `<br/><br/>Reason: <em>${reason}</em>` : ""}<br/><br/>Please resubmit your payment with the correct details.`;
+
+  return `
+    <div style="max-width:600px;margin:auto;font-family:Arial,sans-serif;color:#333;">
+      <div style="background-color:${accentColor};padding:30px 0;text-align:center;">
+        <h2 style="color:white;margin:0;">${icon} ${headline}</h2>
+      </div>
+      <div style="background-color:#ffffff;padding:30px;border-radius:8px;margin:20px 0;border:1px solid #eee;">
+        <p style="font-size:16px;">Hi <strong>${userName}</strong>,</p>
+        <p style="font-size:15px;line-height:1.6;">${bodyText}</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;"/>
+        <p style="color:#888;font-size:13px;">Apartment Bill Tracker</p>
+      </div>
+    </div>
+  `;
+};
+
+/**
+ * Send in-app notification + optional email to a user about their payment status
+ */
+const sendPaymentStatusNotification = async ({
+  userId,
+  status,
+  billType,
+  amount,
+  note,
+  reason,
+  verifierName,
+}) => {
+  try {
+    const isVerified = status === "completed";
+    const title = isVerified ? "Payment Verified ✅" : "Payment Rejected ❌";
+    const inAppMessage = isVerified
+      ? `Your ${(billType || "").toUpperCase()} payment of ₱${Number(amount || 0).toFixed(2)} has been verified by ${verifierName || "your host"}.${note ? ` Note: ${note}` : ""}`
+      : `Your ${(billType || "").toUpperCase()} payment of ₱${Number(amount || 0).toFixed(2)} was rejected by ${verifierName || "your host"}.${reason ? ` Reason: ${reason}` : ""} Please resubmit.`;
+
+    // 1) In-app notification
+    await SupabaseService.insertMany("notifications", [
+      {
+        recipient_id: userId,
+        notification_type: isVerified ? "payment_verified" : "payment_rejected",
+        title,
+        message: inAppMessage,
+        is_read: false,
+        related_data: {
+          bill_type: billType,
+          amount,
+          status,
+          note: note || null,
+          reason: reason || null,
+        },
+        created_at: new Date().toISOString(),
+      },
+    ]);
+
+    // 2) Email (non-blocking)
+    const user = await SupabaseService.findUserById(userId);
+    if (user?.email) {
+      const html = buildPaymentEmail({
+        userName: user.name || "Tenant",
+        status,
+        billType,
+        amount,
+        note,
+        reason,
+      });
+      sendMail({ email: user.email, subject: title, message: html }).catch(
+        () => {},
+      );
+    }
+  } catch (err) {
+    console.error("[sendPaymentStatusNotification] error:", err.message);
+  }
+};
 
 // Helper to normalize settlement for mobile compatibility
 const normalizeSettlement = (s) => ({
@@ -399,15 +492,23 @@ router.get(
         });
       }
 
-      // Get all payments for this room
+      // Get all payments for this room — show submitted (awaiting host verification)
       const payments = await SupabaseService.getRoomPayments(roomId);
+      const members = room.room_members || [];
       const pendingPayments = payments
-        .filter((p) => p.status === "pending")
-        .map((p) => ({
-          ...p,
-          cycleId: activeCycle.id,
-          dueDate: activeCycle.end_date,
-        }));
+        .filter((p) => p.status === "submitted")
+        .map((p) => {
+          const member = members.find((m) => m.user_id === p.paid_by);
+          return {
+            ...p,
+            // Camelcase aliases so the mobile frontend can read them
+            billType: p.bill_type,
+            memberId: p.paid_by,
+            memberName: member?.name || "Unknown",
+            cycleId: activeCycle.id,
+            dueDate: activeCycle.end_date,
+          };
+        });
 
       res.status(200).json({
         success: true,
@@ -446,6 +547,24 @@ router.post(
         },
       );
 
+      // Auto-close cycle if all payors have now been verified
+      const payment = await SupabaseService.findPaymentById(paymentId);
+      if (paymentStatus === "completed" && payment?.room_id) {
+        await checkAndAutoCloseCycle(payment.room_id).catch(() => {});
+      }
+
+      // Notify the payer
+      if (payment?.paid_by) {
+        await sendPaymentStatusNotification({
+          userId: payment.paid_by,
+          status: paymentStatus,
+          billType: payment.bill_type,
+          amount: payment.amount,
+          note: req.body.note || null,
+          verifierName: req.user.name,
+        });
+      }
+
       res.status(200).json({
         success: true,
         message: "Payment verified successfully",
@@ -469,11 +588,30 @@ router.post(
       const { paymentId } = req.params;
       const { reason } = req.body;
 
+      const rejectedPayment = await SupabaseService.findPaymentById(paymentId);
+
       const updatedPayment = await SupabaseService.update(
         "payments",
         paymentId,
-        { status: "rejected", rejection_reason: reason },
+        {
+          status: "rejected",
+          rejection_reason: reason,
+          rejected_by: req.user.id,
+          rejected_at: new Date().toISOString(),
+        },
       );
+
+      // Notify the payer
+      if (rejectedPayment?.paid_by) {
+        await sendPaymentStatusNotification({
+          userId: rejectedPayment.paid_by,
+          status: "rejected",
+          billType: rejectedPayment.bill_type,
+          amount: rejectedPayment.amount,
+          reason: reason || null,
+          verifierName: req.user.name,
+        });
+      }
 
       res.status(200).json({
         success: true,

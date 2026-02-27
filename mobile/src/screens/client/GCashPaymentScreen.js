@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useContext } from "react";
 import {
   View,
   Text,
@@ -19,10 +19,13 @@ import apiService from "../../services/apiService";
 import { settingsService } from "../../services/apiService";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
+import { AuthContext } from "../../context/AuthContext";
 
 const GCashPaymentScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const authContext = useContext(AuthContext);
+  const user = authContext?.state?.user;
 
   const { roomId, roomName, amount, billType } = route.params;
   const [loading, setLoading] = useState(true);
@@ -30,6 +33,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const [hostQrUri, setHostQrUri] = useState(null); // host-uploaded QR image
   const [referenceNumber, setReferenceNumber] = useState("");
   const [transactionId, setTransactionId] = useState("");
+  const [paymentDate, setPaymentDate] = useState(null);
   const [step, setStep] = useState("qr"); // qr, verify, success
   const [mobileNumber, setMobileNumber] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
@@ -234,6 +238,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
       if (response.success) {
         setStep("success");
+        setPaymentDate(new Date());
       }
     } catch (error) {
       Alert.alert(
@@ -504,37 +509,126 @@ const GCashPaymentScreen = ({ navigation, route }) => {
               collapsable={false}
               style={styles.receiptCapture}
             >
-              <View style={styles.successIconCircle}>
-                <Ionicons name="checkmark-circle" size={56} color="#43a047" />
-              </View>
-
-              <Text style={styles.successTitle}>Payment Recorded!</Text>
-              <Text style={styles.successSubtitle}>
-                Awaiting admin verification
-              </Text>
-
-              <View style={styles.successCard}>
-                <View style={styles.successRow}>
-                  <Text style={styles.successLabel}>Amount</Text>
-                  <Text style={styles.successValue}>₱{amount.toFixed(2)}</Text>
+              {/* Receipt Paper */}
+              <View style={styles.receiptPaper}>
+                {/* Header */}
+                <View style={styles.receiptHeader}>
+                  <View style={styles.receiptAppIcon}>
+                    <Ionicons name="home" size={20} color="#fff" />
+                  </View>
+                  <View>
+                    <Text style={styles.receiptAppName}>
+                      ApartmentBillTracker
+                    </Text>
+                    <Text style={styles.receiptAppTagline}>
+                      Billing Management System
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.divider} />
-                <View style={styles.successRow}>
-                  <Text style={styles.successLabel}>Reference</Text>
-                  <Text style={styles.successValue}>{referenceNumber}</Text>
+
+                {/* Title */}
+                <View style={styles.receiptTitleBar}>
+                  <Text style={styles.receiptTitleText}>PAYMENT RECEIPT</Text>
                 </View>
-                <View style={styles.divider} />
-                <View style={styles.successRow}>
-                  <Text style={styles.successLabel}>Bill Type</Text>
-                  <Text style={styles.successValue}>
-                    {billType.charAt(0).toUpperCase() + billType.slice(1)}
+
+                {/* Status */}
+                <View style={styles.receiptStatusBadge}>
+                  <Ionicons name="time-outline" size={13} color="#e65100" />
+                  <Text style={styles.receiptStatusText}>
+                    Awaiting Verification
                   </Text>
                 </View>
-                <View style={styles.divider} />
-                <View style={styles.successRow}>
-                  <Text style={styles.successLabel}>Room</Text>
-                  <Text style={styles.successValue}>{roomName}</Text>
+
+                <View style={styles.receiptDash} />
+
+                {/* Info rows */}
+                <View style={styles.receiptRows}>
+                  {paymentDate && (
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptRowLabel}>Date</Text>
+                      <Text style={styles.receiptRowValue}>
+                        {paymentDate.toLocaleDateString("en-PH", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </Text>
+                    </View>
+                  )}
+                  {paymentDate && (
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptRowLabel}>Time</Text>
+                      <Text style={styles.receiptRowValue}>
+                        {paymentDate.toLocaleTimeString("en-PH", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                    </View>
+                  )}
+                  {user?.name && (
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptRowLabel}>Tenant</Text>
+                      <Text style={styles.receiptRowValue}>{user.name}</Text>
+                    </View>
+                  )}
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptRowLabel}>Room</Text>
+                    <Text style={styles.receiptRowValue}>{roomName}</Text>
+                  </View>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptRowLabel}>Bill Type</Text>
+                    <Text style={styles.receiptRowValue}>
+                      {billType.charAt(0).toUpperCase() + billType.slice(1)}
+                    </Text>
+                  </View>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptRowLabel}>Method</Text>
+                    <Text style={styles.receiptRowValue}>GCash</Text>
+                  </View>
+                  {!!mobileNumber && (
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptRowLabel}>GCash No.</Text>
+                      <Text style={styles.receiptRowValue}>{mobileNumber}</Text>
+                    </View>
+                  )}
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptRowLabel}>Reference No.</Text>
+                    <Text style={styles.receiptRowValue}>
+                      {referenceNumber}
+                    </Text>
+                  </View>
+                  {!!transactionId && (
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptRowLabel}>Txn ID</Text>
+                      <Text style={styles.receiptRowValue} numberOfLines={1}>
+                        {transactionId}
+                      </Text>
+                    </View>
+                  )}
                 </View>
+
+                <View style={styles.receiptDash} />
+
+                {/* Amount */}
+                <View style={styles.receiptAmountSection}>
+                  <Text style={styles.receiptAmountLabel}>TOTAL AMOUNT</Text>
+                  <Text style={styles.receiptAmountValue}>
+                    ₱
+                    {amount.toLocaleString("en-PH", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Text>
+                </View>
+
+                <View style={styles.receiptDash} />
+
+                {/* Footer */}
+                <Text style={styles.receiptFooter}>ApartmentBillTracker</Text>
+                <Text style={styles.receiptFooterSub}>
+                  Keep this receipt for your records
+                </Text>
               </View>
             </View>
 
@@ -561,7 +655,11 @@ const GCashPaymentScreen = ({ navigation, route }) => {
               <TouchableOpacity
                 style={styles.historyButton}
                 onPress={() =>
-                  navigation.navigate("PaymentHistory", { refresh: true })
+                  navigation.navigate("PaymentHistory", {
+                    roomId,
+                    roomName,
+                    refresh: true,
+                  })
                 }
               >
                 <Ionicons name="time-outline" size={18} color={colors.accent} />
@@ -971,7 +1069,137 @@ const createStyles = (colors) =>
       width: "100%",
       alignItems: "center",
       backgroundColor: colors.background,
-      paddingTop: 4,
+      paddingVertical: 8,
+    },
+    receiptPaper: {
+      width: "100%",
+      backgroundColor: "#fff",
+      borderRadius: 16,
+      paddingVertical: 20,
+      paddingHorizontal: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 4,
+      borderWidth: 1,
+      borderColor: "#e8e8e8",
+    },
+    receiptHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 14,
+    },
+    receiptAppIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      backgroundColor: "#1a73e8",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    receiptAppName: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: "#1a1a1a",
+      letterSpacing: 0.2,
+    },
+    receiptAppTagline: {
+      fontSize: 10,
+      color: "#888",
+      marginTop: 1,
+    },
+    receiptTitleBar: {
+      backgroundColor: "#f0f7ff",
+      borderRadius: 8,
+      paddingVertical: 8,
+      alignItems: "center",
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: "#d0e4ff",
+    },
+    receiptTitleText: {
+      fontSize: 13,
+      fontWeight: "800",
+      letterSpacing: 1.5,
+      color: "#1a73e8",
+    },
+    receiptStatusBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      backgroundColor: "#fff3e0",
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      alignSelf: "center",
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: "#ffcc80",
+    },
+    receiptStatusText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: "#e65100",
+    },
+    receiptDash: {
+      borderStyle: "dashed",
+      borderWidth: 1,
+      borderColor: "#ddd",
+      borderRadius: 1,
+      marginVertical: 12,
+    },
+    receiptRows: {
+      gap: 7,
+    },
+    receiptRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+    },
+    receiptRowLabel: {
+      fontSize: 12,
+      color: "#888",
+      flex: 1,
+    },
+    receiptRowValue: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#1a1a1a",
+      flex: 2,
+      textAlign: "right",
+    },
+    receiptAmountSection: {
+      alignItems: "center",
+      paddingVertical: 4,
+    },
+    receiptAmountLabel: {
+      fontSize: 10,
+      letterSpacing: 1.5,
+      color: "#888",
+      fontWeight: "600",
+      marginBottom: 4,
+    },
+    receiptAmountValue: {
+      fontSize: 28,
+      fontWeight: "800",
+      color: "#43a047",
+      letterSpacing: 0.5,
+    },
+    receiptFooter: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#1a73e8",
+      textAlign: "center",
+      marginTop: 2,
+    },
+    receiptFooterSub: {
+      fontSize: 10,
+      color: "#aaa",
+      textAlign: "center",
+      marginTop: 2,
     },
     downloadReceiptBtn: {
       flexDirection: "row",

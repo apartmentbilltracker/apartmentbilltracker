@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { settingsService } from "../../services/apiService";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const PaymentMethodScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -380,6 +381,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
                 <Text style={styles.confirmButtonText}>Proceed</Text>
               </TouchableOpacity>
             </View>
+            <ModalBottomSpacer />
           </View>
         </View>
       </Modal>
@@ -583,7 +585,7 @@ const createStyles = (colors) =>
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
       paddingHorizontal: 18,
-      paddingBottom: 24,
+      paddingBottom: 8,
       maxHeight: "80%",
     },
     dragHandle: {

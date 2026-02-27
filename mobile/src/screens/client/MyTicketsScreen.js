@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const MyTicketsScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -265,7 +266,11 @@ const MyTicketsScreen = ({ navigation }) => {
 
             {/* Replies */}
             <View style={styles.metaItem}>
-              <Ionicons name="chatbubble-outline" size={11} color={colors.textSecondary} />
+              <Ionicons
+                name="chatbubble-outline"
+                size={11}
+                color={colors.textSecondary}
+              />
               <Text style={styles.metaText}>{item.replies?.length || 0}</Text>
             </View>
           </View>
@@ -412,7 +417,7 @@ const MyTicketsScreen = ({ navigation }) => {
               <ScrollView
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 30 }}
+                contentContainerStyle={{ paddingBottom: 4 }}
               >
                 {/* Info pills */}
                 <View style={styles.infoPillRow}>
@@ -594,6 +599,7 @@ const MyTicketsScreen = ({ navigation }) => {
                     </TouchableOpacity>
                   </View>
                 )}
+                <ModalBottomSpacer />
               </ScrollView>
             )}
           </View>

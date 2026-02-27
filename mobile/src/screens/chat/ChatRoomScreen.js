@@ -16,6 +16,7 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  Keyboard,
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,6 +43,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [chatEnabled, setChatEnabled] = useState(false);
   const [togglingChat, setTogglingChat] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const flatListRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -99,6 +101,20 @@ const ChatRoomScreen = ({ route, navigation }) => {
   useEffect(() => {
     fetchStatus();
   }, [roomId]);
+
+  // Track keyboard visibility so inputBar padding is correct on Android
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () =>
+      setKeyboardVisible(true),
+    );
+    const hide = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardVisible(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   // Poll for new messages when focused & mark as read
   useFocusEffect(
@@ -352,143 +368,151 @@ const ChatRoomScreen = ({ route, navigation }) => {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {roomName || "Chat"}
-          </Text>
-          <Text style={styles.headerSub}>
-            {chatEnabled
-              ? `${messages.length} message${messages.length !== 1 ? "s" : ""}`
-              : "Chat disabled"}
-          </Text>
-        </View>
-        {isHost && (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+      >
+        {/* Header */}
+        <View style={styles.header}>
           <TouchableOpacity
-            style={[
-              styles.toggleBtn,
-              {
-                backgroundColor: chatEnabled
-                  ? colors.errorBg
-                  : colors.successBg,
-              },
-            ]}
-            onPress={toggleChat}
-            disabled={togglingChat}
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
           >
-            {togglingChat ? (
-              <ActivityIndicator
-                size="small"
-                color={chatEnabled ? colors.error : colors.success}
-              />
-            ) : (
-              <Ionicons
-                name={
-                  chatEnabled
-                    ? "close-circle-outline"
-                    : "chatbubble-ellipses-outline"
-                }
-                size={18}
-                color={chatEnabled ? colors.error : colors.success}
-              />
-            )}
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
           </TouchableOpacity>
-        )}
-        {!isHost && <View style={{ width: 36 }} />}
-      </View>
-
-      {/* Chat not enabled state */}
-      {!chatEnabled && (
-        <View style={styles.centered}>
-          <Ionicons
-            name="chatbubbles-outline"
-            size={56}
-            color={colors.textTertiary}
-          />
-          <Text style={styles.emptyTitle}>Chat Not Available</Text>
-          <Text style={styles.emptyDesc}>
-            {isHost
-              ? "Tap the button above to enable chat for all room members."
-              : "The room host hasn't enabled chat yet."}
-          </Text>
-        </View>
-      )}
-
-      {/* Messages */}
-      {chatEnabled && (
-        <>
-          {/* Info banner */}
-          <View style={styles.ttlBanner}>
-            <Ionicons name="time-outline" size={14} color={colors.accent} />
-            <Text style={styles.ttlText}>Messages auto-delete after 1 day</Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {roomName || "Chat"}
+            </Text>
+            <Text style={styles.headerSub}>
+              {chatEnabled
+                ? `${messages.length} message${messages.length !== 1 ? "s" : ""}`
+                : "Chat disabled"}
+            </Text>
           </View>
-
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            renderItem={renderMessage}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.messagesList}
-            onContentSizeChange={() => {
-              if (messages.length > 0) {
-                flatListRef.current?.scrollToEnd({ animated: false });
-              }
-            }}
-            ListEmptyComponent={
-              <View style={styles.centered}>
-                <Ionicons
-                  name="chatbubble-outline"
-                  size={40}
-                  color={colors.textTertiary}
-                />
-                <Text style={styles.emptyDesc}>
-                  No messages yet. Start the conversation!
-                </Text>
-              </View>
-            }
-          />
-
-          {/* Input bar */}
-          <View
-            style={[
-              styles.inputBar,
-              { paddingBottom: insets.bottom > 0 ? insets.bottom + 4 : 12 },
-            ]}
-          >
-            <TextInput
-              style={styles.input}
-              placeholder="Type a message..."
-              placeholderTextColor={colors.textTertiary}
-              value={text}
-              onChangeText={setText}
-              multiline
-              maxLength={1000}
-              returnKeyType="default"
-            />
+          {isHost && (
             <TouchableOpacity
-              style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
-              onPress={handleSend}
-              disabled={!text.trim()}
-              activeOpacity={0.7}
+              style={[
+                styles.toggleBtn,
+                {
+                  backgroundColor: chatEnabled
+                    ? colors.errorBg
+                    : colors.successBg,
+                },
+              ]}
+              onPress={toggleChat}
+              disabled={togglingChat}
             >
-              <Ionicons name="send" size={18} color="#fff" />
+              {togglingChat ? (
+                <ActivityIndicator
+                  size="small"
+                  color={chatEnabled ? colors.error : colors.success}
+                />
+              ) : (
+                <Ionicons
+                  name={
+                    chatEnabled
+                      ? "close-circle-outline"
+                      : "chatbubble-ellipses-outline"
+                  }
+                  size={18}
+                  color={chatEnabled ? colors.error : colors.success}
+                />
+              )}
             </TouchableOpacity>
+          )}
+          {!isHost && <View style={{ width: 36 }} />}
+        </View>
+
+        {/* Chat not enabled state */}
+        {!chatEnabled && (
+          <View style={styles.centered}>
+            <Ionicons
+              name="chatbubbles-outline"
+              size={56}
+              color={colors.textTertiary}
+            />
+            <Text style={styles.emptyTitle}>Chat Not Available</Text>
+            <Text style={styles.emptyDesc}>
+              {isHost
+                ? "Tap the button above to enable chat for all room members."
+                : "The room host hasn't enabled chat yet."}
+            </Text>
           </View>
-        </>
-      )}
-    </KeyboardAvoidingView>
+        )}
+
+        {/* Messages */}
+        {chatEnabled && (
+          <>
+            {/* Info banner */}
+            <View style={styles.ttlBanner}>
+              <Ionicons name="time-outline" size={14} color={colors.accent} />
+              <Text style={styles.ttlText}>
+                Messages auto-delete after 1 day
+              </Text>
+            </View>
+
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              renderItem={renderMessage}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.messagesList}
+              onContentSizeChange={() => {
+                if (messages.length > 0) {
+                  flatListRef.current?.scrollToEnd({ animated: false });
+                }
+              }}
+              ListEmptyComponent={
+                <View style={styles.centered}>
+                  <Ionicons
+                    name="chatbubble-outline"
+                    size={40}
+                    color={colors.textTertiary}
+                  />
+                  <Text style={styles.emptyDesc}>
+                    No messages yet. Start the conversation!
+                  </Text>
+                </View>
+              }
+            />
+
+            {/* Input bar */}
+            <View
+              style={[
+                styles.inputBar,
+                {
+                  paddingBottom: keyboardVisible
+                    ? 10
+                    : Math.max(insets.bottom + 10, 10),
+                },
+              ]}
+            >
+              <TextInput
+                style={styles.input}
+                placeholder="Type a message..."
+                placeholderTextColor={colors.textTertiary}
+                value={text}
+                onChangeText={setText}
+                multiline
+                maxLength={1000}
+                returnKeyType="default"
+              />
+              <TouchableOpacity
+                style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
+                onPress={handleSend}
+                disabled={!text.trim()}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="send" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -513,7 +537,6 @@ const createStyles = (colors) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
       backgroundColor: colors.card,
-      marginTop: -32,
     },
     backBtn: {
       width: 36,
@@ -675,7 +698,7 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "flex-end",
       paddingHorizontal: 12,
-      paddingTop: 8,
+      paddingTop: 10,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
       backgroundColor: colors.card,

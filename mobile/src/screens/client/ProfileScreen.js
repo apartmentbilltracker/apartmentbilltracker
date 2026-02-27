@@ -20,6 +20,7 @@ import {
   hostRoleService,
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const THEME_OPTIONS = [
   { key: "light", label: "Light", icon: "sunny" },
@@ -866,6 +867,7 @@ const ProfileScreen = ({ navigation }) => {
                 </>
               )}
             </TouchableOpacity>
+            <ModalBottomSpacer />
           </View>
         </View>
       </Modal>
@@ -961,7 +963,7 @@ const ProfileScreen = ({ navigation }) => {
                   {isSubmitting ? "Submitting..." : "Submit Ticket"}
                 </Text>
               </TouchableOpacity>
-              <View style={{ height: 20 }} />
+              <ModalBottomSpacer />
             </ScrollView>
           </View>
         </View>
@@ -1020,7 +1022,7 @@ const ProfileScreen = ({ navigation }) => {
                   <Text style={styles.emptyFaqText}>No FAQs available</Text>
                 </View>
               )}
-              <View style={{ height: 20 }} />
+              <ModalBottomSpacer />
             </ScrollView>
           </View>
         </View>
@@ -1152,7 +1154,7 @@ const ProfileScreen = ({ navigation }) => {
                   {isSubmitting ? "Submitting..." : "Submit Report"}
                 </Text>
               </TouchableOpacity>
-              <View style={{ height: 20 }} />
+              <ModalBottomSpacer />
             </ScrollView>
           </View>
         </View>
@@ -1410,7 +1412,7 @@ const createStyles = (colors) =>
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
       paddingHorizontal: 20,
-      paddingBottom: 30,
+      paddingBottom: 8,
       maxHeight: "90%",
     },
     modalHandle: {

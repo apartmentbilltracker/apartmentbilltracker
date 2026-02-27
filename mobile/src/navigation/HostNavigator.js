@@ -2,6 +2,7 @@ import React from "react";
 import { View, StyleSheet } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { CommonActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { roomService, memberService } from "../services/apiService";
@@ -20,6 +21,7 @@ import AdminRemindersScreen from "../screens/admin/AdminRemindersScreen";
 import AdminPresenceRemindersScreen from "../screens/admin/AdminPresenceRemindersScreen";
 import AdminPaymentSettingsScreen from "../screens/admin/AdminPaymentSettingsScreen";
 import AdminBroadcastScreen from "../screens/admin/AdminBroadcastScreen";
+import AdminAnnouncementsScreen from "../screens/admin/AdminAnnouncementsScreen";
 import ChatRoomScreen from "../screens/chat/ChatRoomScreen";
 import HostProfileScreen from "../screens/host/HostProfileScreen";
 import TermsOfServiceScreen from "../screens/legal/TermsOfServiceScreen";
@@ -147,6 +149,19 @@ const BillingStack = () => {
   );
 };
 
+const AnnouncementsStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="HostAnnouncements"
+        component={AdminAnnouncementsScreen}
+        options={{ title: "Announcements" }}
+      />
+    </Stack.Navigator>
+  );
+};
+
 const MembersStack = () => {
   const headerOptions = useHeaderOptions();
   return (
@@ -186,6 +201,7 @@ const ProfileStack = () => {
 const HostNavigator = () => {
   const [pendingMemberCount, setPendingMemberCount] = React.useState(0);
   const { colors } = useTheme();
+  const tabInsets = useSafeAreaInsets();
   const lastPendingFetch = React.useRef(0);
 
   const fetchPendingMemberCount = async () => {
@@ -222,6 +238,7 @@ const HostNavigator = () => {
     <View style={{ flex: 1 }}>
       <ChatNotificationBanner role="host" />
       <Tab.Navigator
+        sceneContainerStyle={{ backgroundColor: colors.background }}
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarIcon: ({ focused, color }) => {
@@ -232,6 +249,8 @@ const HostNavigator = () => {
               iconName = focused ? "home" : "home-outline";
             } else if (route.name === "BillingStack") {
               iconName = focused ? "wallet" : "wallet-outline";
+            } else if (route.name === "AnnouncementsStack") {
+              iconName = focused ? "megaphone" : "megaphone-outline";
             } else if (route.name === "MembersStack") {
               iconName = focused ? "people" : "people-outline";
             } else if (route.name === "ProfileStack") {
@@ -260,7 +279,7 @@ const HostNavigator = () => {
           tabBarLabelStyle: {
             fontSize: 10,
             fontWeight: "600",
-            marginTop: 2,
+            marginTop: 0,
           },
           tabBarStyle: {
             backgroundColor: colors.tabBarBg,
@@ -271,6 +290,8 @@ const HostNavigator = () => {
             shadowOpacity: 0.08,
             shadowRadius: 8,
             paddingTop: 4,
+            paddingBottom: Math.max(tabInsets.bottom, 8),
+            height: 56 + Math.max(tabInsets.bottom, 8),
           },
           tabBarBadgeStyle: {
             backgroundColor: "#e74c3c",
@@ -288,16 +309,77 @@ const HostNavigator = () => {
           name="DashboardStack"
           component={DashboardStack}
           options={{ title: "Dashboard" }}
+          listeners={({ navigation }) => ({
+            tabPress: () =>
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "DashboardStack",
+                      state: { routes: [{ name: "HostDashboard" }] },
+                    },
+                  ],
+                }),
+              ),
+          })}
         />
         <Tab.Screen
           name="RoomStack"
           component={RoomManagementStack}
           options={{ title: "Rooms" }}
+          listeners={({ navigation }) => ({
+            tabPress: () =>
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "RoomStack",
+                      state: { routes: [{ name: "RoomManagement" }] },
+                    },
+                  ],
+                }),
+              ),
+          })}
         />
         <Tab.Screen
           name="BillingStack"
           component={BillingStack}
           options={{ title: "Billing" }}
+          listeners={({ navigation }) => ({
+            tabPress: () =>
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "BillingStack",
+                      state: { routes: [{ name: "HostBilling" }] },
+                    },
+                  ],
+                }),
+              ),
+          })}
+        />
+        <Tab.Screen
+          name="AnnouncementsStack"
+          component={AnnouncementsStack}
+          options={{ title: "News" }}
+          listeners={({ navigation }) => ({
+            tabPress: () =>
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "AnnouncementsStack",
+                      state: { routes: [{ name: "HostAnnouncements" }] },
+                    },
+                  ],
+                }),
+              ),
+          })}
         />
         <Tab.Screen
           name="MembersStack"
@@ -306,16 +388,41 @@ const HostNavigator = () => {
             title: "Members",
             tabBarBadge: pendingMemberCount > 0 ? pendingMemberCount : null,
           }}
-          listeners={{
-            focus: () => {
+          listeners={({ navigation }) => ({
+            tabPress: () => {
               fetchPendingMemberCount();
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "MembersStack",
+                      state: { routes: [{ name: "Members" }] },
+                    },
+                  ],
+                }),
+              );
             },
-          }}
+          })}
         />
         <Tab.Screen
           name="ProfileStack"
           component={ProfileStack}
           options={{ title: "Profile" }}
+          listeners={({ navigation }) => ({
+            tabPress: () =>
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [
+                    {
+                      name: "ProfileStack",
+                      state: { routes: [{ name: "HostProfile" }] },
+                    },
+                  ],
+                }),
+              ),
+          })}
         />
       </Tab.Navigator>
     </View>

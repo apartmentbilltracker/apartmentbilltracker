@@ -131,6 +131,13 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
           label: "Verified",
           icon: "checkmark-circle",
         };
+      case "submitted":
+        return {
+          color: "#e65100",
+          bg: "#fff3e0",
+          label: "Awaiting Verification",
+          icon: "time-outline",
+        };
       case "pending":
         return {
           color: colors.warning,
@@ -162,7 +169,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
     .filter((p) => p.status === "verified" || p.status === "completed")
     .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
   const totalPending = payments
-    .filter((p) => p.status === "pending")
+    .filter((p) => p.status === "pending" || p.status === "submitted")
     .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
 
   /* ─── Reference helper ─── */
@@ -251,7 +258,11 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
         {/* Reference / Details */}
         {ref && (
           <View style={styles.refRow}>
-            <Ionicons name="document-text-outline" size={13} color={colors.textSecondary} />
+            <Ionicons
+              name="document-text-outline"
+              size={13}
+              color={colors.textSecondary}
+            />
             <Text style={styles.refLabel}>Ref:</Text>
             <Text style={styles.refValue} numberOfLines={1}>
               {ref}
@@ -261,7 +272,11 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
 
         {payment.bankTransfer?.bankName && (
           <View style={styles.refRow}>
-            <Ionicons name="business-outline" size={13} color={colors.textSecondary} />
+            <Ionicons
+              name="business-outline"
+              size={13}
+              color={colors.textSecondary}
+            />
             <Text style={styles.refLabel}>Bank:</Text>
             <Text style={styles.refValue}>{payment.bankTransfer.bankName}</Text>
           </View>

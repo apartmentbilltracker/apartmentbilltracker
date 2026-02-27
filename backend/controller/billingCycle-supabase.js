@@ -213,6 +213,12 @@ router.post("/", isAuthenticated, async (req, res, next) => {
         room.water_billing_mode,
       );
 
+    const totalAmount =
+      parseFloat(rentVal) +
+      parseFloat(elecVal) +
+      parseFloat(waterVal) +
+      parseFloat(internetVal);
+
     const billingCycle = await SupabaseService.createBillingCycle({
       room_id: roomId,
       cycle_number: cycleNumber,
@@ -227,14 +233,59 @@ router.post("/", isAuthenticated, async (req, res, next) => {
         previousMeterReading != null ? previousMeterReading : null,
       current_meter_reading:
         currentMeterReading != null ? currentMeterReading : null,
-      total_billed_amount:
-        parseFloat(rentVal) +
-        parseFloat(elecVal) +
-        parseFloat(waterVal) +
-        parseFloat(internetVal),
+      total_billed_amount: totalAmount,
       status: "active",
       created_by: req.user.id,
     });
+
+    // Auto-create a pinned announcement banner for all room members
+    try {
+      const fmt = (d) =>
+        new Date(d).toLocaleDateString("en-PH", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      const lines = [`📅 Period: ${fmt(startDate)} – ${fmt(endDate)}`];
+      if (parseFloat(rentVal) > 0)
+        lines.push(`🏠 Rent: ₱${parseFloat(rentVal).toFixed(2)}`);
+      if (parseFloat(elecVal) > 0)
+        lines.push(`⚡ Electricity: ₱${parseFloat(elecVal).toFixed(2)}`);
+      if (parseFloat(waterVal) > 0)
+        lines.push(`💧 Water: ₱${parseFloat(waterVal).toFixed(2)}`);
+      if (parseFloat(internetVal) > 0)
+        lines.push(`📶 Internet: ₱${parseFloat(internetVal).toFixed(2)}`);
+      lines.push(`\n💰 Total: ₱${totalAmount.toFixed(2)}`);
+
+      // Unpin any existing pinned cycle announcements first
+      const existing = await SupabaseService.selectAll(
+        "announcements",
+        "room_id",
+        roomId,
+      );
+      const prevPinned = (existing || []).filter(
+        (a) => a.is_pinned && a.notification_type === "billing_cycle",
+      );
+      await Promise.all(
+        prevPinned.map((a) =>
+          SupabaseService.update("announcements", a.id, { is_pinned: false }),
+        ),
+      );
+
+      await SupabaseService.insert("announcements", {
+        room_id: roomId,
+        title: `New Billing Cycle #${cycleNumber} – ${room.name || "Your Room"}`,
+        content: lines.join("\n"),
+        created_by: req.user.id,
+        is_pinned: true,
+        target_user_id: null,
+        notification_type: "billing_cycle",
+        created_at: new Date(),
+      });
+    } catch (bannerErr) {
+      // Non-fatal: don't fail the cycle creation if banner insert fails
+      console.error("[auto-banner] failed:", bannerErr.message);
+    }
 
     res.status(201).json({
       success: true,

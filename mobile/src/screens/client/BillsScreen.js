@@ -14,7 +14,11 @@ import {
   Dimensions,
 } from "react-native";
 import { MaterialIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
-import { roomService, billingCycleService } from "../../services/apiService";
+import {
+  roomService,
+  billingCycleService,
+  paymentService,
+} from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
@@ -55,6 +59,7 @@ const BillsScreen = ({ navigation }) => {
   const [selectedMemberPresence, setSelectedMemberPresence] = useState(null); // For presence modal
   const [showPresenceModal, setShowPresenceModal] = useState(false);
   const [presenceMonth, setPresenceMonth] = useState(new Date()); // For calendar navigation
+  const [userPendingPayment, setUserPendingPayment] = useState(null); // submitted/rejected payment
 
   const userId = state?.user?.id || state?.user?._id;
 
@@ -74,11 +79,14 @@ const BillsScreen = ({ navigation }) => {
 
   useEffect(() => {
     if (selectedRoom) {
-      // Clear previous room's billing data immediately to prevent flash
+      const roomId = selectedRoom.id || selectedRoom._id;
+      // Clear previous room data immediately
       setActiveCycle(null);
-      // Extract presence directly from already-loaded room members (no extra API call)
+      setUserPendingPayment(null);
       extractMemberPresence(selectedRoom);
-      fetchActiveBillingCycle(selectedRoom.id || selectedRoom._id);
+      // Fire independently — billing cycle renders first, payment status overlays when ready
+      fetchActiveBillingCycle(roomId);
+      fetchUserPendingPayment(roomId);
     }
   }, [selectedRoom]);
 
@@ -95,16 +103,29 @@ const BillsScreen = ({ navigation }) => {
 
   const fetchActiveBillingCycle = async (roomId) => {
     try {
-      const response = await billingCycleService.getBillingCycles(roomId);
-      let cycles = Array.isArray(response)
-        ? response
-        : response?.billingCycles || response?.data || [];
-
+      const cycleResponse = await billingCycleService.getBillingCycles(roomId);
+      let cycles = Array.isArray(cycleResponse)
+        ? cycleResponse
+        : cycleResponse?.billingCycles || cycleResponse?.data || [];
       const active = cycles.find((c) => c.status === "active");
       setActiveCycle(active || null);
     } catch (error) {
       console.error("Error fetching active billing cycle:", error);
       setActiveCycle(null);
+    }
+  };
+
+  // Runs independently so it never delays the billing/button render
+  const fetchUserPendingPayment = async (roomId) => {
+    try {
+      const response = await paymentService.getPaymentHistory(roomId);
+      const payments = response?.payments || [];
+      const pending = payments.find(
+        (p) => p.status === "submitted" || p.status === "rejected",
+      );
+      setUserPendingPayment(pending || null);
+    } catch (_) {
+      setUserPendingPayment(null);
     }
   };
 
@@ -1599,8 +1620,131 @@ const BillsScreen = ({ navigation }) => {
                       </Text>
                     </View>
 
-                    {/* Pay Now / Locked */}
-                    {isPaymentAllowed() ? (
+                    {/* Pay Now / Locked / Pending Verification */}
+                    {userPendingPayment?.status === "submitted" ? (
+                      /* ── Awaiting Verification ── */
+                      <View
+                        style={[
+                          styles.paymentLockedBox,
+                          {
+                            backgroundColor: colors.warningBg || "#fff8e1",
+                            borderColor: "#f9a825",
+                            borderWidth: 1,
+                            borderRadius: 12,
+                            padding: 14,
+                            gap: 10,
+                          },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="hourglass-top"
+                          size={22}
+                          color="#f9a825"
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.paymentLockedText,
+                              { color: "#e65100", fontWeight: "700" },
+                            ]}
+                          >
+                            Awaiting Host Verification
+                          </Text>
+                          <Text
+                            style={[
+                              styles.paymentLockedSubtext,
+                              { color: "#795548" },
+                            ]}
+                          >
+                            Your payment has been submitted. Your host will
+                            verify it shortly.
+                          </Text>
+                          {!!userPendingPayment.reference && (
+                            <Text
+                              style={[
+                                styles.paymentLockedSubtext,
+                                { color: "#795548", marginTop: 4 },
+                              ]}
+                            >
+                              Ref:{" "}
+                              <Text style={{ fontWeight: "700" }}>
+                                {userPendingPayment.reference}
+                              </Text>
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    ) : userPendingPayment?.status === "rejected" ? (
+                      /* ── Payment Rejected ── */
+                      <View style={{ gap: 8 }}>
+                        <View
+                          style={[
+                            styles.paymentLockedBox,
+                            {
+                              backgroundColor: "#fdecea",
+                              borderColor: "#c62828",
+                              borderWidth: 1,
+                              borderRadius: 12,
+                              padding: 14,
+                              gap: 10,
+                            },
+                          ]}
+                        >
+                          <MaterialIcons
+                            name="cancel"
+                            size={22}
+                            color="#c62828"
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.paymentLockedText,
+                                { color: "#c62828", fontWeight: "700" },
+                              ]}
+                            >
+                              Payment Rejected
+                            </Text>
+                            <Text
+                              style={[
+                                styles.paymentLockedSubtext,
+                                { color: "#795548" },
+                              ]}
+                            >
+                              {userPendingPayment.rejection_reason ||
+                                "Your payment was rejected by your host. Please resubmit."}
+                            </Text>
+                          </View>
+                        </View>
+                        {/* Retry button */}
+                        <TouchableOpacity
+                          style={[
+                            styles.payNowButton,
+                            { backgroundColor: "#c62828" },
+                          ]}
+                          onPress={() => {
+                            if (selectedRoom && billShare) {
+                              navigation.navigate("PaymentMethod", {
+                                roomId: selectedRoom.id || selectedRoom._id,
+                                roomName: selectedRoom.name,
+                                amount: billShare.total,
+                                billType: "total",
+                              });
+                            }
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <MaterialIcons
+                            name="replay"
+                            size={20}
+                            color={colors.textOnAccent}
+                          />
+                          <Text style={styles.payNowButtonText}>
+                            Resubmit Payment
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : isPaymentAllowed() ? (
+                      /* ── Normal Pay Now ── */
                       <TouchableOpacity
                         style={styles.payNowButton}
                         onPress={() => {
@@ -1623,6 +1767,7 @@ const BillsScreen = ({ navigation }) => {
                         <Text style={styles.payNowButtonText}>Pay Now</Text>
                       </TouchableOpacity>
                     ) : (
+                      /* ── Payment Not Yet Open ── */
                       <View style={styles.paymentLockedBox}>
                         <MaterialIcons
                           name="lock-clock"

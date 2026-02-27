@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState, useMemo} from "react";
+import React, { useContext, useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { announcementService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const REACTION_TYPES = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -272,10 +273,17 @@ const AnnouncementsScreen = ({ navigation }) => {
     }));
   };
 
+  const toUTC = (str) => {
+    if (!str) return str;
+    const s = String(str);
+    if (/Z$|[+-]\d{2}:\d{2}$/.test(s)) return s;
+    return s + "Z";
+  };
+
   const formatTimeAgo = (date) => {
     if (!date) return "";
     const now = new Date();
-    const d = new Date(date);
+    const d = new Date(toUTC(date));
     const diffMs = now - d;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHrs = Math.floor(diffMs / 3600000);
@@ -382,7 +390,11 @@ const AnnouncementsScreen = ({ navigation }) => {
                     style={styles.moreBtn}
                     onPress={() => handleDeleteAnnouncement(annId)}
                   >
-                    <Ionicons name="trash-outline" size={16} color={colors.error} />
+                    <Ionicons
+                      name="trash-outline"
+                      size={16}
+                      color={colors.error}
+                    />
                   </TouchableOpacity>
                 )}
               </View>
@@ -489,7 +501,11 @@ const AnnouncementsScreen = ({ navigation }) => {
                     setShowCommentModal(true);
                   }}
                 >
-                  <Ionicons name="chatbubble-outline" size={16} color={colors.textSecondary} />
+                  <Ionicons
+                    name="chatbubble-outline"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
                   <Text style={styles.actionLabel}>Comment</Text>
                 </TouchableOpacity>
 
@@ -639,7 +655,11 @@ const AnnouncementsScreen = ({ navigation }) => {
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="megaphone-outline" size={52} color={colors.skeleton} />
+            <Ionicons
+              name="megaphone-outline"
+              size={52}
+              color={colors.skeleton}
+            />
             <Text style={styles.emptyTitle}>No Announcements</Text>
             <Text style={styles.emptySubtitle}>
               Nothing posted yet. Check back later!
@@ -710,6 +730,7 @@ const AnnouncementsScreen = ({ navigation }) => {
                 />
                 <Text style={styles.submitBtnText}>Post Announcement</Text>
               </TouchableOpacity>
+              <ModalBottomSpacer />
             </ScrollView>
           </View>
         </View>
@@ -759,6 +780,7 @@ const AnnouncementsScreen = ({ navigation }) => {
                 />
                 <Text style={styles.submitBtnText}>Post Comment</Text>
               </TouchableOpacity>
+              <ModalBottomSpacer />
             </View>
           </View>
         </View>
@@ -768,395 +790,396 @@ const AnnouncementsScreen = ({ navigation }) => {
 };
 
 /* ── Styles ── */
-const createStyles = (colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: colors.textTertiary,
-  },
-  listContent: {
-    padding: 14,
-    paddingBottom: 24,
-  },
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centered: {
+      flex: 1,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 14,
+      color: colors.textTertiary,
+    },
+    listContent: {
+      padding: 14,
+      paddingBottom: 24,
+    },
 
-  /* Card */
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-    overflow: "hidden",
-  },
+    /* Card */
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      marginBottom: 14,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+      overflow: "hidden",
+    },
 
-  /* Header */
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 10,
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-  },
-  avatarFallback: {
-    backgroundColor: colors.accent,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarLetter: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  headerMeta: {
-    flex: 1,
-    marginLeft: 10,
-  },
-  authorName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  timeBadgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 2,
-  },
-  timeText: {
-    fontSize: 11,
-    color: colors.textTertiary,
-  },
-  moreBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.errorBg,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+    /* Header */
+    cardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      paddingTop: 14,
+      paddingBottom: 10,
+    },
+    avatar: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+    },
+    avatarFallback: {
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    avatarLetter: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 16,
+    },
+    headerMeta: {
+      flex: 1,
+      marginLeft: 10,
+    },
+    authorName: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    timeBadgeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 2,
+    },
+    timeText: {
+      fontSize: 11,
+      color: colors.textTertiary,
+    },
+    moreBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.errorBg,
+      justifyContent: "center",
+      alignItems: "center",
+    },
 
-  /* Body */
-  cardBody: {
-    paddingHorizontal: 14,
-    paddingBottom: 12,
-  },
-  postTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 6,
-  },
-  postContent: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 21,
-  },
+    /* Body */
+    cardBody: {
+      paddingHorizontal: 14,
+      paddingBottom: 12,
+    },
+    postTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 6,
+    },
+    postContent: {
+      fontSize: 14,
+      color: colors.text,
+      lineHeight: 21,
+    },
 
-  /* Stats */
-  statsBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  statGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  statEmoji: {
-    fontSize: 14,
-    marginRight: -4,
-  },
-  statText: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    marginLeft: 8,
-  },
+    /* Stats */
+    statsBar: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.divider,
+    },
+    statGroup: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    statEmoji: {
+      fontSize: 14,
+      marginRight: -4,
+    },
+    statText: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginLeft: 8,
+    },
 
-  /* Actions */
-  actionBar: {
-    flexDirection: "row",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-    paddingVertical: 2,
-  },
-  actionBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    gap: 5,
-  },
-  actionEmoji: {
-    fontSize: 16,
-  },
-  actionLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: "600",
-  },
-  actionLabelActive: {
-    color: colors.accent,
-  },
+    /* Actions */
+    actionBar: {
+      flexDirection: "row",
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.divider,
+      paddingVertical: 2,
+    },
+    actionBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+      gap: 5,
+    },
+    actionEmoji: {
+      fontSize: 16,
+    },
+    actionLabel: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    actionLabelActive: {
+      color: colors.accent,
+    },
 
-  /* Reaction Picker */
-  reactionPicker: {
-    position: "absolute",
-    bottom: 46,
-    left: 4,
-    flexDirection: "row",
-    backgroundColor: colors.card,
-    borderRadius: 24,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: -2 },
-    shadowRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.divider,
-  },
-  reactionPickerItem: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  reactionPickerEmoji: {
-    fontSize: 24,
-  },
+    /* Reaction Picker */
+    reactionPicker: {
+      position: "absolute",
+      bottom: 46,
+      left: 4,
+      flexDirection: "row",
+      backgroundColor: colors.card,
+      borderRadius: 24,
+      paddingHorizontal: 6,
+      paddingVertical: 6,
+      elevation: 8,
+      shadowColor: "#000",
+      shadowOpacity: 0.15,
+      shadowOffset: { width: 0, height: -2 },
+      shadowRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.divider,
+    },
+    reactionPickerItem: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    reactionPickerEmoji: {
+      fontSize: 24,
+    },
 
-  /* Comments */
-  commentsSection: {
-    paddingHorizontal: 14,
-    paddingTop: 6,
-    paddingBottom: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  viewCommentsBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    gap: 5,
-  },
-  viewCommentsText: {
-    fontSize: 12,
-    color: colors.accent,
-    fontWeight: "600",
-  },
-  commentRow: {
-    flexDirection: "row",
-    marginBottom: 10,
-  },
-  commentAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 8,
-    marginTop: 2,
-  },
-  commentAvatarFallback: {
-    backgroundColor: colors.skeleton,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  commentAvatarLetter: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.textSecondary,
-  },
-  commentBubble: {
-    flex: 1,
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  commentBubbleHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 3,
-  },
-  commentAuthor: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  commentBody: {
-    fontSize: 13,
-    color: colors.text,
-    lineHeight: 18,
-    marginBottom: 4,
-  },
-  commentTime: {
-    fontSize: 10,
-    color: colors.textTertiary,
-  },
+    /* Comments */
+    commentsSection: {
+      paddingHorizontal: 14,
+      paddingTop: 6,
+      paddingBottom: 4,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.divider,
+    },
+    viewCommentsBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 8,
+      gap: 5,
+    },
+    viewCommentsText: {
+      fontSize: 12,
+      color: colors.accent,
+      fontWeight: "600",
+    },
+    commentRow: {
+      flexDirection: "row",
+      marginBottom: 10,
+    },
+    commentAvatar: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      marginRight: 8,
+      marginTop: 2,
+    },
+    commentAvatarFallback: {
+      backgroundColor: colors.skeleton,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    commentAvatarLetter: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textSecondary,
+    },
+    commentBubble: {
+      flex: 1,
+      backgroundColor: colors.background,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    commentBubbleHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 3,
+    },
+    commentAuthor: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    commentBody: {
+      fontSize: 13,
+      color: colors.text,
+      lineHeight: 18,
+      marginBottom: 4,
+    },
+    commentTime: {
+      fontSize: 10,
+      color: colors.textTertiary,
+    },
 
-  /* Write comment bar */
-  writeCommentBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  miniAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    marginRight: 8,
-  },
-  miniAvatarFallback: {
-    backgroundColor: colors.accent,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  miniAvatarLetter: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 11,
-  },
-  writeCommentPill: {
-    flex: 1,
-    backgroundColor: colors.background,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  writeCommentPlaceholder: {
-    fontSize: 13,
-    color: colors.textTertiary,
-  },
+    /* Write comment bar */
+    writeCommentBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.divider,
+    },
+    miniAvatar: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      marginRight: 8,
+    },
+    miniAvatarFallback: {
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    miniAvatarLetter: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 11,
+    },
+    writeCommentPill: {
+      flex: 1,
+      backgroundColor: colors.background,
+      borderRadius: 18,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    writeCommentPlaceholder: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
 
-  /* Empty state */
-  emptyContainer: {
-    alignItems: "center",
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-    marginTop: 14,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    marginTop: 4,
-  },
+    /* Empty state */
+    emptyContainer: {
+      alignItems: "center",
+      paddingVertical: 60,
+    },
+    emptyTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+      marginTop: 14,
+    },
+    emptySubtitle: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 4,
+    },
 
-  /* Modals */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
-  },
-  modalSheetSmall: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "55%",
-  },
-  dragHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.skeleton,
-    alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  modalHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingBottom: 12,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  modalCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBody: {
-    paddingHorizontal: 18,
-    paddingBottom: 24,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.textTertiary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 14,
-    backgroundColor: colors.cardAlt,
-  },
-  textArea: {
-    textAlignVertical: "top",
-    minHeight: 100,
-  },
-  submitBtn: {
-    flexDirection: "row",
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-  },
-  submitBtnText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-});
+    /* Modals */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: "80%",
+    },
+    modalSheetSmall: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: "55%",
+    },
+    dragHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.skeleton,
+      alignSelf: "center",
+      marginTop: 10,
+      marginBottom: 6,
+    },
+    modalHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 18,
+      paddingBottom: 12,
+    },
+    modalTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    modalCloseBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalBody: {
+      paddingHorizontal: 18,
+      paddingBottom: 24,
+    },
+    inputLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 6,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+      marginBottom: 14,
+      backgroundColor: colors.cardAlt,
+    },
+    textArea: {
+      textAlignVertical: "top",
+      minHeight: 100,
+    },
+    submitBtn: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 4,
+    },
+    submitBtnText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+    },
+  });
 
 export default AnnouncementsScreen;

@@ -1,7 +1,8 @@
 import React from "react";
-import { View, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { CommonActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supportService, badgeService } from "../services/apiService";
@@ -247,6 +248,7 @@ const AnnouncementsStack = () => {
 const AdminNavigator = () => {
   const [unreadSupportCount, setUnreadSupportCount] = React.useState(0);
   const { colors } = useTheme();
+  const tabInsets = useSafeAreaInsets();
 
   const fetchUnreadSupportCount = async () => {
     try {
@@ -263,6 +265,7 @@ const AdminNavigator = () => {
 
   return (
     <Tab.Navigator
+      sceneContainerStyle={{ backgroundColor: colors.background }}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {
@@ -301,7 +304,7 @@ const AdminNavigator = () => {
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: "600",
-          marginTop: 2,
+          marginTop: 0,
         },
         tabBarStyle: {
           backgroundColor: colors.tabBarBg,
@@ -312,6 +315,8 @@ const AdminNavigator = () => {
           shadowOpacity: 0.08,
           shadowRadius: 8,
           paddingTop: 4,
+          paddingBottom: Math.max(tabInsets.bottom, 8),
+          height: 56 + Math.max(tabInsets.bottom, 8),
         },
         tabBarBadgeStyle: {
           backgroundColor: "#e74c3c",
@@ -329,11 +334,39 @@ const AdminNavigator = () => {
         name="DashboardStack"
         component={DashboardStack}
         options={{ title: "Dashboard" }}
+        listeners={({ navigation }) => ({
+          tabPress: () =>
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [
+                  {
+                    name: "DashboardStack",
+                    state: { routes: [{ name: "AdminDashboard" }] },
+                  },
+                ],
+              }),
+            ),
+        })}
       />
       <Tab.Screen
         name="ManageStack"
         component={ManageStack}
         options={{ title: "Manage" }}
+        listeners={({ navigation }) => ({
+          tabPress: () =>
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [
+                  {
+                    name: "ManageStack",
+                    state: { routes: [{ name: "ManageHub" }] },
+                  },
+                ],
+              }),
+            ),
+        })}
       />
       <Tab.Screen
         name="SupportStack"
@@ -350,28 +383,59 @@ const AdminNavigator = () => {
             right: 2,
           },
         }}
-        listeners={{
-          focus: () => {
+        listeners={({ navigation }) => ({
+          tabPress: () => {
             fetchUnreadSupportCount();
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [
+                  {
+                    name: "SupportStack",
+                    state: { routes: [{ name: "SupportTickets" }] },
+                  },
+                ],
+              }),
+            );
           },
-        }}
+        })}
       />
       <Tab.Screen
         name="AnnouncementsStack"
         component={AnnouncementsStack}
         options={{ title: "News" }}
+        listeners={({ navigation }) => ({
+          tabPress: () =>
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [
+                  {
+                    name: "AnnouncementsStack",
+                    state: { routes: [{ name: "AdminAnnouncements" }] },
+                  },
+                ],
+              }),
+            ),
+        })}
       />
       <Tab.Screen
         name="ProfileStack"
         component={ProfileStack}
         options={{ title: "Profile" }}
-        listeners={({ navigation: nav }) => ({
-          tabPress: (e) => {
-            // Prevent default tab behavior to avoid conflict
-            e.preventDefault();
-            // Always navigate to AdminProfile when Profile tab is pressed
-            nav.navigate("ProfileStack", { screen: "AdminProfile" });
-          },
+        listeners={({ navigation }) => ({
+          tabPress: () =>
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [
+                  {
+                    name: "ProfileStack",
+                    state: { routes: [{ name: "AdminProfile" }] },
+                  },
+                ],
+              }),
+            ),
         })}
       />
     </Tab.Navigator>

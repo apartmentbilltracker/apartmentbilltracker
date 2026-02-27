@@ -277,7 +277,22 @@ const LoginScreen = ({ navigation }) => {
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== "granted") return;
-      const token = await Notifications.getExpoPushTokenAsync();
+
+      // Android 8+ requires a notification channel for push to show
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "Default",
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: "#b38604",
+          sound: "default",
+        });
+      }
+
+      // projectId is required in Expo SDK 50+ for valid push tokens
+      const token = await Notifications.getExpoPushTokenAsync({
+        projectId: "72a4be98-f7c2-4e5c-8d5a-5b7a8fd1a75c",
+      });
       await apiService.post("/api/v2/notifications/register-token", {
         expoPushToken: token.data,
       });

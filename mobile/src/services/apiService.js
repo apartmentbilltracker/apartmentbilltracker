@@ -311,12 +311,20 @@ export const announcementService = {
   getRoomAnnouncements: (roomId) =>
     api.get(`/api/v2/announcements/room/${roomId}`).then(extractData),
 
-  createAnnouncement: (roomId, title, content) =>
+  createAnnouncement: (
+    roomId,
+    title,
+    content,
+    isPinned = false,
+    targetUserId = null,
+  ) =>
     api
       .post("/api/v2/announcements", {
         roomId,
         title,
         content,
+        isPinned,
+        targetUserId,
       })
       .then(extractData),
 

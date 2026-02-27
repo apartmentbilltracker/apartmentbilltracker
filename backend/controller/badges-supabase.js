@@ -94,21 +94,30 @@ router.get("/", isAuthenticated, async (req, res) => {
 
       // --- Client: count unread announcements ---
       try {
+        const supabase = SupabaseService.getClient();
         const userRooms = await SupabaseService.getUserRooms(userId);
         if (userRooms && userRooms.length > 0) {
           const roomId = userRooms[0].id;
-          const announcements = await SupabaseService.selectAll(
-            "announcements",
-            "room_id",
-            roomId,
-            "id, read_by",
-            "created_at",
-            false,
-          );
-          result.unreadAnnouncements = (announcements || []).filter((a) => {
-            const readBy = a.read_by || [];
-            return !readBy.includes(userId);
-          }).length;
+          // Get all announcement IDs for this room
+          const { data: anns } = await supabase
+            .from("announcements")
+            .select("id")
+            .eq("room_id", roomId);
+          if (anns && anns.length > 0) {
+            const annIds = anns.map((a) => a.id);
+            // Find which ones this user has already read
+            const { data: reads } = await supabase
+              .from("announcement_reads")
+              .select("announcement_id")
+              .eq("user_id", userId)
+              .in("announcement_id", annIds);
+            const readIds = new Set(
+              (reads || []).map((r) => r.announcement_id),
+            );
+            result.unreadAnnouncements = annIds.filter(
+              (id) => !readIds.has(id),
+            ).length;
+          }
         }
       } catch (e) {
         /* ignore */

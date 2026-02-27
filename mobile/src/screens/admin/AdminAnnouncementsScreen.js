@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { announcementService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const REACTION_TYPES = [
   { type: "like", emoji: "\uD83D\uDC4D", label: "Like" },
@@ -36,6 +37,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
 
   const { state } = useContext(AuthContext);
   const [adminRoom, setAdminRoom] = useState(null);
+  const [adminRooms, setAdminRooms] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,6 +48,9 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [isPinned, setIsPinned] = useState(false);
+  const [targetUserId, setTargetUserId] = useState(null); // null = everyone
+  const [roomMembers, setRoomMembers] = useState([]);
   const [commentText, setCommentText] = useState("");
   const [userReactions, setUserReactions] = useState({});
 
@@ -73,16 +78,22 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
               : [roomsResponse.rooms];
           }
 
-          const foundRoom = rooms.find((r) => {
+          // Collect all rooms this user manages (created by them, or all if admin)
+          const managedRooms = rooms.filter((r) => {
             const roomCreator = r.created_by || r.createdBy;
             return String(roomCreator) === String(userId);
           });
+          // Fallback: if none found as creator (e.g. superadmin), use all rooms
+          const allManagedRooms =
+            managedRooms.length > 0 ? managedRooms : rooms;
+          setAdminRooms(allManagedRooms);
 
-          if (foundRoom) {
-            setAdminRoom(foundRoom);
+          const firstRoom = allManagedRooms[0];
+          if (firstRoom) {
+            setAdminRoom(firstRoom);
             const announcementsResponse =
               await announcementService.getRoomAnnouncements(
-                foundRoom.id || foundRoom._id,
+                firstRoom.id || firstRoom._id,
               );
             const annList = Array.isArray(announcementsResponse)
               ? announcementsResponse
@@ -157,9 +168,17 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
     }
     const roomId = adminRoom.id || adminRoom._id;
     try {
-      await announcementService.createAnnouncement(roomId, title, content);
+      await announcementService.createAnnouncement(
+        roomId,
+        title,
+        content,
+        isPinned,
+        targetUserId,
+      );
       setTitle("");
       setContent("");
+      setIsPinned(false);
+      setTargetUserId(null);
       setShowCreateModal(false);
       await fetchAnnouncements(roomId);
       Alert.alert("Success", "Announcement created");
@@ -302,12 +321,75 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
           </View>
         </View>
         <TouchableOpacity
-          onPress={() => setShowCreateModal(true)}
+          onPress={async () => {
+            setShowCreateModal(true);
+            // Load members for the current room
+            const rid = adminRoom?.id || adminRoom?._id;
+            if (rid) {
+              try {
+                const res = await roomService.getRoomById(rid);
+                const list = res?.room?.members || res?.members || [];
+                setRoomMembers(
+                  list.filter(
+                    (m) =>
+                      m.status === "approved" ||
+                      m.status === "active" ||
+                      !m.status,
+                  ),
+                );
+              } catch (_) {}
+            }
+          }}
           style={styles.createButton}
         >
           <Ionicons name="add" size={22} color={colors.textOnAccent} />
         </TouchableOpacity>
       </View>
+
+      {/* Room Selector */}
+      {adminRooms.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.roomSelectorScroll}
+          contentContainerStyle={styles.roomSelectorContent}
+        >
+          {adminRooms.map((room) => {
+            const rid = room.id || room._id;
+            const isSelected = rid === (adminRoom?.id || adminRoom?._id);
+            return (
+              <TouchableOpacity
+                key={rid}
+                style={[styles.roomChip, isSelected && styles.roomChipActive]}
+                onPress={async () => {
+                  setAdminRoom(room);
+                  setAnnouncements([]);
+                  setLoading(true);
+                  await fetchAnnouncements(rid);
+                  setLoading(false);
+                }}
+              >
+                <Ionicons
+                  name="home-outline"
+                  size={12}
+                  color={
+                    isSelected ? colors.textOnAccent : colors.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.roomChipText,
+                    isSelected && styles.roomChipTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {room.name || `Room ${rid}`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {/* Summary Strip */}
       <View style={styles.summaryStrip}>
@@ -387,7 +469,11 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                     </Text>
                     <Text style={styles.createdAt}>
                       {new Date(
-                        item.created_at || item.createdAt,
+                        /Z$|[+-]\d{2}:\d{2}$/.test(
+                          String(item.created_at || item.createdAt || ""),
+                        )
+                          ? item.created_at || item.createdAt
+                          : (item.created_at || item.createdAt) + "Z",
                       ).toLocaleDateString()}
                     </Text>
                   </View>
@@ -712,7 +798,13 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Create Announcement</Text>
               <TouchableOpacity
-                onPress={() => setShowCreateModal(false)}
+                onPress={() => {
+                  setShowCreateModal(false);
+                  setIsPinned(false);
+                  setTargetUserId(null);
+                  setTitle("");
+                  setContent("");
+                }}
                 style={styles.modalCloseBtn}
               >
                 <Ionicons name="close" size={22} color={colors.text} />
@@ -738,6 +830,122 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                 numberOfLines={6}
                 placeholderTextColor={colors.placeholder}
               />
+
+              {/* Target User Selector */}
+              {roomMembers.length > 0 && (
+                <>
+                  <Text style={styles.inputLabel}>Visible To</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.targetScrollView}
+                    contentContainerStyle={styles.targetScrollContent}
+                  >
+                    {/* Everyone option */}
+                    <TouchableOpacity
+                      style={[
+                        styles.targetChip,
+                        !targetUserId && styles.targetChipActive,
+                      ]}
+                      onPress={() => setTargetUserId(null)}
+                    >
+                      <Ionicons
+                        name="people"
+                        size={12}
+                        color={
+                          !targetUserId
+                            ? colors.textOnAccent
+                            : colors.textSecondary
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.targetChipText,
+                          !targetUserId && styles.targetChipTextActive,
+                        ]}
+                      >
+                        Everyone
+                      </Text>
+                    </TouchableOpacity>
+                    {/* Individual members */}
+                    {roomMembers.map((m) => {
+                      const mid = m.user_id || m.userId || m.id;
+                      const mname =
+                        m.user?.name || m.name || m.memberName || "Member";
+                      const isActive = targetUserId === mid;
+                      return (
+                        <TouchableOpacity
+                          key={mid}
+                          style={[
+                            styles.targetChip,
+                            isActive && styles.targetChipActive,
+                          ]}
+                          onPress={() => setTargetUserId(isActive ? null : mid)}
+                        >
+                          <Ionicons
+                            name="person"
+                            size={12}
+                            color={
+                              isActive
+                                ? colors.textOnAccent
+                                : colors.textSecondary
+                            }
+                          />
+                          <Text
+                            style={[
+                              styles.targetChipText,
+                              isActive && styles.targetChipTextActive,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {mname}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </>
+              )}
+
+              {/* Pinned / Banner toggle */}
+              <TouchableOpacity
+                style={[
+                  styles.pinnedToggleRow,
+                  isPinned && styles.pinnedToggleRowActive,
+                ]}
+                onPress={() => setIsPinned((v) => !v)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={isPinned ? "bookmark" : "bookmark-outline"}
+                  size={18}
+                  color={isPinned ? colors.accent : colors.textSecondary}
+                />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text
+                    style={[
+                      styles.pinnedToggleLabel,
+                      isPinned && { color: colors.accent },
+                    ]}
+                  >
+                    Pin as Banner
+                  </Text>
+                  <Text style={styles.pinnedToggleHint}>
+                    Pinned announcements appear as a dismissible banner at the
+                    top of the client home screen.
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.pinnedCheckbox,
+                    isPinned && styles.pinnedCheckboxActive,
+                  ]}
+                >
+                  {isPinned && (
+                    <Ionicons name="checkmark" size={13} color="#fff" />
+                  )}
+                </View>
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.submitButton}
@@ -883,6 +1091,43 @@ const createStyles = (colors) =>
     },
 
     /* Summary Strip */
+    roomSelectorScroll: {
+      maxHeight: 48,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    roomSelectorContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      gap: 8,
+    },
+    roomChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 20,
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    roomChipActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    roomChipText: {
+      fontSize: 12,
+      fontWeight: "500",
+      color: colors.textSecondary,
+      maxWidth: 120,
+    },
+    roomChipTextActive: {
+      color: colors.textOnAccent,
+    },
     summaryStrip: {
       flexDirection: "row",
       backgroundColor: colors.card,
@@ -1341,6 +1586,79 @@ const createStyles = (colors) =>
       color: "#fff",
       fontSize: 15,
       fontWeight: "700",
+    },
+    targetScrollView: {
+      marginBottom: 4,
+    },
+    targetScrollContent: {
+      flexDirection: "row",
+      gap: 8,
+      paddingVertical: 4,
+      paddingRight: 4,
+    },
+    targetChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    targetChipActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    targetChipText: {
+      fontSize: 12,
+      fontWeight: "500",
+      color: colors.textSecondary,
+      maxWidth: 110,
+    },
+    targetChipTextActive: {
+      color: colors.textOnAccent,
+    },
+    pinnedToggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.cardAlt,
+      padding: 12,
+      marginTop: 12,
+      marginBottom: 4,
+    },
+    pinnedToggleRowActive: {
+      borderColor: colors.accent,
+      backgroundColor: colors.accentLight || colors.cardAlt,
+    },
+    pinnedToggleLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    pinnedToggleHint: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginTop: 2,
+      lineHeight: 15,
+    },
+    pinnedCheckbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 5,
+      borderWidth: 2,
+      borderColor: colors.border,
+      backgroundColor: "transparent",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    pinnedCheckboxActive: {
+      borderColor: colors.accent,
+      backgroundColor: colors.accent,
     },
   });
 

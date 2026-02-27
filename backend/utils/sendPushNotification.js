@@ -19,6 +19,7 @@ const sendPushNotification = async (expoPushToken, notification) => {
       data: notification.data || {},
       badge: 1,
       priority: "high",
+      channelId: "default", // Required for Android 8+ to display notifications
     };
 
     console.log("Sending push notification:", message);
