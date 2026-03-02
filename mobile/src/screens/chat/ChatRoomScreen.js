@@ -104,9 +104,14 @@ const ChatRoomScreen = ({ route, navigation }) => {
 
   // Track keyboard visibility so inputBar padding is correct on Android
   useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", () =>
-      setKeyboardVisible(true),
-    );
+    const show = Keyboard.addListener("keyboardDidShow", () => {
+      setKeyboardVisible(true);
+      // Scroll to newest message when keyboard opens so the last message is visible
+      setTimeout(
+        () => flatListRef.current?.scrollToEnd({ animated: false }),
+        120,
+      );
+    });
     const hide = Keyboard.addListener("keyboardDidHide", () =>
       setKeyboardVisible(false),
     );
@@ -119,6 +124,10 @@ const ChatRoomScreen = ({ route, navigation }) => {
   // Poll for new messages when focused & mark as read
   useFocusEffect(
     useCallback(() => {
+      // Hide the tab bar for an immersive full-screen chat experience
+      const parent = navigation.getParent();
+      parent?.setOptions({ tabBarStyle: { display: "none" } });
+
       // Mark room as read when user views the chat
       chatReadTracker.markAsRead(roomId);
 
@@ -135,6 +144,8 @@ const ChatRoomScreen = ({ route, navigation }) => {
         }
       }, POLL_INTERVAL);
       return () => {
+        // Restore tab bar when leaving chat room
+        parent?.setOptions({ tabBarStyle: undefined });
         // Mark as read when leaving the chat screen
         chatReadTracker.markAsRead(roomId);
         if (pollRef.current) clearInterval(pollRef.current);

@@ -57,7 +57,10 @@ const PresenceScreen = () => {
     selectedRoom?.waterBillingMode === "fixed_monthly" ||
     selectedRoom?.water_billing_mode === "fixed_monthly";
   const canMarkPresence =
-    hasActiveCycle && !userPaidStatus && !isFixedMonthlyWater;
+    hasActiveCycle &&
+    !userPaidStatus &&
+    !isFixedMonthlyWater &&
+    selectedRoom?.cycleStatus !== "cycle_closed";
 
   const [markedDates, setMarkedDates] = useState([]);
   const markedDatesSet = useMemo(() => new Set(markedDates), [markedDates]);
@@ -997,6 +1000,20 @@ const PresenceScreen = () => {
             </View>
           </View>
         </>
+      ) : selectedRoom &&
+        selectedRoom?.cycleStatus === "cycle_closed" &&
+        !userPaidStatus ? (
+        <View style={styles.emptyCard}>
+          <View style={[styles.emptyIconWrap, { backgroundColor: "#fff3e0" }]}>
+            <Ionicons name="lock-closed" size={36} color="#e65100" />
+          </View>
+          <Text style={styles.emptyTitle}>Billing Cycle Closed</Text>
+          <Text style={styles.emptySub}>
+            This billing cycle has been closed by your host. Attendance marking
+            is no longer available. Please contact your host to settle your
+            outstanding payment.
+          </Text>
+        </View>
       ) : selectedRoom && userPaidStatus ? (
         <View style={styles.emptyCard}>
           <View

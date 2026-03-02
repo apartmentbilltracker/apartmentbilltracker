@@ -27,7 +27,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const authContext = useContext(AuthContext);
   const user = authContext?.state?.user;
 
-  const { roomId, roomName, amount, billType } = route.params;
+  const { roomId, roomName, amount, billType, billingCycleId } = route.params;
   const [loading, setLoading] = useState(true);
   const [qrData, setQrData] = useState(null);
   const [hostQrUri, setHostQrUri] = useState(null); // host-uploaded QR image
@@ -205,6 +205,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         roomId,
         amount,
         billType,
+        billingCycleId,
       });
 
       if (response.success) {

@@ -20,7 +20,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
 
-  const { roomId, roomName, amount, billType } = route.params;
+  const { roomId, roomName, amount, billType, billingCycleId } = route.params;
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [methodStatus, setMethodStatus] = useState(null); // null = loading
@@ -154,6 +154,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
         roomName,
         amount,
         billType,
+        billingCycleId,
       });
     } else if (selectedMethod.id === "bank_transfer") {
       // Guard: only block when settings loaded successfully but no accounts configured
@@ -183,6 +184,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
         roomName,
         amount,
         billType,
+        billingCycleId,
       });
     } else if (selectedMethod.id === "cash") {
       navigation.navigate("CashPayment", {
@@ -190,6 +192,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
         roomName,
         amount,
         billType,
+        billingCycleId,
       });
     }
     setShowConfirm(false);

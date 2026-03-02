@@ -188,19 +188,25 @@ router.get("/", isAuthenticated, async (req, res, next) => {
       rooms = userRooms || [];
     }
 
-    // Parallel member enrichment + billing cycles for all rooms
-    const [enrichedMembersPerRoom, billingCyclesPerRoom] = await Promise.all([
+    // ── Single parallel pass: members + ALL billing cycles per room ──
+    // getBillingCyclesSlim replaces the old separate getActiveBillingCycle call
+    // AND the later getRoomBillingCycles call, halving the number of DB round-trips.
+    const [enrichedMembersPerRoom, allCyclesPerRoom] = await Promise.all([
       Promise.all(rooms.map((r) => enrichRoomMembers(r.id))),
-      Promise.all(
-        rooms.map((r) => SupabaseService.getActiveBillingCycle(r.id)),
-      ),
+      Promise.all(rooms.map((r) => SupabaseService.getBillingCyclesSlim(r.id))),
     ]);
+
+    // Derive active cycle in-memory (no extra query)
+    const activeCyclePerRoom = allCyclesPerRoom.map(
+      (cycles) => (cycles || []).find((c) => c.status === "active") || null,
+    );
+
     for (let i = 0; i < rooms.length; i++) {
       rooms[i].members = enrichedMembersPerRoom[i];
       normalizeRoom(rooms[i]);
 
       // Add billing info for dropdown display
-      const activeCycle = billingCyclesPerRoom[i];
+      const activeCycle = activeCyclePerRoom[i];
       if (activeCycle) {
         rooms[i].currentCycleId = activeCycle.id;
         rooms[i].cycleStatus = activeCycle.status || "active";
@@ -224,6 +230,71 @@ router.get("/", isAuthenticated, async (req, res, next) => {
         rooms[i].currentCycleId = null;
         rooms[i].cycleStatus = null;
       }
+    }
+
+    // ── hasPriorUnpaid check: one getAllPaymentsForRoom per room instead of
+    //    one getPaymentsForCycle per completed cycle (N queries vs N×M queries) ──
+    // Only fetch payments for rooms that actually have completed cycles.
+    const roomsWithCompleted = rooms
+      .map((r, i) => ({ room: r, i }))
+      .filter(({ i }) =>
+        (allCyclesPerRoom[i] || []).some((c) => c.status === "completed"),
+      );
+
+    if (roomsWithCompleted.length > 0) {
+      const paymentResults = await Promise.all(
+        roomsWithCompleted.map(({ room }) =>
+          SupabaseService.getAllPaymentsForRoom(room.id).catch(() => []),
+        ),
+      );
+
+      roomsWithCompleted.forEach(({ room, i }, idx) => {
+        try {
+          const completedCycles = (allCyclesPerRoom[i] || []).filter(
+            (c) => c.status === "completed",
+          );
+          const payers = (room.members || []).filter(
+            (m) => m.is_payer || m.isPayer,
+          );
+          if (payers.length === 0) return;
+
+          const allRoomPayments = paymentResults[idx] || [];
+
+          // Check each completed cycle in-memory (no extra DB call)
+          let anyPriorUnpaid = false;
+          for (const cycle of completedCycles) {
+            const cyclePayments = allRoomPayments.filter(
+              (p) =>
+                p.billing_cycle_start === cycle.start_date &&
+                p.billing_cycle_end === cycle.end_date,
+            );
+            const paidIds = new Set(
+              cyclePayments
+                .filter(
+                  (p) => p.status === "completed" || p.status === "verified",
+                )
+                .map((p) => String(p.paid_by)),
+            );
+            const allPaid = payers.every((m) =>
+              paidIds.has(String(m.userId || m.user_id || m.id)),
+            );
+            if (!allPaid) {
+              anyPriorUnpaid = true;
+              break;
+            }
+          }
+
+          if (activeCyclePerRoom[i]) {
+            if (anyPriorUnpaid) rooms[i].hasPriorUnpaid = true;
+          } else {
+            rooms[i].cycleStatus = anyPriorUnpaid
+              ? "cycle_closed"
+              : "completed";
+          }
+        } catch (_) {
+          /* non-critical */
+        }
+      });
     }
 
     cache.set(cacheKey, rooms, 30);
@@ -267,7 +338,27 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
     );
     const closedCyclePromises = cyclesPerRoom.map((cycle, i) =>
       !cycle
-        ? SupabaseService.getRoomBillingCycles(rooms[i].id)
+        ? SupabaseService.getRoomBillingCycles(rooms[i].id).then(
+            async (allCycles) => {
+              const closedCycle = (allCycles || [])
+                .filter(
+                  (c) => c.status === "completed" || c.status === "closed",
+                )
+                .sort(
+                  (a, b) =>
+                    new Date(b.closed_at || b.end_date) -
+                    new Date(a.closed_at || a.end_date),
+                )[0];
+              if (!closedCycle)
+                return { cycles: allCycles, closedPayments: [] };
+              const payments = await SupabaseService.getPaymentsForCycle(
+                rooms[i].id,
+                closedCycle.start_date,
+                closedCycle.end_date,
+              );
+              return { cycles: allCycles, closedPayments: payments || [] };
+            },
+          )
         : Promise.resolve(null),
     );
 
@@ -368,8 +459,7 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
         }
       } else {
         // No active cycle — find most recent closed cycle
-        const allCycles = allCyclesPerRoom[i] || [];
-        const closedCycle = allCycles
+        const closedCycle = (allCyclesPerRoom[i]?.cycles || [])
           .filter((c) => c.status === "completed" || c.status === "closed")
           .sort(
             (a, b) =>
@@ -377,7 +467,7 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
               new Date(a.closed_at || a.end_date),
           )[0];
         if (closedCycle) {
-          room.cycleStatus = "completed";
+          room.cycleStatus = "cycle_closed";
           room.closedCycleId = closedCycle.id;
           room.billing = {
             start: closedCycle.start_date,
@@ -389,17 +479,34 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
             previousReading: closedCycle.previous_meter_reading ?? null,
             currentReading: closedCycle.current_meter_reading ?? null,
           };
+          const closedPayments = (
+            allCyclesPerRoom[i]?.closedPayments || []
+          ).filter((p) => p.status === "completed" || p.status === "verified");
           const payerMembers = members.filter((m) => m.is_payer);
-          room.memberPayments = payerMembers.map((member) => ({
-            member: member.user_id,
-            memberName: member.name,
-            isPayer: member.is_payer,
-            rentStatus: "paid",
-            electricityStatus: "paid",
-            waterStatus: "paid",
-            internetStatus: "paid",
-            allPaid: true,
-          }));
+          room.memberPayments = payerMembers.map((member) => {
+            const mp = closedPayments.filter(
+              (p) => p.paid_by === member.user_id,
+            );
+            const isTotalPaid = mp.some((p) => p.bill_type === "total");
+            const rentPaid =
+              isTotalPaid || mp.some((p) => p.bill_type === "rent");
+            const elecPaid =
+              isTotalPaid || mp.some((p) => p.bill_type === "electricity");
+            const waterPaid =
+              isTotalPaid || mp.some((p) => p.bill_type === "water");
+            const internetPaid =
+              isTotalPaid || mp.some((p) => p.bill_type === "internet");
+            return {
+              member: member.user_id,
+              memberName: member.name,
+              isPayer: member.is_payer,
+              rentStatus: rentPaid ? "paid" : "unpaid",
+              electricityStatus: elecPaid ? "paid" : "unpaid",
+              waterStatus: waterPaid ? "paid" : "unpaid",
+              internetStatus: internetPaid ? "paid" : "unpaid",
+              allPaid: rentPaid && elecPaid && waterPaid && internetPaid,
+            };
+          });
         }
       }
     }
@@ -845,7 +952,7 @@ router.get("/:id", async (req, res, next) => {
             new Date(a.closed_at || a.end_date),
         )[0];
       if (closedCycle) {
-        room.cycleStatus = "completed";
+        room.cycleStatus = "cycle_closed";
         room.closedCycleId = closedCycle.id;
         room.billing = {
           start: closedCycle.start_date,
@@ -857,17 +964,40 @@ router.get("/:id", async (req, res, next) => {
           previousReading: closedCycle.previous_meter_reading ?? null,
           currentReading: closedCycle.current_meter_reading ?? null,
         };
+        const closedCyclePayments =
+          (await SupabaseService.getPaymentsForCycle(
+            room.id,
+            closedCycle.start_date,
+            closedCycle.end_date,
+          )) || [];
+        const completedClosedPayments = closedCyclePayments.filter(
+          (p) => p.status === "completed" || p.status === "verified",
+        );
         const payerMembers = (members || []).filter((m) => m.is_payer);
-        room.memberPayments = payerMembers.map((member) => ({
-          member: member.user_id,
-          memberName: member.name,
-          isPayer: member.is_payer,
-          rentStatus: "paid",
-          electricityStatus: "paid",
-          waterStatus: "paid",
-          internetStatus: "paid",
-          allPaid: true,
-        }));
+        room.memberPayments = payerMembers.map((member) => {
+          const mp = completedClosedPayments.filter(
+            (p) => p.paid_by === member.user_id,
+          );
+          const isTotalPaid = mp.some((p) => p.bill_type === "total");
+          const rentPaid =
+            isTotalPaid || mp.some((p) => p.bill_type === "rent");
+          const elecPaid =
+            isTotalPaid || mp.some((p) => p.bill_type === "electricity");
+          const waterPaid =
+            isTotalPaid || mp.some((p) => p.bill_type === "water");
+          const internetPaid =
+            isTotalPaid || mp.some((p) => p.bill_type === "internet");
+          return {
+            member: member.user_id,
+            memberName: member.name,
+            isPayer: member.is_payer,
+            rentStatus: rentPaid ? "paid" : "unpaid",
+            electricityStatus: elecPaid ? "paid" : "unpaid",
+            waterStatus: waterPaid ? "paid" : "unpaid",
+            internetStatus: internetPaid ? "paid" : "unpaid",
+            allPaid: rentPaid && elecPaid && waterPaid && internetPaid,
+          };
+        });
       }
     }
 

@@ -755,10 +755,126 @@ const AdminDashboardScreen = ({ navigation }) => {
             </View>
           </View>
 
-          {/* All Payors Paid Notice */}
+          {/* ─── Cycle Closed: Unpaid Members Warning ─── */}
+          {(() => {
+            // Show for rooms where:
+            // 1. No active cycle and prior cycle had unpaid members (cycleStatus = "cycle_closed")
+            // 2. Has a NEW active cycle but a prior closed cycle still has unpaid members (hasPriorUnpaid)
+            const closedRooms = (
+              selectedRoomId
+                ? rooms.filter(
+                    (r) => String(r.id || r._id) === String(selectedRoomId),
+                  )
+                : rooms
+            ).filter(
+              (r) =>
+                r.cycleStatus === "cycle_closed" || r.hasPriorUnpaid === true,
+            );
+
+            if (closedRooms.length === 0) return null;
+
+            const firstRoom = closedRooms[0];
+            return (
+              <View
+                style={{
+                  backgroundColor: "#fff8e1",
+                  borderRadius: 10,
+                  padding: 12,
+                  marginTop: 14,
+                  borderWidth: 1,
+                  borderColor: "#ffe082",
+                  borderLeftWidth: 4,
+                  borderLeftColor: "#f9a825",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: "#fff3cd",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    <Ionicons name="warning" size={20} color="#f9a825" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: "#7b5800",
+                        fontWeight: "700",
+                        fontSize: 13,
+                      }}
+                    >
+                      Cycle Closed — Unpaid Balance Remaining
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#7b5800",
+                        fontSize: 11,
+                        marginTop: 2,
+                        opacity: 0.85,
+                      }}
+                    >
+                      {closedRooms.length === 1
+                        ? `${firstRoom.name} has members who haven't paid after cycle close.`
+                        : `${closedRooms.length} rooms have members who haven't paid after cycle close.`}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Per-room reminder buttons */}
+                <View style={{ marginTop: 10, gap: 6 }}>
+                  {closedRooms.map((r) => (
+                    <TouchableOpacity
+                      key={r.id || r._id}
+                      style={{
+                        backgroundColor: "#f9a825",
+                        borderRadius: 8,
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                      onPress={() =>
+                        navigation.getParent()?.navigate("BillingStack", {
+                          screen: "Reminders",
+                          params: { room: r },
+                        })
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="notifications" size={15} color="#fff" />
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontWeight: "700",
+                          fontSize: 13,
+                          flex: 1,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {closedRooms.length > 1
+                          ? `Send Reminders — ${r.name}`
+                          : "Send Reminders to Unpaid Members"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            );
+          })()}
+
+          {/* ─── All Paid / Cycle Complete Success Notice ─── */}
           {latestBillingCycle &&
-            (latestBillingCycle.collectionRate >= 100 ||
-              latestBillingCycle.cycleStatus === "completed") && (
+            ((latestBillingCycle.cycleStatus === "completed" &&
+              (latestBillingCycle.totalPending || 0) === 0) ||
+              (latestBillingCycle.collectionRate >= 100 &&
+                latestBillingCycle.cycleStatus !== "completed")) && (
               <View
                 style={{
                   backgroundColor: colors.successBg,

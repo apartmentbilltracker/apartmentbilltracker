@@ -239,6 +239,7 @@ const HostNavigator = () => {
       <ChatNotificationBanner role="host" />
       <Tab.Navigator
         sceneContainerStyle={{ backgroundColor: colors.background }}
+        safeAreaInsets={{ bottom: 0 }}
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarIcon: ({ focused, color }) => {

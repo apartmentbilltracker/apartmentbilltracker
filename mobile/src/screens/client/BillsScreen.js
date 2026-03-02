@@ -60,6 +60,10 @@ const BillsScreen = ({ navigation }) => {
   const [showPresenceModal, setShowPresenceModal] = useState(false);
   const [presenceMonth, setPresenceMonth] = useState(new Date()); // For calendar navigation
   const [userPendingPayment, setUserPendingPayment] = useState(null); // submitted/rejected payment
+  const [outstandingBalance, setOutstandingBalance] = useState({
+    totalOutstanding: 0,
+    unpaidCycles: [],
+  }); // unpaid charges from closed billing cycles
 
   const userId = state?.user?.id || state?.user?._id;
 
@@ -83,10 +87,12 @@ const BillsScreen = ({ navigation }) => {
       // Clear previous room data immediately
       setActiveCycle(null);
       setUserPendingPayment(null);
+      setOutstandingBalance({ totalOutstanding: 0, unpaidCycles: [] });
       extractMemberPresence(selectedRoom);
       // Fire independently — billing cycle renders first, payment status overlays when ready
       fetchActiveBillingCycle(roomId);
       fetchUserPendingPayment(roomId);
+      fetchOutstandingBalance(roomId);
     }
   }, [selectedRoom]);
 
@@ -126,6 +132,19 @@ const BillsScreen = ({ navigation }) => {
       setUserPendingPayment(pending || null);
     } catch (_) {
       setUserPendingPayment(null);
+    }
+  };
+
+  // Fetch unpaid charges from CLOSED billing cycles for this user
+  const fetchOutstandingBalance = async (roomId) => {
+    try {
+      const res = await billingCycleService.getOutstandingBalance(roomId);
+      setOutstandingBalance({
+        totalOutstanding: res?.totalOutstanding || 0,
+        unpaidCycles: res?.unpaidCycles || [],
+      });
+    } catch (_) {
+      setOutstandingBalance({ totalOutstanding: 0, unpaidCycles: [] });
     }
   };
 
@@ -213,13 +232,17 @@ const BillsScreen = ({ navigation }) => {
 
     let waterShare = 0;
     if (isFixedWater) {
-      // Fixed monthly: split total fixed amount among payors
-      const fixedTotal =
-        parseFloat(
-          selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || 0,
-        ) || 0;
-      if (currentUserMember?.isPayer) {
-        waterShare = r2(fixedTotal / payorCount);
+      // Fixed monthly: only charge when an active billing cycle exists
+      if (activeCycle) {
+        const fixedTotal =
+          parseFloat(
+            selectedRoom.waterFixedAmount ||
+              selectedRoom.water_fixed_amount ||
+              0,
+          ) || 0;
+        if (currentUserMember?.isPayer) {
+          waterShare = r2(fixedTotal / payorCount);
+        }
       }
     } else if (
       currentUserMember?.isPayer &&
@@ -268,11 +291,12 @@ const BillsScreen = ({ navigation }) => {
   };
 
   const calculateTotalWaterBill = () => {
-    // Fixed monthly: return fixed amount directly
+    // Fixed monthly: only show if an active billing cycle exists
     if (
       selectedRoom?.waterBillingMode === "fixed_monthly" ||
       selectedRoom?.water_billing_mode === "fixed_monthly"
     ) {
+      if (!activeCycle) return 0;
       return (
         parseFloat(
           selectedRoom?.waterFixedAmount ||
@@ -312,11 +336,12 @@ const BillsScreen = ({ navigation }) => {
   const calculateMemberWaterBill = (memberId) => {
     if (!selectedRoom?.members) return 0;
 
-    // Fixed monthly: split total evenly per member (all members, for display)
+    // Fixed monthly: only show per-member amount when an active billing cycle exists
     if (
       selectedRoom.waterBillingMode === "fixed_monthly" ||
       selectedRoom.water_billing_mode === "fixed_monthly"
     ) {
+      if (!activeCycle) return 0;
       const fixedTotal =
         parseFloat(
           selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || 0,
@@ -364,11 +389,12 @@ const BillsScreen = ({ navigation }) => {
     const payorCount =
       selectedRoom.members.filter((m) => m.isPayer).length || 1;
 
-    // Fixed monthly fallback
+    // Fixed monthly fallback (only when active cycle exists)
     if (
       selectedRoom.waterBillingMode === "fixed_monthly" ||
       selectedRoom.water_billing_mode === "fixed_monthly"
     ) {
+      if (!activeCycle) return 0;
       const fixedTotal =
         parseFloat(
           selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || 0,
@@ -1181,11 +1207,176 @@ const BillsScreen = ({ navigation }) => {
 
         {selectedRoom && (
           <>
-            {billing?.start &&
-            billing?.end &&
-            !hasUserPaidAllBills() &&
-            selectedRoom?.cycleStatus !== "completed" ? (
+            {/* ─── OUTSTANDING BALANCE BANNER ─── */}
+            {outstandingBalance.totalOutstanding > 0 && (
               <View style={styles.contentPadding}>
+                <View style={styles.outstandingCard}>
+                  <View style={styles.outstandingCardHeader}>
+                    <MaterialIcons name="warning" size={20} color="#c62828" />
+                    <Text style={styles.outstandingCardTitle}>
+                      Outstanding Balance
+                    </Text>
+                    <Text style={styles.outstandingCardTotal}>
+                      {fmt(outstandingBalance.totalOutstanding)}
+                    </Text>
+                  </View>
+                  <Text style={styles.outstandingCardSubtitle}>
+                    You have unpaid bills from{" "}
+                    {outstandingBalance.unpaidCycles.length} previous billing{" "}
+                    {outstandingBalance.unpaidCycles.length === 1
+                      ? "cycle"
+                      : "cycles"}
+                    . Please settle these with your host.
+                  </Text>
+                  {outstandingBalance.unpaidCycles.map((cycle, idx) => {
+                    // A submitted or pending payment already exists for this cycle —
+                    // hide the Pay button so the user can't double-submit.
+                    const cycleAlreadySubmitted =
+                      userPendingPayment &&
+                      (userPendingPayment.status === "submitted" ||
+                        userPendingPayment.status === "pending") &&
+                      userPendingPayment.billing_cycle_start ===
+                        cycle.startDate;
+
+                    return (
+                      <View key={idx} style={styles.outstandingCycleRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.outstandingCycleLabel}>
+                            Cycle #{cycle.cycleNumber}
+                          </Text>
+                          <Text style={styles.outstandingCyclePeriod}>
+                            {new Date(cycle.startDate).toLocaleDateString(
+                              "en-US",
+                              { month: "short", day: "numeric" },
+                            )}{" "}
+                            –{" "}
+                            {new Date(cycle.endDate).toLocaleDateString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              },
+                            )}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: "flex-end", gap: 6 }}>
+                          <Text style={styles.outstandingCycleAmount}>
+                            {fmt(cycle.totalDue)}
+                          </Text>
+                          {cycleAlreadySubmitted ? (
+                            /* Already submitted — show status badge instead of Pay */
+                            <View
+                              style={{
+                                backgroundColor: "#fff8e1",
+                                borderRadius: 8,
+                                paddingHorizontal: 10,
+                                paddingVertical: 5,
+                                borderWidth: 1,
+                                borderColor: "#f9a825",
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              <MaterialIcons
+                                name="hourglass-top"
+                                size={12}
+                                color="#f9a825"
+                              />
+                              <Text
+                                style={{
+                                  color: "#e65100",
+                                  fontSize: 11,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                Awaiting Verification
+                              </Text>
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              style={{
+                                backgroundColor: "#c62828",
+                                borderRadius: 8,
+                                paddingHorizontal: 14,
+                                paddingVertical: 6,
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                              onPress={() => {
+                                if (selectedRoom) {
+                                  navigation.navigate("PaymentMethod", {
+                                    roomId: selectedRoom.id || selectedRoom._id,
+                                    roomName: selectedRoom.name,
+                                    amount: cycle.totalDue,
+                                    billType: "total",
+                                    billingCycleId: cycle.cycleId,
+                                  });
+                                }
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <MaterialIcons
+                                name="payment"
+                                size={14}
+                                color="#fff"
+                              />
+                              <Text
+                                style={{
+                                  color: "#fff",
+                                  fontSize: 12,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                Pay
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {billing?.start && billing?.end && !hasUserPaidAllBills() ? (
+              <View style={styles.contentPadding}>
+                {/* ─── CYCLE CLOSED WARNING ─── */}
+                {selectedRoom?.cycleStatus === "cycle_closed" && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: "#fff3e0",
+                      borderColor: "#e65100",
+                      borderWidth: 1,
+                      borderRadius: 10,
+                      padding: 12,
+                      marginBottom: 12,
+                      gap: 10,
+                    }}
+                  >
+                    <MaterialIcons name="warning" size={20} color="#e65100" />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          color: "#e65100",
+                          fontWeight: "700",
+                          fontSize: 13,
+                        }}
+                      >
+                        Billing Cycle Closed
+                      </Text>
+                      <Text style={{ color: "#bf360c", fontSize: 12 }}>
+                        This billing cycle has been closed by your host. Please
+                        settle your outstanding payment.
+                      </Text>
+                    </View>
+                  </View>
+                )}
                 {/* ─── BILLING PERIOD CARD ─── */}
                 <View style={styles.card}>
                   <View style={styles.cardHeader}>
@@ -1621,7 +1812,9 @@ const BillsScreen = ({ navigation }) => {
                     </View>
 
                     {/* Pay Now / Locked / Pending Verification */}
-                    {userPendingPayment?.status === "submitted" ? (
+                    {userPendingPayment?.status === "submitted" &&
+                    userPendingPayment.billing_cycle_start ===
+                      activeCycle?.start_date ? (
                       /* ── Awaiting Verification ── */
                       <View
                         style={[
@@ -1674,7 +1867,9 @@ const BillsScreen = ({ navigation }) => {
                           )}
                         </View>
                       </View>
-                    ) : userPendingPayment?.status === "rejected" ? (
+                    ) : userPendingPayment?.status === "rejected" &&
+                      userPendingPayment.billing_cycle_start ===
+                        activeCycle?.start_date ? (
                       /* ── Payment Rejected ── */
                       <View style={{ gap: 8 }}>
                         <View
@@ -1806,8 +2001,7 @@ const BillsScreen = ({ navigation }) => {
                   </View>
                 )}
               </View>
-            ) : hasUserPaidAllBills() ||
-              selectedRoom?.cycleStatus === "completed" ? (
+            ) : hasUserPaidAllBills() ? (
               <View style={styles.contentPadding}>
                 {/* All Paid Banner */}
                 <View style={styles.statusCard}>
@@ -1825,9 +2019,8 @@ const BillsScreen = ({ navigation }) => {
                   </View>
                   <Text style={styles.statusTitle}>All Bills Paid!</Text>
                   <Text style={styles.statusSubtext}>
-                    {selectedRoom?.cycleStatus === "completed"
-                      ? "This billing cycle is complete. Waiting for admin to start a new billing cycle."
-                      : "You have paid all bills for this billing period. Waiting for the billing cycle to close."}
+                    You have paid all bills for this billing period. Waiting for
+                    the admin to start a new billing cycle.
                   </Text>
                 </View>
 
@@ -2971,6 +3164,61 @@ const createStyles = (colors) =>
       fontSize: 11,
       color: "#f57c00",
       marginTop: 2,
+    },
+
+    // ─── OUTSTANDING BALANCE ───
+    outstandingCard: {
+      backgroundColor: "#fdecea",
+      borderRadius: 14,
+      padding: 16,
+      borderWidth: 1.5,
+      borderColor: "#e57373",
+      marginTop: 16,
+    },
+    outstandingCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8,
+    },
+    outstandingCardTitle: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: "700",
+      color: "#c62828",
+    },
+    outstandingCardTotal: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: "#c62828",
+    },
+    outstandingCardSubtitle: {
+      fontSize: 12,
+      color: "#b71c1c",
+      marginBottom: 10,
+      lineHeight: 17,
+    },
+    outstandingCycleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 8,
+      borderTopWidth: 0.5,
+      borderTopColor: "#e57373",
+    },
+    outstandingCycleLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "#c62828",
+    },
+    outstandingCyclePeriod: {
+      fontSize: 11,
+      color: "#e53935",
+      marginTop: 1,
+    },
+    outstandingCycleAmount: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#c62828",
     },
 
     // ─── NON-PAYOR ───

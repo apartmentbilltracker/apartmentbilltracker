@@ -28,7 +28,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const authContext = useContext(AuthContext);
   const user = authContext?.state?.user;
 
-  const { roomId, roomName, amount, billType } = route.params;
+  const { roomId, roomName, amount, billType, billingCycleId } = route.params;
   const [step, setStep] = useState("bankDetails"); // bankDetails, qr, success
   const [bankName, setBankName] = useState("");
   const [showBankSelector, setShowBankSelector] = useState(false);
@@ -216,6 +216,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
         amount,
         billType,
         bankName,
+        billingCycleId,
       });
 
       if (response.success) {

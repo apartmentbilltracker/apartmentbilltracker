@@ -50,6 +50,7 @@ const AdminBillingScreen = ({ navigation }) => {
   const [prevReading, setPrevReading] = useState("");
   const [currReading, setCurrReading] = useState("");
   const [cycleCompleted, setCycleCompleted] = useState(false);
+  const [priorUnpaidData, setPriorUnpaidData] = useState(null);
   const [waterMode, setWaterMode] = useState("presence");
   const [waterFixed, setWaterFixed] = useState("");
   const [savingWaterMode, setSavingWaterMode] = useState(false);
@@ -85,6 +86,7 @@ const AdminBillingScreen = ({ navigation }) => {
       setCurrReading("");
       setMembers([]);
       setCycleCompleted(false);
+      setPriorUnpaidData(null);
 
       // Preload from cache for instant display
       const roomId = selectedRoom.id || selectedRoom._id;
@@ -106,6 +108,14 @@ const AdminBillingScreen = ({ navigation }) => {
         }
       });
       checkAndResetIfCycleClosed();
+      // Only hit the overdue endpoint when the room actually has outstanding
+      // balances — avoids a backend round-trip on every room switch.
+      if (
+        selectedRoom.hasPriorUnpaid ||
+        selectedRoom.cycleStatus === "cycle_closed"
+      ) {
+        fetchPriorUnpaid(roomId);
+      }
       // Load water billing mode from current room
       if (selectedRoom) {
         setWaterMode(
@@ -123,6 +133,28 @@ const AdminBillingScreen = ({ navigation }) => {
       }
     }
   }, [selectedRoom]);
+
+  // Fetch outstanding balances from prior closed cycles
+  const fetchPriorUnpaid = async (roomId) => {
+    try {
+      const res = await apiService.get(
+        `/api/v2/admin/reminders/overdue/${roomId}`,
+      );
+      const payments = res?.overduePayments || [];
+      if (payments.length === 0) {
+        setPriorUnpaidData(null);
+        return;
+      }
+      const total = payments.reduce((s, m) => s + (m.totalDue || 0), 0);
+      setPriorUnpaidData({
+        members: payments,
+        total,
+        cycleInfo: res.cycleInfo || null,
+      });
+    } catch (_) {
+      setPriorUnpaidData(null);
+    }
+  };
 
   // Check if current billing cycle is closed and update state accordingly
   const checkAndResetIfCycleClosed = async () => {
@@ -156,7 +188,11 @@ const AdminBillingScreen = ({ navigation }) => {
       const latestRoom = roomResponse.room || roomResponse.data?.room;
 
       // Check if room has cycleStatus from backend
-      if (latestRoom?.cycleStatus === "completed" && latestRoom?.billing) {
+      if (
+        (latestRoom?.cycleStatus === "completed" ||
+          latestRoom?.cycleStatus === "cycle_closed") &&
+        latestRoom?.billing
+      ) {
         setCycleCompleted(true);
         const billing = latestRoom.billing;
         setStartDate(
@@ -199,7 +235,7 @@ const AdminBillingScreen = ({ navigation }) => {
         );
 
         const cycleStatus = response?.data?.status;
-        if (cycleStatus === "completed" || cycleStatus === "closed") {
+        if (cycleStatus === "completed" || cycleStatus === "cycle_closed") {
           setCycleCompleted(true);
           const billing = latestRoom.billing;
           if (billing) {
@@ -799,7 +835,9 @@ const AdminBillingScreen = ({ navigation }) => {
                             ? " • Active cycle"
                             : room.cycleStatus === "completed"
                               ? " • Cycle completed"
-                              : " • No cycle"}
+                              : room.cycleStatus === "cycle_closed"
+                                ? " • Cycle closed"
+                                : " • No cycle"}
                         </Text>
                       </View>
                     </View>
@@ -882,6 +920,185 @@ const AdminBillingScreen = ({ navigation }) => {
 
         {selectedRoom && (
           <>
+            {/* ─── OUTSTANDING BALANCE BANNER ─── */}
+            {priorUnpaidData && (
+              <View
+                style={{
+                  marginHorizontal: 16,
+                  marginTop: 12,
+                  backgroundColor: "#fff8e1",
+                  borderRadius: 14,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: "#ffe082",
+                  borderLeftWidth: 4,
+                  borderLeftColor: "#f9a825",
+                }}
+              >
+                {/* Header */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 10,
+                  }}
+                >
+                  <MaterialIcons name="warning" size={22} color="#f9a825" />
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      fontWeight: "700",
+                      color: "#7b5800",
+                      marginLeft: 8,
+                      flex: 1,
+                    }}
+                  >
+                    Outstanding Balance Remaining
+                  </Text>
+                </View>
+
+                {/* Total amount */}
+                <Text
+                  style={{
+                    fontSize: 22,
+                    fontWeight: "800",
+                    color: "#e65100",
+                    marginBottom: 4,
+                  }}
+                >
+                  ₱{priorUnpaidData.total.toFixed(2)}
+                </Text>
+
+                {/* Billing period */}
+                {priorUnpaidData.cycleInfo?.startDate &&
+                  priorUnpaidData.cycleInfo?.endDate && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginBottom: 4,
+                        gap: 4,
+                      }}
+                    >
+                      <Ionicons
+                        name="calendar-outline"
+                        size={13}
+                        color="#7b5800"
+                      />
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: "#7b5800",
+                          opacity: 0.85,
+                        }}
+                      >
+                        Billing period:{" "}
+                        {new Date(
+                          priorUnpaidData.cycleInfo.startDate,
+                        ).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}{" "}
+                        —{" "}
+                        {new Date(
+                          priorUnpaidData.cycleInfo.endDate,
+                        ).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </Text>
+                    </View>
+                  )}
+
+                {/* Member count */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 14,
+                    gap: 4,
+                  }}
+                >
+                  <Ionicons name="people-outline" size={13} color="#7b5800" />
+                  <Text
+                    style={{ fontSize: 12, color: "#7b5800", opacity: 0.85 }}
+                  >
+                    {priorUnpaidData.members.length} member
+                    {priorUnpaidData.members.length !== 1 ? "s" : ""} haven't
+                    settled their bill
+                    {priorUnpaidData.members.length !== 1 ? "s" : ""}
+                  </Text>
+                </View>
+
+                {/* Per-member list */}
+                {priorUnpaidData.members.map((m) => (
+                  <View
+                    key={m.memberId}
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingVertical: 6,
+                      borderTopWidth: 1,
+                      borderTopColor: "#ffe082",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: "#7b5800",
+                        fontWeight: "600",
+                        flex: 1,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {m.memberName}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: "#e65100",
+                        fontWeight: "700",
+                      }}
+                    >
+                      ₱{(m.totalDue || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                ))}
+
+                {/* Action button */}
+                <TouchableOpacity
+                  style={{
+                    marginTop: 12,
+                    backgroundColor: "#f9a825",
+                    borderRadius: 10,
+                    paddingVertical: 11,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 7,
+                  }}
+                  onPress={() =>
+                    navigation.navigate("Reminders", { room: selectedRoom })
+                  }
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="notifications" size={16} color="#fff" />
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontWeight: "700",
+                      fontSize: 14,
+                    }}
+                  >
+                    Send Reminders to Unpaid Members
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* ─── CYCLE COMPLETED BANNER ─── */}
             {cycleCompleted && (
               <View

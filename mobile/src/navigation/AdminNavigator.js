@@ -266,6 +266,7 @@ const AdminNavigator = () => {
   return (
     <Tab.Navigator
       sceneContainerStyle={{ backgroundColor: colors.background }}
+      safeAreaInsets={{ bottom: 0 }}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {

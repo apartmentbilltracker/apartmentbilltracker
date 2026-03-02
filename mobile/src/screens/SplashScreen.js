@@ -237,6 +237,9 @@ const SplashScreen = () => {
   const mutedText = isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.35)";
   const versionC = isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.2)";
   const versionDivC = isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)";
+  // Organic polygon blob colours around the logo
+  const blobBg1 = isDark ? "rgba(179,134,4,0.08)" : "rgba(179,134,4,0.10)";
+  const blobBg2 = isDark ? "rgba(179,134,4,0.05)" : "rgba(179,134,4,0.07)";
   const errBg = isDark ? "rgba(255,107,107,0.12)" : "rgba(211,47,47,0.08)";
   const errBorder = isDark ? "rgba(255,107,107,0.2)" : "rgba(211,47,47,0.15)";
   const errColor = isDark ? "#ff6b6b" : "#d32f2f";
@@ -273,6 +276,27 @@ const SplashScreen = () => {
       <View style={styles.container}>
         {/* Logo with golden ring */}
         <View style={styles.logoSection}>
+          {/* Organic polygon blobs — create the heptagon/octagon shape behind the ring */}
+          <Animated.View
+            style={[
+              styles.logoBlobA,
+              {
+                backgroundColor: blobBg1,
+                transform: [{ rotate: "-15deg" }, { scale: ringScale }],
+                opacity: ringOpacity,
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.logoBlobB,
+              {
+                backgroundColor: blobBg2,
+                transform: [{ rotate: "20deg" }, { scale: ringScale }],
+                opacity: ringOpacity,
+              },
+            ]}
+          />
           <Animated.View
             style={[
               styles.ring,
@@ -432,6 +456,24 @@ const styles = StyleSheet.create({
     borderRadius: 85,
     borderWidth: 2.5,
     backgroundColor: "transparent",
+  },
+  logoBlobA: {
+    position: "absolute",
+    width: 186,
+    height: 186,
+    borderTopLeftRadius: 72,
+    borderTopRightRadius: 38,
+    borderBottomLeftRadius: 48,
+    borderBottomRightRadius: 66,
+  },
+  logoBlobB: {
+    position: "absolute",
+    width: 166,
+    height: 166,
+    borderTopLeftRadius: 38,
+    borderTopRightRadius: 64,
+    borderBottomLeftRadius: 58,
+    borderBottomRightRadius: 34,
   },
   logoContainer: {
     width: 130,
