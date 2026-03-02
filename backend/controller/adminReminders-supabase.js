@@ -10,8 +10,10 @@ const { sendPushNotification } = require("../utils/sendPushNotification");
 const { enrichBillingCycle } = require("../utils/enrichBillingCycle");
 const PaymentReminderContent = require("../utils/PaymentReminderContent");
 const PresenceReminderContent = require("../utils/PresenceReminderContent");
+const cache = require("../utils/MemoryCache");
 
 // Get list of overdue payments
+// Cached per-room for 5 minutes — invalidated by payment verification & cycle close
 router.get(
   "/overdue/:roomId",
   isAuthenticated,
@@ -20,106 +22,200 @@ router.get(
     try {
       const { roomId } = req.params;
       const today = new Date();
+      const cacheKey = `overdue:${roomId}`;
+
+      // ── Serve from cache if fresh ──
+      const hit = cache.get(cacheKey);
+      if (hit) return res.status(200).json(hit);
 
       const room = await SupabaseService.findRoomById(roomId);
-      if (!room) {
-        return next(new ErrorHandler("Room not found", 404));
-      }
+      if (!room) return next(new ErrorHandler("Room not found", 404));
 
-      const cycles = await SupabaseService.getRoomBillingCycles(roomId);
-      const activeCycle = cycles.find((c) => c.status === "active");
-
-      if (!activeCycle) {
+      const members = await SupabaseService.getRoomMembers(roomId);
+      const payers = members.filter((m) => m.is_payer);
+      if (payers.length === 0) {
         return res.status(200).json({
           success: true,
           overduePayments: [],
-          message: "No active billing cycle",
+          message: "No payers in room",
         });
       }
 
-      const isOverdue = new Date(activeCycle.end_date) < today;
-      const overduePayments = [];
+      const cycles = await SupabaseService.getRoomBillingCycles(roomId);
+      if (!cycles || cycles.length === 0) {
+        return res.status(200).json({
+          success: true,
+          overduePayments: [],
+          message: "No billing cycles found",
+        });
+      }
 
-      if (isOverdue) {
+      // ── Single batch payment fetch for ALL cycles (egress-optimised) ──
+      // Old: one getPaymentsForCycle() per completed cycle (N queries)
+      // New: one getAllPaymentsForRoom() then filter per cycle in-memory (1 query)
+      const allPayments = await SupabaseService.getAllPaymentsForRoom(roomId);
+
+      const overdueMap = {};
+
+      // ── 1. ALL completed cycles: any unpaid member is outstanding ──
+      const completedCycles = cycles.filter((c) => c.status === "completed");
+      for (const cycle of completedCycles) {
+        // Pass already-fetched room to avoid a DB lookup per cycle inside enrichBillingCycle
+        await enrichBillingCycle(cycle, members, room);
+
+        const payments = allPayments.filter(
+          (p) =>
+            p.billing_cycle_start === cycle.start_date &&
+            p.billing_cycle_end === cycle.end_date,
+        );
+        const donePmts = payments.filter(
+          (p) => p.status === "completed" || p.status === "verified",
+        );
+        const daysSinceClosed = Math.floor(
+          (today - new Date(cycle.end_date)) / (1000 * 60 * 60 * 24),
+        );
+
+        payers.forEach((member) => {
+          const memberPayments = donePmts.filter(
+            (p) => p.paid_by === member.user_id,
+          );
+          const hasTotal = memberPayments.some((p) => p.bill_type === "total");
+          const unpaidItems = [];
+          if (!hasTotal) {
+            if (!memberPayments.some((p) => p.bill_type === "rent"))
+              unpaidItems.push("rent");
+            if (!memberPayments.some((p) => p.bill_type === "electricity"))
+              unpaidItems.push("electricity");
+            if (!memberPayments.some((p) => p.bill_type === "water"))
+              unpaidItems.push("water");
+            if (!memberPayments.some((p) => p.bill_type === "internet"))
+              unpaidItems.push("internet");
+          }
+          if (unpaidItems.length === 0) return;
+
+          const charge =
+            cycle.member_charges?.find((c) => c.user_id === member.user_id) ||
+            {};
+
+          if (!overdueMap[member.user_id]) {
+            overdueMap[member.user_id] = {
+              memberId: member.user_id,
+              memberName: member.name,
+              email: member.email,
+              unpaidBills: unpaidItems,
+              daysOverdue: Math.max(0, daysSinceClosed),
+              dueDate: cycle.end_date,
+              totalDue: charge.total_due || 0,
+              lastReminder: member.last_reminder_date || null,
+              reminderCount: member.reminder_count || 0,
+              cycleCount: 1,
+            };
+          } else {
+            const existing = overdueMap[member.user_id];
+            existing.unpaidBills = [
+              ...new Set([...existing.unpaidBills, ...unpaidItems]),
+            ];
+            existing.totalDue += charge.total_due || 0;
+            existing.cycleCount += 1;
+            existing.daysOverdue = Math.max(
+              existing.daysOverdue,
+              Math.max(0, daysSinceClosed),
+            );
+          }
+        });
+      }
+
+      // ── 2. Active cycle overdue by date ──
+      const activeCycle = cycles.find((c) => c.status === "active");
+      const activeCycleOverdue =
+        activeCycle && new Date(activeCycle.end_date) < today;
+
+      if (activeCycleOverdue) {
         const daysOverdue = Math.floor(
           (today - new Date(activeCycle.end_date)) / (1000 * 60 * 60 * 24),
         );
+        await enrichBillingCycle(activeCycle, members, room);
 
-        const members = await SupabaseService.getRoomMembers(roomId);
-
-        // Enrich the cycle so member_charges (with total_due) are computed
-        await enrichBillingCycle(activeCycle, members);
-
-        const payments =
-          (await SupabaseService.getPaymentsForCycle(
-            roomId,
-            activeCycle.start_date,
-            activeCycle.end_date,
-          )) || [];
-
-        const completedPayments = payments.filter(
+        const payments = allPayments.filter(
+          (p) =>
+            p.billing_cycle_start === activeCycle.start_date &&
+            p.billing_cycle_end === activeCycle.end_date,
+        );
+        const donePmts = payments.filter(
           (p) => p.status === "completed" || p.status === "verified",
         );
 
-        members.forEach((member) => {
-          if (!member.is_payer) return;
-
-          const memberPayments = completedPayments.filter(
+        payers.forEach((member) => {
+          const memberPayments = donePmts.filter(
             (p) => p.paid_by === member.user_id,
           );
-
-          const hasRent = memberPayments.some((p) => p.bill_type === "rent");
-          const hasElectricity = memberPayments.some(
-            (p) => p.bill_type === "electricity",
-          );
-          const hasWater = memberPayments.some((p) => p.bill_type === "water");
-          const hasInternet = memberPayments.some(
-            (p) => p.bill_type === "internet",
-          );
           const hasTotal = memberPayments.some((p) => p.bill_type === "total");
-
           const unpaidItems = [];
-          if (!hasRent && !hasTotal) unpaidItems.push("rent");
-          if (!hasElectricity && !hasTotal) unpaidItems.push("electricity");
-          if (!hasWater && !hasTotal) unpaidItems.push("water");
-          if (!hasInternet && !hasTotal) unpaidItems.push("internet");
+          if (!hasTotal) {
+            if (!memberPayments.some((p) => p.bill_type === "rent"))
+              unpaidItems.push("rent");
+            if (!memberPayments.some((p) => p.bill_type === "electricity"))
+              unpaidItems.push("electricity");
+            if (!memberPayments.some((p) => p.bill_type === "water"))
+              unpaidItems.push("water");
+            if (!memberPayments.some((p) => p.bill_type === "internet"))
+              unpaidItems.push("internet");
+          }
+          if (unpaidItems.length === 0) return;
 
-          if (unpaidItems.length > 0) {
-            const charge =
-              activeCycle.member_charges?.find(
-                (c) => c.user_id === member.user_id,
-              ) || {};
-            overduePayments.push({
+          const charge =
+            activeCycle.member_charges?.find(
+              (c) => c.user_id === member.user_id,
+            ) || {};
+
+          if (!overdueMap[member.user_id]) {
+            overdueMap[member.user_id] = {
               memberId: member.user_id,
               memberName: member.name,
-              memberEmail: member.email,
+              email: member.email,
               unpaidBills: unpaidItems,
               daysOverdue,
               dueDate: activeCycle.end_date,
               totalDue: charge.total_due || 0,
               lastReminder: member.last_reminder_date || null,
               reminderCount: member.reminder_count || 0,
-            });
+              cycleCount: 1,
+            };
+          } else {
+            const existing = overdueMap[member.user_id];
+            existing.unpaidBills = [
+              ...new Set([...existing.unpaidBills, ...unpaidItems]),
+            ];
+            existing.totalDue += charge.total_due || 0;
+            existing.cycleCount += 1;
+            existing.daysOverdue = Math.max(existing.daysOverdue, daysOverdue);
           }
         });
       }
 
-      res.status(200).json({
+      const overduePayments = Object.values(overdueMap);
+
+      const refCycle =
+        completedCycles[completedCycles.length - 1] || activeCycle || cycles[0];
+
+      const payload = {
         success: true,
         overduePayments,
         cycleInfo: {
-          cycleNumber: activeCycle.cycle_number,
-          startDate: activeCycle.start_date,
-          endDate: activeCycle.end_date,
-          isOverdue,
-          daysOverdue: isOverdue
-            ? Math.floor(
-                (today - new Date(activeCycle.end_date)) /
-                  (1000 * 60 * 60 * 24),
-              )
-            : 0,
+          cycleNumber: refCycle?.cycle_number,
+          startDate: refCycle?.start_date,
+          endDate: refCycle?.end_date,
+          isOverdue: overduePayments.length > 0,
+          daysOverdue:
+            overduePayments.length > 0
+              ? Math.max(...overduePayments.map((m) => m.daysOverdue))
+              : 0,
         },
-      });
+      };
+
+      // Cache for 5 minutes — invalidated when a payment is verified or cycle is closed
+      cache.set(cacheKey, payload, 300);
+      return res.status(200).json(payload);
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -240,7 +336,9 @@ router.post(
       const member = members.find((m) => m.user_id === memberId);
 
       const cycles = await SupabaseService.getRoomBillingCycles(roomId);
-      const activeCycle = cycles.find((c) => c.status === "active");
+      const activeCycle = cycles.find(
+        (c) => c.status === "active" || c.status === "completed",
+      );
 
       if (!activeCycle) {
         return next(new ErrorHandler("No active billing cycle", 400));
@@ -370,7 +468,9 @@ router.post(
       }
 
       const cycles = await SupabaseService.getRoomBillingCycles(roomId);
-      const activeCycle = cycles.find((c) => c.status === "active");
+      const activeCycle = cycles.find(
+        (c) => c.status === "active" || c.status === "completed",
+      );
 
       if (!activeCycle) {
         return res.status(400).json({

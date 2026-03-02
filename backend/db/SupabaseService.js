@@ -722,6 +722,43 @@ class SupabaseService {
   static async getPaymentTransactions(paymentId) {
     return this.selectAll("payment_transactions", "payment_id", paymentId);
   }
+
+  // ============ BATCH / SLIM QUERY HELPERS (egress-optimised) ============
+
+  /**
+   * Get ALL payments for a room in one query (slim columns only).
+   * Use this instead of calling getPaymentsForCycle() in a loop.
+   * Callers filter by billing_cycle_start / billing_cycle_end in-memory.
+   */
+  static async getAllPaymentsForRoom(roomId) {
+    const { data, error } = await supabase
+      .from("payments")
+      .select(
+        "paid_by, status, bill_type, billing_cycle_start, billing_cycle_end, amount",
+      )
+      .eq("room_id", roomId)
+      .order("payment_date", { ascending: false });
+    if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
+    return data || [];
+  }
+
+  /**
+   * Get ALL billing cycles for a room with only the columns needed for
+   * status checks and room-list enrichment (skips large member_charges JSON).
+   */
+  static async getBillingCyclesSlim(roomId) {
+    const { data, error } = await supabase
+      .from("billing_cycles")
+      .select(
+        "id, room_id, status, start_date, end_date, cycle_number, " +
+          "rent, electricity, water_bill_amount, internet, " +
+          "previous_meter_reading, current_meter_reading, closed_at",
+      )
+      .eq("room_id", roomId)
+      .order("start_date", { ascending: false });
+    if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
+    return data || [];
+  }
 }
 
 module.exports = SupabaseService;

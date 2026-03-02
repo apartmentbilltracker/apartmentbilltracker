@@ -343,6 +343,9 @@ router.put(
     );
     const row = Array.isArray(updated) ? updated[0] : updated;
 
+    // Bust the cached version response so the app sees the new values immediately
+    cache.del("app_settings");
+
     res
       .status(200)
       .json({ success: true, settings: row || { ...settings, ...updates } });

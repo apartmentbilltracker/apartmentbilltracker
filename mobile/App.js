@@ -9,7 +9,10 @@ import {
   Linking,
   Platform,
 } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import { AuthProvider, AuthContext } from "./src/context/AuthContext";
@@ -63,7 +66,7 @@ export default function App() {
   // If forced update is required, show blocking screen
   if (updateStatus?.isForced) {
     return (
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <View style={styles.container}>
           <View style={styles.updateIconWrap}>
             <Ionicons name="cloud-download-outline" size={64} color="#b38604" />
@@ -104,7 +107,7 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <ThemeProvider>
         <AuthProvider>
           <ThemedNavigation />

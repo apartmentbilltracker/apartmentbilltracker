@@ -123,7 +123,10 @@ app.get("/api/app-version", async (req, res) => {
       async () => {
         try {
           const rows = await SupabaseService.selectAllRecords("app_settings");
-          return rows && rows.length > 0 ? rows[0] : null;
+          if (!rows || rows.length === 0) return null;
+          // Prefer the global row (user_id IS NULL) — host rows only hold
+          // payment-method settings and default to "1.0.0" for version fields.
+          return rows.find((r) => !r.user_id) || rows[0];
         } catch (err) {
           console.error("app_settings read error:", err.message);
           return null;

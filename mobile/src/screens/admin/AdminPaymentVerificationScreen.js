@@ -198,6 +198,27 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
                 Due {new Date(item.dueDate).toLocaleDateString()}
               </Text>
             </View>
+            {/* Show billing period label when payment is from a prior cycle */}
+            {item.cycleStart && item.cycleEnd && (
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: colors.textTertiary,
+                  marginTop: 2,
+                }}
+              >
+                {new Date(item.cycleStart).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                })}{" "}
+                –{" "}
+                {new Date(item.cycleEnd).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </Text>
+            )}
           </View>
           <View style={[styles.billBadge, { backgroundColor: bill.bg }]}>
             <Text style={[styles.billBadgeText, { color: bill.text }]}>

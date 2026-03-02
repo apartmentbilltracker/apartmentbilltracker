@@ -21,7 +21,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
 
-  const { roomId, roomName, amount, billType } = route.params;
+  const { roomId, roomName, amount, billType, billingCycleId } = route.params;
   const [step, setStep] = useState("form"); // form, success
   const [receiptNumber, setReceiptNumber] = useState("");
   const [receivedBy, setReceivedBy] = useState("");
@@ -65,6 +65,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
         receivedBy,
         witnessName,
         notes,
+        billingCycleId,
       });
 
       if (response.success) {

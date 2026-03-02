@@ -162,6 +162,10 @@ export const billingCycleService = {
     api.post(`/api/v2/billing-cycles`, { ...data, roomId }).then(extractData),
   getBillingCycles: (roomId) =>
     api.get(`/api/v2/billing-cycles/room/${roomId}`).then(extractData),
+  getOutstandingBalance: (roomId) =>
+    api
+      .get(`/api/v2/billing-cycles/room/${roomId}/outstanding`)
+      .then(extractData),
   getBillingCycleById: (cycleId) =>
     api.get(`/api/v2/billing-cycles/${cycleId}`).then(extractData),
   getActiveCycle: (roomId) =>
@@ -169,7 +173,7 @@ export const billingCycleService = {
   updateBillingCycle: (cycleId, data) =>
     api.put(`/api/v2/billing-cycles/${cycleId}`, data).then(extractData),
   closeBillingCycle: (cycleId) =>
-    api.put(`/api/v2/billing-cycles/${cycleId}/close`).then(extractData),
+    api.post(`/api/v2/billing-cycles/${cycleId}/close`).then(extractData),
   deleteBillingCycle: (cycleId) =>
     api.delete(`/api/v2/billing-cycles/${cycleId}`).then(extractData),
 };

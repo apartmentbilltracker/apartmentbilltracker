@@ -23,7 +23,7 @@ const r2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
  * @param {Array}  [members] - Room members array (fetched if not provided)
  * @returns {Object} The enriched cycle
  */
-async function enrichBillingCycle(cycle, members) {
+async function enrichBillingCycle(cycle, members, roomData) {
   if (!cycle) return cycle;
 
   // Fetch members if not provided
@@ -31,11 +31,12 @@ async function enrichBillingCycle(cycle, members) {
     members = await SupabaseService.getRoomMembers(cycle.room_id);
   }
 
-  // Fetch room to check water billing mode
+  // Use provided roomData to avoid a DB round-trip when caller already has it
   let waterBillingMode = "presence";
   let waterFixedAmount = 0;
   try {
-    const room = await SupabaseService.findById("rooms", cycle.room_id);
+    const room =
+      roomData || (await SupabaseService.findById("rooms", cycle.room_id));
     waterBillingMode = room?.water_billing_mode || "presence";
     waterFixedAmount = parseFloat(room?.water_fixed_amount || 0) || 0;
   } catch (_) {}
@@ -297,12 +298,14 @@ async function enrichBillingCycle(cycle, members) {
 async function enrichBillingCycles(cycles, roomId) {
   if (!cycles || cycles.length === 0) return cycles || [];
 
-  const members = await SupabaseService.getRoomMembers(
-    roomId || cycles[0].room_id,
-  );
+  const rid = roomId || cycles[0].room_id;
+  const [members, roomData] = await Promise.all([
+    SupabaseService.getRoomMembers(rid),
+    SupabaseService.findById("rooms", rid).catch(() => null),
+  ]);
 
   for (const cycle of cycles) {
-    await enrichBillingCycle(cycle, members);
+    await enrichBillingCycle(cycle, members, roomData);
   }
 
   return cycles;

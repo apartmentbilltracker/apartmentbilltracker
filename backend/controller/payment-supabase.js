@@ -6,6 +6,7 @@ const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 const sendMail = require("../utils/sendMail");
+const cache = require("../utils/MemoryCache");
 
 /**
  * Build a styled HTML email for payment status notifications
@@ -480,42 +481,53 @@ router.get(
         return next(new ErrorHandler("Room not found", 404));
       }
 
-      // Get active billing cycle
-      const billingCycles = await SupabaseService.getRoomBillingCycles(roomId);
-      const activeCycle = billingCycles.find((c) => c.status === "active");
+      // Fetch all room payments and members in parallel
+      const [billingCycles, payments, membersRaw] = await Promise.all([
+        SupabaseService.getRoomBillingCycles(roomId),
+        SupabaseService.getRoomPayments(roomId),
+        SupabaseService.getRoomMembers(roomId),
+      ]);
 
-      if (!activeCycle) {
-        return res.status(200).json({
-          success: true,
-          pendingPayments: [],
-          message: "No active billing cycle",
-        });
-      }
+      const activeCycle =
+        billingCycles.find((c) => c.status === "active") || null;
 
-      // Get all payments for this room — show submitted (awaiting host verification)
-      const payments = await SupabaseService.getRoomPayments(roomId);
-      const members = room.room_members || [];
+      // Build a cycle lookup by id for fast dueDate resolution
+      const cycleMap = {};
+      for (const c of billingCycles) cycleMap[c.id] = c;
+
+      // Include ALL submitted payments — not just those belonging to the
+      // active cycle.  This ensures payments for prior closed cycles (outstanding
+      // balance payments) also appear in the host's verification queue.
       const pendingPayments = payments
         .filter((p) => p.status === "submitted")
         .map((p) => {
-          const member = members.find((m) => m.user_id === p.paid_by);
+          const member = membersRaw.find((m) => m.user_id === p.paid_by);
+          // Resolve the cycle this payment actually belongs to so the
+          // host sees the correct billing period and due date.
+          const matchedCycle = billingCycles.find(
+            (c) =>
+              c.start_date === p.billing_cycle_start &&
+              c.end_date === p.billing_cycle_end,
+          );
           return {
             ...p,
-            // Camelcase aliases so the mobile frontend can read them
             billType: p.bill_type,
             memberId: p.paid_by,
             memberName: member?.name || "Unknown",
-            cycleId: activeCycle.id,
-            dueDate: activeCycle.end_date,
+            // Use the payment's OWN cycle end date — NOT the active cycle's
+            cycleId: matchedCycle?.id || activeCycle?.id || null,
+            dueDate: p.billing_cycle_end,
+            cycleStart: p.billing_cycle_start,
+            cycleEnd: p.billing_cycle_end,
           };
         });
 
       res.status(200).json({
         success: true,
         pendingPayments,
-        cycleId: activeCycle.id,
-        cycleStart: activeCycle.start_date,
-        cycleEnd: activeCycle.end_date,
+        cycleId: activeCycle?.id || null,
+        cycleStart: activeCycle?.start_date || null,
+        cycleEnd: activeCycle?.end_date || null,
       });
     } catch (error) {
       next(new ErrorHandler(error.message, 500));
@@ -551,6 +563,9 @@ router.post(
       const payment = await SupabaseService.findPaymentById(paymentId);
       if (paymentStatus === "completed" && payment?.room_id) {
         await checkAndAutoCloseCycle(payment.room_id).catch(() => {});
+        // Bust cached outstanding/overdue responses so clients see fresh data immediately
+        cache.del(`overdue:${payment.room_id}`);
+        cache.invalidatePrefix(`outstanding:${payment.room_id}:`);
       }
 
       // Notify the payer

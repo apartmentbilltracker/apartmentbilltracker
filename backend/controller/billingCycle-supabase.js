@@ -8,6 +8,7 @@ const {
   enrichBillingCycle,
   enrichBillingCycles,
 } = require("../utils/enrichBillingCycle");
+const cache = require("../utils/MemoryCache");
 
 // Helper to normalize a billing cycle charge for mobile compatibility
 const normalizeCharge = (charge) => {
@@ -287,6 +288,10 @@ router.post("/", isAuthenticated, async (req, res, next) => {
       console.error("[auto-banner] failed:", bannerErr.message);
     }
 
+    // Bust the room-list cache so the dashboard picks up the new cycle
+    // and re-computes hasPriorUnpaid against the remaining completed cycles.
+    cache.del(`roomlist:${req.user.id}:host`);
+
     res.status(201).json({
       success: true,
       message: "Billing cycle created successfully",
@@ -353,6 +358,128 @@ router.get("/room/:roomId", isAuthenticated, async (req, res, next) => {
     next(new ErrorHandler(error.message, 500));
   }
 });
+
+// ============================================================
+// GET OUTSTANDING BALANCE FOR LOGGED-IN USER IN A ROOM
+// Returns unpaid total_due from closed billing cycles where the
+// user is a payor and has no completed/verified payment.
+// Must be before /:cycleId to avoid route collision.
+// ============================================================
+router.get(
+  "/room/:roomId/outstanding",
+  isAuthenticated,
+  async (req, res, next) => {
+    try {
+      const { roomId } = req.params;
+      const userId = req.user.id;
+
+      // All cycles for this room
+      const cacheKey = `outstanding:${roomId}:${userId}`;
+      const hit = cache.get(cacheKey);
+      if (hit) return res.status(200).json(hit);
+
+      const allCycles =
+        (await SupabaseService.getRoomBillingCycles(roomId)) || [];
+
+      // Only completed/closed cycles matter — active cycle debt is tracked in real time
+      const closedCycles = allCycles.filter((c) => c.status === "completed");
+
+      // Fetch room members once (needed for fallback calculation)
+      const members = (await SupabaseService.getRoomMembers(roomId)) || [];
+      const userMember = members.find(
+        (m) => String(m.user_id) === String(userId),
+      );
+
+      // User is not in this room or is not a payor — nothing to check
+      if (!userMember || !userMember.is_payer) {
+        return res.status(200).json({
+          success: true,
+          totalOutstanding: 0,
+          unpaidCycles: [],
+        });
+      }
+
+      // ── Batch fetch: all payments for this room in one query ──
+      // Replaces per-cycle getPaymentsForCycle() calls (N queries → 1 query)
+      const allRoomPayments =
+        await SupabaseService.getAllPaymentsForRoom(roomId);
+
+      const unpaidCycles = [];
+      let totalOutstanding = 0;
+
+      for (const cycle of closedCycles) {
+        // ── Try stored billing_cycle_charges first ──
+        const charges =
+          (await SupabaseService.getBillingCycleCharges(cycle.id)) || [];
+
+        let amountDue = 0;
+
+        if (charges.length > 0) {
+          // Charges table has data — use stored total_due
+          const userCharge = charges.find(
+            (c) => String(c.user_id) === String(userId),
+          );
+          if (!userCharge || !userCharge.is_payer) continue;
+          amountDue = parseFloat(userCharge.total_due) || 0;
+        } else {
+          // ── Fallback: compute per-member share from billing cycle amounts ──
+          await enrichBillingCycle(cycle, members);
+          const memberCharge = (cycle.member_charges || []).find(
+            (mc) => String(mc.user_id) === String(userId),
+          );
+          if (!memberCharge || !memberCharge.is_payer) continue;
+          amountDue = parseFloat(memberCharge.total_due) || 0;
+
+          // Last-resort simple split if enrichment produced 0
+          if (amountDue === 0) {
+            const payerCount = members.filter((m) => m.is_payer).length;
+            if (payerCount > 0) {
+              const rent = parseFloat(cycle.rent || 0);
+              const electricity = parseFloat(cycle.electricity || 0);
+              const internet = parseFloat(cycle.internet || 0);
+              const water = parseFloat(cycle.water_bill_amount || 0);
+              amountDue =
+                Math.round(
+                  ((rent + electricity + internet + water) / payerCount) * 100,
+                ) / 100;
+            }
+          }
+        }
+
+        // Filter payments in-memory (no extra DB call per cycle)
+        const cyclePayments = allRoomPayments.filter(
+          (p) =>
+            p.billing_cycle_start === cycle.start_date &&
+            p.billing_cycle_end === cycle.end_date,
+        );
+
+        const userPaid = cyclePayments.some(
+          (p) =>
+            String(p.paid_by) === String(userId) &&
+            (p.status === "completed" || p.status === "verified"),
+        );
+
+        if (!userPaid && amountDue > 0) {
+          totalOutstanding += amountDue;
+          unpaidCycles.push({
+            cycleId: cycle.id,
+            cycleNumber: cycle.cycle_number,
+            startDate: cycle.start_date,
+            endDate: cycle.end_date,
+            totalDue: amountDue,
+          });
+        }
+      }
+
+      const payload = { success: true, totalOutstanding, unpaidCycles };
+      // Cache for 3 minutes — busted when a payment is verified
+      cache.set(cacheKey, payload, 180);
+      res.status(200).json(payload);
+    } catch (error) {
+      next(new ErrorHandler(error.message, 500));
+    }
+  },
+);
 
 // ============================================================
 // GET LATEST BILLING CYCLE STATS
@@ -440,6 +567,7 @@ router.get("/totals/latest", isAuthenticated, async (req, res, next) => {
         totalPending,
         collectionRate: parseFloat(collectionRate),
         latestCycleId: latestCycle.id,
+        roomId: latestCycle.room_id,
         startDate: latestCycle.start_date,
         endDate: latestCycle.end_date,
         cycleStatus: latestCycle.status || "active",
@@ -737,11 +865,17 @@ router.post("/:cycleId/close", isAuthenticated, async (req, res, next) => {
       "billing_cycles",
       cycleId,
       {
-        status: "closed",
+        status: "completed",
         closed_at: new Date(),
         closed_by: req.user.id,
       },
     );
+
+    // Bust the room-list cache so the host's dashboard immediately sees
+    // the updated cycleStatus ("cycle_closed" or "completed") on next load.
+    cache.del(`roomlist:${req.user.id}:host`);
+    // Bust the per-room overdue cache so the billing screen reflects the close immediately.
+    if (updatedCycle?.room_id) cache.del(`overdue:${updatedCycle.room_id}`);
 
     res.status(200).json({
       success: true,

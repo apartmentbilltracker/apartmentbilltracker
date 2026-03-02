@@ -22,7 +22,7 @@ import { hostRoleService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 
 const AdminManageHubScreen = ({ navigation }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
   const insets = useSafeAreaInsets();
   const { state } = useContext(AuthContext);
@@ -121,7 +121,12 @@ const AdminManageHubScreen = ({ navigation }) => {
 
       {/* Overview Stats */}
       <View style={styles.statsGrid}>
-        <View style={[styles.statCard, { backgroundColor: "#EBF5FB" }]}>
+        <View
+          style={[
+            styles.statCard,
+            { backgroundColor: isDark ? "rgba(41,128,185,0.18)" : "#EBF5FB" },
+          ]}
+        >
           <View style={[styles.statIconWrap, { backgroundColor: "#2980B9" }]}>
             <Ionicons name="people" size={16} color="#fff" />
           </View>
@@ -130,7 +135,12 @@ const AdminManageHubScreen = ({ navigation }) => {
           </Text>
           <Text style={styles.statLabel}>Users</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "#EAFAF1" }]}>
+        <View
+          style={[
+            styles.statCard,
+            { backgroundColor: isDark ? "rgba(39,174,96,0.18)" : "#EAFAF1" },
+          ]}
+        >
           <View style={[styles.statIconWrap, { backgroundColor: "#27AE60" }]}>
             <Ionicons name="home" size={16} color="#fff" />
           </View>
@@ -139,16 +149,31 @@ const AdminManageHubScreen = ({ navigation }) => {
           </Text>
           <Text style={styles.statLabel}>Rooms</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "#FEF9E7" }]}>
+        <View
+          style={[
+            styles.statCard,
+            { backgroundColor: isDark ? "rgba(179,134,4,0.18)" : "#FEF9E7" },
+          ]}
+        >
           <View style={[styles.statIconWrap, { backgroundColor: "#b38604" }]}>
             <Ionicons name="key" size={16} color="#fff" />
           </View>
-          <Text style={[styles.statValue, { color: "#b38604" }]}>
+          <Text
+            style={[
+              styles.statValue,
+              { color: isDark ? "#e8b800" : "#b38604" },
+            ]}
+          >
             {stats.totalHosts}
           </Text>
           <Text style={styles.statLabel}>Hosts</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "#FDEDEC" }]}>
+        <View
+          style={[
+            styles.statCard,
+            { backgroundColor: isDark ? "rgba(231,76,60,0.18)" : "#FDEDEC" },
+          ]}
+        >
           <View style={[styles.statIconWrap, { backgroundColor: "#E74C3C" }]}>
             <Ionicons name="hourglass" size={16} color="#fff" />
           </View>

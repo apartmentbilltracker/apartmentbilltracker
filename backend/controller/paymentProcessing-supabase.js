@@ -7,6 +7,7 @@ const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
+const { sendPushNotification } = require("../utils/sendPushNotification");
 
 // Helper: get payment settings for a specific host (falls back to all-enabled if not found)
 const getHostSettings = async (hostUserId) => {
@@ -350,7 +351,7 @@ router.post(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { roomId, amount, billType } = req.body;
+      const { roomId, amount, billType, billingCycleId } = req.body;
 
       if (!roomId || !amount || !billType) {
         return next(
@@ -377,8 +378,10 @@ router.post(
       }
 
       const cycles = await SupabaseService.getRoomBillingCycles(roomId);
-      const activeCycle = cycles.find((c) => c.status === "active");
-      if (!activeCycle) {
+      const targetCycle = billingCycleId
+        ? cycles.find((c) => String(c.id) === String(billingCycleId))
+        : cycles.find((c) => c.status === "active");
+      if (!targetCycle) {
         return next(new ErrorHandler("No active billing cycle", 400));
       }
 
@@ -392,8 +395,8 @@ router.post(
         reference: referenceNumber,
         payment_method: "gcash",
         status: "pending",
-        billing_cycle_start: activeCycle.start_date,
-        billing_cycle_end: activeCycle.end_date,
+        billing_cycle_start: targetCycle.start_date,
+        billing_cycle_end: targetCycle.end_date,
       });
 
       const createdPayment = Array.isArray(payment) ? payment[0] : payment;
@@ -443,6 +446,22 @@ router.post(
       }
       await SupabaseService.updatePayment(transactionId, updateData);
 
+      // Notify host that a GCash payment was submitted
+      try {
+        const room = await SupabaseService.findRoomById(payment.room_id);
+        if (room) {
+          const hostUser = await SupabaseService.findUserById(room.created_by);
+          if (hostUser?.expo_push_token) {
+            await sendPushNotification(hostUser.expo_push_token, {
+              title: "GCash Payment Submitted",
+              body: `${req.user.name || "A tenant"} submitted a GCash payment for ${room.name}. Please verify.`,
+            });
+          }
+        }
+      } catch (_) {
+        /* non-critical */
+      }
+
       res.status(200).json({
         success: true,
         message: "GCash payment submitted. Awaiting host verification.",
@@ -461,7 +480,7 @@ router.post(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { roomId, amount, billType } = req.body;
+      const { roomId, amount, billType, billingCycleId } = req.body;
 
       if (!roomId || !amount || !billType) {
         return next(
@@ -494,8 +513,10 @@ router.post(
       }
 
       const cycles = await SupabaseService.getRoomBillingCycles(roomId);
-      const activeCycle = cycles.find((c) => c.status === "active");
-      if (!activeCycle) {
+      const targetCycle = billingCycleId
+        ? cycles.find((c) => String(c.id) === String(billingCycleId))
+        : cycles.find((c) => c.status === "active");
+      if (!targetCycle) {
         return next(new ErrorHandler("No active billing cycle", 400));
       }
 
@@ -509,8 +530,8 @@ router.post(
         reference: referenceNumber,
         payment_method: "bank_transfer",
         status: "pending",
-        billing_cycle_start: activeCycle.start_date,
-        billing_cycle_end: activeCycle.end_date,
+        billing_cycle_start: targetCycle.start_date,
+        billing_cycle_end: targetCycle.end_date,
       });
 
       const createdPayment = Array.isArray(payment) ? payment[0] : payment;
@@ -560,6 +581,22 @@ router.post(
       }
       await SupabaseService.updatePayment(transactionId, updateData);
 
+      // Notify host that a bank transfer was submitted
+      try {
+        const room = await SupabaseService.findRoomById(payment.room_id);
+        if (room) {
+          const hostUser = await SupabaseService.findUserById(room.created_by);
+          if (hostUser?.expo_push_token) {
+            await sendPushNotification(hostUser.expo_push_token, {
+              title: "Bank Transfer Submitted",
+              body: `${req.user.name || "A tenant"} submitted a bank transfer for ${room.name}. Please verify.`,
+            });
+          }
+        }
+      } catch (_) {
+        /* non-critical */
+      }
+
       res.status(200).json({
         success: true,
         message: "Bank transfer submitted. Awaiting host verification.",
@@ -586,6 +623,7 @@ router.post(
         receivedBy,
         witnessName,
         notes,
+        billingCycleId,
       } = req.body;
 
       if (!roomId || !amount || !billType) {
@@ -600,8 +638,10 @@ router.post(
       }
 
       const cycles = await SupabaseService.getRoomBillingCycles(roomId);
-      const activeCycle = cycles.find((c) => c.status === "active");
-      if (!activeCycle) {
+      const targetCycle = billingCycleId
+        ? cycles.find((c) => String(c.id) === String(billingCycleId))
+        : cycles.find((c) => c.status === "active");
+      if (!targetCycle) {
         return next(new ErrorHandler("No active billing cycle", 400));
       }
 
@@ -628,11 +668,24 @@ router.post(
         reference: fullReference,
         payment_method: "cash",
         status: "completed",
-        billing_cycle_start: activeCycle.start_date,
-        billing_cycle_end: activeCycle.end_date,
+        billing_cycle_start: targetCycle.start_date,
+        billing_cycle_end: targetCycle.end_date,
       });
 
       const createdPayment = Array.isArray(payment) ? payment[0] : payment;
+
+      // Notify host that cash was received
+      try {
+        const hostUser = await SupabaseService.findUserById(room.created_by);
+        if (hostUser?.expo_push_token) {
+          await sendPushNotification(hostUser.expo_push_token, {
+            title: "Cash Payment Received",
+            body: `${req.user.name || "A tenant"} recorded a cash payment of ₱${Number(amount).toFixed(2)} for ${room.name}.`,
+          });
+        }
+      } catch (_) {
+        /* non-critical */
+      }
 
       // Auto-close cycle if all payors have paid
       const autoClose = await checkAndAutoCloseCycle(roomId);

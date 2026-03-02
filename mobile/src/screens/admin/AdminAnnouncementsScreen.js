@@ -348,47 +348,41 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
 
       {/* Room Selector */}
       {adminRooms.length > 1 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.roomSelectorScroll}
-          contentContainerStyle={styles.roomSelectorContent}
-        >
-          {adminRooms.map((room) => {
-            const rid = room.id || room._id;
-            const isSelected = rid === (adminRoom?.id || adminRoom?._id);
-            return (
-              <TouchableOpacity
-                key={rid}
-                style={[styles.roomChip, isSelected && styles.roomChipActive]}
-                onPress={async () => {
-                  setAdminRoom(room);
-                  setAnnouncements([]);
-                  setLoading(true);
-                  await fetchAnnouncements(rid);
-                  setLoading(false);
-                }}
-              >
-                <Ionicons
-                  name="home-outline"
-                  size={12}
-                  color={
-                    isSelected ? colors.textOnAccent : colors.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.roomChipText,
-                    isSelected && styles.roomChipTextActive,
-                  ]}
-                  numberOfLines={1}
+        <View style={styles.roomSelectorWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.roomSelectorContent}
+          >
+            {adminRooms.map((room) => {
+              const rid = room.id || room._id;
+              const isSelected = rid === (adminRoom?.id || adminRoom?._id);
+              return (
+                <TouchableOpacity
+                  key={rid}
+                  style={[styles.roomChip, isSelected && styles.roomChipActive]}
+                  onPress={async () => {
+                    setAdminRoom(room);
+                    setAnnouncements([]);
+                    setLoading(true);
+                    await fetchAnnouncements(rid);
+                    setLoading(false);
+                  }}
                 >
-                  {room.name || `Room ${rid}`}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.roomChipText,
+                      isSelected && styles.roomChipTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {room.name || `Room ${rid}`}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
       )}
 
       {/* Summary Strip */}
@@ -1091,26 +1085,31 @@ const createStyles = (colors) =>
     },
 
     /* Summary Strip */
-    roomSelectorScroll: {
-      maxHeight: 48,
+    roomSelectorWrapper: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.card,
+    },
+    roomSelectorScroll: {
+      flex: 0,
+      flexShrink: 0,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.card,
     },
     roomSelectorContent: {
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: 14,
-      paddingVertical: 8,
-      gap: 8,
+      paddingVertical: 10,
+      gap: 10,
     },
     roomChip: {
       flexDirection: "row",
-      alignItems: "center",
-      gap: 5,
-      paddingHorizontal: 12,
-      paddingVertical: 5,
-      borderRadius: 20,
+      alignSelf: "flex-start",
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 22,
       backgroundColor: colors.inputBg,
       borderWidth: 1,
       borderColor: colors.border,
@@ -1120,10 +1119,9 @@ const createStyles = (colors) =>
       borderColor: colors.accent,
     },
     roomChipText: {
-      fontSize: 12,
-      fontWeight: "500",
+      fontSize: 15,
+      fontWeight: "600",
       color: colors.textSecondary,
-      maxWidth: 120,
     },
     roomChipTextActive: {
       color: colors.textOnAccent,

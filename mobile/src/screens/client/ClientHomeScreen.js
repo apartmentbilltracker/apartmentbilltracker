@@ -75,6 +75,10 @@ const ClientHomeScreen = ({ navigation }) => {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expandedStats, setExpandedStats] = useState(false);
   const [activeCycle, setActiveCycle] = useState(null);
+  const [outstandingBalance, setOutstandingBalance] = useState({
+    totalOutstanding: 0,
+    unpaidCycles: [],
+  });
   const [announcementBanner, setAnnouncementBanner] = useState(null);
   const [statusChangeNotifications, setStatusChangeNotifications] = useState(
     [],
@@ -463,6 +467,18 @@ const ClientHomeScreen = ({ navigation }) => {
     }
   };
 
+  const fetchOutstandingBalance = async (roomId) => {
+    try {
+      const res = await billingCycleService.getOutstandingBalance(roomId);
+      setOutstandingBalance({
+        totalOutstanding: res?.totalOutstanding || 0,
+        unpaidCycles: res?.unpaidCycles || [],
+      });
+    } catch (_) {
+      setOutstandingBalance({ totalOutstanding: 0, unpaidCycles: [] });
+    }
+  };
+
   // Fetch unread chat count for the joined room (only messages after last read)
   const fetchChatBadge = async (roomId) => {
     try {
@@ -544,6 +560,7 @@ const ClientHomeScreen = ({ navigation }) => {
         fetchStatusChangeNotifications(),
         roomId ? fetchChatBadge(roomId) : Promise.resolve(),
         roomId ? fetchAnnouncementBanner(roomId) : Promise.resolve(),
+        roomId ? fetchOutstandingBalance(roomId) : Promise.resolve(),
       ]).catch(() => {});
     } catch (error) {
       console.error("Error fetching rooms:", error);
@@ -1099,6 +1116,32 @@ const ClientHomeScreen = ({ navigation }) => {
                 </Text>
               </View>
             )}
+            {userJoinedRoom?.cycleStatus === "cycle_closed" &&
+              !getPaymentStatus()?.allPaid && (
+                <View
+                  style={{
+                    backgroundColor: "#fff3e0",
+                    borderRadius: 10,
+                    padding: 12,
+                    marginBottom: 14,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <Ionicons name="warning" size={20} color="#e65100" />
+                  <Text
+                    style={{
+                      color: "#e65100",
+                      fontWeight: "600",
+                      fontSize: 13,
+                      marginLeft: 8,
+                      flex: 1,
+                    }}
+                  >
+                    Billing cycle closed — you still have outstanding bills.
+                  </Text>
+                </View>
+              )}
             {getPaymentStatus() && (
               <View>
                 {[
@@ -1559,6 +1602,26 @@ const ClientHomeScreen = ({ navigation }) => {
                             COMPLETED
                           </Text>
                         </View>
+                      ) : userJoinedRoom?.cycleStatus === "cycle_closed" ? (
+                        <View
+                          style={{
+                            backgroundColor: "#fff3e0",
+                            borderRadius: 6,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            marginLeft: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              fontWeight: "700",
+                              color: "#e65100",
+                            }}
+                          >
+                            CLOSED
+                          </Text>
+                        </View>
                       ) : userJoinedRoom?.cycleStatus === "active" ? (
                         <View
                           style={{
@@ -1672,9 +1735,85 @@ const ClientHomeScreen = ({ navigation }) => {
                   </TouchableOpacity>
                 )}
 
+                {/* ─── OUTSTANDING BALANCE BANNER ─── */}
+                {isCurrentUserPayor() &&
+                  outstandingBalance.totalOutstanding > 0 && (
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginHorizontal: 16,
+                        marginTop: 12,
+                        paddingHorizontal: 14,
+                        paddingVertical: 13,
+                        backgroundColor: "#fdecea",
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: "#ef9a9a",
+                        borderLeftWidth: 4,
+                        borderLeftColor: "#c62828",
+                      }}
+                      onPress={() =>
+                        navigation.navigate("BillsStack", {
+                          screen: "BillsMain",
+                        })
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons
+                        name="error"
+                        size={22}
+                        color="#c62828"
+                        style={{ marginRight: 12 }}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: "#b71c1c",
+                            fontWeight: "700",
+                            fontSize: 14,
+                          }}
+                        >
+                          Outstanding Balance
+                        </Text>
+                        <Text
+                          style={{
+                            color: "#c62828",
+                            fontWeight: "800",
+                            fontSize: 16,
+                            marginTop: 1,
+                          }}
+                        >
+                          ₱{outstandingBalance.totalOutstanding.toFixed(2)}
+                        </Text>
+                        <Text
+                          style={{
+                            color: "#b71c1c",
+                            fontSize: 12,
+                            marginTop: 3,
+                            opacity: 0.85,
+                          }}
+                        >
+                          {outstandingBalance.unpaidCycles.length} unpaid closed
+                          cycle
+                          {outstandingBalance.unpaidCycles.length !== 1
+                            ? "s"
+                            : ""}
+                          {" · "}Tap to settle
+                        </Text>
+                      </View>
+                      <MaterialIcons
+                        name="chevron-right"
+                        size={20}
+                        color="#c62828"
+                      />
+                    </TouchableOpacity>
+                  )}
+
                 {/* ─── PAYMENT STATUS ─── */}
                 {(getPaymentStatus() ||
-                  userJoinedRoom?.cycleStatus === "completed") && (
+                  userJoinedRoom?.cycleStatus === "completed" ||
+                  userJoinedRoom?.cycleStatus === "cycle_closed") && (
                   <TouchableOpacity
                     style={[
                       styles.paymentCard,
@@ -1719,15 +1858,23 @@ const ClientHomeScreen = ({ navigation }) => {
                       >
                         {userJoinedRoom?.cycleStatus === "completed"
                           ? "Billing Cycle Complete"
-                          : getPaymentStatus()?.allPaid
-                            ? "All Bills Paid"
-                            : "Payment Pending"}
+                          : userJoinedRoom?.cycleStatus === "cycle_closed"
+                            ? "Billing Cycle Closed"
+                            : getPaymentStatus()?.allPaid
+                              ? "All Bills Paid"
+                              : "Payment Pending"}
                       </Text>
                       {userJoinedRoom?.cycleStatus === "completed" ? (
                         <Text
                           style={[styles.paymentSub, { color: colors.success }]}
                         >
                           All paid! Waiting for new billing cycle.
+                        </Text>
+                      ) : userJoinedRoom?.cycleStatus === "cycle_closed" ? (
+                        <Text style={styles.paymentSub}>
+                          {getPaymentStatus()?.allPaid
+                            ? "You’re all settled up."
+                            : "Cycle closed. Please settle your outstanding payment."}
                         </Text>
                       ) : !getPaymentStatus()?.allPaid &&
                         getPaymentStatus()?.pendingCount > 0 ? (

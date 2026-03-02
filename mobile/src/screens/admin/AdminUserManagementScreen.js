@@ -28,7 +28,7 @@ const ROLE_FILTERS = [
 ];
 
 const AdminUserManagementScreen = ({ navigation }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
   const insets = useSafeAreaInsets();
   const { state } = useContext(AuthContext);
@@ -312,26 +312,51 @@ const AdminUserManagementScreen = ({ navigation }) => {
 
       {/* Stats Row */}
       <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: "#EBF5FB" }]}>
+        <View
+          style={[
+            styles.statCard,
+            { backgroundColor: isDark ? "rgba(41,128,185,0.18)" : "#EBF5FB" },
+          ]}
+        >
           <Text style={[styles.statValue, { color: "#2980B9" }]}>
             {stats.total}
           </Text>
           <Text style={styles.statLabel}>Total</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "#EAFAF1" }]}>
+        <View
+          style={[
+            styles.statCard,
+            { backgroundColor: isDark ? "rgba(39,174,96,0.18)" : "#EAFAF1" },
+          ]}
+        >
           <Text style={[styles.statValue, { color: "#27AE60" }]}>
             {stats.clients}
           </Text>
           <Text style={styles.statLabel}>Clients</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "#EBF5FB" }]}>
+        <View
+          style={[
+            styles.statCard,
+            { backgroundColor: isDark ? "rgba(41,128,185,0.18)" : "#EBF5FB" },
+          ]}
+        >
           <Text style={[styles.statValue, { color: "#2980B9" }]}>
             {stats.hosts}
           </Text>
           <Text style={styles.statLabel}>Hosts</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "#FEF9E7" }]}>
-          <Text style={[styles.statValue, { color: "#b38604" }]}>
+        <View
+          style={[
+            styles.statCard,
+            { backgroundColor: isDark ? "rgba(179,134,4,0.18)" : "#FEF9E7" },
+          ]}
+        >
+          <Text
+            style={[
+              styles.statValue,
+              { color: isDark ? "#e8b800" : "#b38604" },
+            ]}
+          >
             {stats.admins}
           </Text>
           <Text style={styles.statLabel}>Admins</Text>

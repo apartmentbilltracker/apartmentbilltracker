@@ -80,8 +80,7 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
           );
           const cycleData =
             cycleResponse?.billingCycle || cycleResponse?.data || cycleResponse;
-          cycleIsClosed =
-            cycleData?.status === "completed" || cycleData?.status === "closed";
+          cycleIsClosed = cycleData?.status === "completed";
           setIsCycleClosed(cycleIsClosed);
 
           if (cycleIsClosed) {

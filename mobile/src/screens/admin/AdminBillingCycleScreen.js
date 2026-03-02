@@ -183,7 +183,7 @@ const AdminBillingCycleScreen = ({ route }) => {
           onPress: async () => {
             try {
               setLoading(true);
-              const response = await apiService.put(
+              const response = await apiService.post(
                 `/api/v2/billing-cycles/${cycleId}/close`,
                 {},
               );
@@ -340,7 +340,10 @@ const AdminBillingCycleScreen = ({ route }) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.createFab}
-            onPress={() => setShowCreateModal(true)}
+            onPress={() => {
+              resetForm();
+              setShowCreateModal(true);
+            }}
             activeOpacity={0.8}
           >
             <Ionicons name="add" size={22} color={colors.textOnAccent} />
@@ -591,7 +594,10 @@ const AdminBillingCycleScreen = ({ route }) => {
         visible={showCreateModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowCreateModal(false)}
+        onRequestClose={() => {
+          setShowCreateModal(false);
+          resetForm();
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modal}>
@@ -608,7 +614,10 @@ const AdminBillingCycleScreen = ({ route }) => {
                 <Text style={styles.modalTitle}>New Billing Cycle</Text>
               </View>
               <TouchableOpacity
-                onPress={() => setShowCreateModal(false)}
+                onPress={() => {
+                  setShowCreateModal(false);
+                  resetForm();
+                }}
                 style={styles.modalCloseBtn}
               >
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
