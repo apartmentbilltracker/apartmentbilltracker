@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppState } from "react-native";
 import { authService } from "../services/apiService";
+import api from "../services/api";
 import notificationService from "../services/notificationService";
 import savedAccountsService from "../services/savedAccountsService";
 
@@ -150,6 +151,7 @@ export const AuthProvider = ({ children }) => {
 
   const clearCachedData = async () => {
     try {
+      api.clearTokenCache();
       await SecureStore.deleteItemAsync("authToken");
       await AsyncStorage.multiRemove([
         "cachedUser",
@@ -380,6 +382,7 @@ export const AuthProvider = ({ children }) => {
         const data = response.data || response;
         const { token, user } = data;
         await SecureStore.setItemAsync("authToken", token);
+        api.setTokenCache(token);
         await cacheUserData(user);
         await saveRememberMe(rememberMe);
         if (!rememberMe) await saveLastActivity();
@@ -405,6 +408,7 @@ export const AuthProvider = ({ children }) => {
         const data = response.data || response;
         const { token, user } = data;
         await SecureStore.setItemAsync("authToken", token);
+        api.setTokenCache(token);
         await cacheUserData(user);
         await saveLastActivity();
         dispatch({ type: "SIGN_UP", payload: { token, user } });
@@ -444,6 +448,7 @@ export const AuthProvider = ({ children }) => {
         const { token, user } = data;
         if (!token) throw new Error("No token received from server");
         await SecureStore.setItemAsync("authToken", token);
+        api.setTokenCache(token);
         await cacheUserData(user);
         await saveRememberMe(rememberMe);
         if (!rememberMe) await saveLastActivity();
@@ -475,6 +480,7 @@ export const AuthProvider = ({ children }) => {
           const { token, user } = data;
           if (!token) throw new Error("No token received from server");
           await SecureStore.setItemAsync("authToken", token);
+          api.setTokenCache(token);
           await cacheUserData(user);
           await saveRememberMe(rememberMe);
           if (!rememberMe) await saveLastActivity();
@@ -538,19 +544,9 @@ export const AuthProvider = ({ children }) => {
           payload: updatedUser,
         });
 
-        // Refresh full user data from server to ensure consistency
-        try {
-          const freshResponse = await authService.getProfile();
-          const freshData = freshResponse.data || freshResponse;
-          const freshUser = freshData.user || freshData;
-          await cacheUserData(freshUser);
-          dispatch({
-            type: "UPDATE_USER",
-            payload: freshUser,
-          });
-        } catch (refreshError) {
-          // Still return success as the update was saved
-        }
+        // Do NOT call getProfile() here as a follow-up — it uses withAvatar:false
+        // and would overwrite the Storage avatar URL we just received from
+        // update-profile with null, causing a flash of missing avatar.
 
         return { success: true, user: updatedUser };
       } catch (error) {

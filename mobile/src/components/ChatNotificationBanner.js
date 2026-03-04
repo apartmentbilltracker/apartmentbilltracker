@@ -10,10 +10,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation, useNavigationState } from "@react-navigation/native";
 import { AuthContext } from "../context/AuthContext";
 import { chatService, roomService } from "../services/apiService";
 import { useTheme } from "../theme/ThemeContext";
+import { navigationRef } from "../navigation/navigationRef";
 
 const POLL_INTERVAL = 60000; // 60 seconds (was 8s — reduced to save Supabase egress)
 const BANNER_DURATION = 4500; // 4.5 seconds visible
@@ -27,12 +27,15 @@ const BANNER_HEIGHT = 76;
  * Props:
  *  - role: "client" | "host"
  */
-const ChatNotificationBanner = ({ role = "client" }) => {
+const ChatNotificationBanner = () => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
   const { state: authState } = useContext(AuthContext);
   const userId = authState?.user?.id || authState?.user?._id;
+  const userRole = authState?.user?.role;
+  const isHost = Array.isArray(userRole)
+    ? userRole.includes("host")
+    : typeof userRole === "string" && userRole.toLowerCase() === "host";
 
   const [visible, setVisible] = useState(false);
   const [notification, setNotification] = useState(null); // { senderName, senderAvatar, text, roomId, roomName }
@@ -43,23 +46,15 @@ const ChatNotificationBanner = ({ role = "client" }) => {
   const lastMsgIdRef = useRef(null);
   const dismissTimerRef = useRef(null);
   const pollRef = useRef(null);
-  const isHost = role === "host";
 
-  // Detect if ChatRoom screen is currently active
-  const navState = useNavigationState((s) => s);
-  const isChatActive = useRef(false);
+  // Don't render for admins or unauthenticated users
+  const isAdmin = Array.isArray(userRole)
+    ? userRole.includes("admin")
+    : typeof userRole === "string" && userRole.toLowerCase().includes("admin");
 
-  useEffect(() => {
-    // Recursively find active route name
-    const getActiveRouteName = (state) => {
-      if (!state) return null;
-      const route = state.routes?.[state.index];
-      if (route?.state) return getActiveRouteName(route.state);
-      return route?.name;
-    };
-    const activeRoute = getActiveRouteName(navState);
-    isChatActive.current = activeRoute === "ChatRoom";
-  }, [navState]);
+  // Check active route via ref — safe to call from anywhere, no Navigator context needed
+  const isChatScreenActive = () =>
+    navigationRef.current?.getCurrentRoute()?.name === "ChatRoom";
 
   // Fetch user's room ID
   useEffect(() => {
@@ -137,7 +132,7 @@ const ChatNotificationBanner = ({ role = "client" }) => {
 
     const checkMessages = async () => {
       // Skip if user is on the chat screen
-      if (isChatActive.current) return;
+      if (isChatScreenActive()) return;
 
       try {
         // First check if chat is enabled
@@ -199,15 +194,18 @@ const ChatNotificationBanner = ({ role = "client" }) => {
 
   if (!visible || !notification) return null;
 
+  // Don't mount for admin users or when signed out
+  if (!userId || isAdmin) return null;
+
   const handlePress = () => {
     hideBanner();
-    navigation.navigate(isHost ? "DashboardStack" : "HomeStack", {
-      screen: "ChatRoom",
-      params: {
-        roomId: notification.roomId,
-        roomName: notification.roomName,
-        isHost,
-      },
+    // ChatRoom is at the root of each role navigator — navigate directly.
+    // Using navigationRef instead of useNavigation() so this component can
+    // be rendered at App root level, above all navigator native surfaces.
+    navigationRef.current?.navigate("ChatRoom", {
+      roomId: notification.roomId,
+      roomName: notification.roomName,
+      isHost,
     });
   };
 

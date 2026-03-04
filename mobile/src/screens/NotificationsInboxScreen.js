@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiService } from "../services/apiService";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme/ThemeContext";
@@ -20,6 +21,7 @@ import ModalBottomSpacer from "../components/ModalBottomSpacer";
 const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -385,7 +387,10 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
 
             {/* Close button */}
             <TouchableOpacity
-              style={styles.modalDoneBtn}
+              style={[
+                styles.modalDoneBtn,
+                { marginBottom: Math.max(insets.bottom, 8) + 10 },
+              ]}
               onPress={() => setSelectedNotification(null)}
               activeOpacity={0.8}
             >

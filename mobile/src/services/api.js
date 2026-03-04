@@ -1,10 +1,24 @@
 import * as SecureStore from "expo-secure-store";
 import { getAPIBaseURL } from "../config/config";
 
+// In-memory token cache — avoids an encrypted SecureStore disk read on every request.
+// Invalidated on logout by calling api.clearTokenCache().
+let _cachedToken = null;
+
 class APIClient {
   constructor() {
     this.baseURL = getAPIBaseURL();
     this.timeout = 30000;
+  }
+
+  clearTokenCache() {
+    _cachedToken = null;
+  }
+
+  // Call this immediately after writing a new token to SecureStore so the
+  // next request doesn't need a SecureStore read.
+  setTokenCache(token) {
+    _cachedToken = token || null;
   }
 
   // Helper to get timeout promise
@@ -18,7 +32,11 @@ class APIClient {
   async makeRequest(endpoint, options = {}) {
     try {
       const url = `${this.baseURL}${endpoint}`;
-      const token = await SecureStore.getItemAsync("authToken");
+      // Use cached token; fall back to SecureStore only on cache miss
+      if (_cachedToken === null) {
+        _cachedToken = (await SecureStore.getItemAsync("authToken")) ?? "";
+      }
+      const token = _cachedToken || null;
 
       const headers = {
         "Content-Type": "application/json",

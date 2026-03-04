@@ -26,7 +26,6 @@ import ChatRoomScreen from "../screens/chat/ChatRoomScreen";
 import HostProfileScreen from "../screens/host/HostProfileScreen";
 import TermsOfServiceScreen from "../screens/legal/TermsOfServiceScreen";
 import PrivacyPolicyScreen from "../screens/legal/PrivacyPolicyScreen";
-import ChatNotificationBanner from "../components/ChatNotificationBanner";
 import { useTheme } from "../theme/ThemeContext";
 
 const Stack = createNativeStackNavigator();
@@ -66,11 +65,6 @@ const DashboardStack = () => {
         name="HostDashboard"
         component={AdminDashboardScreen}
         options={{ title: "Dashboard" }}
-      />
-      <Stack.Screen
-        name="ChatRoom"
-        component={ChatRoomScreen}
-        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -198,7 +192,7 @@ const ProfileStack = () => {
   );
 };
 
-const HostNavigator = () => {
+const HostTabNavigator = () => {
   const [pendingMemberCount, setPendingMemberCount] = React.useState(0);
   const { colors } = useTheme();
   const tabInsets = useSafeAreaInsets();
@@ -236,7 +230,6 @@ const HostNavigator = () => {
 
   return (
     <View style={{ flex: 1 }}>
-      <ChatNotificationBanner role="host" />
       <Tab.Navigator
         sceneContainerStyle={{ backgroundColor: colors.background }}
         safeAreaInsets={{ bottom: 0 }}
@@ -291,8 +284,8 @@ const HostNavigator = () => {
             shadowOpacity: 0.08,
             shadowRadius: 8,
             paddingTop: 4,
-            paddingBottom: Math.max(tabInsets.bottom, 8),
-            height: 56 + Math.max(tabInsets.bottom, 8),
+            paddingBottom: tabInsets.bottom + 10,
+            height: 56 + tabInsets.bottom + 10,
           },
           tabBarBadgeStyle: {
             backgroundColor: "#e74c3c",
@@ -429,5 +422,13 @@ const HostNavigator = () => {
     </View>
   );
 };
+
+// Root wrapper — ChatRoom lives here, ABOVE the Tab navigator.
+const HostNavigator = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="HostTabs" component={HostTabNavigator} />
+    <Stack.Screen name="ChatRoom" component={ChatRoomScreen} />
+  </Stack.Navigator>
+);
 
 export default HostNavigator;

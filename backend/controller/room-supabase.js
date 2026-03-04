@@ -1563,41 +1563,42 @@ router.get("/:id/billing-history", isAuthenticated, async (req, res, next) => {
 // ============================================================
 router.post("/:id/presence", isAuthenticated, async (req, res, next) => {
   try {
-    const { presenceDates } = req.body;
+    const { presenceDates, memberRecordId } = req.body;
     if (!Array.isArray(presenceDates)) {
       return next(new ErrorHandler("Presence dates must be an array", 400));
     }
 
-    const room = await SupabaseService.findRoomById(req.params.id);
-    if (!room) return next(new ErrorHandler("Room not found", 404));
+    let recordId = memberRecordId || null;
 
-    // Update presence for the member (filtered query per room, not full table scan)
-    const roomMembers = await SupabaseService.selectAll(
-      "room_members",
-      "room_id",
-      req.params.id,
-      "*",
-      "joined_at",
-    );
-    const memberRecord = (roomMembers || []).find(
-      (m) => m.user_id === req.user.id,
-    );
-    if (!memberRecord) {
-      return next(new ErrorHandler("Not a member of this room", 400));
+    if (!recordId) {
+      // Fallback: look up the member record (only needed on first save or cache miss)
+      const roomMembers = await SupabaseService.selectAll(
+        "room_members",
+        "room_id",
+        req.params.id,
+        "id,user_id",
+        "joined_at",
+      );
+      const memberRecord = (roomMembers || []).find(
+        (m) => m.user_id === req.user.id,
+      );
+      if (!memberRecord) {
+        return next(new ErrorHandler("Not a member of this room", 400));
+      }
+      recordId = memberRecord.id;
     }
 
-    await SupabaseService.update("room_members", memberRecord.id, {
-      presence: presenceDates, // Store as JSON array
+    await SupabaseService.update("room_members", recordId, {
+      presence: presenceDates,
     });
 
-    // Enhance room with members
-    room.members = await enrichRoomMembers(room.id);
-    normalizeRoom(room);
+    // Bust cached member data so the next full room fetch is fresh
+    cache.del(`room_members:${req.params.id}`);
 
+    // Lightweight response — client does optimistic updates locally
     res.status(200).json({
       success: true,
       message: "Presence saved successfully",
-      room,
     });
   } catch (error) {
     next(new ErrorHandler(error.message, 500));
