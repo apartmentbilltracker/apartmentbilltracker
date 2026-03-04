@@ -18,6 +18,7 @@ import Constants from "expo-constants";
 import { AuthContext } from "../../context/AuthContext";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { getAPIBaseURL } from "../../config/config";
 
 const THEME_OPTIONS = [
   { key: "light", label: "Light", icon: "sunny" },
@@ -115,8 +116,16 @@ const AdminProfileScreen = ({ navigation }) => {
   };
 
   const getAvatarSource = () => {
-    if (user.avatar?.url) {
+    // External URL (Google/Facebook): kept in /getuser response (tiny string, no egress cost)
+    if (user?.avatar?.url?.startsWith("http")) {
       return { uri: user.avatar.url };
+    }
+    // Base64 avatars are stripped from /getuser to save Supabase egress.
+    // Use the server's cached avatar-image endpoint instead (1-hour TTL).
+    if (user?.email) {
+      return {
+        uri: `${getAPIBaseURL()}/api/v2/user/avatar-image/${encodeURIComponent(user.email)}`,
+      };
     }
     return null;
   };
@@ -159,19 +168,11 @@ const AdminProfileScreen = ({ navigation }) => {
       {/* Profile Header Card */}
       <View style={styles.profileCard}>
         <View style={styles.avatarContainer}>
-          {user.avatar?.url ? (
-            <Image
-              source={getAvatarSource()}
-              style={styles.avatarImage}
-              defaultSource={require("../../assets/default-avatar.png")}
-            />
-          ) : (
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {(user.name || "A").charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+          <Image
+            source={getAvatarSource()}
+            style={styles.avatarImage}
+            defaultSource={require("../../assets/default-avatar.png")}
+          />
           <TouchableOpacity
             style={styles.editAvatarBtn}
             onPress={handleEditPress}
@@ -581,10 +582,11 @@ const AdminProfileScreen = ({ navigation }) => {
                   source={{ uri: selectedImage.uri }}
                   style={styles.modalAvatarImage}
                 />
-              ) : user.avatar?.url ? (
+              ) : getAvatarSource() ? (
                 <Image
                   source={getAvatarSource()}
                   style={styles.modalAvatarImage}
+                  defaultSource={require("../../assets/default-avatar.png")}
                 />
               ) : (
                 <View style={styles.modalAvatar}>

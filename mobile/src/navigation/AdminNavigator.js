@@ -316,8 +316,8 @@ const AdminNavigator = () => {
           shadowOpacity: 0.08,
           shadowRadius: 8,
           paddingTop: 4,
-          paddingBottom: Math.max(tabInsets.bottom, 8),
-          height: 56 + Math.max(tabInsets.bottom, 8),
+          paddingBottom: tabInsets.bottom + 10,
+          height: 56 + tabInsets.bottom + 10,
         },
         tabBarBadgeStyle: {
           backgroundColor: "#e74c3c",

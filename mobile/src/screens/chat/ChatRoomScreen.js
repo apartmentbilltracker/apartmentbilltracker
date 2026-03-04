@@ -12,11 +12,13 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   Alert,
   Platform,
   KeyboardAvoidingView,
   Keyboard,
+  AppState,
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,7 +29,12 @@ import { chatService } from "../../services/apiService";
 import chatReadTracker from "../../services/chatReadTracker";
 import { useTheme } from "../../theme/ThemeContext";
 
-const POLL_INTERVAL = 15000; // 15 seconds (was 5s — reduced to save Supabase egress)
+const POLL_INTERVAL = 30000; // 30 seconds (was 15s — halved to save Supabase egress)
+
+// Defined at module level so the reference is stable across renders.
+// If defined inside the component, React sees a new component type each render
+// and unmounts/remounts the entire subtree, destroying the TextInput native view.
+const KBWrapper = Platform.OS === "ios" ? KeyboardAvoidingView : View;
 
 const ChatRoomScreen = ({ route, navigation }) => {
   const { roomId, roomName, isHost } = route.params;
@@ -43,9 +50,11 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [chatEnabled, setChatEnabled] = useState(false);
   const [togglingChat, setTogglingChat] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [inputKey, setInputKey] = useState(0);
   const flatListRef = useRef(null);
   const pollRef = useRef(null);
+  const inputRef = useRef(null);
+  const appStateRef = useRef(AppState.currentState);
 
   const fetchMessages = async (silent = false) => {
     try {
@@ -102,51 +111,50 @@ const ChatRoomScreen = ({ route, navigation }) => {
     fetchStatus();
   }, [roomId]);
 
-  // Track keyboard visibility so inputBar padding is correct on Android
+  // Scroll to newest message when keyboard opens so last message stays visible
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", () => {
-      setKeyboardVisible(true);
-      // Scroll to newest message when keyboard opens so the last message is visible
       setTimeout(
         () => flatListRef.current?.scrollToEnd({ animated: false }),
         120,
       );
     });
-    const hide = Keyboard.addListener("keyboardDidHide", () =>
-      setKeyboardVisible(false),
-    );
-    return () => {
-      show.remove();
-      hide.remove();
-    };
+    return () => show.remove();
+  }, []);
+
+  // Re-focus input when app returns from background.
+  // useFocusEffect does NOT re-fire on background→foreground because the screen
+  // never loses navigation focus — AppState is the only way to catch this.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextState === "active"
+      ) {
+        // Force-remount the TextInput native view on foreground return.
+        // This resets any stale Android IME/focus state without auto-opening
+        // the keyboard. The value prop (controlled) restores the text content.
+        setInputKey((k) => k + 1);
+      }
+      appStateRef.current = nextState;
+    });
+    return () => sub.remove();
   }, []);
 
   // Poll for new messages when focused & mark as read
   useFocusEffect(
     useCallback(() => {
-      // Hide the tab bar for an immersive full-screen chat experience
-      const parent = navigation.getParent();
-      parent?.setOptions({ tabBarStyle: { display: "none" } });
-
-      // Mark room as read when user views the chat
       chatReadTracker.markAsRead(roomId);
-
-      // Always start by fetching fresh status + messages
       fetchStatus();
       pollRef.current = setInterval(() => {
         if (chatEnabled) {
           fetchMessages(true);
-          // Keep updating the read timestamp while viewing
           chatReadTracker.markAsRead(roomId);
         } else {
-          // Re-check status periodically in case host enables chat
           fetchStatus();
         }
       }, POLL_INTERVAL);
       return () => {
-        // Restore tab bar when leaving chat room
-        parent?.setOptions({ tabBarStyle: undefined });
-        // Mark as read when leaving the chat screen
         chatReadTracker.markAsRead(roomId);
         if (pollRef.current) clearInterval(pollRef.current);
       };
@@ -378,13 +386,17 @@ const ChatRoomScreen = ({ route, navigation }) => {
     );
   }
 
+  // On Android, "resize" mode (app.json) shrinks the window to sit above the
+  // keyboard — KAV is not needed and its internal listeners prevent TextInput
+  // from receiving the focus event on first tap. KBWrapper is module-level.
+  const kbProps =
+    Platform.OS === "ios"
+      ? { behavior: "padding", keyboardVerticalOffset: insets.top }
+      : {};
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
-      >
+      <KBWrapper style={{ flex: 1 }} {...kbProps}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -471,6 +483,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
               renderItem={renderMessage}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.messagesList}
+              keyboardShouldPersistTaps="handled"
               onContentSizeChange={() => {
                 if (messages.length > 0) {
                   flatListRef.current?.scrollToEnd({ animated: false });
@@ -492,16 +505,11 @@ const ChatRoomScreen = ({ route, navigation }) => {
 
             {/* Input bar */}
             <View
-              style={[
-                styles.inputBar,
-                {
-                  paddingBottom: keyboardVisible
-                    ? 10
-                    : Math.max(insets.bottom + 10, 10),
-                },
-              ]}
+              style={[styles.inputBar, { paddingBottom: insets.bottom || 8 }]}
             >
               <TextInput
+                key={inputKey}
+                ref={inputRef}
                 style={styles.input}
                 placeholder="Type a message..."
                 placeholderTextColor={colors.textTertiary}
@@ -510,6 +518,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
                 multiline
                 maxLength={1000}
                 returnKeyType="default"
+                showSoftInputOnFocus
               />
               <TouchableOpacity
                 style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
@@ -522,7 +531,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
             </View>
           </>
         )}
-      </KeyboardAvoidingView>
+      </KBWrapper>
     </View>
   );
 };

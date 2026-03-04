@@ -17,6 +17,7 @@ const { isAuthenticated } = require("../middleware/auth");
 const ActivationContent = require("../utils/ActivationContent");
 const ResetPasswordEmail = require("../utils/ResetPasswordEmail");
 const avatarCache = require("../utils/MemoryCache");
+const { uploadAvatarToStorage } = require("../utils/supabaseStorage");
 
 // In-memory store for pending users (10-minute expiry)
 const pendingUsers = new Map();
@@ -815,6 +816,12 @@ router.get(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
+      // withAvatar: false — currently the avatar column can hold a 2–5 MB base64
+      // string for users who uploaded before the Storage migration.  Once
+      // migrate-avatars.js has run (all rows have a Storage URL), flip this to
+      //   withAvatar: true
+      // — the column will then be a tiny URL string and egress is negligible.
+      // Profile screens handle the missing avatar by calling /avatar-image/:email.
       const user = await SupabaseService.findUserById(req.user.id, {
         withAvatar: true,
       });
@@ -841,6 +848,8 @@ router.get(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
+      // withAvatar: false — same reasoning as /me above.
+      // After migrate-avatars.js completes, change to withAvatar: true.
       const user = await SupabaseService.findUserById(req.user.id, {
         withAvatar: true,
       });
@@ -875,17 +884,34 @@ router.put(
       if (dateOfBirth) updates.date_of_birth = dateOfBirth;
       if (phoneNumber) updates.phone_number = phoneNumber;
 
-      // Handle avatar update
+      // Handle avatar update — upload to Supabase Storage (CDN) instead of
+      // storing base64 in the DB column (which costs 2–5 MB of egress per read).
       if (avatar) {
-        // If avatar is base64 string, convert to data URL
-        const avatarUrl = avatar.startsWith("data:image")
-          ? avatar
-          : `data:image/jpeg;base64,${avatar}`;
-
-        updates.avatar = JSON.stringify({
-          public_id: "user_avatar",
-          url: avatarUrl,
-        });
+        try {
+          const base64Url = avatar.startsWith("data:image")
+            ? avatar
+            : `data:image/jpeg;base64,${avatar}`;
+          const publicUrl = await uploadAvatarToStorage(req.user.id, base64Url);
+          updates.avatar = JSON.stringify({
+            public_id: "user_avatar",
+            url: publicUrl, // Supabase Storage public URL (tiny string)
+          });
+          // Bust the in-memory avatar cache so the new image is served immediately.
+          avatarCache.del(`avatar:${req.user.email?.toLowerCase()}`);
+        } catch (storageErr) {
+          // Storage unavailable — fall back to DB base64 (old behaviour).
+          console.error(
+            "⚠️  Storage upload failed, falling back to DB storage:",
+            storageErr.message,
+          );
+          const avatarUrl = avatar.startsWith("data:image")
+            ? avatar
+            : `data:image/jpeg;base64,${avatar}`;
+          updates.avatar = JSON.stringify({
+            public_id: "user_avatar",
+            url: avatarUrl,
+          });
+        }
       }
 
       try {
@@ -1380,10 +1406,27 @@ router.post(
       const avatars = {};
       for (const email of limitedEmails) {
         try {
+          // Check in-memory cache first (1-hour TTL, shared with avatar-image endpoint).
+          // Avoids fetching a 2–5 MB base64 blob from Supabase just to determine avatar type.
+          const cacheKey = `avatar:${email}`;
+          const cachedUrl = avatarCache.get(cacheKey);
+          if (cachedUrl !== undefined) {
+            if (cachedUrl) {
+              avatars[email] = cachedUrl.startsWith("http")
+                ? cachedUrl
+                : `/api/v2/user/avatar-image/${encodeURIComponent(email)}`;
+            } else {
+              avatars[email] = null;
+            }
+            continue;
+          }
+
           const user = await SupabaseService.findUserByEmail(email, {
             withAvatar: true,
           });
           if (user && user.avatar && user.avatar.url) {
+            // Populate cache so /avatar-image and future /avatars calls skip Supabase
+            avatarCache.set(cacheKey, user.avatar.url, 3600);
             if (user.avatar.url.startsWith("http")) {
               // External URL (Google/Facebook) — return directly
               avatars[email] = user.avatar.url;
@@ -1393,6 +1436,7 @@ router.post(
                 `/api/v2/user/avatar-image/${encodeURIComponent(email)}`;
             }
           } else {
+            avatarCache.set(cacheKey, null, 3600); // Cache "no avatar" to skip re-fetching
             avatars[email] = null;
           }
         } catch {

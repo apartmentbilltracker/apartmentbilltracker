@@ -2,6 +2,7 @@ const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("./catchAsyncErrors");
 const jwt = require("jsonwebtoken");
 const SupabaseService = require("../db/SupabaseService");
+const cache = require("../utils/MemoryCache");
 
 exports.isAuthenticated = catchAsyncErrors(async (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1] || req.cookies.token;
@@ -12,14 +13,22 @@ exports.isAuthenticated = catchAsyncErrors(async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+    const userId = decoded._id || decoded.id;
 
-    req.user = await SupabaseService.findUserById(decoded._id || decoded.id);
-    if (!req.user) {
+    // Cache the user record for 60s to avoid a DB hit on every request.
+    // Deactivation changes propagate within 60s.
+    const cacheKey = `auth_user:${userId}`;
+    let user = cache.get(cacheKey);
+    if (!user) {
+      user = await SupabaseService.findUserById(userId);
+      if (user) cache.set(cacheKey, user, 60);
+    }
+
+    if (!user) {
       return next(new ErrorHandler("Please login to continue", 401));
     }
 
-    // Block deactivated accounts from all API calls
-    if (req.user.is_active === false) {
+    if (user.is_active === false) {
       return next(
         new ErrorHandler(
           "Your account has been deactivated. Please contact support.",
@@ -28,6 +37,7 @@ exports.isAuthenticated = catchAsyncErrors(async (req, res, next) => {
       );
     }
 
+    req.user = user;
     next();
   } catch (error) {
     return next(new ErrorHandler("Please login to continue", 401));

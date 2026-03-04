@@ -25,6 +25,12 @@ const SplashScreen = () => {
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const ringScale = useRef(new Animated.Value(0.6)).current;
   const ringOpacity = useRef(new Animated.Value(0)).current;
+  const ripple1Scale = useRef(new Animated.Value(1)).current;
+  const ripple1Opacity = useRef(new Animated.Value(0)).current;
+  const ripple2Scale = useRef(new Animated.Value(1)).current;
+  const ripple2Opacity = useRef(new Animated.Value(0)).current;
+  const glowScale = useRef(new Animated.Value(0.8)).current;
+  const glowOpacity = useRef(new Animated.Value(0)).current;
   const titleY = useRef(new Animated.Value(30)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const subtitleY = useRef(new Animated.Value(20)).current;
@@ -138,20 +144,76 @@ const SplashScreen = () => {
     const ringPulse = Animated.loop(
       Animated.sequence([
         Animated.timing(ringScale, {
-          toValue: 1.08,
-          duration: 1500,
-          easing: Easing.inOut(Easing.quad),
+          toValue: 1.06,
+          duration: 2000,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(ringScale, {
           toValue: 1,
-          duration: 1500,
-          easing: Easing.inOut(Easing.quad),
+          duration: 2000,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ]),
     );
     const ringTimeout = setTimeout(() => ringPulse.start(), 1200);
+
+    // Soft glow behind the logo — fades in once, then breathes gently
+    const glowIn = setTimeout(() => {
+      Animated.timing(glowOpacity, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowScale, {
+            toValue: 1.15,
+            duration: 2200,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowScale, {
+            toValue: 0.92,
+            duration: 2200,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    }, 900);
+
+    // Staggered ripple rings — sonar-style expanding and fading circles
+    const makeRipple = (scale, opacity, delay) =>
+      setTimeout(() => {
+        Animated.loop(
+          Animated.parallel([
+            Animated.timing(scale, {
+              toValue: 1.7,
+              duration: 2400,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+            Animated.sequence([
+              Animated.timing(opacity, {
+                toValue: 0.55,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(opacity, {
+                toValue: 0,
+                duration: 2200,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: true,
+              }),
+            ]),
+          ]),
+        ).start();
+      }, delay);
+
+    const rippleTimeout1 = makeRipple(ripple1Scale, ripple1Opacity, 1400);
+    const rippleTimeout2 = makeRipple(ripple2Scale, ripple2Opacity, 2600);
 
     const dotLoop = Animated.loop(
       Animated.sequence([
@@ -205,6 +267,9 @@ const SplashScreen = () => {
       clearTimeout(t4);
       clearTimeout(t5);
       clearTimeout(ringTimeout);
+      clearTimeout(glowIn);
+      clearTimeout(rippleTimeout1);
+      clearTimeout(rippleTimeout2);
       clearTimeout(dotTimeout);
       clearTimeout(shimmerTimeout);
       ringPulse.stop();
@@ -231,15 +296,14 @@ const SplashScreen = () => {
   const ringBorder = isDark ? "rgba(179,134,4,0.5)" : "rgba(179,134,4,0.35)";
   const logoBg = isDark ? "rgba(255,255,255,0.08)" : "rgba(179,134,4,0.06)";
   const logoBorderC = isDark ? "rgba(179,134,4,0.25)" : "rgba(179,134,4,0.18)";
+  const glowColor = isDark ? "rgba(179,134,4,0.18)" : "rgba(179,134,4,0.14)";
+  const rippleColor = isDark ? "rgba(179,134,4,0.28)" : "rgba(179,134,4,0.22)";
   const titleColor = colors.text;
   const barTrackBg = isDark ? "rgba(255,255,255,0.08)" : "rgba(179,134,4,0.1)";
   const shimmerC = isDark ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.6)";
   const mutedText = isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.35)";
   const versionC = isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.2)";
   const versionDivC = isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)";
-  // Organic polygon blob colours around the logo
-  const blobBg1 = isDark ? "rgba(179,134,4,0.08)" : "rgba(179,134,4,0.10)";
-  const blobBg2 = isDark ? "rgba(179,134,4,0.05)" : "rgba(179,134,4,0.07)";
   const errBg = isDark ? "rgba(255,107,107,0.12)" : "rgba(211,47,47,0.08)";
   const errBorder = isDark ? "rgba(255,107,107,0.2)" : "rgba(211,47,47,0.15)";
   const errColor = isDark ? "#ff6b6b" : "#d32f2f";
@@ -276,27 +340,40 @@ const SplashScreen = () => {
       <View style={styles.container}>
         {/* Logo with golden ring */}
         <View style={styles.logoSection}>
-          {/* Organic polygon blobs — create the heptagon/octagon shape behind the ring */}
+          {/* Ripple 1 — first sonar ring */}
           <Animated.View
             style={[
-              styles.logoBlobA,
+              styles.rippleRing,
               {
-                backgroundColor: blobBg1,
-                transform: [{ rotate: "-15deg" }, { scale: ringScale }],
-                opacity: ringOpacity,
+                borderColor: rippleColor,
+                transform: [{ scale: ripple1Scale }],
+                opacity: ripple1Opacity,
               },
             ]}
           />
+          {/* Ripple 2 — staggered second ring */}
           <Animated.View
             style={[
-              styles.logoBlobB,
+              styles.rippleRing,
               {
-                backgroundColor: blobBg2,
-                transform: [{ rotate: "20deg" }, { scale: ringScale }],
-                opacity: ringOpacity,
+                borderColor: rippleColor,
+                transform: [{ scale: ripple2Scale }],
+                opacity: ripple2Opacity,
               },
             ]}
           />
+          {/* Soft glow disc behind the logo */}
+          <Animated.View
+            style={[
+              styles.logoGlow,
+              {
+                backgroundColor: glowColor,
+                transform: [{ scale: glowScale }],
+                opacity: glowOpacity,
+              },
+            ]}
+          />
+          {/* Outer ring — breathes gently */}
           <Animated.View
             style={[
               styles.ring,
@@ -307,6 +384,7 @@ const SplashScreen = () => {
               },
             ]}
           />
+          {/* Logo circle */}
           <Animated.View
             style={[
               styles.logoContainer,
@@ -449,6 +527,22 @@ const styles = StyleSheet.create({
     width: 170,
     height: 170,
   },
+  // Sonar ripple rings — same base size as the main ring, expand + fade outward
+  rippleRing: {
+    position: "absolute",
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 1.5,
+    backgroundColor: "transparent",
+  },
+  // Soft radial glow disc
+  logoGlow: {
+    position: "absolute",
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+  },
   ring: {
     position: "absolute",
     width: 170,
@@ -456,24 +550,6 @@ const styles = StyleSheet.create({
     borderRadius: 85,
     borderWidth: 2.5,
     backgroundColor: "transparent",
-  },
-  logoBlobA: {
-    position: "absolute",
-    width: 186,
-    height: 186,
-    borderTopLeftRadius: 72,
-    borderTopRightRadius: 38,
-    borderBottomLeftRadius: 48,
-    borderBottomRightRadius: 66,
-  },
-  logoBlobB: {
-    position: "absolute",
-    width: 166,
-    height: 166,
-    borderTopLeftRadius: 38,
-    borderTopRightRadius: 64,
-    borderBottomLeftRadius: 58,
-    borderBottomRightRadius: 34,
   },
   logoContainer: {
     width: 130,

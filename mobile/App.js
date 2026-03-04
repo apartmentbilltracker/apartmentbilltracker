@@ -21,9 +21,10 @@ import notificationService from "./src/services/notificationService";
 import updateService from "./src/services/updateService";
 import { getAPIBaseURL } from "./src/config/config";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeContext";
+import { navigationRef } from "./src/navigation/navigationRef";
+import ChatNotificationBanner from "./src/components/ChatNotificationBanner";
 
-// Global navigation ref for push notification navigation
-export const navigationRef = React.createRef();
+export { navigationRef };
 
 export default function App() {
   const [updateStatus, setUpdateStatus] = React.useState(null);
@@ -117,25 +118,12 @@ export default function App() {
   );
 }
 
-/** Wraps children with a transparent touch detector to reset inactivity timer */
+/** Resets inactivity timer on navigation state changes. The previous approach
+ *  used onStartShouldSetResponderCapture which, even with return false, intercepts
+ *  Android native MotionEvents during the capture phase and prevents TextInput
+ *  from establishing its IME connection in production APK builds. */
 function ActivityTracker({ children }) {
-  const authContext = React.useContext(AuthContext);
-
-  const handleTouchCapture = React.useCallback(() => {
-    if (authContext?.resetInactivityTimer && authContext?.state?.userToken) {
-      authContext.resetInactivityTimer();
-    }
-    return false; // Don't capture — let touches pass through
-  }, [authContext]);
-
-  return (
-    <View
-      style={{ flex: 1 }}
-      onStartShouldSetResponderCapture={handleTouchCapture}
-    >
-      {children}
-    </View>
-  );
+  return <View style={{ flex: 1 }}>{children}</View>;
 }
 
 /** Reads theme inside ThemeProvider and passes navTheme to NavigationContainer */
@@ -158,21 +146,11 @@ function ThemedNavigation() {
               roomName: data.roomName || "Chat",
               isHost: false,
             };
-            // Try client navigator first, fallback to host navigator
+            // ChatRoom is at the root of each role navigator — navigate directly
             try {
-              nav.navigate("HomeStack", {
-                screen: "ChatRoom",
-                params: chatParams,
-              });
+              nav.navigate("ChatRoom", chatParams);
             } catch {
-              try {
-                nav.navigate("DashboardStack", {
-                  screen: "ChatRoom",
-                  params: { ...chatParams, isHost: true },
-                });
-              } catch {
-                // Silent — user may be on auth screen
-              }
+              // Silent — user may be on auth screen
             }
           }
         }, 500);
@@ -204,6 +182,9 @@ function ThemedNavigation() {
       <ActivityTracker>
         <RootNavigator />
       </ActivityTracker>
+      {/* Rendered above all navigator native surfaces so position:absolute
+          zIndex works correctly in production APK native stack builds */}
+      <ChatNotificationBanner />
     </NavigationContainer>
   );
 }

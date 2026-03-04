@@ -25,7 +25,6 @@ import SettlementScreen from "../screens/client/SettlementScreen";
 import ChatRoomScreen from "../screens/chat/ChatRoomScreen";
 import NotificationsInboxScreen from "../screens/NotificationsInboxScreen";
 import AnnouncementsScreen from "../screens/client/AnnouncementsScreen";
-import ChatNotificationBanner from "../components/ChatNotificationBanner";
 import {
   apiService,
   announcementService,
@@ -89,11 +88,6 @@ const ClientHomeStack = () => {
         name="Presence"
         component={PresenceScreen}
         options={{ title: "Mark Presence" }}
-      />
-      <Stack.Screen
-        name="ChatRoom"
-        component={ChatRoomScreen}
-        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -244,7 +238,7 @@ const NotificationsStack = ({ onNotificationsStatusChange }) => {
   );
 };
 
-const ClientNavigator = () => {
+const ClientTabNavigator = () => {
   const { state } = useContext(AuthContext);
   const { colors } = useTheme();
   const tabInsets = useSafeAreaInsets();
@@ -296,7 +290,6 @@ const ClientNavigator = () => {
 
   return (
     <View style={{ flex: 1 }}>
-      <ChatNotificationBanner role="client" />
       <Tab.Navigator
         sceneContainerStyle={{ backgroundColor: colors.background }}
         safeAreaInsets={{ bottom: 0 }}
@@ -351,8 +344,8 @@ const ClientNavigator = () => {
             shadowOpacity: 0.08,
             shadowRadius: 8,
             paddingTop: 4,
-            paddingBottom: Math.max(tabInsets.bottom, 8),
-            height: 56 + Math.max(tabInsets.bottom, 8),
+            paddingBottom: tabInsets.bottom + 10,
+            height: 56 + tabInsets.bottom + 10,
           },
           tabBarBadgeStyle: {
             backgroundColor: "#e74c3c",
@@ -511,5 +504,15 @@ const ClientNavigator = () => {
     </View>
   );
 };
+
+// Root wrapper — ChatRoom lives here, ABOVE the Tab navigator.
+// This means it has no tab bar in its ancestry at all: no hiding/restoring
+// needed, no double inset padding, no keyboard layout interference.
+const ClientNavigator = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="ClientTabs" component={ClientTabNavigator} />
+    <Stack.Screen name="ChatRoom" component={ChatRoomScreen} />
+  </Stack.Navigator>
+);
 
 export default ClientNavigator;

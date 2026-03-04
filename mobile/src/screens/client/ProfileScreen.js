@@ -20,6 +20,7 @@ import {
   hostRoleService,
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { getAPIBaseURL } from "../../config/config";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const THEME_OPTIONS = [
@@ -350,8 +351,16 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const getAvatarSource = () => {
-    if (user.avatar?.url) {
+    // External URL (Google/Facebook): kept in /getuser response (tiny string, no egress cost)
+    if (user?.avatar?.url?.startsWith("http")) {
       return { uri: user.avatar.url };
+    }
+    // Base64 avatars are stripped from /getuser to save Supabase egress.
+    // Use the server's cached avatar-image endpoint instead (1-hour TTL).
+    if (user?.email) {
+      return {
+        uri: `${getAPIBaseURL()}/api/v2/user/avatar-image/${encodeURIComponent(user.email)}`,
+      };
     }
     return null;
   };
@@ -361,19 +370,11 @@ const ProfileScreen = ({ navigation }) => {
       {/* ─── PROFILE HEADER ─── */}
       <View style={styles.headerBg}>
         <View style={styles.avatarWrap}>
-          {user.avatar?.url ? (
-            <Image
-              source={getAvatarSource()}
-              style={styles.avatarImg}
-              defaultSource={require("../../assets/default-avatar.png")}
-            />
-          ) : (
-            <View style={styles.avatarFallback}>
-              <Text style={styles.avatarLetter}>
-                {(user.name || "U").charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+          <Image
+            source={getAvatarSource()}
+            style={styles.avatarImg}
+            defaultSource={require("../../assets/default-avatar.png")}
+          />
           <TouchableOpacity
             style={styles.editAvatarBtn}
             onPress={handleEditPress}
@@ -815,10 +816,11 @@ const ProfileScreen = ({ navigation }) => {
                   source={{ uri: selectedImage.uri }}
                   style={styles.modalAvatarImg}
                 />
-              ) : user.avatar?.url ? (
+              ) : getAvatarSource() ? (
                 <Image
                   source={getAvatarSource()}
                   style={styles.modalAvatarImg}
+                  defaultSource={require("../../assets/default-avatar.png")}
                 />
               ) : (
                 <View style={styles.modalAvatarFallback}>

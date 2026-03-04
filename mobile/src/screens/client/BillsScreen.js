@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, useMemo } from "react";
 import { useIsFocused } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View,
   Text,
@@ -44,6 +45,7 @@ const filterPresenceByDates = (presenceArr, start, end) => {
 const BillsScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const { state } = useContext(AuthContext);
   const isFocused = useIsFocused();
@@ -2312,7 +2314,9 @@ const BillsScreen = ({ navigation }) => {
         animationType="slide"
         onRequestClose={() => setShowReceiptModal(false)}
       >
-        <View style={styles.modalHeader}>
+        <View
+          style={[styles.modalHeader, { paddingTop: Math.max(insets.top, 24) }]}
+        >
           <TouchableOpacity onPress={() => setShowReceiptModal(false)}>
             <MaterialIcons name="close" size={28} color="white" />
           </TouchableOpacity>
@@ -2320,7 +2324,12 @@ const BillsScreen = ({ navigation }) => {
           <View style={{ width: 28 }} />
         </View>
         {receiptData && (
-          <ScrollView style={styles.receiptContainer}>
+          <ScrollView
+            style={styles.receiptContainer}
+            contentContainerStyle={{
+              paddingBottom: Math.max(insets.bottom, 16) + 16,
+            }}
+          >
             {/* Header */}
             <View style={styles.receiptHeader}>
               <Text style={styles.receiptTitle}>BILLING RECEIPT</Text>
@@ -2485,7 +2494,18 @@ const BillsScreen = ({ navigation }) => {
                   </Text>
                 </View>
                 {receiptData.userShare.waterBreakdown && (
-                  <View style={[styles.receiptRow, { marginTop: 0 }]}>
+                  <View
+                    style={[
+                      styles.receiptRow,
+                      { marginTop: 0, alignItems: "flex-start", gap: 4 },
+                    ]}
+                  >
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={14}
+                      color={colors.textSecondary}
+                      style={{ marginTop: 1 }}
+                    />
                     <Text
                       style={[
                         styles.receiptLabel,
@@ -2493,25 +2513,17 @@ const BillsScreen = ({ navigation }) => {
                           fontSize: 11,
                           color: colors.textSecondary,
                           fontStyle: "italic",
+                          flex: 1,
                         },
                       ]}
                     >
-                      <Ionicons
-                        name="information-circle-outline"
-                        size={14}
-                        color={colors.textSecondary}
-                      />{" "}
                       Your consumption: ₱
                       {receiptData.userShare.waterBreakdown.ownWater}
                       {parseFloat(
                         receiptData.userShare.waterBreakdown.nonPayorShare,
-                      ) > 0 && (
-                        <Text>
-                          {" "}
-                          + Non-payors share: ₱
-                          {receiptData.userShare.waterBreakdown.nonPayorShare}
-                        </Text>
-                      )}
+                      ) > 0
+                        ? ` + Non-payors share: ₱${receiptData.userShare.waterBreakdown.nonPayorShare}`
+                        : ""}
                     </Text>
                   </View>
                 )}

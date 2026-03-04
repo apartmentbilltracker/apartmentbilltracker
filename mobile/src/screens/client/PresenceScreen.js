@@ -29,6 +29,11 @@ const PresenceScreen = () => {
   const pendingUpdatesRef = useRef(new Set());
   const updateTimeoutRef = useRef(null);
   const isUpdatingRef = useRef(false);
+  // Cached room_members row id — lets backend skip the lookup query entirely
+  const memberRecordIdRef = useRef(null);
+  // Fire-immediately + queue-one-pending: no debounce delay
+  const inFlightRef = useRef(false);
+  const pendingDatesRef = useRef(null); // latest desired state waiting for in-flight to finish
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   // Whether an admin-configured billing period or an active billing cycle exists for this room
@@ -66,7 +71,6 @@ const PresenceScreen = () => {
   const markedDatesSet = useMemo(() => new Set(markedDates), [markedDates]);
   const [rangeStartDate, setRangeStartDate] = useState(null);
   const [markingMultiple, setMarkingMultiple] = useState(false);
-  const [isMarkingInProgress, setIsMarkingInProgress] = useState(false); // Prevent duplicate requests
 
   useFocusEffect(
     React.useCallback(() => {
@@ -168,8 +172,11 @@ const PresenceScreen = () => {
           .map((d) => formatToYMD(d))
           .filter(Boolean);
         setMarkedDates(normalized);
+        // Cache the room_members row id for fast presence saves
+        memberRecordIdRef.current = currentUserMember.id || null;
       } else {
         setMarkedDates([]);
+        memberRecordIdRef.current = null;
       }
     } catch (error) {
       console.error("Error loading marked dates:", error);
@@ -194,15 +201,10 @@ const PresenceScreen = () => {
       return;
     }
 
-    // Prevent duplicate marking requests
-    if (isMarkingInProgress) {
-      return;
-    }
-
     const dateStr = formatToYMD(date);
 
-    // Prevent double-clicking the same date
-    if (pendingUpdatesRef.current.has(dateStr)) {
+    // Prevent double-clicking the same date while in flight
+    if (pendingUpdatesRef.current.has(dateStr) && inFlightRef.current) {
       return;
     }
 
@@ -230,34 +232,25 @@ const PresenceScreen = () => {
       setSelectedRoom({ ...selectedRoom, members: updatedMembers });
     }
 
-    // Clear previous timer
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current);
+    // Fire-immediately + queue-one-pending:
+    // If a request is in flight, store latest state — one follow-up fires when done.
+    // Rapid taps = instant UI + at most 2 network round trips total, zero debounce delay.
+    if (inFlightRef.current) {
+      pendingDatesRef.current = updatedDates;
+      pendingUpdatesRef.current.clear();
+      return;
     }
 
-    // Debounce API call: wait 600ms for user to stop clicking, then send
-    updateTimeoutRef.current = setTimeout(async () => {
-      // Prevent duplicate API calls
-      if (isMarkingInProgress) {
-        updateTimeoutRef.current = setTimeout(() => markPresence(date), 300);
-        return;
-      }
-
-      setIsMarkingInProgress(true);
-
+    const sendPresence = async (dates) => {
+      inFlightRef.current = true;
+      const roomId = selectedRoom.id || selectedRoom._id;
       try {
-        await presenceService.markPresence(
-          selectedRoom.id || selectedRoom._id,
-          {
-            presenceDates: updatedDates,
-          },
-        );
-
-        pendingUpdatesRef.current.clear();
+        await presenceService.markPresence(roomId, {
+          presenceDates: dates,
+          memberRecordId: memberRecordIdRef.current ?? undefined,
+        });
       } catch (error) {
-        // Revert optimistic update on error
         console.error("❌ Error marking presence:", error);
-        pendingUpdatesRef.current.clear();
         setMarkedDates(prevMarked);
         if (selectedRoom && selectedRoom.members) {
           const revertedMembers = selectedRoom.members.map((m) => {
@@ -268,13 +261,23 @@ const PresenceScreen = () => {
             }
             return m;
           });
-          setSelectedRoom({ ...selectedRoom, members: revertedMembers });
+          setSelectedRoom((prev) => ({ ...prev, members: revertedMembers }));
         }
         Alert.alert("Error", error.message || "Failed to update presence");
       } finally {
-        setIsMarkingInProgress(false);
+        inFlightRef.current = false;
+        pendingUpdatesRef.current.clear();
+        // If more taps arrived while in flight, send one final request
+        if (pendingDatesRef.current !== null) {
+          const next = pendingDatesRef.current;
+          pendingDatesRef.current = null;
+          await sendPresence(next);
+        }
       }
-    }, 600); // Increased debounce to 600ms for better batching
+    };
+
+    pendingUpdatesRef.current.clear();
+    sendPresence(updatedDates);
   };
 
   const markTodayPresence = async () => {
