@@ -20,6 +20,7 @@ import {
   Keyboard,
   AppState,
   Image,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,9 +32,10 @@ import { useTheme } from "../../theme/ThemeContext";
 
 const POLL_INTERVAL = 30000; // 30 seconds (was 15s — halved to save Supabase egress)
 
-// Defined at module level so the reference is stable across renders.
-// If defined inside the component, React sees a new component type each render
-// and unmounts/remounts the entire subtree, destroying the TextInput native view.
+// iOS uses KeyboardAvoidingView. Android uses a manual keyboard height listener
+// (Keyboard events) because KAV on Android is unreliable across manufacturers
+// and Android versions — it either gaps, floats, or double-shifts depending on
+// window inset handling. Manual margin is the only consistent solution.
 const KBWrapper = Platform.OS === "ios" ? KeyboardAvoidingView : View;
 
 const ChatRoomScreen = ({ route, navigation }) => {
@@ -51,6 +53,8 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const [chatEnabled, setChatEnabled] = useState(false);
   const [togglingChat, setTogglingChat] = useState(false);
   const [inputKey, setInputKey] = useState(0);
+  // Animated keyboard offset — animates in sync with keyboard open/close.
+  const keyboardAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef(null);
   const pollRef = useRef(null);
   const inputRef = useRef(null);
@@ -111,35 +115,96 @@ const ChatRoomScreen = ({ route, navigation }) => {
     fetchStatus();
   }, [roomId]);
 
-  // Scroll to newest message when keyboard opens so last message stays visible
+  // Single keyboard listener: track height (Android layout) + scroll on show.
   useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", () => {
+    if (Platform.OS !== "android") {
+      // iOS — just scroll on show, KAV handles the rest.
+      const show = Keyboard.addListener("keyboardDidShow", () => {
+        setTimeout(
+          () => flatListRef.current?.scrollToEnd({ animated: false }),
+          120,
+        );
+      });
+      return () => show.remove();
+    }
+
+    // Android — animate the bottom offset in sync with the keyboard.
+    // keyboardWillShow fires BEFORE the animation starts (RN 0.73+ / Expo SDK 52+),
+    // so the layout moves together with the keyboard rather than jumping after it.
+    const animateTo = (toValue, duration) => {
+      Animated.timing(keyboardAnim, {
+        toValue,
+        duration: duration || 250,
+        useNativeDriver: false,
+      }).start();
+    };
+
+    const willShow = Keyboard.addListener("keyboardWillShow", (e) => {
+      animateTo(e.endCoordinates.height, e.duration);
+    });
+    const willHide = Keyboard.addListener("keyboardWillHide", (e) => {
+      animateTo(0, e.duration);
+    });
+    // didShow/Hide as fallback for devices that don't fire Will* events.
+    const didShow = Keyboard.addListener("keyboardDidShow", (e) => {
+      animateTo(e.endCoordinates.height, 0);
       setTimeout(
         () => flatListRef.current?.scrollToEnd({ animated: false }),
         120,
       );
     });
-    return () => show.remove();
+    const didHide = Keyboard.addListener("keyboardDidHide", () => {
+      animateTo(0, 0);
+    });
+
+    return () => {
+      willShow.remove();
+      willHide.remove();
+      didShow.remove();
+      didHide.remove();
+    };
   }, []);
 
   // Re-focus input when app returns from background.
-  // useFocusEffect does NOT re-fire on background→foreground because the screen
-  // never loses navigation focus — AppState is the only way to catch this.
+  // AppState is the only reliable signal — the screen never loses nav focus.
   useEffect(() => {
     const sub = AppState.addEventListener("change", (nextState) => {
       if (
         appStateRef.current.match(/inactive|background/) &&
         nextState === "active"
       ) {
-        // Force-remount the TextInput native view on foreground return.
-        // This resets any stale Android IME/focus state without auto-opening
-        // the keyboard. The value prop (controlled) restores the text content.
+        // Force-remount the TextInput native view. In production APK builds
+        // the Android IME can get stuck after background/foreground cycles;
+        // remounting resets the native view entirely.
         setInputKey((k) => k + 1);
       }
       appStateRef.current = nextState;
     });
     return () => sub.remove();
   }, []);
+
+  // After inputKey remount, re-focus so keyboard re-attaches on Android.
+  // Only fires when chat is enabled so the input is actually visible.
+  const chatEnabledRef = useRef(chatEnabled);
+  useEffect(() => {
+    chatEnabledRef.current = chatEnabled;
+  }, [chatEnabled]);
+  useEffect(() => {
+    if (inputKey === 0) return; // skip initial mount
+    if (!chatEnabledRef.current) return;
+    // On Android, calling focus() alone opens the keyboard but the native
+    // EditText sometimes doesn't visually enter the focused state (no cursor).
+    // blur() → focus() forces a full focus-state cycle, ensuring the cursor
+    // appears and typed text is visible. The outer 300ms lets the remounted
+    // native view fully attach before we touch it.
+    const t = setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.blur();
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [inputKey]);
 
   // Poll for new messages when focused & mark as read
   useFocusEffect(
@@ -386,16 +451,28 @@ const ChatRoomScreen = ({ route, navigation }) => {
     );
   }
 
-  // On Android, "resize" mode (app.json) shrinks the window to sit above the
-  // keyboard — KAV is not needed and its internal listeners prevent TextInput
-  // from receiving the focus event on first tap. KBWrapper is module-level.
   const kbProps =
     Platform.OS === "ios"
-      ? { behavior: "padding", keyboardVerticalOffset: insets.top }
+      ? { behavior: "padding", keyboardVerticalOffset: insets.top + 10 }
       : {};
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top,
+          // On Android: keyboardAnim lifts the entire layout in sync with the
+          // keyboard animation so the input bar is always above the keyboard.
+          // On iOS: KAV handles it; no extra padding needed here.
+          // Add 8px gap above keyboard so the input bar never sits flush against it.
+          paddingBottom:
+            Platform.OS === "android"
+              ? Animated.add(keyboardAnim, new Animated.Value(8))
+              : 0,
+        },
+      ]}
+    >
       <KBWrapper style={{ flex: 1 }} {...kbProps}>
         {/* Header */}
         <View style={styles.header}>
@@ -505,7 +582,10 @@ const ChatRoomScreen = ({ route, navigation }) => {
 
             {/* Input bar */}
             <View
-              style={[styles.inputBar, { paddingBottom: insets.bottom || 8 }]}
+              style={[
+                styles.inputBar,
+                { paddingBottom: Math.max(insets.bottom, 8) },
+              ]}
             >
               <TextInput
                 key={inputKey}
@@ -532,7 +612,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
           </>
         )}
       </KBWrapper>
-    </View>
+    </Animated.View>
   );
 };
 

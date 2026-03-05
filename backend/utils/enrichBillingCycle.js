@@ -34,11 +34,13 @@ async function enrichBillingCycle(cycle, members, roomData) {
   // Use provided roomData to avoid a DB round-trip when caller already has it
   let waterBillingMode = "presence";
   let waterFixedAmount = 0;
+  let waterFixedType = "by_room"; // "by_room" | "per_person"
   try {
     const room =
       roomData || (await SupabaseService.findById("rooms", cycle.room_id));
     waterBillingMode = room?.water_billing_mode || "presence";
     waterFixedAmount = parseFloat(room?.water_fixed_amount || 0) || 0;
+    waterFixedType = room?.water_fixed_type || "by_room";
   } catch (_) {}
 
   const cycleStart = new Date(cycle.start_date);
@@ -61,10 +63,20 @@ async function enrichBillingCycle(cycle, members, roomData) {
   let internetAssigned = 0;
   let payerIndex = 0;
 
-  // ── FIXED MONTHLY WATER: split equally among payors, skip presence math ──
+  // ── FIXED MONTHLY WATER ──
   if (waterBillingMode === "fixed_monthly") {
+    // per_person: each payor is charged waterFixedAmount individually
+    // by_room:    one total (waterFixedAmount) split equally among payors
+    const totalFixedWater =
+      waterFixedType === "per_person"
+        ? r2(waterFixedAmount * payerCount)
+        : waterFixedAmount;
     const fixedWaterPerPayor =
-      payerCount > 0 ? r2(waterFixedAmount / payerCount) : 0;
+      waterFixedType === "per_person"
+        ? waterFixedAmount // each person always pays the full per-person rate
+        : payerCount > 0
+          ? r2(waterFixedAmount / payerCount)
+          : 0;
     let waterAssignedFixed = 0;
     let fixedPayerIndex = 0;
 
@@ -82,17 +94,23 @@ async function enrichBillingCycle(cycle, members, roomData) {
 
       if (member.is_payer) {
         fixedPayerIndex++;
+        // Last payer absorbs rounding remainder for rent/elec/internet
         if (fixedPayerIndex === payerCount) {
-          // Last payer absorbs rounding remainder
           memberRentShare = r2(rent - rentAssigned);
           memberElecShare = r2(electricity - elecAssigned);
           memberInternetShare = r2(internet - internetAssigned);
-          waterBillShare = r2(waterFixedAmount - waterAssignedFixed);
+          waterBillShare =
+            waterFixedType === "per_person"
+              ? waterFixedAmount
+              : r2(totalFixedWater - waterAssignedFixed);
         } else {
           memberRentShare = rentShare;
           memberElecShare = electricityShare;
           memberInternetShare = internetShare;
-          waterBillShare = fixedWaterPerPayor;
+          waterBillShare =
+            waterFixedType === "per_person"
+              ? waterFixedAmount
+              : fixedWaterPerPayor;
         }
         rentAssigned = r2(rentAssigned + memberRentShare);
         elecAssigned = r2(elecAssigned + memberElecShare);
@@ -123,9 +141,9 @@ async function enrichBillingCycle(cycle, members, roomData) {
     });
 
     cycle.member_charges = memberCharges;
-    cycle.water_bill_amount = waterFixedAmount;
+    cycle.water_bill_amount = totalFixedWater;
     cycle.total_billed_amount = r2(
-      rent + electricity + waterFixedAmount + internet,
+      rent + electricity + totalFixedWater + internet,
     );
 
     // Correct last payer total_due for any rounding

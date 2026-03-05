@@ -307,6 +307,32 @@ router.post(
 );
 
 // ──────────────────────────────────────────────
+// POST /register-token — save Expo push token for this user
+// ──────────────────────────────────────────────
+router.post(
+  "/register-token",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { expoPushToken } = req.body;
+      if (!expoPushToken || typeof expoPushToken !== "string") {
+        return next(new ErrorHandler("expoPushToken is required", 400));
+      }
+      // Only save if it looks like a valid Expo token
+      if (!expoPushToken.startsWith("ExponentPushToken[")) {
+        return next(new ErrorHandler("Invalid Expo push token format", 400));
+      }
+      await SupabaseService.updateUser(req.user.id, {
+        expo_push_token: expoPushToken,
+      });
+      res.status(200).json({ success: true, message: "Push token registered" });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+// ──────────────────────────────────────────────
 // POST /log-presence — log a presence notification
 // ──────────────────────────────────────────────
 router.post(

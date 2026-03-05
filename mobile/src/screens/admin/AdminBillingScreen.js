@@ -53,7 +53,11 @@ const AdminBillingScreen = ({ navigation }) => {
   const [priorUnpaidData, setPriorUnpaidData] = useState(null);
   const [waterMode, setWaterMode] = useState("presence");
   const [waterFixed, setWaterFixed] = useState("");
+  // "by_room" = one total split among payors;  "per_person" = amount charged per payor
+  const [waterFixedType, setWaterFixedType] = useState("by_room");
   const [savingWaterMode, setSavingWaterMode] = useState(false);
+  // true = host manually closed the cycle; false = auto-completed when all payors paid
+  const [cycleClosedManually, setCycleClosedManually] = useState(false);
 
   // Fetch rooms on mount and when screen regains focus
   useEffect(() => {
@@ -86,6 +90,7 @@ const AdminBillingScreen = ({ navigation }) => {
       setCurrReading("");
       setMembers([]);
       setCycleCompleted(false);
+      setCycleClosedManually(false);
       setPriorUnpaidData(null);
 
       // Preload from cache for instant display
@@ -129,6 +134,11 @@ const AdminBillingScreen = ({ navigation }) => {
               selectedRoom.water_fixed_amount ||
               "",
           ),
+        );
+        setWaterFixedType(
+          selectedRoom.waterFixedType ||
+            selectedRoom.water_fixed_type ||
+            "by_room",
         );
       }
     }
@@ -194,6 +204,7 @@ const AdminBillingScreen = ({ navigation }) => {
         latestRoom?.billing
       ) {
         setCycleCompleted(true);
+        setCycleClosedManually(latestRoom?.cycleStatus === "cycle_closed");
         const billing = latestRoom.billing;
         setStartDate(
           billing.start
@@ -237,6 +248,7 @@ const AdminBillingScreen = ({ navigation }) => {
         const cycleStatus = response?.data?.status;
         if (cycleStatus === "completed" || cycleStatus === "cycle_closed") {
           setCycleCompleted(true);
+          setCycleClosedManually(cycleStatus === "cycle_closed");
           const billing = latestRoom.billing;
           if (billing) {
             setStartDate(
@@ -341,7 +353,17 @@ const AdminBillingScreen = ({ navigation }) => {
   };
 
   const calculateTotalWaterBill = () => {
-    if (waterMode === "fixed_monthly") return parseFloat(waterFixed) || 0;
+    if (waterMode === "fixed_monthly") {
+      const fixedAmt = parseFloat(waterFixed) || 0;
+      if (waterFixedType === "per_person") {
+        const payorCount = Math.max(
+          1,
+          members.filter((m) => m.isPayer !== false).length,
+        );
+        return r2(fixedAmt * payorCount);
+      }
+      return fixedAmt; // by_room: the total entered IS the total
+    }
     return members.reduce((total, member) => {
       const presenceDays = getFilteredPresenceDays(member);
       return total + calculateWaterBill(presenceDays);
@@ -366,6 +388,7 @@ const AdminBillingScreen = ({ navigation }) => {
         name: selectedRoom.name,
         water_billing_mode: waterMode,
         water_fixed_amount: parseFloat(waterFixed) || 0,
+        water_fixed_type: waterFixedType,
       });
       setSelectedRoom((prev) => ({
         ...prev,
@@ -373,6 +396,8 @@ const AdminBillingScreen = ({ navigation }) => {
         water_billing_mode: waterMode,
         waterFixedAmount: parseFloat(waterFixed) || 0,
         water_fixed_amount: parseFloat(waterFixed) || 0,
+        waterFixedType: waterFixedType,
+        water_fixed_type: waterFixedType,
       }));
       Alert.alert("Saved", "Water billing settings updated successfully.");
     } catch (err) {
@@ -561,15 +586,22 @@ const AdminBillingScreen = ({ navigation }) => {
       const origWaterFixed = String(
         selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || "",
       );
+      const origWaterFixedType =
+        selectedRoom.waterFixedType ||
+        selectedRoom.water_fixed_type ||
+        "by_room";
       if (
         waterMode !== origWaterMode ||
-        (waterMode === "fixed_monthly" && String(waterFixed) !== origWaterFixed)
+        (waterMode === "fixed_monthly" &&
+          (String(waterFixed) !== origWaterFixed ||
+            waterFixedType !== origWaterFixedType))
       ) {
         try {
           await roomService.updateRoom(selectedRoom.id || selectedRoom._id, {
             name: selectedRoom.name,
             water_billing_mode: waterMode,
             water_fixed_amount: parseFloat(waterFixed) || 0,
+            water_fixed_type: waterFixedType,
           });
           setSelectedRoom((prev) => ({
             ...prev,
@@ -577,6 +609,8 @@ const AdminBillingScreen = ({ navigation }) => {
             water_billing_mode: waterMode,
             waterFixedAmount: parseFloat(waterFixed) || 0,
             water_fixed_amount: parseFloat(waterFixed) || 0,
+            waterFixedType: waterFixedType,
+            water_fixed_type: waterFixedType,
           }));
         } catch (e) {
           console.error("Failed to save water mode:", e);
@@ -676,16 +710,22 @@ const AdminBillingScreen = ({ navigation }) => {
             selectedRoom.water_fixed_amount ||
             "",
         );
+        const origWaterFixedTypeA =
+          selectedRoom.waterFixedType ||
+          selectedRoom.water_fixed_type ||
+          "by_room";
         if (
           waterMode !== origWaterModeA ||
           (waterMode === "fixed_monthly" &&
-            String(waterFixed) !== origWaterFixedA)
+            (String(waterFixed) !== origWaterFixedA ||
+              waterFixedType !== origWaterFixedTypeA))
         ) {
           try {
             await roomService.updateRoom(selectedRoom.id || selectedRoom._id, {
               name: selectedRoom.name,
               water_billing_mode: waterMode,
               water_fixed_amount: parseFloat(waterFixed) || 0,
+              water_fixed_type: waterFixedType,
             });
           } catch (e) {
             console.error("Failed to save water mode on archive:", e);
@@ -1132,7 +1172,9 @@ const AdminBillingScreen = ({ navigation }) => {
                       marginLeft: 8,
                     }}
                   >
-                    All Payors Paid!
+                    {cycleClosedManually
+                      ? "Billing Cycle Closed"
+                      : "All Payors Paid!"}
                   </Text>
                 </View>
                 <Text
@@ -1143,9 +1185,9 @@ const AdminBillingScreen = ({ navigation }) => {
                     lineHeight: 18,
                   }}
                 >
-                  This billing cycle has been auto-completed. All amounts are
-                  shown below for reference. Create a new billing cycle when
-                  ready.
+                  {cycleClosedManually
+                    ? "This cycle was manually closed. All amounts are shown below for reference. Create a new billing cycle when ready."
+                    : "This billing cycle has been auto-completed (all payors paid). Amounts are shown below for reference. Create a new billing cycle when ready."}
                 </Text>
                 <TouchableOpacity
                   style={{
@@ -1643,23 +1685,71 @@ const AdminBillingScreen = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* Electricity computed */}
-              <View style={styles.electricityStrip}>
-                <View style={styles.electricityStripLeft}>
-                  <Ionicons
-                    name="flash"
-                    size={16}
-                    color={colors.electricityColor}
-                  />
-                  <Text style={styles.electricityStripLabel}>
-                    Electricity ({"\u20B1"}
-                    {ELECTRICITY_RATE}/kWh)
+              {/* kWh usage preview shown whenever both readings are valid */}
+              {prevReading &&
+                currReading &&
+                Number(currReading) > Number(prevReading) && (
+                  <View style={styles.usagePreviewRow}>
+                    <MaterialIcons
+                      name="trending-up"
+                      size={14}
+                      color="#e65100"
+                    />
+                    <Text style={styles.usagePreviewText}>
+                      {(Number(currReading) - Number(prevReading)).toFixed(0)}{" "}
+                      kWh used × ₱{ELECTRICITY_RATE}/kWh = {fmt(electricity)}
+                    </Text>
+                  </View>
+                )}
+
+              {/* Electricity — editable input in edit mode, read-only strip in view mode */}
+              {editMode ? (
+                <View style={styles.inputPairRow}>
+                  <View style={[styles.inputPairCol, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>
+                      Electricity{" "}
+                      <Text
+                        style={{ color: colors.textTertiary, fontSize: 10 }}
+                      >
+                        (auto-filled · tap to override)
+                      </Text>
+                    </Text>
+                    <View style={styles.fieldWrapper}>
+                      <Ionicons
+                        name="flash"
+                        size={15}
+                        color={colors.electricityColor}
+                      />
+                      <TextInput
+                        style={styles.fieldInput}
+                        placeholder="0.00"
+                        value={electricity}
+                        onChangeText={setElectricity}
+                        keyboardType="decimal-pad"
+                        editable={!saving}
+                        placeholderTextColor={colors.textTertiary}
+                      />
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.electricityStrip}>
+                  <View style={styles.electricityStripLeft}>
+                    <Ionicons
+                      name="flash"
+                      size={16}
+                      color={colors.electricityColor}
+                    />
+                    <Text style={styles.electricityStripLabel}>
+                      Electricity ({"\u20B1"}
+                      {ELECTRICITY_RATE}/kWh)
+                    </Text>
+                  </View>
+                  <Text style={styles.electricityStripAmount}>
+                    {fmt(electricity)}
                   </Text>
                 </View>
-                <Text style={styles.electricityStripAmount}>
-                  {fmt(electricity)}
-                </Text>
-              </View>
+              )}
 
               {/* Water Billing Mode */}
               <Text style={[styles.formSectionLabel, { marginTop: 4 }]}>
@@ -1726,12 +1816,106 @@ const AdminBillingScreen = ({ navigation }) => {
                   </Text>
                 </TouchableOpacity>
               </View>
+              {/* Water mode description */}
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: colors.textSecondary,
+                  paddingHorizontal: 16,
+                  marginTop: 6,
+                  marginBottom: 6,
+                  lineHeight: 17,
+                }}
+              >
+                {waterMode === "fixed_monthly"
+                  ? waterFixedType === "per_person"
+                    ? "A fixed amount is charged per paying member each month. Total scales with member count."
+                    : "One fixed total for the whole room, split equally among all paying members."
+                  : "Each member is charged \u20B15 per day they mark themselves as present in the room."}
+              </Text>
+
+              {/* Fixed Monthly sub-options: By Room vs Per Person */}
+              {waterMode === "fixed_monthly" && (
+                <View style={styles.waterSubToggleRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.waterSubBtn,
+                      waterFixedType === "by_room" && styles.waterSubBtnActive,
+                    ]}
+                    onPress={() =>
+                      editMode && !saving && setWaterFixedType("by_room")
+                    }
+                    disabled={!editMode || saving}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name="home"
+                      size={13}
+                      color={
+                        waterFixedType === "by_room"
+                          ? colors.info
+                          : colors.textTertiary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.waterSubBtnText,
+                        waterFixedType === "by_room" &&
+                          styles.waterSubBtnTextActive,
+                      ]}
+                    >
+                      By Room
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.waterSubBtn,
+                      waterFixedType === "per_person" &&
+                        styles.waterSubBtnActive,
+                    ]}
+                    onPress={() =>
+                      editMode && !saving && setWaterFixedType("per_person")
+                    }
+                    disabled={!editMode || saving}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name="person"
+                      size={13}
+                      color={
+                        waterFixedType === "per_person"
+                          ? colors.info
+                          : colors.textTertiary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.waterSubBtnText,
+                        waterFixedType === "per_person" &&
+                          styles.waterSubBtnTextActive,
+                      ]}
+                    >
+                      Per Person
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {editMode && waterMode === "fixed_monthly" && (
-                <View style={[styles.fieldWrapper, { marginHorizontal: 16 }]}>
+                <View
+                  style={[
+                    styles.fieldWrapper,
+                    { marginHorizontal: 16, marginTop: 4 },
+                  ]}
+                >
                   <Text style={styles.pesoPrefix}>{"\u20B1"}</Text>
                   <TextInput
                     style={styles.fieldInput}
-                    placeholder="Fixed monthly water total"
+                    placeholder={
+                      waterFixedType === "per_person"
+                        ? "Amount per person"
+                        : "Fixed total for the room"
+                    }
                     value={waterFixed}
                     onChangeText={setWaterFixed}
                     keyboardType="decimal-pad"
@@ -1741,7 +1925,7 @@ const AdminBillingScreen = ({ navigation }) => {
                 </View>
               )}
               {!editMode && (
-                <View style={[styles.electricityStrip, { marginTop: 0 }]}>
+                <View style={[styles.electricityStrip, { marginTop: 4 }]}>
                   <View style={styles.electricityStripLeft}>
                     <Ionicons name="water" size={16} color={colors.info} />
                     <Text
@@ -1752,8 +1936,10 @@ const AdminBillingScreen = ({ navigation }) => {
                     >
                       Water (
                       {waterMode === "fixed_monthly"
-                        ? `${"\u20B1"}${parseFloat(waterFixed) || 0}/mo Fixed`
-                        : `${"\u20B1"}${WATER_RATE}/day Presence`}
+                        ? waterFixedType === "per_person"
+                          ? `\u20B1${parseFloat(waterFixed) || 0}/person`
+                          : `\u20B1${parseFloat(waterFixed) || 0}/room`
+                        : `\u20B1${WATER_RATE}/day Presence`}
                       )
                     </Text>
                   </View>
@@ -1770,7 +1956,7 @@ const AdminBillingScreen = ({ navigation }) => {
 
               {/* Action Buttons */}
               {editMode && (
-                <View style={styles.formActions}>
+                <View style={[styles.formActions, { paddingBottom: 8 }]}>
                   <TouchableOpacity
                     style={[styles.saveBtn, saving && styles.btnDisabled]}
                     onPress={handleSaveBilling}
@@ -1793,7 +1979,18 @@ const AdminBillingScreen = ({ navigation }) => {
                       </>
                     )}
                   </TouchableOpacity>
+                </View>
+              )}
 
+              {/* Archive & Close — visible outside edit mode so host can finalize anytime */}
+              {!cycleCompleted && (rent || electricity || startDate) && (
+                <View
+                  style={{
+                    paddingHorizontal: 16,
+                    paddingBottom: 16,
+                    paddingTop: editMode ? 0 : 12,
+                  }}
+                >
                   <TouchableOpacity
                     style={[styles.archiveBtn, saving && styles.btnDisabled]}
                     onPress={handleArchiveToBillingCycle}
@@ -1818,6 +2015,18 @@ const AdminBillingScreen = ({ navigation }) => {
                       </>
                     )}
                   </TouchableOpacity>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: colors.textTertiary,
+                      textAlign: "center",
+                      marginTop: 6,
+                      lineHeight: 15,
+                    }}
+                  >
+                    Saves final amounts, closes this cycle, and clears presence
+                    for the next billing period.
+                  </Text>
                 </View>
               )}
             </View>
@@ -1839,48 +2048,192 @@ const AdminBillingScreen = ({ navigation }) => {
               </View>
             )}
 
-            {/* ─── PER-MEMBER WATER BILLS ─── */}
-            {startDate && endDate && waterMode === "fixed_monthly" && (
-              <View style={styles.waterCard}>
-                <View style={styles.waterCardHeader}>
-                  <Ionicons name="water" size={18} color={colors.info} />
-                  <Text style={styles.waterCardTitle}>Fixed Water Bill</Text>
-                </View>
-                <View style={{ padding: 16, alignItems: "center", gap: 6 }}>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 13,
-                      textAlign: "center",
-                    }}
-                  >
-                    Fixed monthly water amount for this room
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.text,
-                      fontWeight: "800",
-                      fontSize: 26,
-                      marginTop: 4,
-                    }}
-                  >
-                    {fmt(parseFloat(waterFixed) || 0)}
-                  </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-                    {fmt(
-                      r2(
-                        (parseFloat(waterFixed) || 0) /
-                          Math.max(
-                            1,
-                            members.filter((m) => m.isPayer !== false).length,
-                          ),
-                      ),
-                    )}{" "}
-                    per payor
-                  </Text>
-                </View>
-              </View>
-            )}
+            {/* ─── FIXED WATER BILL CARD ─── */}
+            {startDate &&
+              endDate &&
+              waterMode === "fixed_monthly" &&
+              (() => {
+                const fixedAmt = parseFloat(waterFixed) || 0;
+                const payorCount = Math.max(
+                  1,
+                  members.filter((m) => m.isPayer !== false).length,
+                );
+                const totalWater =
+                  waterFixedType === "per_person"
+                    ? r2(fixedAmt * payorCount)
+                    : fixedAmt;
+                const perPayor =
+                  waterFixedType === "per_person"
+                    ? fixedAmt
+                    : r2(fixedAmt / payorCount);
+                return (
+                  <View style={styles.waterCard}>
+                    <View style={styles.waterCardHeader}>
+                      <Ionicons name="water" size={18} color={colors.info} />
+                      <Text style={styles.waterCardTitle}>
+                        Fixed Water Bill
+                      </Text>
+                      <View
+                        style={{
+                          marginLeft: 8,
+                          backgroundColor: colors.infoBg || "#e3f2fd",
+                          borderRadius: 6,
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "700",
+                            color: colors.info,
+                          }}
+                        >
+                          {waterFixedType === "per_person"
+                            ? "PER PERSON"
+                            : "BY ROOM"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {waterFixedType === "per_person" ? (
+                      /* Per-person breakdown */
+                      <View
+                        style={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            paddingVertical: 10,
+                            borderBottomWidth: 1,
+                            borderBottomColor: colors.border,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              color: colors.textSecondary,
+                            }}
+                          >
+                            Rate per person
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 15,
+                              fontWeight: "700",
+                              color: colors.text,
+                            }}
+                          >
+                            {fmt(fixedAmt)}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            paddingVertical: 10,
+                            borderBottomWidth: 1,
+                            borderBottomColor: colors.border,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              color: colors.textSecondary,
+                            }}
+                          >
+                            Paying members
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 15,
+                              fontWeight: "700",
+                              color: colors.text,
+                            }}
+                          >
+                            {payorCount}{" "}
+                            {payorCount === 1 ? "person" : "people"}
+                          </Text>
+                        </View>
+                        {members
+                          .filter((m) => m.isPayer !== false)
+                          .map((m) => (
+                            <View
+                              key={m.id || m._id || m.email}
+                              style={styles.memberRow}
+                            >
+                              <View style={styles.memberAvatar}>
+                                <Text style={styles.memberAvatarText}>
+                                  {(m.name || m.email || "?")
+                                    .charAt(0)
+                                    .toUpperCase()}
+                                </Text>
+                              </View>
+                              <View style={styles.memberMeta}>
+                                <Text
+                                  style={styles.memberName}
+                                  numberOfLines={1}
+                                >
+                                  {m.name || m.email || "\u2014"}
+                                </Text>
+                                <Text style={styles.memberDays}>
+                                  fixed per person
+                                </Text>
+                              </View>
+                              <Text style={styles.memberWater}>
+                                {fmt(fixedAmt)}
+                              </Text>
+                            </View>
+                          ))}
+                        <View style={styles.waterTotalRow}>
+                          <Text style={styles.waterTotalLabel}>
+                            {fmt(fixedAmt)} × {payorCount} = Total Water
+                          </Text>
+                          <Text style={styles.waterTotalAmount}>
+                            {fmt(totalWater)}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
+                      /* By-room breakdown */
+                      <View
+                        style={{ padding: 16, alignItems: "center", gap: 6 }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            fontSize: 13,
+                            textAlign: "center",
+                          }}
+                        >
+                          Fixed total for this room
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.text,
+                            fontWeight: "800",
+                            fontSize: 26,
+                            marginTop: 4,
+                          }}
+                        >
+                          {fmt(fixedAmt)}
+                        </Text>
+                        <Text
+                          style={{ color: colors.textSecondary, fontSize: 12 }}
+                        >
+                          ÷ {payorCount} payor{payorCount !== 1 ? "s" : ""} ={" "}
+                          {fmt(perPayor)} each
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
             {startDate && endDate && waterMode !== "fixed_monthly" && (
               <View style={styles.waterCard}>
                 <View style={styles.waterCardHeader}>
@@ -2337,6 +2690,18 @@ const createStyles = (colors) =>
       marginBottom: 10,
     },
     inputPairCol: { flex: 1 },
+    usagePreviewRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 16,
+      marginBottom: 8,
+    },
+    usagePreviewText: {
+      fontSize: 12,
+      color: "#e65100",
+      fontWeight: "500",
+    },
     electricityStrip: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -2396,6 +2761,39 @@ const createStyles = (colors) =>
     },
     waterModeBtnTextActive: {
       color: colors.textOnAccent,
+    },
+
+    // ─── FIXED WATER SUB-TOGGLE (By Room / Per Person) ───
+    waterSubToggleRow: {
+      flexDirection: "row",
+      marginHorizontal: 16,
+      marginTop: 2,
+      marginBottom: 8,
+      gap: 8,
+    },
+    waterSubBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    waterSubBtnActive: {
+      backgroundColor: colors.infoBg || "#e3f2fd",
+      borderColor: colors.info,
+    },
+    waterSubBtnText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+    waterSubBtnTextActive: {
+      color: colors.info,
     },
 
     // ─── FORM ACTIONS ───

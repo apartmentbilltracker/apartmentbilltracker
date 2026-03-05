@@ -401,7 +401,8 @@ class SupabaseService {
           created_at,
           updated_at,
           water_billing_mode,
-          water_fixed_amount
+          water_fixed_amount,
+          water_fixed_type
         )`,
       )
       .eq("user_id", userId)
