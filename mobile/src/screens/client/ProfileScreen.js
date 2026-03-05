@@ -1,4 +1,4 @@
-import React, { useContext, useState, useMemo } from "react";
+import React, { useContext, useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -41,6 +41,7 @@ const ProfileScreen = ({ navigation }) => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [payorStatus, setPayorStatus] = useState(null);
+  const [avatarError, setAvatarError] = useState(false);
 
   // Support Service States
   const [supportModalVisible, setSupportModalVisible] = useState(false);
@@ -67,6 +68,11 @@ const ProfileScreen = ({ navigation }) => {
 
   const user = state.user || {};
   const userId = user.id || user._id;
+
+  // Reset avatar error when user account or selected image changes
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.email, selectedImage]);
 
   // Handle role as either array or string
   const isAdmin = Array.isArray(user.role)
@@ -351,6 +357,8 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const getAvatarSource = () => {
+    if (avatarError) return require("../../assets/default-avatar.png");
+    if (selectedImage?.uri) return { uri: selectedImage.uri };
     // External URL (Google/Facebook): kept in /getuser response (tiny string, no egress cost)
     if (user?.avatar?.url?.startsWith("http")) {
       return { uri: user.avatar.url };
@@ -362,7 +370,7 @@ const ProfileScreen = ({ navigation }) => {
         uri: `${getAPIBaseURL()}/api/v2/user/avatar-image/${encodeURIComponent(user.email)}`,
       };
     }
-    return null;
+    return require("../../assets/default-avatar.png");
   };
 
   return (
@@ -374,6 +382,7 @@ const ProfileScreen = ({ navigation }) => {
             source={getAvatarSource()}
             style={styles.avatarImg}
             defaultSource={require("../../assets/default-avatar.png")}
+            onError={() => setAvatarError(true)}
           />
           <TouchableOpacity
             style={styles.editAvatarBtn}

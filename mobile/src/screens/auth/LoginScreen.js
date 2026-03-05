@@ -202,6 +202,8 @@ const LoginScreen = ({ navigation }) => {
       });
       if (!result.success) {
         setError(result.error || "Google login failed");
+      } else {
+        await registerPushToken();
       }
     } catch (err) {
       console.error("Google login error:", err);
@@ -236,6 +238,8 @@ const LoginScreen = ({ navigation }) => {
       });
       if (!result.success) {
         setError(result.error || "Facebook login failed");
+      } else {
+        await registerPushToken();
       }
     } catch (err) {
       console.error("Facebook login error:", err);

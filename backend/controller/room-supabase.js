@@ -81,6 +81,8 @@ const normalizeRoom = (room) => {
   // Water billing mode
   room.waterBillingMode = room.water_billing_mode || "presence";
   room.waterFixedAmount = parseFloat(room.water_fixed_amount) || 0;
+  // "by_room" (default) = total split equally; "per_person" = amount charged per payor
+  room.waterFixedType = room.water_fixed_type || "by_room";
   return room;
 };
 
@@ -534,8 +536,17 @@ function computeDynamicWater(
   storedAmount,
   room = {},
 ) {
-  if (room.water_billing_mode === "fixed_monthly")
-    return parseFloat(room.water_fixed_amount) || 0;
+  if (room.water_billing_mode === "fixed_monthly") {
+    const fixedAmt = parseFloat(room.water_fixed_amount) || 0;
+    if (room.water_fixed_type === "per_person") {
+      const payorCount =
+        (members || []).filter(
+          (m) => m.is_payer !== false && m.isPayer !== false,
+        ).length || 1;
+      return Math.round(fixedAmt * payorCount * 100) / 100;
+    }
+    return fixedAmt;
+  }
   if (storedAmount > 0) return storedAmount;
   const start = new Date(cycleStartDate);
   const end = new Date(cycleEndDate);
@@ -1123,6 +1134,7 @@ router.put("/:id", isAuthenticated, async (req, res, next) => {
       photos,
       water_billing_mode,
       water_fixed_amount,
+      water_fixed_type,
     } = req.body;
     if (!name) return next(new ErrorHandler("Name is required", 400));
 
@@ -1153,6 +1165,8 @@ router.put("/:id", isAuthenticated, async (req, res, next) => {
       updateData.water_billing_mode = water_billing_mode;
     if (water_fixed_amount !== undefined)
       updateData.water_fixed_amount = parseFloat(water_fixed_amount) || 0;
+    if (water_fixed_type !== undefined)
+      updateData.water_fixed_type = water_fixed_type;
 
     // Update room
     const updatedRoom = await SupabaseService.update(

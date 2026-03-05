@@ -816,14 +816,11 @@ router.get(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      // withAvatar: false — currently the avatar column can hold a 2–5 MB base64
-      // string for users who uploaded before the Storage migration.  Once
-      // migrate-avatars.js has run (all rows have a Storage URL), flip this to
-      //   withAvatar: true
-      // — the column will then be a tiny URL string and egress is negligible.
-      // Profile screens handle the missing avatar by calling /avatar-image/:email.
+      // withAvatar: false — avatar column can hold a 2–5 MB base64 blob.
+      // Flip to true only after migrate-avatars.js has run (all rows have Storage URLs).
+      // Profile screens call /avatar-image/:email as fallback.
       const user = await SupabaseService.findUserById(req.user.id, {
-        withAvatar: true,
+        withAvatar: false,
       });
       if (!user) {
         return next(new ErrorHandler("User not found", 404));
@@ -851,7 +848,7 @@ router.get(
       // withAvatar: false — same reasoning as /me above.
       // After migrate-avatars.js completes, change to withAvatar: true.
       const user = await SupabaseService.findUserById(req.user.id, {
-        withAvatar: true,
+        withAvatar: false,
       });
       if (!user) {
         return next(new ErrorHandler("User not found", 404));

@@ -67,6 +67,7 @@ const computeCycleStats = async (
   endDate,
   fixedWaterAmount,
   waterBillingMode,
+  waterFixedType = "by_room",
 ) => {
   try {
     const members = (await SupabaseService.getRoomMembers(roomId)) || [];
@@ -77,8 +78,16 @@ const computeCycleStats = async (
 
     let waterBillAmount;
     if (waterBillingMode === "fixed_monthly" && Number(fixedWaterAmount) > 0) {
-      // Fixed monthly — respect the admin-set amount
-      waterBillAmount = Number(fixedWaterAmount);
+      if (waterFixedType === "per_person") {
+        // Total = per-person rate × number of paying members
+        const payorCount =
+          approvedMembers.filter((m) => m.is_payer).length || 1;
+        waterBillAmount =
+          Math.round(Number(fixedWaterAmount) * payorCount * 100) / 100;
+      } else {
+        // By-room: amount is the total already
+        waterBillAmount = Number(fixedWaterAmount);
+      }
     } else {
       // Presence-based — recompute from DB presence records
       const sd = new Date(startDate);
@@ -157,6 +166,7 @@ router.post("/", isAuthenticated, async (req, res, next) => {
           endDate,
           updWaterRaw,
           room.water_billing_mode,
+          room.water_fixed_type,
         );
 
       const updatePayload = {
@@ -212,6 +222,7 @@ router.post("/", isAuthenticated, async (req, res, next) => {
         endDate,
         waterValRaw,
         room.water_billing_mode,
+        room.water_fixed_type,
       );
 
     const totalAmount =
@@ -767,6 +778,7 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
               currentCycle.end_date,
               waterRaw,
               cycleRoom?.water_billing_mode,
+              cycleRoom?.water_fixed_type,
             )
           : { membersCount: 0, waterBillAmount: waterRaw };
 
@@ -823,6 +835,7 @@ router.post("/backfill-stats", isAuthenticated, async (req, res, next) => {
           cycle.end_date,
           cycle.water_bill_amount,
           room.water_billing_mode,
+          room.water_fixed_type,
         );
 
         const r = parseFloat(cycle.rent || 0);

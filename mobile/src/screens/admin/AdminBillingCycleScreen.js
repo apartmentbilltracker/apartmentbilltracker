@@ -330,25 +330,16 @@ const AdminBillingCycleScreen = ({ route }) => {
             </View>
           </View>
         </View>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <TouchableOpacity
-            style={styles.recalcFab}
-            onPress={handleBackfillStats}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="refresh" size={18} color={colors.textOnAccent} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.createFab}
-            onPress={() => {
-              resetForm();
-              setShowCreateModal(true);
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add" size={22} color={colors.textOnAccent} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.createFab}
+          onPress={() => {
+            resetForm();
+            setShowCreateModal(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add" size={22} color={colors.textOnAccent} />
+        </TouchableOpacity>
       </View>
 
       {/* STATS BAR */}
@@ -586,6 +577,23 @@ const AdminBillingCycleScreen = ({ route }) => {
               </View>
             );
           })
+        )}
+        {cycles.length > 0 && (
+          <TouchableOpacity
+            style={{ alignItems: "center", paddingVertical: 16 }}
+            onPress={handleBackfillStats}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                color: colors.textTertiary,
+                textDecorationLine: "underline",
+              }}
+            >
+              Recalculate Billing Data
+            </Text>
+          </TouchableOpacity>
         )}
       </ScrollView>
 

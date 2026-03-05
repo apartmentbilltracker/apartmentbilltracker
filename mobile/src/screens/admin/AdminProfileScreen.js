@@ -39,6 +39,14 @@ const AdminProfileScreen = ({ navigation }) => {
   const [unreadTickets, setUnreadTickets] = useState(0);
   const [unreadBugReports, setUnreadBugReports] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+
+  const user = state.user || {};
+
+  // Reset avatar error when user or selected image changes
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.email, selectedImage]);
 
   const handleLogout = async () => {
     try {
@@ -50,8 +58,6 @@ const AdminProfileScreen = ({ navigation }) => {
       setLoggingOut(false);
     }
   };
-
-  const user = state.user || {};
 
   const handleEditPress = () => {
     setEditName(user.name || "");
@@ -116,6 +122,8 @@ const AdminProfileScreen = ({ navigation }) => {
   };
 
   const getAvatarSource = () => {
+    if (avatarError) return require("../../assets/default-avatar.png");
+    if (selectedImage?.uri) return { uri: selectedImage.uri };
     // External URL (Google/Facebook): kept in /getuser response (tiny string, no egress cost)
     if (user?.avatar?.url?.startsWith("http")) {
       return { uri: user.avatar.url };
@@ -127,7 +135,7 @@ const AdminProfileScreen = ({ navigation }) => {
         uri: `${getAPIBaseURL()}/api/v2/user/avatar-image/${encodeURIComponent(user.email)}`,
       };
     }
-    return null;
+    return require("../../assets/default-avatar.png");
   };
 
   useEffect(() => {
@@ -172,6 +180,7 @@ const AdminProfileScreen = ({ navigation }) => {
             source={getAvatarSource()}
             style={styles.avatarImage}
             defaultSource={require("../../assets/default-avatar.png")}
+            onError={() => setAvatarError(true)}
           />
           <TouchableOpacity
             style={styles.editAvatarBtn}
