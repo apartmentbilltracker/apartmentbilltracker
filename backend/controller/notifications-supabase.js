@@ -296,7 +296,25 @@ router.post(
 );
 
 // ──────────────────────────────────────────────
-// POST /log-presence — log a presence notification
+// DELETE /register-token — clear push token on logout so this device
+// stops receiving pushes for the signed-out account
+// ──────────────────────────────────────────────
+router.delete(
+  "/register-token",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({ expo_push_token: null })
+        .eq("id", req.user.id);
+      if (error) throw new Error(error.message);
+      res.status(200).json({ success: true, message: "Push token cleared" });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
 // ──────────────────────────────────────────────
 router.post(
   "/log-presence",
