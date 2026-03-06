@@ -41,18 +41,29 @@ jobs:
           git config user.name "GitHub Actions"
           git add -f ./mobile/google-services.json
 
+      - name: Set versionCode to build number
+        run: |
+          node -e "
+            const fs = require('fs');
+            const app = JSON.parse(fs.readFileSync('./mobile/app.json', 'utf8'));
+            app.expo.android = app.expo.android || {};
+            app.expo.android.versionCode = ${{ github.run_number }};
+            fs.writeFileSync('./mobile/app.json', JSON.stringify(app, null, 2));
+            console.log('versionCode set to ${{ github.run_number }}');
+          "
+
       - name: Build APK with EAS
         working-directory: ./mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_NO_VCS: true
         run: |
-          echo "Building APK locally..."
-          eas build --platform android --profile preview --non-interactive --local --output ./app.apk
+          echo "Building APK locally (build #${{ github.run_number }})..."
+          eas build --platform android --profile preview --non-interactive --local --clear-cache --output ./app-build-${{ github.run_number }}.apk
 
           # Verify APK was built
-          if [ -f "./app.apk" ]; then
-            SIZE=$(ls -lh ./app.apk | awk '{print $5}')
+          if [ -f "./app-build-${{ github.run_number }}.apk" ]; then
+            SIZE=$(ls -lh ./app-build-${{ github.run_number }}.apk | awk '{print $5}')
             echo "✅ APK built successfully - Size: $SIZE"
           else
             echo "❌ APK build failed"
@@ -64,31 +75,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: ./mobile/app.apk
-          tag_name: release-${{ github.run_number }}-${{ github.run_id }}
-          release_name: "APK Build #${{ github.run_number }}"
+          files: ./mobile/app-build-${{ github.run_number }}.apk
+          tag_name: v${{ github.run_number }}
+          release_name: "Build #${{ github.run_number }} (versionCode ${{ github.run_number }})"
           body: |
             ## 📱 Apartment Bill Tracker - Android APK
 
             **Build Number:** ${{ github.run_number }}
+            **versionCode:** ${{ github.run_number }}
             **Commit:** ${{ github.sha }}
 
+            ### ⚠️ Installation Note:
+            If you already have the app installed, **uninstall it first**, then install this APK.
+            (Or Android will upgrade it automatically since versionCode is higher than before.)
+
             ### Installation Instructions:
-            1. Download `app.apk` from the assets below
+            1. Download `app-build-${{ github.run_number }}.apk` from the assets below
             2. Transfer to your Android phone
             3. Open file manager → find APK → Tap to install
             4. Allow unknown sources if prompted
             5. Launch app!
-
-            ### Features:
-            - 👥 Room Management
-            - 💰 Billing Tracking
-            - 📊 Reports & Analytics
-            - 📅 Attendance Tracking
-            - 👤 Member Management
-
-            **Backend:** Render.com deployment
-            **Version:** ${{ github.ref }}
 
             Developed by: Rommel Belia
           draft: false

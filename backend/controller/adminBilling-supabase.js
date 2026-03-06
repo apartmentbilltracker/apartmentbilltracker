@@ -478,7 +478,9 @@ router.get(
       const { data: activeCycles, error: cyclesError } =
         await SupabaseService.getClient()
           .from("billing_cycles")
-          .select("*")
+          .select(
+            "id, room_id, status, start_date, end_date, cycle_number, rent, electricity, internet, water_bill_amount, total_billed_amount, previous_meter_reading, current_meter_reading, closed_at, created_by, created_at",
+          )
           .in("room_id", roomIds)
           .eq("status", "active");
       if (cyclesError) throw new Error(cyclesError.message);
