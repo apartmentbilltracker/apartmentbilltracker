@@ -569,6 +569,7 @@ export const chatService = {
   getMessages: (roomId, params = {}) => {
     const query = new URLSearchParams();
     if (params.before) query.append("before", params.before);
+    if (params.after) query.append("after", params.after);
     if (params.limit) query.append("limit", params.limit);
     const qs = query.toString();
     return api

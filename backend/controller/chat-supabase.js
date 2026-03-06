@@ -265,7 +265,7 @@ router.get(
   async (req, res, next) => {
     try {
       const { roomId } = req.params;
-      const { before, limit = 50 } = req.query;
+      const { before, after, limit = 50 } = req.query;
 
       // Cache room lookup for 30s to avoid re-querying on every poll
       const room = await cache.getOrSet(
@@ -297,6 +297,12 @@ router.get(
 
       if (before) {
         query = query.lt("created_at", before);
+      }
+      // 'after' cursor: only return messages newer than this timestamp.
+      // Used by poll incremental fetch — returns empty array when no new messages
+      // which means near-zero egress during quiet periods.
+      if (after) {
+        query = query.gt("created_at", after);
       }
 
       const { data: messages, error } = await query;
