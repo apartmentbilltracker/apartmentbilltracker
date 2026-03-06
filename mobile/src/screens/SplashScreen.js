@@ -11,6 +11,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
+import * as Application from "expo-application";
 import { AuthContext } from "../context/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
 
@@ -495,7 +496,8 @@ const SplashScreen = () => {
       {/* Version at bottom */}
       <Animated.View style={[styles.versionRow, { opacity: versionOpacity }]}>
         <Text style={[styles.versionText, { color: versionC }]}>
-          Version {Constants.expoConfig?.version || "1.0.0"}
+          Version {Constants.expoConfig?.version || "1.0.0"} (
+          {Application.nativeBuildVersion || "1"})
         </Text>
         <View
           style={[styles.versionDivider, { backgroundColor: versionDivC }]}

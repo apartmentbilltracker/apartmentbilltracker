@@ -243,6 +243,14 @@ class SupabaseService {
   static USER_COLS_AUTH =
     "id, name, email, password_hash, username, role, is_admin, avatar, auth_provider, expo_push_token, phone_number, gender, date_of_birth, is_active, host_request_status, created_at, updated_at";
 
+  /** Specific columns for billing_cycles — avoids fetching unused metadata. */
+  static BILLING_CYCLE_COLS =
+    "id, room_id, start_date, end_date, status, cycle_number, rent, electricity, internet, water_bill_amount, total_billed_amount, previous_meter_reading, current_meter_reading, closed_at, created_at, created_by, updated_at";
+
+  /** Specific columns for payments — avoids fetching unused metadata. */
+  static PAYMENT_COLS =
+    "id, room_id, paid_by, bill_type, amount, payment_method, status, reference, notes, billing_cycle_start, billing_cycle_end, payment_date, verified_by, verified_at, created_at, updated_at";
+
   /**
    * Parse user data to ensure avatar is properly formatted
    * @param {object} user - User object from database
@@ -313,6 +321,22 @@ class SupabaseService {
       map.set(user.id, this.formatUserData(user));
     }
     return map;
+  }
+
+  /**
+   * Batch-fetch multiple users by emails in a single query.
+   * Returns an array of formatted user objects (includes avatar when requested).
+   */
+  static async findUsersByEmails(emails, { withAvatar = false } = {}) {
+    if (!emails || emails.length === 0) return [];
+    const uniqueEmails = [...new Set(emails.map((e) => e.toLowerCase()))];
+    const cols = withAvatar ? this.USER_COLS_WITH_AVATAR : this.USER_COLS;
+    const { data, error } = await supabase
+      .from("users")
+      .select(cols)
+      .in("email", uniqueEmails);
+    if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
+    return (data || []).map((u) => this.formatUserData(u));
   }
 
   static async findUserByPhone(phoneNumber) {
@@ -502,7 +526,7 @@ class SupabaseService {
       "billing_cycles",
       "room_id",
       roomId,
-      "*",
+      this.BILLING_CYCLE_COLS,
       "start_date",
       false,
     );
@@ -511,7 +535,7 @@ class SupabaseService {
   static async getActiveBillingCycle(roomId) {
     const { data, error } = await supabase
       .from("billing_cycles")
-      .select("*")
+      .select(this.BILLING_CYCLE_COLS)
       .eq("room_id", roomId)
       .eq("status", "active")
       .single();
@@ -552,7 +576,7 @@ class SupabaseService {
   static async getRoomPayments(roomId) {
     const { data, error } = await supabase
       .from("payments")
-      .select("*")
+      .select(this.PAYMENT_COLS)
       .eq("room_id", roomId)
       .order("payment_date", { ascending: false });
     if (error) throw new Error(`Select error: ${error.message}`);
@@ -562,7 +586,7 @@ class SupabaseService {
   static async getUserPayments(userId) {
     const { data, error } = await supabase
       .from("payments")
-      .select("*")
+      .select(this.PAYMENT_COLS)
       .eq("paid_by", userId)
       .order("payment_date", { ascending: false });
     if (error) throw new Error(`Select error: ${error.message}`);
@@ -576,7 +600,7 @@ class SupabaseService {
   static async getPaymentsForCycle(roomId, startDate, endDate) {
     const { data, error } = await supabase
       .from("payments")
-      .select("*")
+      .select(this.PAYMENT_COLS)
       .eq("room_id", roomId)
       .eq("billing_cycle_start", startDate)
       .eq("billing_cycle_end", endDate)

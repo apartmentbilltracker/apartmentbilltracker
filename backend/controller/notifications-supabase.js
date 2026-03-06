@@ -34,7 +34,9 @@ router.get(
     try {
       const { data, error } = await supabase
         .from("notifications")
-        .select("*")
+        .select(
+          "id, recipient_id, title, message, notification_type, is_read, created_at, related_data",
+        )
         .eq("recipient_id", req.user.id)
         .eq("is_read", false)
         .order("created_at", { ascending: false });
@@ -84,7 +86,9 @@ router.get(
       // Get page of data
       const { data, error } = await supabase
         .from("notifications")
-        .select("*")
+        .select(
+          "id, recipient_id, title, message, notification_type, is_read, created_at, related_data",
+        )
         .eq("recipient_id", req.user.id)
         .order("created_at", { ascending: false })
         .range(from, to);

@@ -289,7 +289,7 @@ router.get(
       const supabase = SupabaseService.getClient();
       let query = supabase
         .from("chat_messages")
-        .select("*")
+        .select("id, room_id, text, sender_id, created_at, expires_at")
         .eq("room_id", roomId)
         .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: true })

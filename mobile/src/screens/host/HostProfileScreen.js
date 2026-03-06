@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import Constants from "expo-constants";
+import * as Application from "expo-application";
 import { AuthContext } from "../../context/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
 import { getAPIBaseURL } from "../../config/config";
@@ -221,12 +222,15 @@ const HostProfileScreen = ({ navigation }) => {
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Version</Text>
           <Text style={styles.infoValue}>
-            {Constants.expoConfig?.version || "1.0.0"}
+            {Constants.expoConfig?.version || "1.0.0"} (
+            {Application.nativeBuildVersion || "1"})
           </Text>
         </View>
         <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
           <Text style={styles.infoLabel}>Build</Text>
-          <Text style={styles.infoValue}>1</Text>
+          <Text style={styles.infoValue}>
+            {Application.nativeBuildVersion || "1"}
+          </Text>
         </View>
       </View>
 
