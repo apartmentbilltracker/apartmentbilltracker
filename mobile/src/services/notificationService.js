@@ -7,12 +7,18 @@ import * as Notifications from "expo-notifications";
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
+  handleNotification: async (notification) => {
+    // Suppress the OS banner for chat messages — the custom ChatNotificationBanner
+    // component handles those in-app with its own polished UI.
+    const type = notification?.request?.content?.data?.type;
+    const isChatMessage = type === "chat_message";
+    return {
+      shouldShowBanner: !isChatMessage, // custom banner handles chat
+      shouldShowList: !isChatMessage, // don't stack chat in tray
+      shouldPlaySound: !isChatMessage,
+      shouldSetBadge: true,
+    };
+  },
 });
 
 /**

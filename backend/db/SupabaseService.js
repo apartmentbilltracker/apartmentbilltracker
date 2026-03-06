@@ -687,7 +687,9 @@ class SupabaseService {
   static async getRoomAnnouncements(roomId) {
     const { data, error } = await supabase
       .from("announcements")
-      .select("*")
+      .select(
+        "id, room_id, title, content, pin_priority, created_at, created_by",
+      )
       .eq("room_id", roomId)
       .order("pin_priority", { ascending: true })
       .order("created_at", { ascending: false });

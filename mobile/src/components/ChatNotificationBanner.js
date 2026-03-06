@@ -10,12 +10,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Notifications from "expo-notifications";
 import { AuthContext } from "../context/AuthContext";
 import { chatService, roomService } from "../services/apiService";
 import { useTheme } from "../theme/ThemeContext";
 import { navigationRef } from "../navigation/navigationRef";
 
-const POLL_INTERVAL = 60000; // 60 seconds — reduced to save Supabase egress
+const POLL_INTERVAL = 60000; // 60s fallback — APK uses push listener (instant); Expo Go uses polling
 const BANNER_DURATION = 4500; // 4.5 seconds visible
 const BANNER_HEIGHT = 95; // header (~30) + body (~65)
 
@@ -142,11 +143,12 @@ const ChatNotificationBanner = () => {
     });
   };
 
-  // Poll for new messages
+  // Poll for new messages (primary in Expo Go; fallback in APK builds where push works)
   useEffect(() => {
     if (!roomId) return;
 
-    // On first mount, seed lastMsgIdRef so we don't banner old messages
+    // Record the mount timestamp — any message OLDER than this is "already seen"
+    const mountedAt = new Date();
     let seeded = false;
 
     const checkMessages = async () => {
@@ -164,11 +166,16 @@ const ChatNotificationBanner = () => {
 
         const latest = msgs[msgs.length - 1];
 
-        // First poll: just record the current latest ID, don't show banner
+        // First poll: seed the last known ID
         if (!seeded) {
           lastMsgIdRef.current = latest.id;
           seeded = true;
-          return;
+          // Still check if this message arrived AFTER we mounted (edge case)
+          const msgTime = latest.created_at
+            ? new Date(latest.created_at)
+            : null;
+          if (!msgTime || msgTime <= mountedAt) return; // message is old
+          // Message is newer than mount — fall through to show banner
         }
 
         // Skip own messages
@@ -203,6 +210,30 @@ const ChatNotificationBanner = () => {
     };
   }, [roomId, userId, roomName]);
 
+  // Instant trigger: show banner when a chat push notification arrives while app is open.
+  // This fires immediately (no polling delay) and is the primary trigger.
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        const data = notification?.request?.content?.data;
+        if (data?.type !== "chat_message") return;
+        // Don't show if already in the ChatRoom for that room
+        if (isChatScreenActive()) return;
+        // Don't show own messages
+        if (data?.senderId && String(data.senderId) === String(userId)) return;
+
+        showBanner({
+          senderName: data?.senderName || "Someone",
+          senderAvatar: null,
+          text: notification?.request?.content?.body || "New message",
+          roomId: data?.roomId || roomId,
+          roomName: data?.roomName || roomName || "Chat",
+        });
+      },
+    );
+    return () => sub.remove();
+  }, [userId, roomId, roomName]);
+
   // Cleanup
   useEffect(() => {
     return () => {
@@ -211,8 +242,6 @@ const ChatNotificationBanner = () => {
     };
   }, []);
 
-  if (!visible || !notification) return null;
-  // Don't mount for admin users or when signed out
   if (!userId || isAdmin) return null;
 
   const handlePress = () => {
@@ -223,6 +252,8 @@ const ChatNotificationBanner = () => {
       isHost,
     });
   };
+
+  if (!visible || !notification) return null;
 
   const avatarColor = getAvatarColor(notification.senderName);
 
