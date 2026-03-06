@@ -556,13 +556,12 @@ const AdminBillingScreen = ({ navigation }) => {
         const updateResponse = await apiService.put(
           `/api/v2/billing-cycles/${selectedRoom.currentCycleId}`,
           {
-            memberCharges: undefined, // Let backend recompute with current presence
-            totalBilledAmount: undefined,
-            billBreakdown: undefined,
             rent: cyclePayload.rent,
             electricity: cyclePayload.electricity,
             waterBillAmount: cyclePayload.waterBillAmount,
             internet: cyclePayload.internet,
+            previousMeterReading: cyclePayload.previousMeterReading,
+            currentMeterReading: cyclePayload.currentMeterReading,
           },
         );
 
