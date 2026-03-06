@@ -430,6 +430,10 @@ export const AuthProvider = ({ children }) => {
 
     signOut: useCallback(async () => {
       try {
+        // Clear push token first so this device stops receiving pushes for this account
+        await api
+          .delete("/api/v2/notifications/register-token")
+          .catch(() => {});
         await authService.logout();
       } catch (error) {
         // Logout API call may fail if server unreachable — proceed anyway
