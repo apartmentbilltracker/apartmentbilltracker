@@ -15,6 +15,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import Constants from "expo-constants";
+import * as Application from "expo-application";
 import { AuthContext } from "../../context/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
 
@@ -262,7 +263,8 @@ const RegisterScreen = ({ navigation }) => {
         {/* Developer Credit Footer */}
         <View style={styles.developerFooter}>
           <Text style={styles.developerText}>
-            v{Constants.expoConfig?.version || "1.0.0"}
+            v{Constants.expoConfig?.version || "1.0.0"} (
+            {Application.nativeBuildVersion || "1"})
           </Text>
         </View>
       </View>

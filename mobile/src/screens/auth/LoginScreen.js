@@ -6,6 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import Constants from "expo-constants";
+import * as Application from "expo-application";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View,
@@ -695,7 +696,8 @@ const LoginScreen = ({ navigation }) => {
 
         <View style={styles.creditRow}>
           <Text style={styles.creditText}>
-            v{Constants.expoConfig?.version || "1.0.0"}
+            v{Constants.expoConfig?.version || "1.0.0"} (
+            {Application.nativeBuildVersion || "1"})
           </Text>
         </View>
       </ScrollView>

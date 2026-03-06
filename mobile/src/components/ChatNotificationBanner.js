@@ -15,9 +15,28 @@ import { chatService, roomService } from "../services/apiService";
 import { useTheme } from "../theme/ThemeContext";
 import { navigationRef } from "../navigation/navigationRef";
 
-const POLL_INTERVAL = 60000; // 60 seconds (was 8s — reduced to save Supabase egress)
+const POLL_INTERVAL = 60000; // 60 seconds — reduced to save Supabase egress
 const BANNER_DURATION = 4500; // 4.5 seconds visible
-const BANNER_HEIGHT = 76;
+const BANNER_HEIGHT = 95; // header (~30) + body (~65)
+
+// Deterministic color per sender name — makes avatars recognizable at a glance
+const AVATAR_PALETTE = [
+  "#e91e63",
+  "#9c27b0",
+  "#3f51b5",
+  "#2196f3",
+  "#009688",
+  "#ff5722",
+  "#795548",
+  "#607d8b",
+];
+const getAvatarColor = (name = "") => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+};
 
 /**
  * Messenger-style chat notification banner.
@@ -42,7 +61,7 @@ const ChatNotificationBanner = () => {
   const [roomId, setRoomId] = useState(null);
   const [roomName, setRoomName] = useState(null);
 
-  const slideAnim = useRef(new Animated.Value(-BANNER_HEIGHT - 20)).current;
+  const slideAnim = useRef(new Animated.Value(-(BANNER_HEIGHT + 20))).current;
   const lastMsgIdRef = useRef(null);
   const dismissTimerRef = useRef(null);
   const pollRef = useRef(null);
@@ -114,7 +133,7 @@ const ChatNotificationBanner = () => {
 
   const hideBanner = () => {
     Animated.timing(slideAnim, {
-      toValue: -BANNER_HEIGHT - 20,
+      toValue: -(BANNER_HEIGHT + 20),
       duration: 250,
       useNativeDriver: true,
     }).start(() => {
@@ -193,15 +212,11 @@ const ChatNotificationBanner = () => {
   }, []);
 
   if (!visible || !notification) return null;
-
   // Don't mount for admin users or when signed out
   if (!userId || isAdmin) return null;
 
   const handlePress = () => {
     hideBanner();
-    // ChatRoom is at the root of each role navigator — navigate directly.
-    // Using navigationRef instead of useNavigation() so this component can
-    // be rendered at App root level, above all navigator native surfaces.
     navigationRef.current?.navigate("ChatRoom", {
       roomId: notification.roomId,
       roomName: notification.roomName,
@@ -209,93 +224,91 @@ const ChatNotificationBanner = () => {
     });
   };
 
+  const avatarColor = getAvatarColor(notification.senderName);
+
   return (
     <Animated.View
       style={[
         styles.container,
         {
           transform: [{ translateY: slideAnim }],
-          top: insets.top + 4,
-          backgroundColor: colors.card,
-          borderColor: colors.border,
+          top: insets.top + 8,
           shadowColor: "#000",
         },
       ]}
     >
-      <TouchableOpacity
-        style={styles.inner}
-        onPress={handlePress}
-        activeOpacity={0.85}
-      >
-        {/* Avatar */}
-        <View style={styles.avatarWrap}>
-          {notification.senderAvatar ? (
-            <Image
-              source={{ uri: notification.senderAvatar }}
-              style={styles.avatar}
-            />
-          ) : (
-            <View
-              style={[
-                styles.avatarPlaceholder,
-                { backgroundColor: colors.accentLight || colors.accentSurface },
-              ]}
-            >
-              <Text style={[styles.avatarLetter, { color: colors.accent }]}>
+      {/* Inner wrapper — clips header accent colour to rounded corners */}
+      <View style={[styles.innerClip, { backgroundColor: colors.card }]}>
+        {/* ── Accent header bar ── */}
+        <View style={[styles.headerBar, { backgroundColor: colors.accent }]}>
+          <Ionicons
+            name="chatbubble-ellipses"
+            size={12}
+            color="rgba(255,255,255,0.95)"
+          />
+          <Text style={styles.headerLabel}>NEW MESSAGE</Text>
+          <View style={styles.headerDot} />
+          <Text style={styles.headerRoom} numberOfLines={1}>
+            {notification.roomName}
+          </Text>
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              hideBanner();
+            }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close" size={14} color="rgba(255,255,255,0.9)" />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Message body (tappable) ── */}
+        <TouchableOpacity
+          style={styles.body}
+          onPress={handlePress}
+          activeOpacity={0.85}
+        >
+          {/* Avatar */}
+          <View style={[styles.avatarBox, { backgroundColor: avatarColor }]}>
+            {notification.senderAvatar ? (
+              <Image
+                source={{ uri: notification.senderAvatar }}
+                style={styles.avatar}
+              />
+            ) : (
+              <Text style={styles.avatarLetter}>
                 {(notification.senderName || "?")[0].toUpperCase()}
               </Text>
-            </View>
-          )}
-          {/* Online dot */}
-          <View style={styles.onlineDot} />
-        </View>
+            )}
+          </View>
 
-        {/* Content */}
-        <View style={styles.content}>
-          <Text
-            style={[styles.senderName, { color: colors.text }]}
-            numberOfLines={1}
-          >
-            {notification.senderName}
-          </Text>
-          <Text
-            style={[
-              styles.messagePreview,
-              { color: colors.textSecondary || colors.textTertiary },
-            ]}
-            numberOfLines={1}
-          >
-            {notification.text}
-          </Text>
-        </View>
+          {/* Text content */}
+          <View style={styles.msgContent}>
+            <Text
+              style={[styles.senderName, { color: colors.text }]}
+              numberOfLines={1}
+            >
+              {notification.senderName}
+            </Text>
+            <Text
+              style={[
+                styles.msgText,
+                { color: colors.textSecondary || colors.textTertiary },
+              ]}
+              numberOfLines={2}
+            >
+              {notification.text}
+            </Text>
+          </View>
 
-        {/* Dismiss */}
-        <TouchableOpacity
-          style={[styles.dismissBtn, { backgroundColor: colors.background }]}
-          onPress={(e) => {
-            e.stopPropagation?.();
-            hideBanner();
-          }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="close" size={14} color={colors.textTertiary} />
+          {/* Reply caret */}
+          <View
+            style={[styles.replyBtn, { backgroundColor: `${colors.accent}1A` }]}
+          >
+            <Ionicons name="arrow-forward" size={14} color={colors.accent} />
+          </View>
         </TouchableOpacity>
-      </TouchableOpacity>
-
-      {/* Room badge */}
-      <View
-        style={[
-          styles.roomBadge,
-          { backgroundColor: colors.accentLight || colors.accentSurface },
-        ]}
-      >
-        <Ionicons name="chatbubble-ellipses" size={10} color={colors.accent} />
-        <Text
-          style={[styles.roomBadgeText, { color: colors.accent }]}
-          numberOfLines={1}
-        >
-          {notification.roomName}
-        </Text>
       </View>
     </Animated.View>
   );
@@ -304,96 +317,98 @@ const ChatNotificationBanner = () => {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: 12,
-    right: 12,
+    left: 10,
+    right: 10,
     zIndex: 9999,
-    elevation: 20,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
     ...Platform.select({
       ios: {
-        shadowOpacity: 0.18,
-        shadowOffset: { width: 0, height: 4 },
-        shadowRadius: 12,
+        shadowOpacity: 0.22,
+        shadowOffset: { width: 0, height: 6 },
+        shadowRadius: 16,
       },
       android: {
-        elevation: 20,
+        elevation: 24,
       },
     }),
-    overflow: "visible",
   },
-  inner: {
+  innerClip: {
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  headerBar: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 6,
-    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    gap: 5,
   },
-  avatarWrap: {
-    position: "relative",
+  headerLabel: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    flex: 1,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  headerDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.5)",
   },
-  avatarPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  headerRoom: {
+    color: "rgba(255,255,255,0.87)",
+    fontSize: 11,
+    fontWeight: "500",
+    flex: 2,
+  },
+  closeBtn: {
+    marginLeft: 6,
+    padding: 2,
+  },
+  body: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  avatarBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
   },
   avatarLetter: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
+    color: "#fff",
   },
-  onlineDot: {
-    position: "absolute",
-    bottom: 1,
-    right: 1,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#2ecc71",
-    borderWidth: 2,
-    borderColor: "#fff",
-  },
-  content: {
+  msgContent: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   senderName: {
     fontSize: 14,
     fontWeight: "700",
+    lineHeight: 17,
   },
-  messagePreview: {
-    fontSize: 13,
-    lineHeight: 18,
+  msgText: {
+    fontSize: 12,
+    lineHeight: 16,
   },
-  dismissBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  replyBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-  },
-  roomBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: 4,
-    marginLeft: 70,
-    marginBottom: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  roomBadgeText: {
-    fontSize: 10,
-    fontWeight: "600",
-    maxWidth: 120,
   },
 });
 

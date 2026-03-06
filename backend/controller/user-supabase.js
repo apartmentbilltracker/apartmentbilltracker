@@ -1401,43 +1401,47 @@ router.post(
       const limitedEmails = emails.slice(0, 10).map((e) => e.toLowerCase());
 
       const avatars = {};
+
+      // --- Phase 1: serve from cache (no DB hit) ---
+      const uncachedEmails = [];
       for (const email of limitedEmails) {
-        try {
-          // Check in-memory cache first (1-hour TTL, shared with avatar-image endpoint).
-          // Avoids fetching a 2–5 MB base64 blob from Supabase just to determine avatar type.
-          const cacheKey = `avatar:${email}`;
-          const cachedUrl = avatarCache.get(cacheKey);
-          if (cachedUrl !== undefined) {
-            if (cachedUrl) {
-              avatars[email] = cachedUrl.startsWith("http")
-                ? cachedUrl
+        const cachedUrl = avatarCache.get(`avatar:${email}`);
+        if (cachedUrl !== undefined) {
+          avatars[email] = cachedUrl
+            ? cachedUrl.startsWith("http")
+              ? cachedUrl
+              : `/api/v2/user/avatar-image/${encodeURIComponent(email)}`
+            : null;
+        } else {
+          uncachedEmails.push(email);
+        }
+      }
+
+      // --- Phase 2: single batch query for all uncached emails ---
+      if (uncachedEmails.length > 0) {
+        const users = await SupabaseService.findUsersByEmails(uncachedEmails, {
+          withAvatar: true,
+        });
+        // Build a lookup map email -> user
+        const userByEmail = {};
+        for (const user of users) {
+          if (user?.email) userByEmail[user.email.toLowerCase()] = user;
+        }
+        for (const email of uncachedEmails) {
+          try {
+            const user = userByEmail[email];
+            if (user && user.avatar && user.avatar.url) {
+              avatarCache.set(`avatar:${email}`, user.avatar.url, 3600);
+              avatars[email] = user.avatar.url.startsWith("http")
+                ? user.avatar.url
                 : `/api/v2/user/avatar-image/${encodeURIComponent(email)}`;
             } else {
+              avatarCache.set(`avatar:${email}`, null, 3600);
               avatars[email] = null;
             }
-            continue;
-          }
-
-          const user = await SupabaseService.findUserByEmail(email, {
-            withAvatar: true,
-          });
-          if (user && user.avatar && user.avatar.url) {
-            // Populate cache so /avatar-image and future /avatars calls skip Supabase
-            avatarCache.set(cacheKey, user.avatar.url, 3600);
-            if (user.avatar.url.startsWith("http")) {
-              // External URL (Google/Facebook) — return directly
-              avatars[email] = user.avatar.url;
-            } else {
-              // Base64 data URL — return a server endpoint URL instead
-              avatars[email] =
-                `/api/v2/user/avatar-image/${encodeURIComponent(email)}`;
-            }
-          } else {
-            avatarCache.set(cacheKey, null, 3600); // Cache "no avatar" to skip re-fetching
+          } catch {
             avatars[email] = null;
           }
-        } catch {
-          avatars[email] = null;
         }
       }
 
