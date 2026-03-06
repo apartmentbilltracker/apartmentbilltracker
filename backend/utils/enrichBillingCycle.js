@@ -183,23 +183,19 @@ async function enrichBillingCycle(cycle, members, roomData) {
   const nonPayorWaterPerPayor =
     payerCount > 0 ? r2(nonPayorWaterTotal / payerCount) : 0;
 
-  // Check if admin set a specific water bill amount — if so, we'll scale charges
-  const adminWater = cycle.water_bill_amount
-    ? parseFloat(cycle.water_bill_amount)
-    : 0;
   const rawTotalWater = memberWaterOwn.reduce(
     (sum, m) => r2(sum + m.ownWater),
     0,
   );
-  // Scale factor: if admin set 505 but raw presence totals 530, scale = 505/530
-  // If rawTotalWater is 0 (no presence in this cycle), water is 0 regardless of stored amount
-  const waterScale =
-    adminWater > 0 && rawTotalWater > 0 ? adminWater / rawTotalWater : 1;
 
-  // Target water total that all payors collectively must cover
-  // If no presence data in cycle range, target is 0 (fresh cycle, no water yet)
-  const targetWaterTotal =
-    rawTotalWater === 0 ? 0 : adminWater > 0 ? adminWater : rawTotalWater;
+  // For presence-based mode, always use live presence data as the target.
+  // The stored water_bill_amount becomes stale as members mark presence after the
+  // cycle was first saved, so scaling against it produces incorrect per-member shares.
+  // No scaling is needed — each member's share is computed from their own presence.
+  const waterScale = 1;
+
+  // Target water total = sum of all members' own presence-based water
+  const targetWaterTotal = rawTotalWater;
 
   // ── PASS 2: Build final member charges (with non-payor water distributed) ──
   let totalWater = 0;
@@ -268,25 +264,14 @@ async function enrichBillingCycle(cycle, members, roomData) {
 
   cycle.member_charges = memberCharges;
 
-  // Set water_bill_amount from presence if not manually set
-  // If no presence in cycle range AND cycle is still active, water should be 0 (fresh cycle)
-  const allMembersWater = memberWaterOwn.reduce(
-    (sum, m) => r2(sum + m.ownWater),
-    0,
-  );
-  if (allMembersWater === 0 && cycle.status === "active") {
-    // No presence data in this active cycle's range — override any stale stored water
-    cycle.water_bill_amount = 0;
-  } else if (
-    !cycle.water_bill_amount ||
-    parseFloat(cycle.water_bill_amount) === 0
-  ) {
-    cycle.water_bill_amount = allMembersWater;
-  }
+  // For presence-based mode, always use live presence total as water_bill_amount.
+  // The stored value becomes stale once members mark more presence after the cycle was saved.
+  const allMembersWater = rawTotalWater;
+  cycle.water_bill_amount = allMembersWater;
 
   // Recalculate total_billed_amount to include computed water
   cycle.total_billed_amount = r2(
-    rent + electricity + parseFloat(cycle.water_bill_amount || 0) + internet,
+    rent + electricity + allMembersWater + internet,
   );
 
   // ── Final pass: correct last payer's total_due so sum matches total_billed_amount ──

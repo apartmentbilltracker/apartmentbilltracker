@@ -265,48 +265,6 @@ router.delete(
 );
 
 // ──────────────────────────────────────────────
-// POST /register-token — save Expo push token
-// ──────────────────────────────────────────────
-router.post(
-  "/register-token",
-  isAuthenticated,
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      const { expoPushToken } = req.body;
-
-      if (!expoPushToken) {
-        return next(new ErrorHandler("Expo push token is required", 400));
-      }
-
-      // Try to save to users table (column may not exist yet)
-      try {
-        await supabase
-          .from("users")
-          .update({ expo_push_token: expoPushToken })
-          .eq("id", req.user.id);
-      } catch (updateErr) {
-        console.log(
-          "Push token save skipped (column may not exist):",
-          updateErr.message,
-        );
-      }
-
-      res.status(200).json({
-        success: true,
-        message: "Push token registered successfully",
-        user: {
-          id: req.user.id,
-          name: req.user.name,
-          email: req.user.email,
-        },
-      });
-    } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  }),
-);
-
-// ──────────────────────────────────────────────
 // POST /register-token — save Expo push token for this user
 // ──────────────────────────────────────────────
 router.post(
@@ -318,13 +276,14 @@ router.post(
       if (!expoPushToken || typeof expoPushToken !== "string") {
         return next(new ErrorHandler("expoPushToken is required", 400));
       }
-      // Only save if it looks like a valid Expo token
       if (!expoPushToken.startsWith("ExponentPushToken[")) {
         return next(new ErrorHandler("Invalid Expo push token format", 400));
       }
-      await SupabaseService.updateUser(req.user.id, {
-        expo_push_token: expoPushToken,
-      });
+      const { error } = await supabase
+        .from("users")
+        .update({ expo_push_token: expoPushToken })
+        .eq("id", req.user.id);
+      if (error) throw new Error(error.message);
       res.status(200).json({ success: true, message: "Push token registered" });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
