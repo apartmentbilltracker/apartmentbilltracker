@@ -487,16 +487,16 @@ const ClientHomeScreen = ({ navigation }) => {
         setUnreadChatCount(0);
         return;
       }
-      const [res, lastRead] = await Promise.all([
-        chatService.getMessages(roomId, { limit: 50 }),
-        chatReadTracker.getLastRead(roomId),
-      ]);
+      // Use lastRead timestamp as 'after' cursor — only fetches messages newer
+      // than what was already read. Near-zero egress when no new messages.
+      const lastRead = await chatReadTracker.getLastRead(roomId);
+      const afterTs = lastRead ? new Date(lastRead).toISOString() : undefined;
+      const res = await chatService.getMessages(roomId, {
+        after: afterTs,
+        limit: 50,
+      });
       const msgs = res.messages || [];
-      const unread = msgs.filter(
-        (m) =>
-          String(m.senderId) !== String(userId) &&
-          new Date(m.createdAt).getTime() > lastRead,
-      );
+      const unread = msgs.filter((m) => String(m.senderId) !== String(userId));
       setUnreadChatCount(unread.length);
     } catch {
       setUnreadChatCount(0);

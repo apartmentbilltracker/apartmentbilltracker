@@ -59,12 +59,18 @@ const ChatRoomScreen = ({ route, navigation }) => {
   const pollRef = useRef(null);
   const inputRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
+  const lastMsgTimestampRef = useRef(null); // tracks newest msg timestamp for incremental polls
 
   const fetchMessages = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
       const res = await chatService.getMessages(roomId, { limit: 100 });
       const serverMsgs = res.messages || [];
+      // Record newest timestamp so the poll can fetch only new messages
+      if (serverMsgs.length > 0) {
+        lastMsgTimestampRef.current =
+          serverMsgs[serverMsgs.length - 1].createdAt;
+      }
       // Merge: keep any optimistic (temp_) messages that aren't on the server yet
       setMessages((prev) => {
         const pendingOptimistic = prev.filter(
@@ -213,7 +219,32 @@ const ChatRoomScreen = ({ route, navigation }) => {
       fetchStatus();
       pollRef.current = setInterval(() => {
         if (chatEnabled) {
-          fetchMessages(true);
+          // Incremental fetch: only get messages newer than the last one we have.
+          // Returns empty array when nothing new — near-zero egress during quiet periods.
+          if (lastMsgTimestampRef.current) {
+            chatService
+              .getMessages(roomId, { after: lastMsgTimestampRef.current })
+              .then((res) => {
+                const newMsgs = res?.messages || [];
+                if (newMsgs.length === 0) return; // nothing new — skip re-render
+                lastMsgTimestampRef.current =
+                  newMsgs[newMsgs.length - 1].createdAt;
+                setMessages((prev) => {
+                  const existingIds = new Set(prev.map((m) => m.id));
+                  const fresh = newMsgs.filter((m) => !existingIds.has(m.id));
+                  if (fresh.length === 0) return prev;
+                  const withoutOptimistic = prev.filter(
+                    (m) =>
+                      !(typeof m.id === "string" && m.id.startsWith("temp_")),
+                  );
+                  return [...withoutOptimistic, ...fresh];
+                });
+                chatReadTracker.markAsRead(roomId);
+              })
+              .catch(() => {});
+          } else {
+            fetchMessages(true);
+          }
           chatReadTracker.markAsRead(roomId);
         } else {
           fetchStatus();
