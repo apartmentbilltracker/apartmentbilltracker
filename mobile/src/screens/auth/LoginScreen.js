@@ -26,7 +26,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import * as Facebook from "expo-auth-session/providers/facebook";
-import { makeRedirectUri } from "expo-auth-session";
 import * as Notifications from "expo-notifications";
 import { AuthContext } from "../../context/AuthContext";
 import { apiService, authService } from "../../services/apiService";
@@ -39,8 +38,7 @@ import AuthBubbles from "../../components/AuthBubbles";
 // Detect if running in Expo Go vs custom dev build
 const IS_EXPO_GO = Constants.appOwnership === "expo";
 
-// TODO: Replace with your Facebook App ID from https://developers.facebook.com
-const FACEBOOK_APP_ID = "YOUR_FACEBOOK_APP_ID";
+const FACEBOOK_APP_ID = "1296319515642952";
 const FB_ENABLED = FACEBOOK_APP_ID !== "YOUR_FACEBOOK_APP_ID";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -146,23 +144,30 @@ const LoginScreen = ({ navigation }) => {
   }, []);
 
   // ── Google OAuth ──
-  // In Expo Go the native Android flow can't work (wrong package name),
-  // so we use the Expo auth proxy. In dev/standalone builds, the native flow works.
-  const googleRedirectUri = IS_EXPO_GO
-    ? "https://auth.expo.io/@apartmentbilltracker/apartment-bill-tracker"
-    : makeRedirectUri({ scheme: "aptbilltracker", path: "redirect" });
-
+  // Uses native Android account picker (no browser/redirect URI needed).
+  // auth.expo.io proxy is deprecated in SDK 53 and cannot redirect back to Expo Go.
+  // Google OAuth only works in APK/dev-client builds — show a message in Expo Go.
   const GOOGLE_WEB_CLIENT_ID =
     "280450131002-ecknav2so7qhc0kd83t9644ap6hvaurh.apps.googleusercontent.com";
+  const GOOGLE_ANDROID_CLIENT_ID =
+    "280450131002-iv8nv3hnottf109ft2ruogaq4daqjpbh.apps.googleusercontent.com";
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-    // In Expo Go we must use the Web client ID (matches the registered redirect URI)
-    ...(IS_EXPO_GO ? { clientId: GOOGLE_WEB_CLIENT_ID } : {}),
-    androidClientId:
-      "280450131002-iv8nv3hnottf109ft2ruogaq4daqjpbh.apps.googleusercontent.com",
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
     webClientId: GOOGLE_WEB_CLIENT_ID,
-    redirectUri: googleRedirectUri,
   });
+
+  const handleGooglePress = () => {
+    if (IS_EXPO_GO) {
+      Alert.alert(
+        "Google Sign-In",
+        "Google login is not available in Expo Go. Please use the installed app to sign in with Google.",
+        [{ text: "OK" }],
+      );
+      return;
+    }
+    promptAsync();
+  };
 
   // ── Facebook OAuth ──
   const [fbRequest, fbResponse, fbPromptAsync] = Facebook.useAuthRequest(
@@ -170,18 +175,25 @@ const LoginScreen = ({ navigation }) => {
   );
 
   // Handle Google response
+  // Native Android flow: response.authentication.accessToken
+  // Web/implicit flow fallback: response.params.access_token
   React.useEffect(() => {
     if (response?.type === "success") {
-      const { access_token } = response.params;
-      handleGoogleLogin(access_token);
+      const accessToken =
+        response.authentication?.accessToken || response.params?.access_token;
+      if (accessToken) handleGoogleLogin(accessToken);
     }
   }, [response]);
 
   // Handle Facebook response
+  // Browser flow: token in params.access_token
+  // Native flow fallback: authentication.accessToken
   React.useEffect(() => {
     if (fbResponse?.type === "success") {
-      const { access_token } = fbResponse.params;
-      handleFacebookLogin(access_token);
+      const accessToken =
+        fbResponse.params?.access_token ||
+        fbResponse.authentication?.accessToken;
+      if (accessToken) handleFacebookLogin(accessToken);
     }
   }, [fbResponse]);
 
@@ -251,6 +263,14 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleFacebookPress = () => {
+    if (IS_EXPO_GO) {
+      Alert.alert(
+        "Facebook Sign-In",
+        "Facebook login is not available in Expo Go. Please use the installed app to sign in with Facebook.",
+        [{ text: "OK" }],
+      );
+      return;
+    }
     if (!FB_ENABLED) {
       Alert.alert(
         "Facebook Login",
@@ -529,7 +549,7 @@ const LoginScreen = ({ navigation }) => {
                   style={[styles.primaryBtn, loading && { opacity: 0.6 }]}
                   onPress={() => {
                     if (selectedAccount.authProvider === "google") {
-                      promptAsync();
+                      handleGooglePress();
                     } else if (selectedAccount.authProvider === "facebook") {
                       handleFacebookPress();
                     }
@@ -658,9 +678,9 @@ const LoginScreen = ({ navigation }) => {
             {/* ─── Social ─── */}
             <View style={styles.socialRow}>
               <TouchableOpacity
-                style={[styles.socialBtn, !request && { opacity: 0.5 }]}
-                onPress={() => promptAsync()}
-                disabled={!request || loading}
+                style={[styles.socialBtn, loading && { opacity: 0.5 }]}
+                onPress={handleGooglePress}
+                disabled={loading}
                 activeOpacity={0.7}
               >
                 <Image

@@ -22,7 +22,23 @@
       "package": "com.apartmentbilltracker",
       "scheme": "aptbilltracker",
       "userInterfaceStyle": "automatic",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "com.googleusercontent.apps.280450131002-iv8nv3hnottf109ft2ruogaq4daqjpbh"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [{ "scheme": "fb1296319515642952" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "plugins": [
       [
