@@ -280,6 +280,10 @@ const ClientTabNavigator = () => {
     // Store function reference to be called from other components
     notificationRefreshRef.current = fetchUnreadCount;
     announcementRefreshRef.current = fetchAnnouncementCount;
+
+    // Poll every 30 seconds so changes made on web (mark-as-read etc.) sync to mobile
+    const pollInterval = setInterval(() => fetchAllBadges(true), 30000);
+    return () => clearInterval(pollInterval);
   }, [userId]);
 
   // Wrapper component to avoid inline function issue

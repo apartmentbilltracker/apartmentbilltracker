@@ -11,7 +11,11 @@ import {
   RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { presenceService, roomService } from "../../services/apiService";
+import {
+  presenceService,
+  roomService,
+  paymentService,
+} from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
 
@@ -26,11 +30,14 @@ const PresenceScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [marking, setMarking] = useState(false);
+  const [hasPendingPayment, setHasPendingPayment] = useState(false);
   const pendingUpdatesRef = useRef(new Set());
   const updateTimeoutRef = useRef(null);
   const isUpdatingRef = useRef(false);
   // Cached room_members row id — lets backend skip the lookup query entirely
   const memberRecordIdRef = useRef(null);
+  // Presence dates outside the current billing cycle — preserved so saves don't wipe previous cycle data
+  const outOfCycleDatesRef = useRef([]);
   // Fire-immediately + queue-one-pending: no debounce delay
   const inFlightRef = useRef(false);
   const pendingDatesRef = useRef(null); // latest desired state waiting for in-flight to finish
@@ -56,14 +63,15 @@ const PresenceScreen = () => {
     );
   }, [selectedRoom, userId, selectedRoom?.memberPayments?.length]);
 
-  // Individual user can mark presence only if they have NOT paid for this cycle
-  // and the room is NOT using fixed monthly water billing
+  // Individual user can mark presence only if they have NOT paid for this cycle,
+  // no payment is awaiting host verification, and the room is NOT using fixed monthly water billing
   const isFixedMonthlyWater =
     selectedRoom?.waterBillingMode === "fixed_monthly" ||
     selectedRoom?.water_billing_mode === "fixed_monthly";
   const canMarkPresence =
     hasActiveCycle &&
     !userPaidStatus &&
+    !hasPendingPayment &&
     !isFixedMonthlyWater &&
     selectedRoom?.cycleStatus !== "cycle_closed";
 
@@ -141,9 +149,8 @@ const PresenceScreen = () => {
 
     try {
       // Fetch full room data directly to get presence AND fresh payment status
-      const roomResponse = await roomService.getRoomById(
-        selectedRoom.id || selectedRoom._id,
-      );
+      const roomId = selectedRoom.id || selectedRoom._id;
+      const roomResponse = await roomService.getRoomById(roomId);
       const roomData = roomResponse.data || roomResponse;
       const room = roomData.room || roomData;
 
@@ -161,21 +168,58 @@ const PresenceScreen = () => {
         );
       }
 
+      // Check if user has a payment awaiting host verification
+      try {
+        const payRes = await paymentService.getPaymentHistory(roomId);
+        const payments = payRes?.payments || [];
+        const pending = payments.some(
+          (p) => p.status === "submitted" || p.status === "pending",
+        );
+        setHasPendingPayment(pending);
+      } catch (_) {
+        setHasPendingPayment(false);
+      }
+
       // Find current user's member record in the room
       const currentUserMember = room.members?.find(
         (m) => String(m.user?.id || m.user?._id || m.user) === String(userId),
       );
 
       if (currentUserMember && Array.isArray(currentUserMember.presence)) {
-        // Normalize presence dates to YYYY-MM-DD local format
-        const normalized = currentUserMember.presence
+        // Normalize all stored presence dates to YYYY-MM-DD local format
+        const allNormalized = currentUserMember.presence
           .map((d) => formatToYMD(d))
           .filter(Boolean);
-        setMarkedDates(normalized);
+
+        // Scope displayed dates to the current billing cycle range to prevent
+        // inheriting presence days from previous billing cycles
+        const cycleStart = room.billing?.start
+          ? formatToYMD(new Date(room.billing.start))
+          : null;
+        const cycleEnd = room.billing?.end
+          ? formatToYMD(new Date(room.billing.end))
+          : null;
+
+        let cycleDates;
+        if (cycleStart && cycleEnd) {
+          cycleDates = allNormalized.filter(
+            (d) => d >= cycleStart && d <= cycleEnd,
+          );
+          // Preserve dates outside the current cycle so saves don't wipe them
+          outOfCycleDatesRef.current = allNormalized.filter(
+            (d) => d < cycleStart || d > cycleEnd,
+          );
+        } else {
+          cycleDates = allNormalized;
+          outOfCycleDatesRef.current = [];
+        }
+
+        setMarkedDates(cycleDates);
         // Cache the room_members row id for fast presence saves
         memberRecordIdRef.current = currentUserMember.id || null;
       } else {
         setMarkedDates([]);
+        outOfCycleDatesRef.current = [];
         memberRecordIdRef.current = null;
       }
     } catch (error) {
@@ -191,6 +235,11 @@ const PresenceScreen = () => {
         Alert.alert(
           "Fixed Water Billing",
           "Your host has set a fixed monthly water bill. Presence tracking is not required for this room.",
+        );
+      } else if (hasPendingPayment) {
+        Alert.alert(
+          "Payment Awaiting Verification",
+          "You have a payment that is awaiting host verification. You cannot mark presence until your payment is approved or rejected.",
         );
       } else {
         Alert.alert(
@@ -245,8 +294,12 @@ const PresenceScreen = () => {
       inFlightRef.current = true;
       const roomId = selectedRoom.id || selectedRoom._id;
       try {
+        // Merge with out-of-cycle dates so previous cycle data is preserved in DB
+        const allDatesToSave = Array.from(
+          new Set([...dates, ...outOfCycleDatesRef.current]),
+        ).sort();
         await presenceService.markPresence(roomId, {
-          presenceDates: dates,
+          presenceDates: allDatesToSave,
           memberRecordId: memberRecordIdRef.current ?? undefined,
         });
       } catch (error) {
@@ -321,8 +374,11 @@ const PresenceScreen = () => {
       let updatedDates = [...new Set([...markedDates, ...datesToAdd])];
       updatedDates.sort();
 
+      const allDatesToSave = Array.from(
+        new Set([...updatedDates, ...outOfCycleDatesRef.current]),
+      ).sort();
       await presenceService.markPresence(selectedRoom.id || selectedRoom._id, {
-        presenceDates: updatedDates,
+        presenceDates: allDatesToSave,
       });
 
       setMarkedDates(updatedDates);
@@ -383,8 +439,11 @@ const PresenceScreen = () => {
       let updatedDates = [...new Set([...markedDates, ...datesToAdd])];
       updatedDates.sort();
 
+      const allDatesToSave = Array.from(
+        new Set([...updatedDates, ...outOfCycleDatesRef.current]),
+      ).sort();
       await presenceService.markPresence(selectedRoom.id || selectedRoom._id, {
-        presenceDates: updatedDates,
+        presenceDates: allDatesToSave,
       });
 
       setMarkedDates(updatedDates);
@@ -448,8 +507,11 @@ const PresenceScreen = () => {
       let updatedDates = [...new Set([...markedDates, ...datesToAdd])];
       updatedDates.sort();
 
+      const allDatesToSave = Array.from(
+        new Set([...updatedDates, ...outOfCycleDatesRef.current]),
+      ).sort();
       await presenceService.markPresence(selectedRoom.id || selectedRoom._id, {
-        presenceDates: updatedDates,
+        presenceDates: allDatesToSave,
       });
 
       setMarkedDates(updatedDates);
@@ -1049,6 +1111,18 @@ const PresenceScreen = () => {
             Your host has set a fixed monthly water bill for this room.
             Attendance tracking is not required — your water charge is already
             calculated.
+          </Text>
+        </View>
+      ) : selectedRoom && hasPendingPayment ? (
+        <View style={styles.emptyCard}>
+          <View style={[styles.emptyIconWrap, { backgroundColor: "#fff8e1" }]}>
+            <Ionicons name="hourglass-outline" size={36} color="#f59e0b" />
+          </View>
+          <Text style={styles.emptyTitle}>Awaiting Payment Verification</Text>
+          <Text style={styles.emptySub}>
+            Your payment has been submitted and is pending verification by your
+            host. Attendance marking will be available again once your payment
+            is verified.
           </Text>
         </View>
       ) : selectedRoom ? (

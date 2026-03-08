@@ -1609,6 +1609,28 @@ router.post("/:id/presence", isAuthenticated, async (req, res, next) => {
     // Bust cached member data so the next full room fetch is fresh
     cache.del(`room_members:${req.params.id}`);
 
+    // Keep the active billing cycle's water_bill_amount in sync with presence.
+    // This ensures the DB reflects the live total so closing the cycle persists
+    // the correct figure even without an explicit admin action.
+    try {
+      const activeCycle = await SupabaseService.getActiveBillingCycle(
+        req.params.id,
+      );
+      if (activeCycle) {
+        // Fetch all members fresh (presence just updated) and enrich
+        const allMembers = await SupabaseService.getRoomMembers(req.params.id);
+        await enrichBillingCycle(activeCycle, allMembers);
+        const newWater = parseFloat(activeCycle.water_bill_amount) || 0;
+        const newTotal = parseFloat(activeCycle.total_billed_amount) || 0;
+        await SupabaseService.update("billing_cycles", activeCycle.id, {
+          water_bill_amount: newWater,
+          total_billed_amount: newTotal,
+        });
+      }
+    } catch (_) {
+      // Non-fatal — presence was saved; DB sync failure shouldn't block the response
+    }
+
     // Lightweight response — client does optimistic updates locally
     res.status(200).json({
       success: true,

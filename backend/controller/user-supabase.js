@@ -638,6 +638,151 @@ router.post(
   }),
 );
 
+// ============ SERVER-SIDE FACEBOOK OAUTH ============
+// These two routes handle the browser-based Facebook OAuth flow for the mobile app.
+// The mobile app opens a WebBrowser session to /auth/facebook, which redirects the
+// user to Facebook, and Facebook then calls /auth/facebook/callback (an HTTPS URL
+// Facebook accepts). The backend completes the flow and deep-links back into the app.
+
+const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || "1296319515642952";
+const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || "";
+const BACKEND_URL =
+  process.env.BACKEND_URL || "https://apartmentbilltracker-server.onrender.com";
+const MOBILE_DEEP_LINK = "aptbilltracker://oauth";
+
+/**
+ * Initiate Facebook OAuth
+ * GET /api/v2/user/auth/facebook
+ * The mobile app opens this URL in a WebBrowser session.
+ */
+router.get("/auth/facebook", (req, res) => {
+  const redirectUri = encodeURIComponent(
+    `${BACKEND_URL}/api/v2/user/auth/facebook/callback`,
+  );
+  const scope = encodeURIComponent("email,public_profile");
+  const fbAuthUrl = `https://www.facebook.com/dialog/oauth?client_id=${FACEBOOK_APP_ID}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
+  res.redirect(fbAuthUrl);
+});
+
+/**
+ * Facebook OAuth callback
+ * GET /api/v2/user/auth/facebook/callback
+ * Facebook redirects here after the user approves. We exchange the code for a token,
+ * fetch user info, create/find user, then deep-link back into the mobile app.
+ */
+router.get(
+  "/auth/facebook/callback",
+  catchAsyncErrors(async (req, res) => {
+    const { code, error } = req.query;
+
+    if (error || !code) {
+      // User denied / something went wrong — deep-link back with error
+      return res.redirect(
+        `${MOBILE_DEEP_LINK}?success=false&error=${encodeURIComponent(error || "Facebook login cancelled")}`,
+      );
+    }
+
+    try {
+      const callbackUri = encodeURIComponent(
+        `${BACKEND_URL}/api/v2/user/auth/facebook/callback`,
+      );
+
+      // Exchange code for access token
+      const tokenRes = await fetch(
+        `https://graph.facebook.com/v18.0/oauth/access_token?client_id=${FACEBOOK_APP_ID}&redirect_uri=${callbackUri}&client_secret=${FACEBOOK_APP_SECRET}&code=${code}`,
+      );
+      const tokenData = await tokenRes.json();
+
+      if (!tokenData.access_token) {
+        return res.redirect(
+          `${MOBILE_DEEP_LINK}?success=false&error=${encodeURIComponent(tokenData.error?.message || "Failed to get access token")}`,
+        );
+      }
+
+      // Fetch user info
+      const profileRes = await fetch(
+        `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${tokenData.access_token}`,
+      );
+      const profile = await profileRes.json();
+
+      if (!profile.email) {
+        return res.redirect(
+          `${MOBILE_DEEP_LINK}?success=false&error=${encodeURIComponent("Facebook account has no email. Please use Google or email login.")}`,
+        );
+      }
+
+      // Find or create user
+      let user = await SupabaseService.findUserByEmail(profile.email, {
+        withAvatar: true,
+      });
+
+      const avatarUrl = profile.picture?.data?.url || null;
+
+      if (!user) {
+        const userData = {
+          name: profile.name || profile.email.split("@")[0],
+          email: profile.email,
+          password_hash: null,
+          username: profile.email.split("@")[0],
+          role: "client",
+          is_admin: false,
+        };
+        if (avatarUrl) {
+          userData.avatar = JSON.stringify({
+            public_id: "facebook_avatar",
+            url: avatarUrl,
+          });
+        }
+        try {
+          userData.auth_provider = "facebook";
+          user = await SupabaseService.createUser(userData);
+        } catch (colErr) {
+          if (colErr.message?.includes("auth_provider")) {
+            delete userData.auth_provider;
+            user = await SupabaseService.createUser(userData);
+          } else throw colErr;
+        }
+      } else {
+        if (user.is_active === false) {
+          return res.redirect(
+            `${MOBILE_DEEP_LINK}?success=false&error=${encodeURIComponent("Account deactivated. Contact support.")}`,
+          );
+        }
+        if (avatarUrl && !user.avatar) {
+          try {
+            await SupabaseService.updateUser(user.id, {
+              avatar: JSON.stringify({
+                public_id: "facebook_avatar",
+                url: avatarUrl,
+              }),
+            });
+          } catch (_) {}
+        }
+        if (!user.auth_provider) {
+          try {
+            await SupabaseService.updateUser(user.id, {
+              auth_provider: "facebook",
+            });
+          } catch (_) {}
+        }
+      }
+
+      const token = signUserToken(user);
+      const userJson = encodeURIComponent(JSON.stringify(userPayload(user)));
+
+      // Deep-link back into the mobile app with token + user data
+      res.redirect(
+        `${MOBILE_DEEP_LINK}?success=true&token=${token}&user=${userJson}`,
+      );
+    } catch (err) {
+      console.error("Facebook OAuth callback error:", err);
+      res.redirect(
+        `${MOBILE_DEEP_LINK}?success=false&error=${encodeURIComponent("Facebook login failed")}`,
+      );
+    }
+  }),
+);
+
 /**
  * Request password reset (sends 6-digit code)
  * POST /api/v2/user/forgot-password

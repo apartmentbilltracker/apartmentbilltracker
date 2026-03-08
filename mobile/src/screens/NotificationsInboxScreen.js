@@ -33,8 +33,9 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
     try {
       setLoading(true);
       const response = await apiService.get("/api/v2/notifications/all");
-      setNotifications(response.notifications || []);
-      setUnreadCount(response.unreadCount || 0);
+      const notifs = response.notifications || [];
+      setNotifications(notifs);
+      setUnreadCount(notifs.filter((n) => !n.isRead).length);
     } catch (error) {
       console.error("Error fetching notifications:", error);
       Alert.alert("Error", "Failed to load notifications");

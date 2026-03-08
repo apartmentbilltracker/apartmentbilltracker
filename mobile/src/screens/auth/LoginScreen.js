@@ -24,8 +24,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
-import * as Facebook from "expo-auth-session/providers/facebook";
 import * as Notifications from "expo-notifications";
 import { AuthContext } from "../../context/AuthContext";
 import { apiService, authService } from "../../services/apiService";
@@ -60,7 +60,7 @@ const LoginScreen = ({ navigation }) => {
   const {
     signIn,
     signInWithGoogle,
-    signInWithFacebook,
+    signInWithToken,
     state: authState,
     clearSessionExpired,
   } = useContext(AuthContext);
@@ -152,9 +152,16 @@ const LoginScreen = ({ navigation }) => {
   const GOOGLE_ANDROID_CLIENT_ID =
     "280450131002-iv8nv3hnottf109ft2ruogaq4daqjpbh.apps.googleusercontent.com";
 
+  // Explicit redirect URI using the reverse Android client ID scheme.
+  // Must match the intent filter scheme in app.json AND the authorized URI in Google Cloud Console.
+  const googleRedirectUri = makeRedirectUri({
+    native: `com.googleusercontent.apps.280450131002-iv8nv3hnottf109ft2ruogaq4daqjpbh:/oauth2redirect/google`,
+  });
+
   const [request, response, promptAsync] = Google.useAuthRequest({
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
     webClientId: GOOGLE_WEB_CLIENT_ID,
+    redirectUri: googleRedirectUri,
   });
 
   const handleGooglePress = () => {
@@ -169,10 +176,57 @@ const LoginScreen = ({ navigation }) => {
     promptAsync();
   };
 
-  // ── Facebook OAuth ──
-  const [fbRequest, fbResponse, fbPromptAsync] = Facebook.useAuthRequest(
-    FB_ENABLED ? { clientId: FACEBOOK_APP_ID } : { clientId: "disabled" },
-  );
+  // ── Facebook OAuth (server-side flow) ──
+  // Facebook rejects custom URI schemes in its console, so we use a server-side
+  // callback: the backend receives the code at an HTTPS URL, creates/finds the user,
+  // then deep-links back with the JWT token via aptbilltracker://oauth?token=...
+  const handleFacebookServerLogin = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const baseUrl = getAPIBaseURL();
+      const authUrl = `${baseUrl}/api/v2/user/auth/facebook`;
+      const result = await WebBrowser.openAuthSessionAsync(
+        authUrl,
+        "aptbilltracker://",
+      );
+
+      if (result.type === "success" && result.url) {
+        // Parse params from aptbilltracker://oauth?success=true&token=...&user=...
+        const urlObj = new URL(result.url);
+        const success = urlObj.searchParams.get("success") === "true";
+        const fbError = urlObj.searchParams.get("error");
+        const token = urlObj.searchParams.get("token");
+        const userJson = urlObj.searchParams.get("user");
+
+        if (!success || fbError) {
+          setError(decodeURIComponent(fbError || "Facebook login failed"));
+          return;
+        }
+
+        if (token && userJson) {
+          const user = JSON.parse(decodeURIComponent(userJson));
+          const loginResult = await signInWithToken(token, user, rememberMe);
+          if (!loginResult.success) {
+            setError(loginResult.error || "Facebook login failed");
+          } else {
+            await registerPushToken();
+          }
+        } else {
+          setError("Facebook login failed: missing token");
+        }
+      } else if (result.type === "cancel" || result.type === "dismiss") {
+        // User closed the browser — silent dismiss
+      } else {
+        setError("Facebook login was cancelled");
+      }
+    } catch (err) {
+      console.error("Facebook server login error:", err);
+      setError("Facebook login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Handle Google response
   // Native Android flow: response.authentication.accessToken
@@ -184,18 +238,6 @@ const LoginScreen = ({ navigation }) => {
       if (accessToken) handleGoogleLogin(accessToken);
     }
   }, [response]);
-
-  // Handle Facebook response
-  // Browser flow: token in params.access_token
-  // Native flow fallback: authentication.accessToken
-  React.useEffect(() => {
-    if (fbResponse?.type === "success") {
-      const accessToken =
-        fbResponse.params?.access_token ||
-        fbResponse.authentication?.accessToken;
-      if (accessToken) handleFacebookLogin(accessToken);
-    }
-  }, [fbResponse]);
 
   const handleGoogleLogin = async (accessToken) => {
     try {
@@ -226,42 +268,6 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
-  const handleFacebookLogin = async (accessToken) => {
-    try {
-      setLoading(true);
-      setError("");
-      // Fetch user info from Facebook Graph API
-      const userResponse = await fetch(
-        `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${accessToken}`,
-      );
-      const userData = await userResponse.json();
-
-      if (!userData.email) {
-        setError(
-          "Facebook account does not have an email. Please use Google or email/password login.",
-        );
-        return;
-      }
-
-      const result = await signInWithFacebook({
-        email: userData.email,
-        name: userData.name,
-        avatar: userData.picture?.data?.url,
-        accessToken,
-      });
-      if (!result.success) {
-        setError(result.error || "Facebook login failed");
-      } else {
-        await registerPushToken();
-      }
-    } catch (err) {
-      console.error("Facebook login error:", err);
-      setError("Facebook login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleFacebookPress = () => {
     if (IS_EXPO_GO) {
       Alert.alert(
@@ -279,7 +285,7 @@ const LoginScreen = ({ navigation }) => {
       );
       return;
     }
-    fbPromptAsync();
+    handleFacebookServerLogin();
   };
 
   const handleLogin = async () => {

@@ -335,6 +335,9 @@ router.get("/room/:roomId/active", isAuthenticated, async (req, res, next) => {
       });
     }
 
+    // Enrich with live presence-based water data (same as the /room/:roomId endpoint)
+    await enrichBillingCycle(activeCycle, null, room);
+
     res.status(200).json({
       success: true,
       billingCycle: normalizeBillingCycle(activeCycle),
@@ -874,6 +877,28 @@ router.post("/:cycleId/close", isAuthenticated, async (req, res, next) => {
   try {
     const { cycleId } = req.params;
 
+    // Read the cycle first so we can snapshot the current water amount
+    // (presence data is cleared immediately after this call in the client,
+    //  so we must persist the live-computed value now while presence is still intact).
+    const existingCycle = await SupabaseService.selectByColumn(
+      "billing_cycles",
+      "id",
+      cycleId,
+    );
+
+    // Compute the current water bill from live presence data before presence is wiped
+    let snapshotWater = parseFloat(existingCycle?.water_bill_amount) || 0;
+    let snapshotTotal = parseFloat(existingCycle?.total_billed_amount) || 0;
+    if (existingCycle) {
+      await enrichBillingCycle(existingCycle);
+      const computedWater = parseFloat(existingCycle.water_bill_amount) || 0;
+      if (computedWater > 0) {
+        snapshotWater = computedWater;
+        snapshotTotal =
+          parseFloat(existingCycle.total_billed_amount) || snapshotTotal;
+      }
+    }
+
     const updatedCycle = await SupabaseService.update(
       "billing_cycles",
       cycleId,
@@ -881,6 +906,10 @@ router.post("/:cycleId/close", isAuthenticated, async (req, res, next) => {
         status: "completed",
         closed_at: new Date(),
         closed_by: req.user.id,
+        // Persist the live-computed water amount so the completed cycle
+        // shows correct values even after presence is cleared for the next cycle.
+        water_bill_amount: snapshotWater,
+        total_billed_amount: snapshotTotal,
       },
     );
 

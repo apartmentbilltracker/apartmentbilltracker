@@ -5,7 +5,11 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { CommonActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { roomService, memberService } from "../services/apiService";
+import {
+  roomService,
+  memberService,
+  paymentService,
+} from "../services/apiService";
 
 // Reuse existing admin screens for host
 import AdminDashboardScreen from "../screens/admin/AdminDashboardScreen";
@@ -194,6 +198,7 @@ const ProfileStack = () => {
 
 const HostTabNavigator = () => {
   const [pendingMemberCount, setPendingMemberCount] = React.useState(0);
+  const [pendingVerifCount, setPendingVerifCount] = React.useState(0);
   const { colors } = useTheme();
   const tabInsets = useSafeAreaInsets();
   const lastPendingFetch = React.useRef(0);
@@ -223,9 +228,36 @@ const HostTabNavigator = () => {
     }
   };
 
+  const fetchPendingVerifCount = async () => {
+    try {
+      const response = await roomService.getRooms();
+      const rooms = response.rooms || response.data?.rooms || [];
+      const results = await Promise.allSettled(
+        rooms.map((room) =>
+          paymentService.getPaymentHistory(room.id || room._id),
+        ),
+      );
+      let total = 0;
+      results.forEach((r) => {
+        if (r.status === "fulfilled") {
+          const payments = r.value?.payments || r.value?.data || [];
+          total += payments.filter(
+            (p) => p.status === "pending" || p.status === "submitted",
+          ).length;
+        }
+      });
+      setPendingVerifCount(total);
+    } catch (_) {}
+  };
+
   // Fire and forget — don't block navigator mount
+  // Poll every 30 s so the badge auto-clears after the host verifies payments
+  // without requiring a tab press.
   React.useEffect(() => {
     fetchPendingMemberCount();
+    fetchPendingVerifCount();
+    const interval = setInterval(fetchPendingVerifCount, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -340,9 +372,13 @@ const HostTabNavigator = () => {
         <Tab.Screen
           name="BillingStack"
           component={BillingStack}
-          options={{ title: "Billing" }}
+          options={{
+            title: "Billing",
+            tabBarBadge: pendingVerifCount > 0 ? pendingVerifCount : null,
+          }}
           listeners={({ navigation }) => ({
-            tabPress: () =>
+            tabPress: () => {
+              fetchPendingVerifCount();
               navigation.dispatch(
                 CommonActions.reset({
                   index: 0,
@@ -353,7 +389,8 @@ const HostTabNavigator = () => {
                     },
                   ],
                 }),
-              ),
+              );
+            },
           })}
         />
         <Tab.Screen
