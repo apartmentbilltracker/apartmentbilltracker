@@ -31,6 +31,76 @@ async function enrichBillingCycle(cycle, members, roomData) {
     members = await SupabaseService.getRoomMembers(cycle.room_id);
   }
 
+  // ── COMPLETED / CLOSED CYCLES ──
+  // Skip all presence computation entirely. The room's *current* water billing mode
+  // must not retroactively change historical per-member amounts.
+  // Simply split the stored totals evenly among payers.
+  if (cycle.status === "completed" || cycle.status === "closed") {
+    const rent = parseFloat(cycle.rent || 0);
+    const electricity = parseFloat(cycle.electricity || 0);
+    const internet = parseFloat(cycle.internet || 0);
+    const water = parseFloat(cycle.water_bill_amount || 0);
+
+    const payingMembers = members.filter((m) => m.is_payer);
+    const payerCount = payingMembers.length;
+
+    const rentShare = payerCount > 0 ? r2(rent / payerCount) : 0;
+    const elecShare = payerCount > 0 ? r2(electricity / payerCount) : 0;
+    const internetShare = payerCount > 0 ? r2(internet / payerCount) : 0;
+    const waterShare = payerCount > 0 ? r2(water / payerCount) : 0;
+
+    let rentAssigned = 0,
+      elecAssigned = 0,
+      internetAssigned = 0,
+      waterAssigned = 0;
+    let pidx = 0;
+
+    const memberCharges = members.map((member) => {
+      let memberRent = 0,
+        memberElec = 0,
+        memberInternet = 0,
+        memberWater = 0;
+
+      if (member.is_payer) {
+        pidx++;
+        if (pidx === payerCount) {
+          // Last payer absorbs any rounding remainder
+          memberRent = r2(rent - rentAssigned);
+          memberElec = r2(electricity - elecAssigned);
+          memberInternet = r2(internet - internetAssigned);
+          memberWater = r2(water - waterAssigned);
+        } else {
+          memberRent = rentShare;
+          memberElec = elecShare;
+          memberInternet = internetShare;
+          memberWater = waterShare;
+        }
+        rentAssigned = r2(rentAssigned + memberRent);
+        elecAssigned = r2(elecAssigned + memberElec);
+        internetAssigned = r2(internetAssigned + memberInternet);
+        waterAssigned = r2(waterAssigned + memberWater);
+      }
+
+      return {
+        user_id: member.user_id,
+        name: member.name || "Unknown",
+        is_payer: member.is_payer,
+        presence_days: 0,
+        rent_share: memberRent,
+        electricity_share: memberElec,
+        water_bill_share: memberWater,
+        water_own: memberWater,
+        water_shared_nonpayor: 0,
+        internet_share: memberInternet,
+        total_due: r2(memberRent + memberElec + memberWater + memberInternet),
+      };
+    });
+
+    cycle.member_charges = memberCharges;
+    cycle.total_billed_amount = r2(rent + electricity + water + internet);
+    return cycle;
+  }
+
   // Use provided roomData to avoid a DB round-trip when caller already has it
   let waterBillingMode = "presence";
   let waterFixedAmount = 0;
@@ -45,6 +115,11 @@ async function enrichBillingCycle(cycle, members, roomData) {
 
   const cycleStart = new Date(cycle.start_date);
   const cycleEnd = new Date(cycle.end_date);
+  // For active cycles that have run past their end date, count any presence
+  // dates logged after end_date (members still in the cycle) up to today.
+  const isActiveCycle = cycle.status === "active";
+  const effectiveEnd =
+    isActiveCycle && new Date() > cycleEnd ? new Date() : cycleEnd;
 
   const payingMembers = members.filter((m) => m.is_payer);
   const payerCount = payingMembers.length;
@@ -84,7 +159,7 @@ async function enrichBillingCycle(cycle, members, roomData) {
       const presenceArr = Array.isArray(member.presence) ? member.presence : [];
       const presenceDays = presenceArr.filter((day) => {
         const d = new Date(day);
-        return d >= cycleStart && d <= cycleEnd;
+        return d >= cycleStart && d <= effectiveEnd;
       }).length;
 
       let memberRentShare = 0;
@@ -169,7 +244,7 @@ async function enrichBillingCycle(cycle, members, roomData) {
     const presenceArr = Array.isArray(member.presence) ? member.presence : [];
     const presenceDays = presenceArr.filter((day) => {
       const d = new Date(day);
-      return d >= cycleStart && d <= cycleEnd;
+      return d >= cycleStart && d <= effectiveEnd;
     }).length;
 
     const ownWater = r2(presenceDays * WATER_RATE_PER_DAY);
@@ -264,15 +339,11 @@ async function enrichBillingCycle(cycle, members, roomData) {
 
   cycle.member_charges = memberCharges;
 
-  // For presence-based mode, always use live presence total as water_bill_amount.
-  // The stored value becomes stale once members mark more presence after the cycle was saved.
-  const allMembersWater = rawTotalWater;
-  cycle.water_bill_amount = allMembersWater;
+  // Active cycles use live presence total (members are still logging days).
+  cycle.water_bill_amount = rawTotalWater;
 
   // Recalculate total_billed_amount to include computed water
-  cycle.total_billed_amount = r2(
-    rent + electricity + allMembersWater + internet,
-  );
+  cycle.total_billed_amount = r2(rent + electricity + rawTotalWater + internet);
 
   // ── Final pass: correct last payer's total_due so sum matches total_billed_amount ──
   const payerCharges = memberCharges.filter((c) => c.is_payer);

@@ -476,6 +476,27 @@ export const AuthProvider = ({ children }) => {
       }
     }, []),
 
+    // signInWithToken: used by server-side OAuth flows (Facebook callback deep link)
+    // The token + user have already been verified by the backend.
+    signInWithToken: useCallback(async (token, user, rememberMe = false) => {
+      try {
+        if (!token) throw new Error("No token received");
+        await SecureStore.setItemAsync("authToken", token);
+        api.setTokenCache(token);
+        await cacheUserData(user);
+        await saveRememberMe(rememberMe);
+        if (!rememberMe) await saveLastActivity();
+        dispatch({ type: "SIGN_IN", payload: { token, user } });
+        await savedAccountsService.saveAccount(user);
+        await notificationService.scheduleDailyPresenceReminder(20, 0);
+        return { success: true };
+      } catch (error) {
+        const message = error.message || "Login failed";
+        dispatch({ type: "SET_ERROR", payload: message });
+        return { success: false, error: message };
+      }
+    }, []),
+
     signInWithFacebook: useCallback(
       async (facebookData, rememberMe = false) => {
         try {

@@ -18,6 +18,7 @@ import {
   billingService,
   apiService,
   presenceService,
+  paymentService,
 } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { screenCache } from "../../hooks/useScreenCache";
@@ -58,6 +59,10 @@ const AdminBillingScreen = ({ navigation }) => {
   const [savingWaterMode, setSavingWaterMode] = useState(false);
   // true = host manually closed the cycle; false = auto-completed when all payors paid
   const [cycleClosedManually, setCycleClosedManually] = useState(false);
+  const [pendingVerifCount, setPendingVerifCount] = useState(0);
+  // Prevents checkAndResetIfCycleClosed from repopulating old values after
+  // the host explicitly starts a new cycle from the completed-cycle screen.
+  const [newCycleMode, setNewCycleMode] = useState(false);
 
   // Fetch rooms on mount and when screen regains focus
   useEffect(() => {
@@ -77,6 +82,24 @@ const AdminBillingScreen = ({ navigation }) => {
     }
   }, [isFocused]);
 
+  // Refresh pending verif count whenever the screen regains focus
+  useEffect(() => {
+    if (isFocused && selectedRoom) {
+      const roomId = selectedRoom.id || selectedRoom._id;
+      paymentService
+        .getPaymentHistory(roomId)
+        .then((res) => {
+          const payments = res?.payments || res?.data || [];
+          setPendingVerifCount(
+            payments.filter(
+              (p) => p.status === "pending" || p.status === "submitted",
+            ).length,
+          );
+        })
+        .catch(() => {});
+    }
+  }, [isFocused, selectedRoom]);
+
   // Load billing state whenever the selected room changes
   useEffect(() => {
     if (selectedRoom) {
@@ -92,27 +115,30 @@ const AdminBillingScreen = ({ navigation }) => {
       setCycleCompleted(false);
       setCycleClosedManually(false);
       setPriorUnpaidData(null);
+      setNewCycleMode(false); // reset on room switch
 
-      // Preload from cache for instant display
+      // Preload from cache for instant display (skip if host just started a new cycle)
       const roomId = selectedRoom.id || selectedRoom._id;
-      screenCache.read("admin_billing_cycle_" + roomId).then((cached) => {
-        if (cached) {
-          if (cached.rent !== undefined) setRent(cached.rent);
-          if (cached.electricity !== undefined)
-            setElectricity(cached.electricity);
-          if (cached.internet !== undefined) setInternet(cached.internet);
-          if (cached.startDate !== undefined) setStartDate(cached.startDate);
-          if (cached.endDate !== undefined) setEndDate(cached.endDate);
-          if (cached.prevReading !== undefined)
-            setPrevReading(cached.prevReading);
-          if (cached.currReading !== undefined)
-            setCurrReading(cached.currReading);
-          if (cached.cycleCompleted !== undefined)
-            setCycleCompleted(cached.cycleCompleted);
-          if (cached.members !== undefined) setMembers(cached.members);
-        }
-      });
-      checkAndResetIfCycleClosed();
+      if (!newCycleMode) {
+        screenCache.read("admin_billing_cycle_" + roomId).then((cached) => {
+          if (cached) {
+            if (cached.rent !== undefined) setRent(cached.rent);
+            if (cached.electricity !== undefined)
+              setElectricity(cached.electricity);
+            if (cached.internet !== undefined) setInternet(cached.internet);
+            if (cached.startDate !== undefined) setStartDate(cached.startDate);
+            if (cached.endDate !== undefined) setEndDate(cached.endDate);
+            if (cached.prevReading !== undefined)
+              setPrevReading(cached.prevReading);
+            if (cached.currReading !== undefined)
+              setCurrReading(cached.currReading);
+            if (cached.cycleCompleted !== undefined)
+              setCycleCompleted(cached.cycleCompleted);
+            if (cached.members !== undefined) setMembers(cached.members);
+          }
+        });
+        checkAndResetIfCycleClosed();
+      }
       // Only hit the overdue endpoint when the room actually has outstanding
       // balances — avoids a backend round-trip on every room switch.
       if (
@@ -551,6 +577,7 @@ const AdminBillingScreen = ({ navigation }) => {
           "Success",
           "Billing cycle created with current member presence. Click Archive & Close Cycle when ready to finalize.",
         );
+        setNewCycleMode(false); // new cycle exists on server now — normal mode
       } else {
         // EXISTING CYCLE: Update the active cycle
         const updateResponse = await apiService.put(
@@ -736,9 +763,16 @@ const AdminBillingScreen = ({ navigation }) => {
         setEndDate("");
         setRent("");
         setElectricity("");
+        setInternet("");
         setPrevReading("");
         setCurrReading("");
+        setCycleCompleted(false);
         setEditMode(false);
+
+        // Clear stale cache so the form doesn't repopulate with old values
+        screenCache.clear(
+          "admin_billing_cycle_" + (selectedRoom.id || selectedRoom._id),
+        );
 
         Alert.alert(
           "Success",
@@ -1207,6 +1241,12 @@ const AdminBillingScreen = ({ navigation }) => {
                     } catch (e) {
                       // Could not clear presence, not critical
                     }
+                    // Clear stale cache so old values don't repopulate the form
+                    screenCache.clear(
+                      "admin_billing_cycle_" +
+                        (selectedRoom.id || selectedRoom._id),
+                    );
+                    setNewCycleMode(true); // suppress checkAndResetIfCycleClosed
                     setCycleCompleted(false);
                     setStartDate("");
                     setEndDate("");
@@ -1222,6 +1262,7 @@ const AdminBillingScreen = ({ navigation }) => {
                     setSelectedRoom((prev) => ({
                       ...prev,
                       currentCycleId: null,
+                      billing: null,
                     }));
                     setEditMode(true);
                   }}
@@ -1338,6 +1379,33 @@ const AdminBillingScreen = ({ navigation }) => {
                       size={20}
                       color={colors.success}
                     />
+                    {pendingVerifCount > 0 && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: -4,
+                          right: -4,
+                          minWidth: 16,
+                          height: 16,
+                          borderRadius: 8,
+                          backgroundColor: "#e74c3c",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          paddingHorizontal: 3,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontSize: 9,
+                            fontWeight: "700",
+                            lineHeight: 12,
+                          }}
+                        >
+                          {pendingVerifCount > 99 ? "99+" : pendingVerifCount}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.toolCardText}>Verify{"\n"}Payments</Text>
                 </TouchableOpacity>

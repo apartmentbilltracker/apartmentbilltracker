@@ -299,13 +299,25 @@ const BillsScreen = ({ navigation }) => {
       selectedRoom?.water_billing_mode === "fixed_monthly"
     ) {
       if (!activeCycle) return 0;
-      return (
+      const fixedAmt =
         parseFloat(
           selectedRoom?.waterFixedAmount ||
             selectedRoom?.water_fixed_amount ||
             0,
-        ) || 0
-      );
+        ) || 0;
+      const isPerPerson =
+        (selectedRoom?.waterFixedType || selectedRoom?.water_fixed_type) ===
+        "per_person";
+      if (isPerPerson) {
+        const payorCount = Math.max(
+          1,
+          (selectedRoom.members || []).filter(
+            (m) => m.isPayer !== false && m.is_payer !== false,
+          ).length,
+        );
+        return r2(fixedAmt * payorCount);
+      }
+      return fixedAmt;
     }
     // Presence-based: total members' presence days within billing period × ₱5
     if (!selectedRoom?.members || selectedRoom.members.length === 0) return 0;
@@ -348,6 +360,11 @@ const BillsScreen = ({ navigation }) => {
         parseFloat(
           selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || 0,
         ) || 0;
+      // per_person: each member pays the full per-person rate
+      const isPerPerson =
+        (selectedRoom.waterFixedType || selectedRoom.water_fixed_type) ===
+        "per_person";
+      if (isPerPerson) return fixedTotal;
       const memberCount = Math.max(1, selectedRoom.members.length);
       return r2(fixedTotal / memberCount);
     }
@@ -401,6 +418,11 @@ const BillsScreen = ({ navigation }) => {
         parseFloat(
           selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || 0,
         ) || 0;
+      // per_person: payer pays their own full rate (no division needed)
+      const isPerPerson =
+        (selectedRoom.waterFixedType || selectedRoom.water_fixed_type) ===
+        "per_person";
+      if (isPerPerson) return fixedTotal;
       return r2(fixedTotal / payorCount);
     }
 

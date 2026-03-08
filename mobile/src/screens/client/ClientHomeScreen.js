@@ -36,6 +36,7 @@ import {
   apiService,
   chatService,
   announcementService,
+  paymentService,
 } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
@@ -80,6 +81,7 @@ const ClientHomeScreen = ({ navigation }) => {
     unpaidCycles: [],
   });
   const [announcementBanner, setAnnouncementBanner] = useState(null);
+  const [hasPendingPayment, setHasPendingPayment] = useState(false);
   const [statusChangeNotifications, setStatusChangeNotifications] = useState(
     [],
   );
@@ -214,18 +216,30 @@ const ClientHomeScreen = ({ navigation }) => {
 
   // Calculate current user's water share from presence data
   const WATER_BILL_PER_DAY = 5;
-  const calcWaterFromPresence = (members, payorCount) => {
+  const calcWaterFromPresence = (members, payorCount, cycleStart, cycleEnd) => {
     if (!members?.length) return 0;
     const myMember = members.find(
       (m) => String(m.user?.id || m.user?._id || m.user) === String(userId),
     );
     if (!myMember?.isPayer) return 0;
 
-    const myWater = (myMember.presence?.length || 0) * WATER_BILL_PER_DAY;
+    // Filter presence to only dates within the current billing cycle
+    const sd = cycleStart ? new Date(cycleStart) : null;
+    const ed = cycleEnd ? new Date(cycleEnd) : null;
+    const filterPresence = (presence) => {
+      if (!sd || !ed || !Array.isArray(presence)) return presence || [];
+      return presence.filter((d) => {
+        const dt = new Date(d);
+        return dt >= sd && dt <= ed;
+      });
+    };
+
+    const myWater =
+      filterPresence(myMember.presence).length * WATER_BILL_PER_DAY;
     let nonPayorWater = 0;
     members.forEach((m) => {
       if (!m.isPayer) {
-        nonPayorWater += (m.presence?.length || 0) * WATER_BILL_PER_DAY;
+        nonPayorWater += filterPresence(m.presence).length * WATER_BILL_PER_DAY;
       }
     });
     return r2(myWater + (payorCount > 0 ? nonPayorWater / payorCount : 0));
@@ -307,15 +321,25 @@ const ClientHomeScreen = ({ navigation }) => {
     const isFixedWater =
       userJoinedRoom?.waterBillingMode === "fixed_monthly" ||
       userJoinedRoom?.water_billing_mode === "fixed_monthly";
+    const fixedWaterAmt =
+      parseFloat(
+        userJoinedRoom?.waterFixedAmount ||
+          userJoinedRoom?.water_fixed_amount ||
+          0,
+      ) || 0;
+    const isPerPersonWater =
+      (userJoinedRoom?.waterFixedType || userJoinedRoom?.water_fixed_type) ===
+      "per_person";
     const water = isFixedWater
-      ? r2(
-          (parseFloat(
-            userJoinedRoom?.waterFixedAmount ||
-              userJoinedRoom?.water_fixed_amount ||
-              0,
-          ) || 0) / payorCount,
-        )
-      : calcWaterFromPresence(members, payorCount);
+      ? isPerPersonWater
+        ? fixedWaterAmt
+        : r2(fixedWaterAmt / payorCount)
+      : calcWaterFromPresence(
+          members,
+          payorCount,
+          activeCycle?.start_date || activeCycle?.startDate,
+          activeCycle?.end_date || activeCycle?.endDate,
+        );
 
     const total = r2(rent + electricity + internet + water);
     const perPayor = total;
@@ -561,6 +585,20 @@ const ClientHomeScreen = ({ navigation }) => {
         roomId ? fetchChatBadge(roomId) : Promise.resolve(),
         roomId ? fetchAnnouncementBanner(roomId) : Promise.resolve(),
         roomId ? fetchOutstandingBalance(roomId) : Promise.resolve(),
+        roomId
+          ? paymentService
+              .getPaymentHistory(roomId)
+              .then((res) => {
+                const payments =
+                  res?.payments || res?.transactions || res?.data || [];
+                setHasPendingPayment(
+                  payments.some(
+                    (p) => p.status === "pending" || p.status === "submitted",
+                  ),
+                );
+              })
+              .catch(() => {})
+          : Promise.resolve(),
       ]).catch(() => {});
     } catch (error) {
       console.error("Error fetching rooms:", error);
@@ -1669,6 +1707,30 @@ const ClientHomeScreen = ({ navigation }) => {
                           formatter={fmtShort}
                           style={styles.billingCardAmount}
                         />
+                        {hasPendingPayment && !getPaymentStatus()?.allPaid ? (
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              color: "#f59e0b",
+                              fontWeight: "600",
+                              marginTop: 2,
+                            }}
+                          >
+                            ⏳ Awaiting Payment Verification
+                          </Text>
+                        ) : !hasPendingPayment &&
+                          getPaymentStatus()?.allPaid ? (
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              color: "#16a34a",
+                              fontWeight: "600",
+                              marginTop: 2,
+                            }}
+                          >
+                            ✓ Payment Verified
+                          </Text>
+                        ) : null}
                       </View>
                       <View style={styles.billingBadge}>
                         <Text style={styles.billingBadgeText}>
