@@ -378,8 +378,7 @@ export default function PresencePage() {
                   const isMarked = markedDays.has(day);
                   // When payment is pending, block future dates (only today and past allowed)
                   const isFuture = dayDate > today;
-                  const clickable =
-                    canMarkPresence && !(hasPendingPayment && isFuture);
+                  const clickable = canMarkPresence && !isFuture;
 
                   return (
                     <button

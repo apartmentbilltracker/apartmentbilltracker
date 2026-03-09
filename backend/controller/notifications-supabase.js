@@ -198,39 +198,8 @@ router.patch(
 );
 
 // ──────────────────────────────────────────────
-// DELETE /:notificationId — delete single
-// ──────────────────────────────────────────────
-router.delete(
-  "/:notificationId",
-  isAuthenticated,
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      const { notificationId } = req.params;
-
-      const { error } = await supabase
-        .from("notifications")
-        .delete()
-        .eq("id", notificationId)
-        .eq("recipient_id", req.user.id);
-
-      if (error) throw error;
-
-      res.status(200).json({
-        success: true,
-        message: "Notification deleted",
-      });
-    } catch (error) {
-      console.log("Delete notification error:", error.message);
-      res.status(200).json({
-        success: true,
-        message: "Notification deleted",
-      });
-    }
-  }),
-);
-
-// ──────────────────────────────────────────────
 // DELETE /clear-all — delete all for user
+// Static routes MUST come before /:notificationId wildcard
 // ──────────────────────────────────────────────
 router.delete(
   "/clear-all",
@@ -269,6 +238,60 @@ router.delete(
 );
 
 // ──────────────────────────────────────────────
+// DELETE /register-token — clear push token on logout so this device
+// stops receiving pushes for the signed-out account
+// Static routes MUST come before /:notificationId wildcard
+// ──────────────────────────────────────────────
+router.delete(
+  "/register-token",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({ expo_push_token: null })
+        .eq("id", req.user.id);
+      if (error) throw new Error(error.message);
+      res.status(200).json({ success: true, message: "Push token cleared" });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }),
+);
+
+// ──────────────────────────────────────────────
+// DELETE /:notificationId — delete single
+// ──────────────────────────────────────────────
+router.delete(
+  "/:notificationId",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { notificationId } = req.params;
+
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("id", notificationId)
+        .eq("recipient_id", req.user.id);
+
+      if (error) throw error;
+
+      res.status(200).json({
+        success: true,
+        message: "Notification deleted",
+      });
+    } catch (error) {
+      console.log("Delete notification error:", error.message);
+      res.status(200).json({
+        success: true,
+        message: "Notification deleted",
+      });
+    }
+  }),
+);
+
+// ──────────────────────────────────────────────
 // POST /register-token — save Expo push token for this user
 // ──────────────────────────────────────────────
 router.post(
@@ -295,26 +318,6 @@ router.post(
   }),
 );
 
-// ──────────────────────────────────────────────
-// DELETE /register-token — clear push token on logout so this device
-// stops receiving pushes for the signed-out account
-// ──────────────────────────────────────────────
-router.delete(
-  "/register-token",
-  isAuthenticated,
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      const { error } = await supabase
-        .from("users")
-        .update({ expo_push_token: null })
-        .eq("id", req.user.id);
-      if (error) throw new Error(error.message);
-      res.status(200).json({ success: true, message: "Push token cleared" });
-    } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  }),
-);
 // ──────────────────────────────────────────────
 router.post(
   "/log-presence",

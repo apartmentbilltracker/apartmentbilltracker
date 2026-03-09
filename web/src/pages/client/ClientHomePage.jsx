@@ -123,13 +123,11 @@ function MobilePayModal({ onClose }) {
           <div className="flex-1 h-px bg-gray-100 dark:bg-white/8" />
         </div>
 
-        {/* Download buttons */}
+        {/* Store buttons — disabled until published on Play Store / App Store */}
         <div className="grid grid-cols-2 gap-3">
-          <a
-            href="https://play.google.com/store"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-900 dark:bg-white/10 hover:bg-gray-800 dark:hover:bg-white/15 transition-colors"
+          <div
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-700/40 dark:bg-white/5 opacity-50 cursor-not-allowed select-none"
+            title="Coming soon"
           >
             <svg
               viewBox="0 0 24 24"
@@ -143,18 +141,16 @@ function MobilePayModal({ onClose }) {
             </svg>
             <div>
               <p className="text-[9px] text-gray-400 dark:text-white/40 leading-none">
-                GET IT ON
+                COMING SOON
               </p>
-              <p className="text-xs font-semibold text-white leading-tight">
+              <p className="text-xs font-semibold text-white/60 leading-tight">
                 Google Play
               </p>
             </div>
-          </a>
-          <a
-            href="https://apps.apple.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-900 dark:bg-white/10 hover:bg-gray-800 dark:hover:bg-white/15 transition-colors"
+          </div>
+          <div
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-700/40 dark:bg-white/5 opacity-50 cursor-not-allowed select-none"
+            title="Coming soon"
           >
             <svg
               viewBox="0 0 24 24"
@@ -168,13 +164,13 @@ function MobilePayModal({ onClose }) {
             </svg>
             <div>
               <p className="text-[9px] text-gray-400 dark:text-white/40 leading-none">
-                DOWNLOAD ON THE
+                COMING SOON
               </p>
-              <p className="text-xs font-semibold text-white leading-tight">
+              <p className="text-xs font-semibold text-white/60 leading-tight">
                 App Store
               </p>
             </div>
-          </a>
+          </div>
         </div>
 
         {/* GitHub / direct APK download — synced with superadmin version control */}

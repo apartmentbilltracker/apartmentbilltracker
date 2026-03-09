@@ -259,6 +259,23 @@ export default function ProfilePage() {
             <p className="text-sm text-amber-600 dark:text-amber-300">
               Your request is pending review by an admin.
             </p>
+          ) : hostStatus === "rejected" ? (
+            <>
+              <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                Your host request was declined by the admin.
+              </p>
+              <p className="text-sm text-gray-500 dark:text-white/40">
+                You can submit a new request at any time.
+              </p>
+              <button
+                onClick={requestHost}
+                disabled={requestingHost}
+                className="btn-secondary flex items-center gap-2"
+              >
+                {requestingHost ? <Spinner size="sm" /> : <Star size={14} />}
+                Request Again
+              </button>
+            </>
           ) : (
             <>
               <p className="text-sm text-gray-500 dark:text-white/40">

@@ -3,6 +3,8 @@ const ErrorHandler = require("./middleware/error");
 const app = express();
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const compression = require("compression");
 const cloudinary = require("cloudinary").v2;
 const fileUpload = require("express-fileupload");
@@ -37,6 +39,23 @@ const allowedOrigins = [
   "http://10.18.100.4:8081",
 ];
 
+// Security headers (helmet)
+app.use(
+  helmet({ crossOriginEmbedderPolicy: false, contentSecurityPolicy: false }),
+);
+
+// Rate limiter for authentication endpoints (20 req / 15 min per IP)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many requests, please try again later.",
+  },
+});
+
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -47,8 +66,12 @@ app.use(
         callback(null, true);
       } else {
         // For development, log but allow; for production, you might want stricter control
-        console.log("CORS request from non-whitelisted origin:", origin);
-        callback(null, true); // Still allow - change to false for strict CORS enforcement
+        if (process.env.NODE_ENV === "PRODUCTION") {
+          callback(new Error("CORS policy violation"), false);
+        } else {
+          console.log("CORS request from non-whitelisted origin:", origin);
+          callback(null, true);
+        }
       }
     },
     credentials: true,
@@ -73,7 +96,7 @@ app.use(
     useTempFiles: true,
     tempFileDir: path.join(__dirname, "temp"),
     createParentPath: true,
-    limits: { fileSize: 50 * 1024 * 1024, files: 50 }, // 50MB max
+    limits: { fileSize: 10 * 1024 * 1024, files: 5 }, // 10MB / 5 files max
     abortOnLimit: true,
     preserveExtension: true,
     safeFileNames: true,
@@ -85,8 +108,8 @@ app.use(
 
 app.use(cookieParser());
 
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Load environment variables
 if (process.env.NODE_ENV !== "PRODUCTION") {
@@ -171,6 +194,17 @@ app.get("/api/app-version", async (req, res) => {
 app.get("/", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
+
+// Apply auth rate limiter to sensitive user endpoints
+app.use("/api/v2/user/login-user", authLimiter);
+app.use("/api/v2/user/create-user", authLimiter);
+app.use("/api/v2/user/verify-activation-code", authLimiter);
+app.use("/api/v2/user/set-password", authLimiter);
+app.use("/api/v2/user/forgot-password", authLimiter);
+app.use("/api/v2/user/reset-password", authLimiter);
+app.use("/api/v2/user/verify-reset-code", authLimiter);
+app.use("/api/v2/user/google-login", authLimiter);
+app.use("/api/v2/user/facebook-login", authLimiter);
 
 app.use("/api/v2/user", user);
 app.use("/api/v2/rooms", room);
