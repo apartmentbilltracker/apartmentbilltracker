@@ -22,6 +22,7 @@ const allowedOrigins = [
   // Deployed frontend
   "https://apartmentbilltracker.onrender.com",
   "https://apartmentbill-tracker.onrender.com",
+  "https://apartmentbilltracker-phi.onrender.com",
   "https://apartmentbilltracker-server.onrender.com",
   // Local development
   "http://localhost:3000",
