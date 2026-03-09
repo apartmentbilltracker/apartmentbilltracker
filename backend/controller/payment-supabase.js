@@ -7,6 +7,7 @@ const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 const sendMail = require("../utils/sendMail");
 const cache = require("../utils/MemoryCache");
+const { sendPushNotification } = require("../utils/sendPushNotification");
 
 /**
  * Build a styled HTML email for payment status notifications
@@ -80,7 +81,7 @@ const sendPaymentStatusNotification = async ({
       },
     ]);
 
-    // 2) Email (non-blocking)
+    // 2) Email + push notification (non-blocking)
     const user = await SupabaseService.findUserById(userId);
     if (user?.email) {
       const html = buildPaymentEmail({
@@ -94,6 +95,14 @@ const sendPaymentStatusNotification = async ({
       sendMail({ email: user.email, subject: title, message: html }).catch(
         () => {},
       );
+    }
+    // 3) Push notification to tenant's device
+    if (user?.expo_push_token) {
+      sendPushNotification(user.expo_push_token, {
+        title,
+        body: inAppMessage,
+        data: { type: isVerified ? "payment_verified" : "payment_rejected" },
+      }).catch(() => {});
     }
   } catch (err) {
     console.error("[sendPaymentStatusNotification] error:", err.message);

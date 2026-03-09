@@ -267,8 +267,8 @@ router.post(
       // Generate JWT token
       const token = jwt.sign(
         { id: user.id, email: user.email },
-        process.env.JWT_SECRET || "your-secret-key",
-        { expiresIn: process.env.JWT_EXPIRE || "7d" },
+        process.env.JWT_SECRET_KEY,
+        { expiresIn: process.env.JWT_EXPIRES || "7d" },
       );
 
       res.status(201).json({
@@ -659,8 +659,10 @@ router.get("/auth/facebook", (req, res) => {
   const redirectUri = encodeURIComponent(
     `${BACKEND_URL}/api/v2/user/auth/facebook/callback`,
   );
-  const scope = encodeURIComponent("email,public_profile");
-  const fbAuthUrl = `https://www.facebook.com/dialog/oauth?client_id=${FACEBOOK_APP_ID}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
+  // Use literal comma between scopes — Facebook's OAuth dialog expects this format.
+  // public_profile is granted by default; email requires the permission to be
+  // added in Facebook Developer Console → App Review → Permissions and Features.
+  const fbAuthUrl = `https://www.facebook.com/dialog/oauth?client_id=${FACEBOOK_APP_ID}&redirect_uri=${redirectUri}&scope=public_profile,email&response_type=code`;
   res.redirect(fbAuthUrl);
 });
 

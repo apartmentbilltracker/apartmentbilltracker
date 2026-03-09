@@ -58,14 +58,21 @@ export function AuthProvider({ children }) {
       }
       // Show cached user immediately so avatar doesn't flash away on refresh
       const cached = localStorage.getItem("cachedUser");
+      let cachedUser = null;
       if (cached) {
         try {
-          dispatch({ type: "RESTORE", token, user: JSON.parse(cached) });
+          cachedUser = JSON.parse(cached);
+          dispatch({ type: "RESTORE", token, user: cachedUser });
         } catch (_) {}
       }
       try {
         const res = await authService.getProfile();
-        const user = res?.data?.user || res?.user || res?.data || res;
+        let user = res?.data?.user || res?.user || res?.data || res;
+        // /getuser omits the avatar column (withAvatar:false) to avoid large
+        // base64 egress. Preserve the cached avatar so it survives refreshes.
+        if (!user.avatar && cachedUser?.avatar) {
+          user = { ...user, avatar: cachedUser.avatar };
+        }
         localStorage.setItem("cachedUser", JSON.stringify(user));
         dispatch({ type: "RESTORE", token, user });
       } catch (err) {
@@ -109,7 +116,15 @@ export function AuthProvider({ children }) {
   const refreshUser = useCallback(async () => {
     try {
       const res = await authService.getProfile();
-      const user = res?.data?.user || res?.user || res?.data || res;
+      let user = res?.data?.user || res?.user || res?.data || res;
+      // Preserve cached avatar (same egress-saving reason as bootstrap above)
+      try {
+        const cachedRaw = localStorage.getItem("cachedUser");
+        const cachedUser = cachedRaw ? JSON.parse(cachedRaw) : null;
+        if (!user.avatar && cachedUser?.avatar) {
+          user = { ...user, avatar: cachedUser.avatar };
+        }
+      } catch (_) {}
       localStorage.setItem("cachedUser", JSON.stringify(user));
       dispatch({ type: "UPDATE_USER", user });
       return { success: true };

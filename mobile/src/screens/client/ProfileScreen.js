@@ -652,37 +652,58 @@ const ProfileScreen = ({ navigation }) => {
               </View>
             </View>
           ) : hostRequestStatus === "rejected" ? (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                backgroundColor: "#fce4ec",
-                padding: 14,
-                borderRadius: 10,
-              }}
-            >
-              <Ionicons name="close-circle" size={22} color="#c62828" />
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: "#c62828",
-                  }}
-                >
-                  Host Request Rejected
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: colors.textSecondary,
-                    marginTop: 2,
-                  }}
-                >
-                  Your request was not approved. Contact admin for details.
-                </Text>
+            <View style={{ gap: 10 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  backgroundColor: "#fce4ec",
+                  padding: 14,
+                  borderRadius: 10,
+                }}
+              >
+                <Ionicons name="close-circle" size={22} color="#c62828" />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: "#c62828",
+                    }}
+                  >
+                    Host Request Rejected
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: colors.textSecondary,
+                      marginTop: 2,
+                    }}
+                  >
+                    Your request was declined. You may submit a new request.
+                  </Text>
+                </View>
               </View>
+              <TouchableOpacity
+                style={[
+                  styles.adminBtn,
+                  { backgroundColor: "#b38604" },
+                  requestingHost && { opacity: 0.6 },
+                ]}
+                onPress={handleRequestHost}
+                disabled={requestingHost}
+                activeOpacity={0.7}
+              >
+                {requestingHost ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="refresh" size={18} color="#fff" />
+                    <Text style={styles.adminBtnText}>Request Again</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           ) : (
             <>

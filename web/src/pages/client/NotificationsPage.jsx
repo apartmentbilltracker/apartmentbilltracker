@@ -2,15 +2,55 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { notificationService } from "../../services/apiService";
 import { Spinner, Alert, EmptyState } from "../../components/ui";
-import { Bell, BellOff, Check } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  Check,
+  CheckCircle,
+  XCircle,
+  CreditCard,
+  Receipt,
+  Megaphone,
+  Droplets,
+  Calendar,
+} from "lucide-react";
 
-const TYPE_COLORS = {
-  payment:
-    "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300",
-  billing: "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300",
-  announcement:
-    "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300",
-  default: "bg-gray-100 dark:bg-white/8 text-gray-600 dark:text-white/50",
+const TYPE_META = {
+  payment_verified: {
+    color:
+      "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300",
+    icon: CheckCircle,
+  },
+  payment_rejected: {
+    color: "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300",
+    icon: XCircle,
+  },
+  payment_reminder: {
+    color:
+      "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300",
+    icon: CreditCard,
+  },
+  billing_cycle: {
+    color: "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300",
+    icon: Receipt,
+  },
+  admin_broadcast: {
+    color:
+      "bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300",
+    icon: Megaphone,
+  },
+  presence_reminder: {
+    color: "bg-cyan-100 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300",
+    icon: Droplets,
+  },
+  presence_confirmation: {
+    color: "bg-cyan-100 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300",
+    icon: Droplets,
+  },
+  default: {
+    color: "bg-gray-100 dark:bg-white/8 text-gray-600 dark:text-white/50",
+    icon: Bell,
+  },
 };
 
 export default function NotificationsPage() {
@@ -19,6 +59,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -107,17 +148,22 @@ export default function NotificationsPage() {
           {notifications.map((n) => {
             const id = n.id || n._id;
             const isRead = n.is_read || n.read || n.isRead;
-            const colorClass = TYPE_COLORS[n.type] || TYPE_COLORS.default;
+            const meta = TYPE_META[n.type] || TYPE_META.default;
+            const Icon = meta.icon;
+            const isExpanded = expandedId === id;
             return (
               <div
                 key={id}
                 className={`card p-4 flex items-start gap-3 cursor-pointer transition-all ${isRead ? "opacity-70" : "border-l-4 border-accent"}`}
-                onClick={() => !isRead && markRead(id)}
+                onClick={() => {
+                  if (!isRead) markRead(id);
+                  setExpandedId(isExpanded ? null : id);
+                }}
               >
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${colorClass}`}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${meta.color}`}
                 >
-                  <Bell size={14} />
+                  <Icon size={14} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p
@@ -125,7 +171,9 @@ export default function NotificationsPage() {
                   >
                     {n.title || n.subject}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-white/40 mt-0.5 line-clamp-2">
+                  <p
+                    className={`text-xs text-gray-500 dark:text-white/40 mt-0.5 whitespace-pre-wrap ${isExpanded ? "" : "line-clamp-2"}`}
+                  >
                     {n.message || n.body || n.content}
                   </p>
                   <p className="text-xs text-gray-400 dark:text-white/30 mt-1">
