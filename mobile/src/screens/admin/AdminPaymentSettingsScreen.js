@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import {
   View,
@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { settingsService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { useFocusEffect } from "@react-navigation/native";
 
 // Common Philippine bank names for quick selection
 const BANK_OPTIONS = [
@@ -36,9 +37,23 @@ const BANK_OPTIONS = [
   "Other",
 ];
 
-const AdminPaymentSettingsScreen = ({ navigation }) => {
+const AdminPaymentSettingsScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+
+  // Get the selected room ID from route params (passed from AdminDashboardScreen)
+  const selectedRoomId = route?.params?.selectedRoomId || null;
+
+  // Payment settings MUST be per-room — block if no room selected
+  useEffect(() => {
+    if (!selectedRoomId) {
+      Alert.alert(
+        "No Room Selected",
+        "Please select a specific room first. Payment settings are configured per room.",
+        [{ text: "OK", onPress: () => navigation.goBack() }],
+      );
+    }
+  }, []);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -72,14 +87,28 @@ const AdminPaymentSettingsScreen = ({ navigation }) => {
   const [customBankFocused, setCustomBankFocused] = useState(false);
   const [modalSubmitted, setModalSubmitted] = useState(false);
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
+  // Re-fetch every time the screen comes into focus (handles navigate-back)
+  useFocusEffect(
+    useCallback(() => {
+      if (selectedRoomId) fetchSettings(selectedRoomId);
+    }, [selectedRoomId]),
+  );
 
-  const fetchSettings = async () => {
+  const fetchSettings = async (roomId) => {
+    console.log(
+      "[AdminPaymentSettings] fetchSettings called with roomId =",
+      roomId,
+      "| selectedRoomId =",
+      selectedRoomId,
+    );
+    if (!roomId) return;
     try {
       setLoading(true);
-      const response = await settingsService.getPaymentMethods();
+      const response = await settingsService.getPaymentMethods(roomId);
+      console.log(
+        "[AdminPaymentSettings] API response:",
+        JSON.stringify(response)?.substring(0, 500),
+      );
       const methods = response?.paymentMethods || response;
       if (methods?.gcash) {
         setGcashEnabled(methods.gcash.enabled !== false);
@@ -102,7 +131,7 @@ const AdminPaymentSettingsScreen = ({ navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchSettings();
+    await fetchSettings(selectedRoomId);
     setRefreshing(false);
   };
 
@@ -116,11 +145,28 @@ const AdminPaymentSettingsScreen = ({ navigation }) => {
         bank_transfer_maintenance_message: bankMessage.trim(),
         bank_accounts: JSON.stringify(bankAccounts),
       };
+      // Include room_id to save room-specific settings, not host-wide
+      if (selectedRoomId) {
+        payload.room_id = selectedRoomId;
+      }
       if (gcashQrDirty && gcashQrUri) {
         payload.gcash_qr_url = gcashQrUri;
+        console.log(
+          "[handleSave] gcash_qr_url length being sent =",
+          gcashQrUri.length,
+          "| starts with =",
+          gcashQrUri.substring(0, 40),
+        );
       }
       await settingsService.updatePaymentMethods(payload);
       setGcashQrDirty(false);
+      // Clear client-side screenCache so clients see updated settings immediately
+      try {
+        const { screenCache } = require("../../hooks/useScreenCache");
+        await screenCache.clear("pmt_methods_" + selectedRoomId);
+      } catch (_) {}
+      // Re-fetch from server to confirm persisted state
+      await fetchSettings(selectedRoomId);
       Alert.alert("Saved", "Payment settings updated successfully.");
     } catch (error) {
       console.error("Error saving payment settings:", error);
@@ -162,11 +208,35 @@ const AdminPaymentSettingsScreen = ({ navigation }) => {
       quality: 0.6,
       base64: true,
     });
-    if (!result.canceled && result.assets?.[0]?.base64) {
-      const { base64, mimeType } = result.assets[0];
-      const mime = mimeType || "image/jpeg";
-      setGcashQrUri(`data:${mime};base64,${base64}`);
-      setGcashQrDirty(true);
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+      console.log(
+        "[handlePickQr] asset keys =",
+        Object.keys(asset),
+        "| base64 length =",
+        asset.base64 ? asset.base64.length : "NULL/MISSING",
+        "| uri length =",
+        asset.uri ? asset.uri.length : "no uri",
+        "| mimeType =",
+        asset.mimeType,
+        "| width =",
+        asset.width,
+        "| height =",
+        asset.height,
+      );
+      if (asset.base64) {
+        const mime = asset.mimeType || "image/jpeg";
+        const dataUri = `data:${mime};base64,${asset.base64}`;
+        console.log("[handlePickQr] dataUri length =", dataUri.length);
+        setGcashQrUri(dataUri);
+        setGcashQrDirty(true);
+      } else {
+        console.warn("[handlePickQr] No base64 returned! Using uri fallback");
+        if (asset.uri) {
+          setGcashQrUri(asset.uri);
+          setGcashQrDirty(true);
+        }
+      }
     }
   };
 

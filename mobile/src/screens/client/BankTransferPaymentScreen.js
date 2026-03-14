@@ -160,36 +160,36 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
     }
   }, [step]);
 
-  // Fetch host-configured bank accounts for this room (cache-first, 10-min TTL)
+  // Fetch host-configured bank accounts for this room (API-first, cache fallback)
   useEffect(() => {
     const pmtKey = "pmt_methods_" + roomId;
-    screenCache.read(pmtKey).then((cached) => {
-      if (cached?.bank_transfer?.accounts) {
-        const accounts = cached.bank_transfer.accounts.filter(
-          (a) => a.enabled !== false,
-        );
-        setHostBankAccounts(cached.bank_transfer.accounts);
-        if (accounts.length > 0) setBankName(accounts[0].bankName);
-        return;
-      }
-      settingsService
-        .getPaymentMethods(roomId)
-        .then((res) => {
-          if (res?.paymentMethods)
-            screenCache.write(pmtKey, res.paymentMethods);
-          const accounts = res?.paymentMethods?.bank_transfer?.accounts;
-          if (Array.isArray(accounts) && accounts.length > 0) {
+    settingsService
+      .getPaymentMethods(roomId)
+      .then((res) => {
+        if (res?.paymentMethods) screenCache.write(pmtKey, res.paymentMethods);
+        const accounts = res?.paymentMethods?.bank_transfer?.accounts;
+        if (Array.isArray(accounts) && accounts.length > 0) {
+          setHostBankAccounts(accounts);
+          const first = accounts.find((a) => a.enabled !== false);
+          if (first) setBankName(first.bankName);
+        } else {
+          setHostBankAccounts([]);
+        }
+      })
+      .catch(() => {
+        // API failed – fall back to cache
+        screenCache.read(pmtKey).then((cached) => {
+          if (cached?.bank_transfer?.accounts) {
+            const accounts = cached.bank_transfer.accounts.filter(
+              (a) => a.enabled !== false,
+            );
             setHostBankAccounts(accounts);
-            const first = accounts.find((a) => a.enabled !== false);
-            if (first) setBankName(first.bankName);
+            if (accounts.length > 0) setBankName(accounts[0].bankName);
           } else {
             setHostBankAccounts([]);
           }
-        })
-        .catch(() => {
-          setHostBankAccounts([]);
         });
-    });
+      });
   }, []);
 
   // Cancel pending transaction if user leaves before completing payment

@@ -32,7 +32,7 @@ router.get(
       if (!room) return next(new ErrorHandler("Room not found", 404));
 
       const members = await SupabaseService.getRoomMembers(roomId);
-      const payers = members.filter((m) => m.is_payer);
+      const payers = members.filter((m) => m.is_payer !== false);
       if (payers.length === 0) {
         return res.status(200).json({
           success: true,

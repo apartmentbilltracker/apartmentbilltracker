@@ -857,7 +857,9 @@ router.post(
     }
 
     try {
-      const user = await SupabaseService.findUserByEmail(email);
+      const user = await SupabaseService.findUserByEmail(email, {
+        withResetToken: true,
+      });
       if (!user) {
         return next(new ErrorHandler("Invalid reset code", 400));
       }
@@ -905,7 +907,9 @@ router.post(
     }
 
     try {
-      const user = await SupabaseService.findUserByEmail(email);
+      const user = await SupabaseService.findUserByEmail(email, {
+        withResetToken: true,
+      });
       if (!user) {
         return next(new ErrorHandler("User not found", 404));
       }

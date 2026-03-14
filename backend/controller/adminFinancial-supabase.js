@@ -30,7 +30,7 @@ router.get(
 
       // Get room members
       const members = await SupabaseService.getRoomMembers(roomId);
-      const payerCount = members.filter((m) => m.is_payer).length;
+      const payerCount = members.filter((m) => m.is_payer !== false).length;
       const nonPayerCount = members.length - payerCount;
 
       // Enrich active cycle with presence-based water charges
@@ -338,7 +338,7 @@ router.get(
       }
 
       const members = await SupabaseService.getRoomMembers(roomId);
-      const payerCount = members.filter((m) => m.is_payer).length;
+      const payerCount = members.filter((m) => m.is_payer !== false).length;
 
       // Enrich active cycle with presence-based water charges
       await enrichBillingCycle(activeCycle, members);

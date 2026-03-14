@@ -64,47 +64,34 @@ const getOrCreateSettings = async () => {
 };
 
 // ─── Helper: pick the best settings row from an array ───
-// Prefers an exact user_id match; falls back to any row with real payment data.
+// ONLY returns rows belonging to the specified user — never leak another host's settings.
 const pickBestRow = (rows, userId) => {
   if (!rows || rows.length === 0) return null;
-  // 1. Exact per-user match
-  const exact = rows.find((r) => r.user_id === userId);
-  if (exact) {
-    const hasData =
-      (exact.bank_accounts && exact.bank_accounts !== "[]") ||
-      exact.gcash_qr_url;
-    if (hasData) return exact;
-  }
-  // 2. Any row that has actual payment configuration
-  const withData = rows.find(
+  // Only consider rows that belong to this user (or have no user_id / global rows)
+  const userRows = rows.filter((r) => r.user_id === userId);
+  if (userRows.length === 0) return null;
+  // Prefer a row with actual payment data configured
+  const withData = userRows.find(
     (r) => (r.bank_accounts && r.bank_accounts !== "[]") || r.gcash_qr_url,
   );
-  if (withData) return withData;
-  // 3. Return exact match even if empty (so PUT updates the right row later)
-  return exact || rows[0];
+  return withData || userRows[0];
 };
 
-// ─── Helper: get or create a per-host settings row (keyed by user_id) ───
-const getOrCreateSettingsForUser = async (userId) => {
+// ─── Helper: get existing settings for a user (READ-ONLY, never creates rows) ───
+const getSettingsForUser = async (userId) => {
   if (!userId) return { ...DEFAULT_SETTINGS };
   try {
-    // Read ALL rows so we can fall back to any configured row
-    const allRows = await SupabaseService.selectAllRecords("app_settings");
-    const best = pickBestRow(allRows, userId);
+    const userRows = await SupabaseService.selectAll(
+      "app_settings",
+      "user_id",
+      userId,
+    );
+    // Filter to host-level rows only (no room_id) — room-specific rows are handled separately
+    const hostRows = userRows ? userRows.filter((r) => !r.room_id) : [];
+    const best = pickBestRow(hostRows, userId);
     if (best) return best;
-    // No row at all — create one with defaults
-    const created = await SupabaseService.insert("app_settings", {
-      user_id: userId,
-      gcash_enabled: true,
-      bank_transfer_enabled: true,
-      gcash_maintenance_message: "",
-      bank_transfer_maintenance_message: "",
-      gcash_qr_url: null,
-      bank_accounts: "[]",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-    return Array.isArray(created) ? created[0] : created;
+    // No row found — return in-memory defaults (do NOT create a DB row on read)
+    return { ...DEFAULT_SETTINGS };
   } catch (err) {
     console.error("app_settings per-user read error:", err.message);
     return { ...DEFAULT_SETTINGS };
@@ -116,23 +103,73 @@ const getOrCreateSettingsForUser = async (userId) => {
 // Returns which payment methods are currently enabled
 // Optional query params:
 //   ?host_id=xxx  – return settings for a specific host (used by client screens)
-//   ?room_id=xxx  – look up room's host then return their settings
+//   ?room_id=xxx  – look up room-specific settings first, then fall back to host settings
 // ─────────────────────────────────────────────
 router.get(
   "/payment-methods",
   isAuthenticated,
   catchAsyncErrors(async (req, res) => {
     let hostUserId = req.query.host_id || null;
+    let roomId = req.query.room_id || null;
 
-    // If room_id provided, resolve the host from the room
-    if (!hostUserId && req.query.room_id) {
+    console.log(
+      "[GET /payment-methods] room_id =",
+      roomId,
+      "| host_id =",
+      hostUserId,
+      "| user =",
+      req.user?.id,
+    );
+
+    // Check memory cache first to reduce Supabase reads
+    // We need to build a preliminary cache key; for room-based lookups use room_id
+    const preliminaryCacheKey = roomId
+      ? "settings:room:" + roomId
+      : hostUserId
+        ? "settings:user:" + hostUserId
+        : null;
+    if (preliminaryCacheKey) {
+      const cached = cache.get(preliminaryCacheKey);
+      if (cached) {
+        return res.status(200).json({ success: true, paymentMethods: cached });
+      }
+    }
+
+    let settings = null;
+
+    // PRIORITY 1: If room_id provided, try to get room-specific settings first
+    if (roomId) {
       try {
-        const room = await SupabaseService.findRoomById(req.query.room_id);
-        if (room && room.created_by) {
-          hostUserId = room.created_by;
+        const roomSettings = await SupabaseService.selectAll(
+          "app_settings",
+          "room_id",
+          roomId,
+        );
+        console.log(
+          "[GET /payment-methods] room query returned",
+          roomSettings?.length,
+          "rows",
+          roomSettings?.length > 0
+            ? "| first row id=" +
+                roomSettings[0].id +
+                " gcash=" +
+                roomSettings[0].gcash_enabled +
+                " bank=" +
+                roomSettings[0].bank_transfer_enabled +
+                " bank_accounts=" +
+                (roomSettings[0].bank_accounts || "null")
+                  .toString()
+                  .substring(0, 80)
+            : "",
+        );
+        if (roomSettings && roomSettings.length > 0) {
+          settings = roomSettings[0];
         } else {
-          // created_by is null — fall back to looking for a non-payer member (host)
-          if (room && Array.isArray(room.room_members)) {
+          // No room-specific settings found, resolve host and use host-level settings
+          const room = await SupabaseService.findRoomById(roomId);
+          if (room && room.created_by) {
+            hostUserId = room.created_by;
+          } else if (room && Array.isArray(room.room_members)) {
             const hostMember = room.room_members.find(
               (m) => m.is_payer === false,
             );
@@ -142,17 +179,32 @@ router.get(
       } catch (_) {}
     }
 
-    // If no explicit host, use the requesting user's own settings
-    if (!hostUserId) hostUserId = req.user.id;
-
-    // Check memory cache first to reduce Supabase reads
-    const cacheKey = "settings:" + hostUserId;
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      return res.status(200).json({ success: true, paymentMethods: cached });
+    // PRIORITY 2: If no room-specific settings, use host-level settings
+    if (!settings) {
+      if (!hostUserId) hostUserId = req.user.id;
+      console.log(
+        "[GET /payment-methods] No room settings found, falling back to host:",
+        hostUserId,
+      );
+      settings = await getSettingsForUser(hostUserId);
     }
 
-    const settings = await getOrCreateSettingsForUser(hostUserId);
+    console.log(
+      "[GET /payment-methods] Final settings row: id =",
+      settings.id,
+      "| room_id =",
+      settings.room_id,
+      "| gcash =",
+      settings.gcash_enabled,
+      "| bank =",
+      settings.bank_transfer_enabled,
+      "| gcash_qr_url length =",
+      settings.gcash_qr_url ? settings.gcash_qr_url.length : "null",
+    );
+
+    const cacheKey = roomId
+      ? "settings:room:" + roomId
+      : "settings:user:" + hostUserId;
 
     const paymentMethods = {
       gcash: {
@@ -180,8 +232,8 @@ router.get(
 
 // ─────────────────────────────────────────────
 // PUT /payment-methods  (admin/host)
-// Toggle payment methods and set maintenance messages — saved PER HOST
-// Body: { gcash_enabled, bank_transfer_enabled, gcash_maintenance_message, bank_transfer_maintenance_message }
+// Toggle payment methods and set maintenance messages — saved PER ROOM or PER HOST
+// Body: { gcash_enabled, bank_transfer_enabled, gcash_maintenance_message, bank_transfer_maintenance_message, room_id? }
 // ─────────────────────────────────────────────
 router.put(
   "/payment-methods",
@@ -195,14 +247,65 @@ router.put(
       bank_transfer_maintenance_message,
       gcash_qr_url,
       bank_accounts,
+      room_id,
     } = req.body;
 
-    const settings = await getOrCreateSettingsForUser(req.user.id);
+    console.log(
+      "[PUT /payment-methods] req.body.room_id =",
+      room_id,
+      "| user_id =",
+      req.user.id,
+      "| gcash_qr_url length =",
+      gcash_qr_url ? gcash_qr_url.length : "undefined/null",
+      "| starts with =",
+      gcash_qr_url ? gcash_qr_url.substring(0, 30) : "N/A",
+    );
+
+    // If room_id provided, verify ownership and get room-specific settings
+    let settings = null;
+    let needsNewRoomRow = false;
+    if (room_id) {
+      // Verify the current user owns this room before allowing settings changes
+      const room = await SupabaseService.findRoomById(room_id);
+      if (!room) {
+        return next(new ErrorHandler("Room not found", 404));
+      }
+      if (room.created_by !== req.user.id && req.user.role !== "admin") {
+        return next(
+          new ErrorHandler(
+            "Not authorized to change settings for this room",
+            403,
+          ),
+        );
+      }
+
+      const roomSettings = await SupabaseService.selectAll(
+        "app_settings",
+        "room_id",
+        room_id,
+      );
+      if (roomSettings && roomSettings.length > 0) {
+        settings = roomSettings[0];
+      } else {
+        // No room-specific row exists yet — we need to CREATE one, not update the host row
+        needsNewRoomRow = true;
+      }
+    }
+
+    // Only fall back to host-level settings if NOT creating a new room-specific row
+    if (!settings && !needsNewRoomRow) {
+      settings = await getSettingsForUser(req.user.id);
+    }
 
     const updates = {
       user_id: req.user.id,
       updated_at: new Date().toISOString(),
     };
+
+    // If saving room-specific settings, include room_id
+    if (room_id) {
+      updates.room_id = room_id;
+    }
 
     if (typeof gcash_enabled === "boolean")
       updates.gcash_enabled = gcash_enabled;
@@ -221,7 +324,14 @@ router.put(
     else if (Array.isArray(bank_accounts))
       updates.bank_accounts = JSON.stringify(bank_accounts);
 
-    if (!settings.id) {
+    if (!settings || !settings.id || needsNewRoomRow) {
+      // Create a new row — either first-ever settings or a new room-specific row
+      console.log(
+        "[PUT /payment-methods] INSERTING new row. needsNewRoomRow =",
+        needsNewRoomRow,
+        "| updates =",
+        JSON.stringify(updates),
+      );
       try {
         const created = await SupabaseService.insert("app_settings", {
           gcash_enabled: true,
@@ -234,6 +344,18 @@ router.put(
           created_at: new Date().toISOString(),
         });
         const row = Array.isArray(created) ? created[0] : created;
+        // DIAGNOSTIC: detect column truncation
+        if (gcash_qr_url && row?.gcash_qr_url) {
+          console.log(
+            "[PUT /payment-methods] QR TRUNCATION CHECK (INSERT): sent =",
+            gcash_qr_url.length,
+            "| stored =",
+            row.gcash_qr_url.length,
+            "| match =",
+            gcash_qr_url.length === row.gcash_qr_url.length,
+          );
+        }
+        cache.invalidatePrefix("settings:");
         return res.status(200).json({ success: true, settings: row });
       } catch (err) {
         return next(
@@ -250,7 +372,24 @@ router.put(
       settings.id,
       updates,
     );
+    console.log(
+      "[PUT /payment-methods] UPDATED row id =",
+      settings.id,
+      "| room_id in updates =",
+      updates.room_id,
+    );
     const row = Array.isArray(updated) ? updated[0] : updated;
+    // DIAGNOSTIC: detect column truncation
+    if (gcash_qr_url && row?.gcash_qr_url) {
+      console.log(
+        "[PUT /payment-methods] QR TRUNCATION CHECK (UPDATE): sent =",
+        gcash_qr_url.length,
+        "| stored =",
+        row.gcash_qr_url.length,
+        "| match =",
+        gcash_qr_url.length === row.gcash_qr_url.length,
+      );
+    }
 
     // Invalidate ALL cached payment-method entries — any host could be served
     // the updated row via the fallback picker (pickBestRow), so stale caches

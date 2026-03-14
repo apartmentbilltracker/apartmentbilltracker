@@ -1,0 +1,4 @@
+        navigation.navigate("BillingStack", {
+          screen: "PaymentSettings",
+          params: { selectedRoomId },
+        }),

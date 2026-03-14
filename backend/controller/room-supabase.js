@@ -418,7 +418,7 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
         const completedPayments = payments.filter(
           (p) => p.status === "completed" || p.status === "verified",
         );
-        const payerMembers = members.filter((m) => m.is_payer);
+        const payerMembers = members.filter((m) => m.is_payer !== false);
         room.memberPayments = payerMembers.map((member) => {
           const mp = completedPayments.filter(
             (p) => p.paid_by === member.user_id,
@@ -450,9 +450,26 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
           room.memberPayments.every((mp) => mp.allPaid)
         ) {
           try {
+            // Snapshot member_charges before closing (like manual close)
+            const enrichedCycle = { ...activeCycle };
+            await enrichBillingCycle(enrichedCycle, members, room);
+            const snapshotWater =
+              parseFloat(enrichedCycle.water_bill_amount) ||
+              parseFloat(activeCycle.water_bill_amount) ||
+              0;
+            const snapshotTotal =
+              parseFloat(enrichedCycle.total_billed_amount) ||
+              parseFloat(activeCycle.total_billed_amount) ||
+              0;
+
             await SupabaseService.update("billing_cycles", activeCycle.id, {
               status: "completed",
               closed_at: new Date(),
+              water_bill_amount: snapshotWater,
+              total_billed_amount: snapshotTotal,
+              member_charges: enrichedCycle.member_charges
+                ? JSON.stringify(enrichedCycle.member_charges)
+                : null,
             });
             room.cycleStatus = "completed";
           } catch (_) {
@@ -484,7 +501,7 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
           const closedPayments = (
             allCyclesPerRoom[i]?.closedPayments || []
           ).filter((p) => p.status === "completed" || p.status === "verified");
-          const payerMembers = members.filter((m) => m.is_payer);
+          const payerMembers = members.filter((m) => m.is_payer !== false);
           room.memberPayments = payerMembers.map((member) => {
             const mp = closedPayments.filter(
               (p) => p.paid_by === member.user_id,
@@ -539,11 +556,8 @@ function computeDynamicWater(
   if (room.water_billing_mode === "fixed_monthly") {
     const fixedAmt = parseFloat(room.water_fixed_amount) || 0;
     if (room.water_fixed_type === "per_person") {
-      const payorCount =
-        (members || []).filter(
-          (m) => m.is_payer !== false && m.isPayer !== false,
-        ).length || 1;
-      return Math.round(fixedAmt * payorCount * 100) / 100;
+      const allMembersCount = (members || []).length || 1;
+      return Math.round(fixedAmt * allMembersCount * 100) / 100;
     }
     return fixedAmt;
   }
@@ -625,7 +639,7 @@ router.get("/admin/all", isAuthenticated, async (req, res, next) => {
         houseRules: room.houseRules || [],
         photos: room.photos || [],
         memberCount: members.length,
-        payerCount: members.filter((m) => m.is_payer).length,
+        payerCount: members.filter((m) => m.is_payer !== false).length,
         creator: creator
           ? {
               id: creator.id,
@@ -912,7 +926,7 @@ router.get("/:id", async (req, res, next) => {
       const completedPayments = payments.filter(
         (p) => p.status === "completed" || p.status === "verified",
       );
-      const payerMembers = (members || []).filter((m) => m.is_payer);
+      const payerMembers = (members || []).filter((m) => m.is_payer !== false);
 
       room.memberPayments = payerMembers.map((member) => {
         const mp = completedPayments.filter(
@@ -984,7 +998,9 @@ router.get("/:id", async (req, res, next) => {
         const completedClosedPayments = closedCyclePayments.filter(
           (p) => p.status === "completed" || p.status === "verified",
         );
-        const payerMembers = (members || []).filter((m) => m.is_payer);
+        const payerMembers = (members || []).filter(
+          (m) => m.is_payer !== false,
+        );
         room.memberPayments = payerMembers.map((member) => {
           const mp = completedClosedPayments.filter(
             (p) => p.paid_by === member.user_id,

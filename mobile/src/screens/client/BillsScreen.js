@@ -116,7 +116,20 @@ const BillsScreen = ({ navigation }) => {
         ? cycleResponse
         : cycleResponse?.billingCycles || cycleResponse?.data || [];
       const active = cycles.find((c) => c.status === "active");
-      setActiveCycle(active || null);
+      if (active) {
+        setActiveCycle(active);
+      } else {
+        // No active cycle — use the most recent completed cycle so billing
+        // summary still displays correct water/total after auto-close
+        const mostRecent = cycles
+          .filter((c) => c.status === "completed" || c.status === "closed")
+          .sort(
+            (a, b) =>
+              new Date(b.closedAt || b.closed_at || b.endDate || b.end_date) -
+              new Date(a.closedAt || a.closed_at || a.endDate || a.end_date),
+          )[0];
+        setActiveCycle(mostRecent || null);
+      }
     } catch (error) {
       console.error("Error fetching active billing cycle:", error);
       setActiveCycle(null);
@@ -199,7 +212,10 @@ const BillsScreen = ({ navigation }) => {
           rent: userCharge.rentShare || 0,
           electricity: userCharge.electricityShare || 0,
           internet: userCharge.internetShare || 0,
-          water: userCharge.waterBillShare || 0,
+          water:
+            userCharge.isPayer !== false
+              ? userCharge.waterBillShare || 0
+              : userCharge.waterOwn || 0,
           total: userCharge.totalDue || 0,
           payorCount: activeCycle.memberCharges.filter((c) => c.isPayer).length,
         };
@@ -242,7 +258,13 @@ const BillsScreen = ({ navigation }) => {
               selectedRoom.water_fixed_amount ||
               0,
           ) || 0;
-        if (currentUserMember?.isPayer) {
+        const isPerPerson =
+          (selectedRoom.waterFixedType || selectedRoom.water_fixed_type) ===
+          "per_person";
+        if (isPerPerson) {
+          // All members see the per-person rate for water display
+          waterShare = fixedTotal;
+        } else if (currentUserMember?.isPayer) {
           waterShare = r2(fixedTotal / payorCount);
         }
       }
@@ -309,13 +331,11 @@ const BillsScreen = ({ navigation }) => {
         (selectedRoom?.waterFixedType || selectedRoom?.water_fixed_type) ===
         "per_person";
       if (isPerPerson) {
-        const payorCount = Math.max(
+        const allMembersCount = Math.max(
           1,
-          (selectedRoom.members || []).filter(
-            (m) => m.isPayer !== false && m.is_payer !== false,
-          ).length,
+          (selectedRoom.members || []).length,
         );
-        return r2(fixedAmt * payorCount);
+        return r2(fixedAmt * allMembersCount);
       }
       return fixedAmt;
     }
@@ -391,8 +411,26 @@ const BillsScreen = ({ navigation }) => {
     );
     if (!member) return 0;
 
-    // Non-payors always pay ₱0 for water
-    if (!member.isPayer) return 0;
+    // Non-payors always see their per-person water allocation,
+    // but pay ₱0 for water (absorbed by payors)
+    if (!member.isPayer) {
+      const isPerPerson =
+        (selectedRoom.waterFixedType || selectedRoom.water_fixed_type) ===
+        "per_person";
+      const isFixed =
+        selectedRoom.waterBillingMode === "fixed_monthly" ||
+        selectedRoom.water_billing_mode === "fixed_monthly";
+      if (isFixed && isPerPerson && activeCycle) {
+        return (
+          parseFloat(
+            selectedRoom.waterFixedAmount ||
+              selectedRoom.water_fixed_amount ||
+              0,
+          ) || 0
+        );
+      }
+      return 0;
+    }
 
     // PRIORITY 1: Use active billing cycle data if populated
     if (activeCycle?.memberCharges?.length > 0 && userId) {
@@ -1232,7 +1270,7 @@ const BillsScreen = ({ navigation }) => {
         {selectedRoom && (
           <>
             {/* ─── OUTSTANDING BALANCE BANNER ─── */}
-            {outstandingBalance.totalOutstanding > 0 && (
+            {isUserPayor && outstandingBalance.totalOutstanding > 0 && (
               <View style={styles.contentPadding}>
                 <View style={styles.outstandingCard}>
                   <View style={styles.outstandingCardHeader}>
@@ -1369,38 +1407,117 @@ const BillsScreen = ({ navigation }) => {
             {billing?.start && billing?.end && !hasUserPaidAllBills() ? (
               <View style={styles.contentPadding}>
                 {/* ─── CYCLE CLOSED WARNING ─── */}
-                {selectedRoom?.cycleStatus === "cycle_closed" && (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: "#fff3e0",
-                      borderColor: "#e65100",
-                      borderWidth: 1,
-                      borderRadius: 10,
-                      padding: 12,
-                      marginBottom: 12,
-                      gap: 10,
-                    }}
-                  >
-                    <MaterialIcons name="warning" size={20} color="#e65100" />
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          color: "#e65100",
-                          fontWeight: "700",
-                          fontSize: 13,
-                        }}
-                      >
-                        Billing Cycle Closed
-                      </Text>
-                      <Text style={{ color: "#bf360c", fontSize: 12 }}>
-                        This billing cycle has been closed by your host. Please
-                        settle your outstanding payment.
-                      </Text>
+                {isUserPayor &&
+                  selectedRoom?.cycleStatus === "cycle_closed" && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#fff3e0",
+                        borderColor: "#e65100",
+                        borderWidth: 1,
+                        borderRadius: 10,
+                        padding: 12,
+                        marginBottom: 12,
+                        gap: 10,
+                      }}
+                    >
+                      <MaterialIcons name="warning" size={20} color="#e65100" />
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: "#e65100",
+                            fontWeight: "700",
+                            fontSize: 13,
+                          }}
+                        >
+                          Billing Cycle Closed
+                        </Text>
+                        <Text style={{ color: "#bf360c", fontSize: 12 }}>
+                          This billing cycle has been closed by your host.
+                          Please settle your outstanding payment.
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                )}
+                  )}
+
+                {/* Non-Payor Notice */}
+                {!isUserPayor &&
+                  (() => {
+                    const payors = (selectedRoom?.members || []).filter(
+                      (m) => m.isPayer,
+                    );
+                    const allPayorsPaid =
+                      payors.length > 0 &&
+                      payors.every((p) => {
+                        const pmt = selectedRoom.memberPayments?.find(
+                          (mp) =>
+                            String(mp.member) ===
+                            String(p.user?.id || p.user?._id || p.user),
+                        );
+                        return (
+                          pmt?.rentStatus === "paid" &&
+                          pmt?.electricityStatus === "paid" &&
+                          pmt?.waterStatus === "paid" &&
+                          (pmt?.internetStatus === "paid" || !billing?.internet)
+                        );
+                      });
+
+                    if (allPayorsPaid) {
+                      return (
+                        <View
+                          style={[
+                            styles.nonPayorCard,
+                            {
+                              borderColor: colors.success || "#4caf50",
+                              backgroundColor: colors.successBg || "#e8f5e9",
+                            },
+                          ]}
+                        >
+                          <MaterialIcons
+                            name="check-circle"
+                            size={22}
+                            color={colors.success || "#4caf50"}
+                          />
+                          <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text
+                              style={[
+                                styles.nonPayorText,
+                                { color: colors.success || "#2e7d32" },
+                              ]}
+                            >
+                              Billing cycle complete!
+                            </Text>
+                            <Text style={styles.nonPayorSubtext}>
+                              All payors in your room have settled their bills.
+                              Please wait for the host to start a new billing
+                              period.
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    }
+
+                    return (
+                      <View style={styles.nonPayorCard}>
+                        <MaterialIcons
+                          name="info-outline"
+                          size={22}
+                          color="#0277bd"
+                        />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={styles.nonPayorText}>
+                            You are not a payor for this room
+                          </Text>
+                          <Text style={styles.nonPayorSubtext}>
+                            The payors in your room handle the bill payments.
+                            You can view the billing summary above.
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })()}
+
                 {/* ─── BILLING PERIOD CARD ─── */}
                 <View style={styles.card}>
                   <View style={styles.cardHeader}>
@@ -2003,25 +2120,6 @@ const BillsScreen = ({ navigation }) => {
                         </View>
                       </View>
                     )}
-                  </View>
-                )}
-
-                {/* Non-Payor Notice */}
-                {!isUserPayor && (
-                  <View style={styles.nonPayorCard}>
-                    <MaterialIcons
-                      name="info-outline"
-                      size={22}
-                      color="#0277bd"
-                    />
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={styles.nonPayorText}>
-                        You are not a payor for this room
-                      </Text>
-                      <Text style={styles.nonPayorSubtext}>
-                        Only payors can view billing shares
-                      </Text>
-                    </View>
                   </View>
                 )}
               </View>

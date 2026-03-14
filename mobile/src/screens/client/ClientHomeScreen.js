@@ -1686,116 +1686,248 @@ const ClientHomeScreen = ({ navigation }) => {
                 </View>
 
                 {/* ─── BILLING OVERVIEW (payors only) ─── */}
-                {userJoinedRoom.billing && isCurrentUserPayor() && (
-                  <TouchableOpacity
-                    style={styles.billingCard}
-                    onPress={() => {
-                      if (userJoinedRoom?.id || userJoinedRoom?._id) {
-                        fetchActiveBillingCycle(
-                          userJoinedRoom.id || userJoinedRoom._id,
-                        );
-                      }
-                      setShowExpenseModal(true);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.billingCardTop}>
-                      <View>
-                        <Text style={styles.billingCardLabel}>Your Share</Text>
-                        <AnimatedAmount
-                          value={getExpenseBreakdown()?.perPayor || 0}
-                          formatter={fmtShort}
-                          style={styles.billingCardAmount}
-                        />
-                        {hasPendingPayment && !getPaymentStatus()?.allPaid ? (
-                          <Text
-                            style={{
-                              fontSize: 10,
-                              color: "#f59e0b",
-                              fontWeight: "600",
-                              marginTop: 2,
-                            }}
-                          >
-                            ⏳ Awaiting Payment Verification
-                          </Text>
-                        ) : !hasPendingPayment &&
-                          getPaymentStatus()?.allPaid ? (
-                          <Text
-                            style={{
-                              fontSize: 10,
-                              color: "#16a34a",
-                              fontWeight: "600",
-                              marginTop: 2,
-                            }}
-                          >
-                            ✓ Payment Verified
-                          </Text>
-                        ) : null}
-                      </View>
-                      <View style={styles.billingBadge}>
-                        <Text style={styles.billingBadgeText}>
-                          Tap for details
-                        </Text>
-                        <Ionicons
-                          name="chevron-forward"
-                          size={14}
-                          color={colors.accent}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.billingBreakdownRow}>
-                      {[
-                        {
-                          label: "Rent",
-                          icon: "home",
-                          amount: getExpenseBreakdown()?.rent?.amount,
-                          color: "#e65100",
-                        },
-                        {
-                          label: "Elec",
-                          icon: "flash",
-                          amount: getExpenseBreakdown()?.electricity?.amount,
-                          color: colors.electricityColor,
-                        },
-                        {
-                          label:
-                            userJoinedRoom?.waterBillingMode ===
-                              "fixed_monthly" ||
-                            userJoinedRoom?.water_billing_mode ===
-                              "fixed_monthly"
-                              ? "Fixed"
-                              : "Water",
-                          icon: "water",
-                          amount: getExpenseBreakdown()?.water?.amount,
-                          color: colors.waterColor,
-                        },
-                        {
-                          label: "Net",
-                          icon: "wifi",
-                          amount: getExpenseBreakdown()?.internet?.amount,
-                          color: colors.internetColor,
-                        },
-                      ].map((item, idx) => (
-                        <View key={idx} style={styles.billingMiniCell}>
-                          <Ionicons
-                            name={item.icon}
-                            size={14}
-                            color={item.color}
-                          />
-                          <Text style={styles.billingMiniLabel}>
-                            {item.label}
+                {userJoinedRoom.billing &&
+                  isCurrentUserPayor() &&
+                  !getPaymentStatus()?.allPaid &&
+                  userJoinedRoom.cycleStatus !== "completed" && (
+                    <TouchableOpacity
+                      style={styles.billingCard}
+                      onPress={() => {
+                        if (userJoinedRoom?.id || userJoinedRoom?._id) {
+                          fetchActiveBillingCycle(
+                            userJoinedRoom.id || userJoinedRoom._id,
+                          );
+                        }
+                        setShowExpenseModal(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.billingCardTop}>
+                        <View>
+                          <Text style={styles.billingCardLabel}>
+                            Your Share
                           </Text>
                           <AnimatedAmount
-                            value={item.amount || 0}
+                            value={getExpenseBreakdown()?.perPayor || 0}
                             formatter={fmtShort}
-                            style={styles.billingMiniAmount}
+                            style={styles.billingCardAmount}
+                          />
+                          {hasPendingPayment && !getPaymentStatus()?.allPaid ? (
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                color: "#f59e0b",
+                                fontWeight: "600",
+                                marginTop: 2,
+                              }}
+                            >
+                              ⏳ Awaiting Payment Verification
+                            </Text>
+                          ) : !hasPendingPayment &&
+                            getPaymentStatus()?.allPaid ? (
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                color: "#16a34a",
+                                fontWeight: "600",
+                                marginTop: 2,
+                              }}
+                            >
+                              ✓ Payment Verified
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={styles.billingBadge}>
+                          <Text style={styles.billingBadgeText}>
+                            Tap for details
+                          </Text>
+                          <Ionicons
+                            name="chevron-forward"
+                            size={14}
+                            color={colors.accent}
                           />
                         </View>
-                      ))}
+                      </View>
+
+                      <View style={styles.billingBreakdownRow}>
+                        {[
+                          {
+                            label: "Rent",
+                            icon: "home",
+                            amount: getExpenseBreakdown()?.rent?.amount,
+                            color: "#e65100",
+                          },
+                          {
+                            label: "Elec",
+                            icon: "flash",
+                            amount: getExpenseBreakdown()?.electricity?.amount,
+                            color: colors.electricityColor,
+                          },
+                          {
+                            label:
+                              userJoinedRoom?.waterBillingMode ===
+                                "fixed_monthly" ||
+                              userJoinedRoom?.water_billing_mode ===
+                                "fixed_monthly"
+                                ? "Fixed"
+                                : "Water",
+                            icon: "water",
+                            amount: getExpenseBreakdown()?.water?.amount,
+                            color: colors.waterColor,
+                          },
+                          {
+                            label: "Net",
+                            icon: "wifi",
+                            amount: getExpenseBreakdown()?.internet?.amount,
+                            color: colors.internetColor,
+                          },
+                        ].map((item, idx) => (
+                          <View key={idx} style={styles.billingMiniCell}>
+                            <Ionicons
+                              name={item.icon}
+                              size={14}
+                              color={item.color}
+                            />
+                            <Text style={styles.billingMiniLabel}>
+                              {item.label}
+                            </Text>
+                            <AnimatedAmount
+                              value={item.amount || 0}
+                              formatter={fmtShort}
+                              style={styles.billingMiniAmount}
+                            />
+                          </View>
+                        ))}
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
+                {/* ─── ALL BILLS PAID BANNER ─── */}
+                {isCurrentUserPayor() &&
+                  (getPaymentStatus()?.allPaid ||
+                    userJoinedRoom.cycleStatus === "completed") && (
+                    <View
+                      style={{
+                        marginHorizontal: 16,
+                        marginTop: 12,
+                        paddingHorizontal: 16,
+                        paddingVertical: 16,
+                        backgroundColor: colors.successBg || "#e8f5e9",
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: colors.success || "#4caf50",
+                        borderLeftWidth: 4,
+                        alignItems: "center",
+                      }}
+                    >
+                      <Ionicons
+                        name="checkmark-done-circle"
+                        size={36}
+                        color={colors.success || "#4caf50"}
+                      />
+                      <Text
+                        style={{
+                          color: colors.success || "#2e7d32",
+                          fontWeight: "700",
+                          fontSize: 15,
+                          marginTop: 8,
+                          textAlign: "center",
+                        }}
+                      >
+                        All bills paid!
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontSize: 12,
+                          marginTop: 4,
+                          textAlign: "center",
+                          lineHeight: 18,
+                        }}
+                      >
+                        Please wait for the host to create a new billing cycle.
+                        You can review your payments in the Bills screen.
+                      </Text>
+                      <TouchableOpacity
+                        style={{
+                          marginTop: 10,
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          backgroundColor: colors.success || "#4caf50",
+                          borderRadius: 8,
+                        }}
+                        onPress={() =>
+                          navigation.navigate("BillsStack", {
+                            screen: "BillsMain",
+                          })
+                        }
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontWeight: "600",
+                            fontSize: 13,
+                          }}
+                        >
+                          View Payment History
+                        </Text>
+                      </TouchableOpacity>
                     </View>
-                  </TouchableOpacity>
-                )}
+                  )}
+
+                {/* ─── NON-PAYER: ALL PAYORS PAID BANNER ─── */}
+                {!isCurrentUserPayor() &&
+                  userJoinedRoom?.billing &&
+                  (() => {
+                    const payors = getPayorsPaymentStatus();
+                    return payors.length > 0 && payors.every((p) => p.allPaid);
+                  })() && (
+                    <View
+                      style={{
+                        marginHorizontal: 16,
+                        marginTop: 12,
+                        paddingHorizontal: 16,
+                        paddingVertical: 16,
+                        backgroundColor: colors.successBg || "#e8f5e9",
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: colors.success || "#4caf50",
+                        borderLeftWidth: 4,
+                        alignItems: "center",
+                      }}
+                    >
+                      <Ionicons
+                        name="checkmark-done-circle"
+                        size={36}
+                        color={colors.success || "#4caf50"}
+                      />
+                      <Text
+                        style={{
+                          color: colors.success || "#2e7d32",
+                          fontWeight: "700",
+                          fontSize: 15,
+                          marginTop: 8,
+                          textAlign: "center",
+                        }}
+                      >
+                        Billing cycle complete!
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontSize: 12,
+                          marginTop: 4,
+                          textAlign: "center",
+                          lineHeight: 18,
+                        }}
+                      >
+                        All payors in your room have settled their bills for
+                        this cycle. Please wait for the host to start a new
+                        billing period.
+                      </Text>
+                    </View>
+                  )}
 
                 {/* ─── OUTSTANDING BALANCE BANNER ─── */}
                 {isCurrentUserPayor() &&
@@ -1873,139 +2005,146 @@ const ClientHomeScreen = ({ navigation }) => {
                   )}
 
                 {/* ─── PAYMENT STATUS ─── */}
-                {(getPaymentStatus() ||
-                  userJoinedRoom?.cycleStatus === "completed" ||
-                  userJoinedRoom?.cycleStatus === "cycle_closed") && (
-                  <TouchableOpacity
-                    style={[
-                      styles.paymentCard,
-                      {
-                        borderLeftColor:
+                {isCurrentUserPayor() &&
+                  (getPaymentStatus() ||
+                    userJoinedRoom?.cycleStatus === "completed" ||
+                    userJoinedRoom?.cycleStatus === "cycle_closed") && (
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentCard,
+                        {
+                          borderLeftColor:
+                            getPaymentStatus()?.allPaid ||
+                            userJoinedRoom?.cycleStatus === "completed"
+                              ? colors.success
+                              : "#e65100",
+                        },
+                      ]}
+                      onPress={() => setShowStatusModal(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={
+                          getPaymentStatus()?.allPaid ||
+                          userJoinedRoom?.cycleStatus === "completed"
+                            ? "checkmark-circle"
+                            : "time"
+                        }
+                        size={22}
+                        color={
                           getPaymentStatus()?.allPaid ||
                           userJoinedRoom?.cycleStatus === "completed"
                             ? colors.success
-                            : "#e65100",
-                      },
-                    ]}
-                    onPress={() => setShowStatusModal(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={
-                        getPaymentStatus()?.allPaid ||
-                        userJoinedRoom?.cycleStatus === "completed"
-                          ? "checkmark-circle"
-                          : "time"
-                      }
-                      size={22}
-                      color={
-                        getPaymentStatus()?.allPaid ||
-                        userJoinedRoom?.cycleStatus === "completed"
-                          ? colors.success
-                          : "#e65100"
-                      }
-                    />
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text
-                        style={[
-                          styles.paymentTitle,
-                          {
-                            color:
-                              getPaymentStatus()?.allPaid ||
-                              userJoinedRoom?.cycleStatus === "completed"
-                                ? colors.success
-                                : "#e65100",
-                          },
-                        ]}
-                      >
-                        {userJoinedRoom?.cycleStatus === "completed"
-                          ? "Billing Cycle Complete"
-                          : userJoinedRoom?.cycleStatus === "cycle_closed"
-                            ? "Billing Cycle Closed"
-                            : getPaymentStatus()?.allPaid
-                              ? "All Bills Paid"
-                              : "Payment Pending"}
-                      </Text>
-                      {userJoinedRoom?.cycleStatus === "completed" ? (
+                            : "#e65100"
+                        }
+                      />
+                      <View style={{ flex: 1, marginLeft: 10 }}>
                         <Text
-                          style={[styles.paymentSub, { color: colors.success }]}
+                          style={[
+                            styles.paymentTitle,
+                            {
+                              color:
+                                getPaymentStatus()?.allPaid ||
+                                userJoinedRoom?.cycleStatus === "completed"
+                                  ? colors.success
+                                  : "#e65100",
+                            },
+                          ]}
                         >
-                          All paid! Waiting for new billing cycle.
+                          {userJoinedRoom?.cycleStatus === "completed"
+                            ? "Billing Cycle Complete"
+                            : userJoinedRoom?.cycleStatus === "cycle_closed"
+                              ? "Billing Cycle Closed"
+                              : getPaymentStatus()?.allPaid
+                                ? "All Bills Paid"
+                                : "Payment Pending"}
                         </Text>
-                      ) : userJoinedRoom?.cycleStatus === "cycle_closed" ? (
-                        <Text style={styles.paymentSub}>
-                          {getPaymentStatus()?.allPaid
-                            ? "You’re all settled up."
-                            : "Cycle closed. Please settle your outstanding payment."}
-                        </Text>
-                      ) : !getPaymentStatus()?.allPaid &&
-                        getPaymentStatus()?.pendingCount > 0 ? (
-                        <Text style={styles.paymentSub}>
-                          {getPaymentStatus().pendingCount} bill
-                          {getPaymentStatus().pendingCount !== 1
-                            ? "s"
-                            : ""}{" "}
-                          awaiting payment
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={18}
-                      color={colors.textSecondary}
-                    />
-                  </TouchableOpacity>
-                )}
+                        {userJoinedRoom?.cycleStatus === "completed" ? (
+                          <Text
+                            style={[
+                              styles.paymentSub,
+                              { color: colors.success },
+                            ]}
+                          >
+                            All paid! Waiting for new billing cycle.
+                          </Text>
+                        ) : userJoinedRoom?.cycleStatus === "cycle_closed" ? (
+                          <Text style={styles.paymentSub}>
+                            {getPaymentStatus()?.allPaid
+                              ? "You’re all settled up."
+                              : "Cycle closed. Please settle your outstanding payment."}
+                          </Text>
+                        ) : !getPaymentStatus()?.allPaid &&
+                          getPaymentStatus()?.pendingCount > 0 ? (
+                          <Text style={styles.paymentSub}>
+                            {getPaymentStatus().pendingCount} bill
+                            {getPaymentStatus().pendingCount !== 1
+                              ? "s"
+                              : ""}{" "}
+                            awaiting payment
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={18}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  )}
 
                 {/* ─── BILLING COUNTDOWN ─── */}
-                {getBillingCountdown() && isCurrentUserPayor() && (
-                  <TouchableOpacity
-                    style={styles.countdownCard}
-                    onPress={() => {
-                      if (userJoinedRoom?.id || userJoinedRoom?._id) {
-                        fetchActiveBillingCycle(
-                          userJoinedRoom.id || userJoinedRoom._id,
-                        );
-                      }
-                      setShowExpenseModal(true);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.countdownRow}>
-                      <Ionicons
-                        name="timer-outline"
-                        size={18}
-                        color={colors.accent}
-                      />
-                      <Text style={styles.countdownText}>
-                        {getBillingCountdown().daysRemaining === 0
-                          ? "Cycle ends today"
-                          : getBillingCountdown().daysRemaining > 0
-                            ? `${getBillingCountdown().daysRemaining} day${getBillingCountdown().daysRemaining !== 1 ? "s" : ""} remaining`
-                            : "Cycle overdue"}
-                      </Text>
-                      <Text style={styles.countdownPct}>
-                        {getBillingCountdown().percentage.toFixed(0)}%
-                      </Text>
-                    </View>
-                    <View style={styles.countdownBarBg}>
-                      <View
-                        style={[
-                          styles.countdownBarFill,
-                          {
-                            width: `${getBillingCountdown().percentage}%`,
-                            backgroundColor:
-                              getBillingCountdown().daysRemaining <= 3
-                                ? "#ef5350"
-                                : getBillingCountdown().daysRemaining <= 7
-                                  ? "#ff9800"
-                                  : colors.success,
-                          },
-                        ]}
-                      />
-                    </View>
-                  </TouchableOpacity>
-                )}
+                {getBillingCountdown() &&
+                  isCurrentUserPayor() &&
+                  !getPaymentStatus()?.allPaid &&
+                  userJoinedRoom.cycleStatus !== "completed" && (
+                    <TouchableOpacity
+                      style={styles.countdownCard}
+                      onPress={() => {
+                        if (userJoinedRoom?.id || userJoinedRoom?._id) {
+                          fetchActiveBillingCycle(
+                            userJoinedRoom.id || userJoinedRoom._id,
+                          );
+                        }
+                        setShowExpenseModal(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.countdownRow}>
+                        <Ionicons
+                          name="timer-outline"
+                          size={18}
+                          color={colors.accent}
+                        />
+                        <Text style={styles.countdownText}>
+                          {getBillingCountdown().daysRemaining === 0
+                            ? "Cycle ends today"
+                            : getBillingCountdown().daysRemaining > 0
+                              ? `${getBillingCountdown().daysRemaining} day${getBillingCountdown().daysRemaining !== 1 ? "s" : ""} remaining`
+                              : "Cycle overdue"}
+                        </Text>
+                        <Text style={styles.countdownPct}>
+                          {getBillingCountdown().percentage.toFixed(0)}%
+                        </Text>
+                      </View>
+                      <View style={styles.countdownBarBg}>
+                        <View
+                          style={[
+                            styles.countdownBarFill,
+                            {
+                              width: `${getBillingCountdown().percentage}%`,
+                              backgroundColor:
+                                getBillingCountdown().daysRemaining <= 3
+                                  ? "#ef5350"
+                                  : getBillingCountdown().daysRemaining <= 7
+                                    ? "#ff9800"
+                                    : colors.success,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  )}
 
                 {/* ─── QUICK ACTIONS ─── */}
                 <View style={styles.actionsRow}>

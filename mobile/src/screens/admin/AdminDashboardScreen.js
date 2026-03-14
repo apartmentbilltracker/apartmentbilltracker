@@ -494,8 +494,22 @@ const AdminDashboardScreen = ({ navigation }) => {
       label: "Pay Settings",
       color: "#e65100",
       bg: "#fff3e0",
-      onPress: () =>
-        navigation.navigate("BillingStack", { screen: "PaymentSettings" }),
+      onPress: () => {
+        // Payment settings must be per-room — resolve the target room
+        const targetRoomId =
+          selectedRoomId ||
+          (rooms.length === 1 ? rooms[0].id || rooms[0]._id : null);
+        if (!targetRoomId) {
+          Alert.alert(
+            "Select a Room",
+            "Please select a specific room from the dropdown first. Payment settings are configured per room.",
+          );
+          return;
+        }
+        navigation.navigate("PaymentSettingsFromDash", {
+          selectedRoomId: targetRoomId,
+        });
+      },
     },
     {
       icon: "chatbubble-ellipses-outline",
