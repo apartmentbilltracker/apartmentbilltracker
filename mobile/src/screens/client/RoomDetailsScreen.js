@@ -137,7 +137,26 @@ const RoomDetailsScreen = ({ route, navigation }) => {
   };
 
   const calculateTotalWaterBill = () => {
-    if (!room?.members) return 0;
+    if (!room) return 0;
+
+    // If fixed_monthly mode, calculate from room settings
+    const isFixed =
+      room.waterBillingMode === "fixed_monthly" ||
+      room.water_billing_mode === "fixed_monthly";
+    if (isFixed) {
+      const fixedAmt =
+        parseFloat(room.waterFixedAmount || room.water_fixed_amount || 0) || 0;
+      const isPerPerson =
+        (room.waterFixedType || room.water_fixed_type) === "per_person";
+      if (isPerPerson) {
+        const allMembersCount = Math.max(1, (room.members || []).length);
+        return fixedAmt * allMembersCount;
+      }
+      return fixedAmt;
+    }
+
+    // Presence-based fallback
+    if (!room.members) return 0;
     const start = room?.billing?.start;
     const end = room?.billing?.end;
     let totalDays = 0;

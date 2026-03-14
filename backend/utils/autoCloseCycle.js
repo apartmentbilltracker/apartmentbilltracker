@@ -30,7 +30,7 @@ async function checkAndAutoCloseCycle(roomId) {
     const members = await SupabaseService.getRoomMembers(roomId);
     await enrichBillingCycle(activeCycle, members);
 
-    const payingMembers = members.filter((m) => m.is_payer);
+    const payingMembers = members.filter((m) => m.is_payer !== false);
     if (payingMembers.length === 0)
       return { closed: false, reason: "no_paying_members" };
 
@@ -73,10 +73,14 @@ async function checkAndAutoCloseCycle(roomId) {
 
     if (!allPaid) return { closed: false, reason: "not_all_paid" };
 
-    // 5. Auto-close the cycle
+    // 5. Auto-close the cycle — snapshot member_charges so the completed
+    //    cycle retains the exact per-member water split (presence-based).
     await SupabaseService.update("billing_cycles", activeCycle.id, {
       status: "completed",
       closed_at: new Date().toISOString(),
+      member_charges: activeCycle.member_charges
+        ? JSON.stringify(activeCycle.member_charges)
+        : null,
     });
 
     console.log(

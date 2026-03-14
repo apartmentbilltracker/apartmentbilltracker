@@ -32,16 +32,31 @@ async function enrichBillingCycle(cycle, members, roomData) {
   }
 
   // ── COMPLETED / CLOSED CYCLES ──
-  // Skip all presence computation entirely. The room's *current* water billing mode
-  // must not retroactively change historical per-member amounts.
-  // Simply split the stored totals evenly among payers.
+  // Use the snapshotted member_charges persisted at close time (preserves
+  // the original presence-based water split). Only fall back to equal split
+  // if no snapshot was stored (legacy cycles closed before this fix).
   if (cycle.status === "completed" || cycle.status === "closed") {
+    // Parse stored member_charges if it's a JSON string
+    let stored = cycle.member_charges;
+    if (typeof stored === "string") {
+      try {
+        stored = JSON.parse(stored);
+      } catch (_) {
+        stored = null;
+      }
+    }
+    if (Array.isArray(stored) && stored.length > 0) {
+      cycle.member_charges = stored;
+      return cycle;
+    }
+
+    // Legacy fallback: no snapshot — split stored totals evenly among payers
     const rent = parseFloat(cycle.rent || 0);
     const electricity = parseFloat(cycle.electricity || 0);
     const internet = parseFloat(cycle.internet || 0);
     const water = parseFloat(cycle.water_bill_amount || 0);
 
-    const payingMembers = members.filter((m) => m.is_payer);
+    const payingMembers = members.filter((m) => m.is_payer !== false);
     const payerCount = payingMembers.length;
 
     const rentShare = payerCount > 0 ? r2(rent / payerCount) : 0;
@@ -61,10 +76,9 @@ async function enrichBillingCycle(cycle, members, roomData) {
         memberInternet = 0,
         memberWater = 0;
 
-      if (member.is_payer) {
+      if (member.is_payer !== false) {
         pidx++;
         if (pidx === payerCount) {
-          // Last payer absorbs any rounding remainder
           memberRent = r2(rent - rentAssigned);
           memberElec = r2(electricity - elecAssigned);
           memberInternet = r2(internet - internetAssigned);
@@ -121,7 +135,7 @@ async function enrichBillingCycle(cycle, members, roomData) {
   const effectiveEnd =
     isActiveCycle && new Date() > cycleEnd ? new Date() : cycleEnd;
 
-  const payingMembers = members.filter((m) => m.is_payer);
+  const payingMembers = members.filter((m) => m.is_payer !== false);
   const payerCount = payingMembers.length;
 
   // Per-payer even splits for rent, electricity, internet — rounded to 2dp
@@ -140,15 +154,23 @@ async function enrichBillingCycle(cycle, members, roomData) {
 
   // ── FIXED MONTHLY WATER ──
   if (waterBillingMode === "fixed_monthly") {
-    // per_person: each payor is charged waterFixedAmount individually
+    // per_person: every member is allocated waterFixedAmount; non-payer
+    //   shares are redistributed equally to payers.
     // by_room:    one total (waterFixedAmount) split equally among payors
+    const allMembersCount = members.length || 1;
+    const nonPayerCount = allMembersCount - payerCount;
     const totalFixedWater =
       waterFixedType === "per_person"
-        ? r2(waterFixedAmount * payerCount)
+        ? r2(waterFixedAmount * allMembersCount)
         : waterFixedAmount;
+    // For per_person payers absorb non-payer water equally
+    const nonPayorWaterPerPayor =
+      waterFixedType === "per_person" && payerCount > 0
+        ? r2((nonPayerCount * waterFixedAmount) / payerCount)
+        : 0;
     const fixedWaterPerPayor =
       waterFixedType === "per_person"
-        ? waterFixedAmount // each person always pays the full per-person rate
+        ? r2(waterFixedAmount + nonPayorWaterPerPayor)
         : payerCount > 0
           ? r2(waterFixedAmount / payerCount)
           : 0;
@@ -167,25 +189,19 @@ async function enrichBillingCycle(cycle, members, roomData) {
       let memberInternetShare = 0;
       let waterBillShare = 0;
 
-      if (member.is_payer) {
+      if (member.is_payer !== false) {
         fixedPayerIndex++;
         // Last payer absorbs rounding remainder for rent/elec/internet
         if (fixedPayerIndex === payerCount) {
           memberRentShare = r2(rent - rentAssigned);
           memberElecShare = r2(electricity - elecAssigned);
           memberInternetShare = r2(internet - internetAssigned);
-          waterBillShare =
-            waterFixedType === "per_person"
-              ? waterFixedAmount
-              : r2(totalFixedWater - waterAssignedFixed);
+          waterBillShare = r2(totalFixedWater - waterAssignedFixed);
         } else {
           memberRentShare = rentShare;
           memberElecShare = electricityShare;
           memberInternetShare = internetShare;
-          waterBillShare =
-            waterFixedType === "per_person"
-              ? waterFixedAmount
-              : fixedWaterPerPayor;
+          waterBillShare = fixedWaterPerPayor;
         }
         rentAssigned = r2(rentAssigned + memberRentShare);
         elecAssigned = r2(elecAssigned + memberElecShare);
@@ -208,8 +224,12 @@ async function enrichBillingCycle(cycle, members, roomData) {
         rent_share: memberRentShare,
         electricity_share: memberElecShare,
         water_bill_share: waterBillShare,
-        water_own: waterBillShare,
-        water_shared_nonpayor: 0,
+        water_own:
+          waterFixedType === "per_person" ? waterFixedAmount : waterBillShare,
+        water_shared_nonpayor:
+          member.is_payer !== false && waterFixedType === "per_person"
+            ? r2(waterBillShare - waterFixedAmount)
+            : 0,
         internet_share: memberInternetShare,
         total_due: totalDue,
       };
@@ -222,7 +242,7 @@ async function enrichBillingCycle(cycle, members, roomData) {
     );
 
     // Correct last payer total_due for any rounding
-    const payerCharges = memberCharges.filter((c) => c.is_payer);
+    const payerCharges = memberCharges.filter((c) => c.is_payer !== false);
     if (payerCharges.length > 0) {
       const sumPayerTotals = payerCharges.reduce(
         (s, c) => r2(s + c.total_due),
@@ -263,14 +283,33 @@ async function enrichBillingCycle(cycle, members, roomData) {
     0,
   );
 
-  // For presence-based mode, always use live presence data as the target.
-  // The stored water_bill_amount becomes stale as members mark presence after the
-  // cycle was first saved, so scaling against it produces incorrect per-member shares.
-  // No scaling is needed — each member's share is computed from their own presence.
+  // For presence-based water (active cycles): live presence is the truth.
+  // The stored water_bill_amount may be stale (e.g. set at cycle creation
+  // before members logged presence). Always use the live-computed total
+  // so member shares reflect actual presence days without distortion.
+  const storedWaterAmount = parseFloat(cycle.water_bill_amount || 0);
+
+  // Active presence-based cycles: trust live computation, no scaling
+  const targetWaterTotal = rawTotalWater;
   const waterScale = 1;
 
-  // Target water total = sum of all members' own presence-based water
-  const targetWaterTotal = rawTotalWater;
+  console.log(
+    "[enrichBillingCycle] WATER DEBUG:",
+    JSON.stringify({
+      storedWaterAmount,
+      rawTotalWater,
+      waterScale,
+      targetWaterTotal,
+      nonPayorWaterTotal,
+      payerCount,
+      members: memberWaterOwn.map((m) => ({
+        name: m.member.name,
+        is_payer: m.member.is_payer,
+        presenceDays: m.presenceDays,
+        ownWater: m.ownWater,
+      })),
+    }),
+  );
 
   // ── PASS 2: Build final member charges (with non-payor water distributed) ──
   let totalWater = 0;
@@ -339,14 +378,17 @@ async function enrichBillingCycle(cycle, members, roomData) {
 
   cycle.member_charges = memberCharges;
 
-  // Active cycles use live presence total (members are still logging days).
-  cycle.water_bill_amount = rawTotalWater;
+  // For presence-based active cycles, always update water_bill_amount to the
+  // live-computed total so the DB stays in sync with actual presence data.
+  cycle.water_bill_amount = targetWaterTotal;
 
-  // Recalculate total_billed_amount to include computed water
-  cycle.total_billed_amount = r2(rent + electricity + rawTotalWater + internet);
+  // Recalculate total_billed_amount to include the (possibly scaled) target water
+  cycle.total_billed_amount = r2(
+    rent + electricity + targetWaterTotal + internet,
+  );
 
   // ── Final pass: correct last payer's total_due so sum matches total_billed_amount ──
-  const payerCharges = memberCharges.filter((c) => c.is_payer);
+  const payerCharges = memberCharges.filter((c) => c.is_payer !== false);
   if (payerCharges.length > 0) {
     const sumPayerTotals = payerCharges.reduce(
       (s, c) => r2(s + c.total_due),

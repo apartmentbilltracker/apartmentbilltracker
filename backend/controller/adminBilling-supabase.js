@@ -86,7 +86,7 @@ router.get(
         (p) => p.status === "completed" || p.status === "verified",
       );
 
-      const payerCount = members.filter((m) => m.is_payer).length;
+      const payerCount = members.filter((m) => m.is_payer !== false).length;
       const nonPayerCount = members.length - payerCount;
 
       const breakdown = {
@@ -270,7 +270,7 @@ router.get(
       );
 
       const memberStatus = members
-        .filter((m) => m.is_payer)
+        .filter((m) => m.is_payer !== false)
         .map((member) => {
           const hasCharges =
             billingCycle.member_charges &&
@@ -282,7 +282,7 @@ router.get(
             : computeFallbackCharge(
                 member,
                 billingCycle,
-                members.filter((m) => m.is_payer).length,
+                members.filter((m) => m.is_payer !== false).length,
               );
           const memberPayments = completedPayments.filter(
             (p) => p.paid_by === member.user_id,

@@ -382,11 +382,8 @@ const AdminBillingScreen = ({ navigation }) => {
     if (waterMode === "fixed_monthly") {
       const fixedAmt = parseFloat(waterFixed) || 0;
       if (waterFixedType === "per_person") {
-        const payorCount = Math.max(
-          1,
-          members.filter((m) => m.isPayer !== false).length,
-        );
-        return r2(fixedAmt * payorCount);
+        const allMembersCount = Math.max(1, members.length);
+        return r2(fixedAmt * allMembersCount);
       }
       return fixedAmt; // by_room: the total entered IS the total
     }
@@ -2125,9 +2122,10 @@ const AdminBillingScreen = ({ navigation }) => {
                   1,
                   members.filter((m) => m.isPayer !== false).length,
                 );
+                const allMembersCount = Math.max(1, members.length);
                 const totalWater =
                   waterFixedType === "per_person"
-                    ? r2(fixedAmt * payorCount)
+                    ? r2(fixedAmt * allMembersCount)
                     : fixedAmt;
                 const perPayor =
                   waterFixedType === "per_person"
@@ -2214,7 +2212,7 @@ const AdminBillingScreen = ({ navigation }) => {
                               color: colors.textSecondary,
                             }}
                           >
-                            Paying members
+                            All members
                           </Text>
                           <Text
                             style={{
@@ -2223,43 +2221,39 @@ const AdminBillingScreen = ({ navigation }) => {
                               color: colors.text,
                             }}
                           >
-                            {payorCount}{" "}
-                            {payorCount === 1 ? "person" : "people"}
+                            {allMembersCount}{" "}
+                            {allMembersCount === 1 ? "person" : "people"}
                           </Text>
                         </View>
-                        {members
-                          .filter((m) => m.isPayer !== false)
-                          .map((m) => (
-                            <View
-                              key={m.id || m._id || m.email}
-                              style={styles.memberRow}
-                            >
-                              <View style={styles.memberAvatar}>
-                                <Text style={styles.memberAvatarText}>
-                                  {(m.name || m.email || "?")
-                                    .charAt(0)
-                                    .toUpperCase()}
-                                </Text>
-                              </View>
-                              <View style={styles.memberMeta}>
-                                <Text
-                                  style={styles.memberName}
-                                  numberOfLines={1}
-                                >
-                                  {m.name || m.email || "\u2014"}
-                                </Text>
-                                <Text style={styles.memberDays}>
-                                  fixed per person
-                                </Text>
-                              </View>
-                              <Text style={styles.memberWater}>
-                                {fmt(fixedAmt)}
+                        {members.map((m) => (
+                          <View
+                            key={m.id || m._id || m.email}
+                            style={styles.memberRow}
+                          >
+                            <View style={styles.memberAvatar}>
+                              <Text style={styles.memberAvatarText}>
+                                {(m.name || m.email || "?")
+                                  .charAt(0)
+                                  .toUpperCase()}
                               </Text>
                             </View>
-                          ))}
+                            <View style={styles.memberMeta}>
+                              <Text style={styles.memberName} numberOfLines={1}>
+                                {m.name || m.email || "\u2014"}
+                              </Text>
+                              <Text style={styles.memberDays}>
+                                fixed per person
+                                {m.isPayer === false ? " (non-payer)" : ""}
+                              </Text>
+                            </View>
+                            <Text style={styles.memberWater}>
+                              {fmt(fixedAmt)}
+                            </Text>
+                          </View>
+                        ))}
                         <View style={styles.waterTotalRow}>
                           <Text style={styles.waterTotalLabel}>
-                            {fmt(fixedAmt)} × {payorCount} = Total Water
+                            {fmt(fixedAmt)} × {allMembersCount} = Total Water
                           </Text>
                           <Text style={styles.waterTotalAmount}>
                             {fmt(totalWater)}

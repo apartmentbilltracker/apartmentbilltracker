@@ -9,32 +9,46 @@ const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 const { sendPushNotification } = require("../utils/sendPushNotification");
 
-// Helper: get payment settings for a specific host (falls back to all-enabled if not found)
-const getHostSettings = async (hostUserId) => {
+// Helper: get payment settings for a specific room, falling back to host-level settings
+const getSettingsForRoom = async (roomId, hostUserId) => {
   try {
+    // PRIORITY 1: Room-specific settings
+    if (roomId) {
+      const roomRows = await SupabaseService.selectAll(
+        "app_settings",
+        "room_id",
+        roomId,
+      );
+      if (roomRows && roomRows.length > 0) return roomRows[0];
+    }
+    // PRIORITY 2: Host-level settings (only rows belonging to this host)
     if (!hostUserId) return {};
-    const rows = await SupabaseService.selectAll(
+    const hostRows = await SupabaseService.selectAll(
       "app_settings",
       "user_id",
       hostUserId,
     );
-    return rows && rows.length > 0 ? rows[0] : {};
+    // Filter to host-level rows (no room_id) to avoid picking another room's overrides
+    const hostLevel = hostRows
+      ? hostRows.find((r) => !r.room_id) || hostRows[0]
+      : null;
+    return hostLevel || {};
   } catch {
     return {};
   }
 };
 
-// Helper: check if a payment method is enabled for a specific host
-const isPaymentMethodEnabled = async (method, hostUserId) => {
-  const settings = await getHostSettings(hostUserId);
+// Helper: check if a payment method is enabled for a specific room/host
+const isPaymentMethodEnabled = async (method, hostUserId, roomId) => {
+  const settings = await getSettingsForRoom(roomId, hostUserId);
   if (method === "gcash") return settings.gcash_enabled !== false;
   if (method === "bank_transfer")
     return settings.bank_transfer_enabled !== false;
   return true;
 };
 
-const getMaintenanceMessage = async (method, hostUserId) => {
-  const settings = await getHostSettings(hostUserId);
+const getMaintenanceMessage = async (method, hostUserId, roomId) => {
+  const settings = await getSettingsForRoom(roomId, hostUserId);
   if (method === "gcash") return settings.gcash_maintenance_message || "";
   if (method === "bank_transfer")
     return settings.bank_transfer_maintenance_message || "";
@@ -102,7 +116,7 @@ router.get(
       );
 
       const paymentStatus = members
-        .filter((m) => m.is_payer)
+        .filter((m) => m.is_payer !== false)
         .map((member) => {
           const charge =
             activeCycle.member_charges?.find(
@@ -364,10 +378,18 @@ router.post(
         return next(new ErrorHandler("Room not found", 404));
       }
 
-      // Check if GCash is enabled for this room's host
-      const enabled = await isPaymentMethodEnabled("gcash", room.created_by);
+      // Check if GCash is enabled for this room (room-specific first, then host-level)
+      const enabled = await isPaymentMethodEnabled(
+        "gcash",
+        room.created_by,
+        roomId,
+      );
       if (!enabled) {
-        const msg = await getMaintenanceMessage("gcash", room.created_by);
+        const msg = await getMaintenanceMessage(
+          "gcash",
+          room.created_by,
+          roomId,
+        );
         return next(
           new ErrorHandler(
             msg ||
@@ -493,15 +515,17 @@ router.post(
         return next(new ErrorHandler("Room not found", 404));
       }
 
-      // Check if Bank Transfer is enabled for this room's host
+      // Check if Bank Transfer is enabled for this room (room-specific first, then host-level)
       const enabled = await isPaymentMethodEnabled(
         "bank_transfer",
         room.created_by,
+        roomId,
       );
       if (!enabled) {
         const msg = await getMaintenanceMessage(
           "bank_transfer",
           room.created_by,
+          roomId,
         );
         return next(
           new ErrorHandler(

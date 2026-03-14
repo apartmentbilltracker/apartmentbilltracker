@@ -245,7 +245,7 @@ class SupabaseService {
 
   /** Specific columns for billing_cycles — avoids fetching unused metadata. */
   static BILLING_CYCLE_COLS =
-    "id, room_id, start_date, end_date, status, cycle_number, rent, electricity, internet, water_bill_amount, total_billed_amount, previous_meter_reading, current_meter_reading, closed_at, created_at, created_by, updated_at";
+    "id, room_id, start_date, end_date, status, cycle_number, rent, electricity, internet, water_bill_amount, total_billed_amount, previous_meter_reading, current_meter_reading, closed_at, created_at, created_by, updated_at, member_charges";
 
   /** Specific columns for payments — avoids fetching unused metadata. */
   static PAYMENT_COLS =
@@ -282,13 +282,16 @@ class SupabaseService {
    */
   static async findUserByEmail(
     email,
-    { withAvatar = false, withPassword = false } = {},
+    { withAvatar = false, withPassword = false, withResetToken = false } = {},
   ) {
-    const cols = withPassword
+    let cols = withPassword
       ? this.USER_COLS_AUTH
       : withAvatar
         ? this.USER_COLS_WITH_AVATAR
         : this.USER_COLS;
+    if (withResetToken) {
+      cols += ", reset_password_token, reset_password_expire";
+    }
     const user = await this.selectByColumn("users", "email", email, cols);
     return this.formatUserData(user);
   }

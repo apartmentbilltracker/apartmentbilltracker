@@ -68,6 +68,7 @@ const computeCycleStats = async (
   fixedWaterAmount,
   waterBillingMode,
   waterFixedType = "by_room",
+  perPersonRate = null,
 ) => {
   try {
     const members = (await SupabaseService.getRoomMembers(roomId)) || [];
@@ -79,11 +80,15 @@ const computeCycleStats = async (
     let waterBillAmount;
     if (waterBillingMode === "fixed_monthly" && Number(fixedWaterAmount) > 0) {
       if (waterFixedType === "per_person") {
-        // Total = per-person rate × number of paying members
-        const payorCount =
-          approvedMembers.filter((m) => m.is_payer).length || 1;
-        waterBillAmount =
-          Math.round(Number(fixedWaterAmount) * payorCount * 100) / 100;
+        // Use the per-person rate from room settings, NOT the client-provided
+        // total (which may already be pre-multiplied by the mobile app).
+        // Multiply by ALL members (not just payers) — non-payer water is
+        // redistributed to payers in enrichBillingCycle.
+        const rate =
+          perPersonRate != null
+            ? Number(perPersonRate)
+            : Number(fixedWaterAmount);
+        waterBillAmount = Math.round(rate * membersCount * 100) / 100;
       } else {
         // By-room: amount is the total already
         waterBillAmount = Number(fixedWaterAmount);
@@ -98,8 +103,28 @@ const computeCycleStats = async (
           const d = new Date(dateStr);
           return d >= sd && d <= ed;
         }).length;
+        console.log(
+          "[computeCycleStats]",
+          member.name,
+          "| presence count:",
+          presence.length,
+          "| days in range:",
+          days,
+          "| sd:",
+          sd.toISOString(),
+          "| ed:",
+          ed.toISOString(),
+          "| sample dates:",
+          presence.slice(0, 3),
+        );
         return total + days * 5;
       }, 0);
+      console.log(
+        "[computeCycleStats] Final waterBillAmount:",
+        waterBillAmount,
+        "| fixedWaterAmount:",
+        fixedWaterAmount,
+      );
       // Fallback: if presence yields 0 but admin sent a value, keep it
       if (!waterBillAmount && Number(fixedWaterAmount) > 0) {
         waterBillAmount = Number(fixedWaterAmount);
@@ -167,6 +192,7 @@ router.post("/", isAuthenticated, async (req, res, next) => {
           updWaterRaw,
           room.water_billing_mode,
           room.water_fixed_type,
+          room.water_fixed_amount,
         );
 
       const updatePayload = {
@@ -223,6 +249,7 @@ router.post("/", isAuthenticated, async (req, res, next) => {
         waterValRaw,
         room.water_billing_mode,
         room.water_fixed_type,
+        room.water_fixed_amount,
       );
 
     const totalAmount =
@@ -446,7 +473,9 @@ router.get(
 
           // Last-resort simple split if enrichment produced 0
           if (amountDue === 0) {
-            const payerCount = members.filter((m) => m.is_payer).length;
+            const payerCount = members.filter(
+              (m) => m.is_payer !== false,
+            ).length;
             if (payerCount > 0) {
               const rent = parseFloat(cycle.rent || 0);
               const electricity = parseFloat(cycle.electricity || 0);
@@ -782,6 +811,7 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
               waterRaw,
               cycleRoom?.water_billing_mode,
               cycleRoom?.water_fixed_type,
+              cycleRoom?.water_fixed_amount,
             )
           : { membersCount: 0, waterBillAmount: waterRaw };
 
@@ -839,6 +869,7 @@ router.post("/backfill-stats", isAuthenticated, async (req, res, next) => {
           cycle.water_bill_amount,
           room.water_billing_mode,
           room.water_fixed_type,
+          room.water_fixed_amount,
         );
 
         const r = parseFloat(cycle.rent || 0);
@@ -910,6 +941,11 @@ router.post("/:cycleId/close", isAuthenticated, async (req, res, next) => {
         // shows correct values even after presence is cleared for the next cycle.
         water_bill_amount: snapshotWater,
         total_billed_amount: snapshotTotal,
+        // Snapshot member_charges so the completed cycle retains the exact
+        // per-member water split (presence-based) instead of equal split.
+        member_charges: existingCycle.member_charges
+          ? JSON.stringify(existingCycle.member_charges)
+          : null,
       },
     );
 

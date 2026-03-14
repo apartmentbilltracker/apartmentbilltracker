@@ -296,9 +296,9 @@ export const paymentProcessingService = {
 export const settingsService = {
   getPaymentMethods: (roomId) =>
     api
-      .get("/api/v2/settings/payment-methods", {
-        params: roomId ? { room_id: roomId } : undefined,
-      })
+      .get(
+        `/api/v2/settings/payment-methods${roomId ? `?room_id=${roomId}` : ""}`,
+      )
       .then(extractData),
 
   updatePaymentMethods: (data) =>

@@ -58,24 +58,22 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     initiateGCashPayment();
-    // Fetch the host's uploaded GCash QR code (cache-first, 10-min TTL)
+    // Always fetch fresh payment settings from server (room-specific)
     const pmtKey = "pmt_methods_" + roomId;
-    screenCache.read(pmtKey).then((cached) => {
-      const qrUrl = cached?.gcash?.qrUrl;
-      if (qrUrl) {
-        setHostQrUri(qrUrl);
-        return;
-      }
-      settingsService
-        .getPaymentMethods(roomId)
-        .then((res) => {
-          if (res?.paymentMethods)
-            screenCache.write(pmtKey, res.paymentMethods);
-          const url = res?.paymentMethods?.gcash?.qrUrl;
-          if (url) setHostQrUri(url);
-        })
-        .catch(() => {});
-    });
+    settingsService
+      .getPaymentMethods(roomId)
+      .then((res) => {
+        if (res?.paymentMethods) screenCache.write(pmtKey, res.paymentMethods);
+        const url = res?.paymentMethods?.gcash?.qrUrl;
+        if (url) setHostQrUri(url);
+      })
+      .catch(() => {
+        // Fallback to cache if API fails
+        screenCache.read(pmtKey).then((cached) => {
+          const qrUrl = cached?.gcash?.qrUrl;
+          if (qrUrl) setHostQrUri(qrUrl);
+        });
+      });
   }, []);
 
   const handleBack = async () => {
@@ -669,7 +667,9 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
               <TouchableOpacity
                 style={styles.billsButton}
-                onPress={() => navigation.navigate("Bills", { refresh: true })}
+                onPress={() =>
+                  navigation.navigate("BillsMain", { refresh: true })
+                }
               >
                 <Ionicons
                   name="receipt-outline"

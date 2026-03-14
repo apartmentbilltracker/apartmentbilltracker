@@ -70,6 +70,11 @@ const DashboardStack = () => {
         component={AdminDashboardScreen}
         options={{ title: "Dashboard" }}
       />
+      <Stack.Screen
+        name="PaymentSettingsFromDash"
+        component={AdminPaymentSettingsScreen}
+        options={{ title: "Payment Settings" }}
+      />
     </Stack.Navigator>
   );
 };
