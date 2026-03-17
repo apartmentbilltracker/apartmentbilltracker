@@ -30,6 +30,7 @@ import { AuthContext } from "../../context/AuthContext";
 import AnimatedAmount from "../../components/AnimatedAmount";
 import chatReadTracker from "../../services/chatReadTracker";
 import {
+  authService,
   roomService,
   memberService,
   billingCycleService,
@@ -90,6 +91,9 @@ const ClientHomeScreen = ({ navigation }) => {
   const [photoViewData, setPhotoViewData] = useState(null);
   const [photoViewIdx, setPhotoViewIdx] = useState(0);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [memberActivity, setMemberActivity] = useState([]);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const initialLoadDone = useRef(false);
   const lastFocusFetch = useRef(0);
 
@@ -102,6 +106,21 @@ const ClientHomeScreen = ({ navigation }) => {
     if (hour < 12) return "Good Morning";
     if (hour < 18) return "Good Afternoon";
     return "Good Evening";
+  };
+
+  const formatLastActive = (isoStr) => {
+    if (!isoStr) return "Offline";
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Active just now";
+    if (mins === 1) return "Active a minute ago";
+    if (mins < 60) return `Active ${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs === 1) return "Active an hour ago";
+    if (hrs < 24) return `Active ${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days === 1) return "Active a day ago";
+    return `Active ${days}d ago`;
   };
 
   // Check if current user is a payor
@@ -527,7 +546,55 @@ const ClientHomeScreen = ({ navigation }) => {
     }
   };
 
+  const fetchMemberActivity = async (roomId) => {
+    try {
+      const res = await roomService.getMemberActivity(roomId);
+      setMemberActivity(res.members || []);
+    } catch {
+      setMemberActivity([]);
+    }
+  };
+
+  // Lightweight poll: update only online/offline dots (zero DB queries on backend)
+  const pollMemberStatus = async (roomId) => {
+    try {
+      const res = await roomService.getMemberStatus(roomId);
+      const statuses = res.statuses || {};
+      setMemberActivity((prev) =>
+        prev.map((m) => {
+          const s = statuses[m.userId];
+          if (!s) return m;
+          return {
+            ...m,
+            isOnline: s.isOnline,
+            isRecentlyActive: s.isRecentlyActive,
+            lastActiveAt: s.lastActiveAt,
+          };
+        }),
+      );
+    } catch {
+      // silent — polling failure shouldn't affect UX
+    }
+  };
+
+  // Fetch public user profile when member name is clicked
+  const viewUserProfile = async (userId) => {
+    try {
+      const res = await authService.getPublicProfile(userId);
+      // console.log("Profile response:", res);
+      setSelectedUserProfile(res.user || null);
+      setProfileModalVisible(true);
+    } catch (err) {
+      console.error("Profile fetch error:", err);
+      Alert.alert(
+        "Error",
+        "Could not load user profile. " + (err?.message || ""),
+      );
+    }
+  };
+
   // Refresh room data when screen comes into focus (throttled: max once per 30s)
+  // + start 30s status polling while screen is focused
   useFocusEffect(
     useCallback(() => {
       const now = Date.now();
@@ -537,7 +604,16 @@ const ClientHomeScreen = ({ navigation }) => {
         lastFocusFetch.current = now;
         fetchRooms(false);
       }
-    }, []),
+
+      // Start lightweight status polling (no DB egress)
+      const roomId = userJoinedRoom?.id || userJoinedRoom?._id;
+      const interval = roomId
+        ? setInterval(() => pollMemberStatus(roomId), 30000)
+        : null;
+      return () => {
+        if (interval) clearInterval(interval);
+      };
+    }, [userJoinedRoom]),
   );
 
   const fetchRooms = async (showSpinner = false) => {
@@ -585,6 +661,7 @@ const ClientHomeScreen = ({ navigation }) => {
         roomId ? fetchChatBadge(roomId) : Promise.resolve(),
         roomId ? fetchAnnouncementBanner(roomId) : Promise.resolve(),
         roomId ? fetchOutstandingBalance(roomId) : Promise.resolve(),
+        roomId ? fetchMemberActivity(roomId) : Promise.resolve(),
         roomId
           ? paymentService
               .getPaymentHistory(roomId)
@@ -2385,6 +2462,122 @@ const ClientHomeScreen = ({ navigation }) => {
                     </View>
                   </View>
                 )}
+
+                {/* ─── MEMBER ACTIVITY & CONTRIBUTIONS ─── */}
+                {memberActivity.length > 0 && (
+                  <View style={styles.activityCard}>
+                    <View style={styles.activityHeader}>
+                      <Ionicons name="pulse" size={18} color={colors.accent} />
+                      <Text style={styles.activityTitle}>Members Activity</Text>
+                      <View style={styles.onlineCountChip}>
+                        <View style={styles.onlineDotSmall} />
+                        <Text style={styles.onlineCountText}>
+                          {memberActivity.filter((m) => m.isOnline).length}{" "}
+                          online
+                        </Text>
+                      </View>
+                    </View>
+
+                    {memberActivity.map((member, index) => (
+                      <View key={member.userId}>
+                        <View style={styles.activityRow}>
+                          <View style={styles.activityAvatarWrap}>
+                            {member.avatar?.url ? (
+                              <Image
+                                source={{ uri: member.avatar.url }}
+                                style={styles.activityAvatarImg}
+                              />
+                            ) : (
+                              <View style={styles.activityAvatar}>
+                                <Text style={styles.activityAvatarText}>
+                                  {(member.name || "?").charAt(0).toUpperCase()}
+                                </Text>
+                              </View>
+                            )}
+                            <View
+                              style={[
+                                styles.statusDot,
+                                {
+                                  backgroundColor: member.isOnline
+                                    ? "#4caf50"
+                                    : member.isRecentlyActive
+                                      ? "#ff9800"
+                                      : "#bdbdbd",
+                                },
+                              ]}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <View style={styles.activityNameRow}>
+                              <Text
+                                style={styles.activityName}
+                                numberOfLines={1}
+                              >
+                                {member.name}
+                                {String(member.userId) === String(userId)
+                                  ? " (You)"
+                                  : ""}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => viewUserProfile(member.userId)}
+                                style={{ marginLeft: 4 }}
+                              >
+                                <Ionicons
+                                  name="information-circle-outline"
+                                  size={16}
+                                  color={colors.accent}
+                                />
+                              </TouchableOpacity>
+                              {member.isOnline && (
+                                <View style={styles.onlineChip}>
+                                  <Text style={styles.onlineChipText}>
+                                    Online
+                                  </Text>
+                                </View>
+                              )}
+                              {!member.isOnline && member.isRecentlyActive && (
+                                <View style={styles.recentChip}>
+                                  <Text style={styles.recentChipText}>
+                                    {formatLastActive(member.lastActiveAt)}
+                                  </Text>
+                                </View>
+                              )}
+                              {!member.isOnline && !member.isRecentlyActive && (
+                                <Text style={styles.offlineText}>
+                                  {member.lastActiveAt
+                                    ? formatLastActive(member.lastActiveAt)
+                                    : "Offline"}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={styles.contributionRow}>
+                              <Ionicons
+                                name="wallet-outline"
+                                size={12}
+                                color={colors.textTertiary}
+                              />
+                              <Text style={styles.contributionText}>
+                                {"\u20B1"}
+                                {(member.totalContributions || 0)
+                                  .toFixed(2)
+                                  .replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                              </Text>
+                              <Text style={styles.contributionLabel}>
+                                total contributions
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.rankBadge}>
+                            <Text style={styles.rankText}>#{index + 1}</Text>
+                          </View>
+                        </View>
+                        {index < memberActivity.length - 1 && (
+                          <View style={styles.activityDivider} />
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
               </>
             ) : (
               /* ─── NO ROOM JOINED ─── */
@@ -2406,7 +2599,9 @@ const ClientHomeScreen = ({ navigation }) => {
             {/* ─── AVAILABLE ROOMS ─── */}
             {unjoinedRooms.length > 0 && (
               <View style={styles.availSection}>
-                <Text style={styles.sectionLabel}>AVAILABLE ROOMS</Text>
+                <Text style={styles.sectionLabel}>
+                  AVAILABLE ROOMS FOR RENT
+                </Text>
                 {unjoinedRooms.map((room) => {
                   const roomId = room.id || room._id;
                   const isPending = pendingRoomIds.includes(roomId);
@@ -2597,6 +2792,210 @@ const ClientHomeScreen = ({ navigation }) => {
             )}
           </ScrollView>
         )}
+
+        {/* ─── USER PROFILE MODAL ─── */}
+        <Modal
+          visible={profileModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setProfileModalVisible(false)}
+        >
+          <View style={styles.profileModalBackground}>
+            <View style={styles.profileModalContent}>
+              {/* Modal Header */}
+              <View style={styles.profileModalHeader}>
+                <Text style={styles.profileModalTitle}>User Profile</Text>
+                <TouchableOpacity onPress={() => setProfileModalVisible(false)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              {selectedUserProfile ? (
+                <ScrollView style={styles.profileModalBody}>
+                  {/* Avatar */}
+                  {selectedUserProfile.avatar?.url ? (
+                    <Image
+                      source={{ uri: selectedUserProfile.avatar.url }}
+                      style={styles.profileLargeAvatar}
+                    />
+                  ) : (
+                    <View style={styles.profileLargeAvatarPlaceholder}>
+                      <Text style={styles.profileLargeAvatarText}>
+                        {(selectedUserProfile.name || "?")
+                          .charAt(0)
+                          .toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Name */}
+                  <Text style={styles.profileName}>
+                    {selectedUserProfile.name}
+                  </Text>
+
+                  {/* Username */}
+                  {selectedUserProfile.username && (
+                    <Text style={styles.profileUsername}>
+                      @{selectedUserProfile.username}
+                    </Text>
+                  )}
+
+                  {/* Role Badge */}
+                  <View style={styles.profileRoleBadge}>
+                    <Text style={styles.profileRoleText}>
+                      {selectedUserProfile.is_admin
+                        ? "Administrator"
+                        : selectedUserProfile.role === "host"
+                          ? "Host"
+                          : "Member"}
+                    </Text>
+                  </View>
+
+                  {/* Info Grid */}
+                  <View style={styles.profileInfoGrid}>
+                    {selectedUserProfile.gender && (
+                      <View style={styles.profileInfoItem}>
+                        <Ionicons
+                          name="person-outline"
+                          size={16}
+                          color={colors.accent}
+                        />
+                        <View>
+                          <Text style={styles.profileInfoLabel}>Gender</Text>
+                          <Text style={styles.profileInfoValue}>
+                            {selectedUserProfile.gender}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {selectedUserProfile.date_of_birth && (
+                      <View style={styles.profileInfoItem}>
+                        <Ionicons
+                          name="calendar-outline"
+                          size={16}
+                          color={colors.accent}
+                        />
+                        <View>
+                          <Text style={styles.profileInfoLabel}>
+                            Date of Birth
+                          </Text>
+                          <Text style={styles.profileInfoValue}>
+                            {new Date(
+                              selectedUserProfile.date_of_birth,
+                            ).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {selectedUserProfile.created_at && (
+                      <View style={styles.profileInfoItem}>
+                        <Ionicons
+                          name="calendar"
+                          size={16}
+                          color={colors.accent}
+                        />
+                        <View>
+                          <Text style={styles.profileInfoLabel}>
+                            Member Since
+                          </Text>
+                          <Text style={styles.profileInfoValue}>
+                            {new Date(
+                              selectedUserProfile.created_at,
+                            ).toLocaleDateString("en-US", {
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {selectedUserProfile.totalContributions !== undefined && (
+                      <View style={styles.profileInfoItem}>
+                        <Ionicons
+                          name="wallet"
+                          size={16}
+                          color={colors.accent}
+                        />
+                        <View>
+                          <Text style={styles.profileInfoLabel}>
+                            Total Contributions
+                          </Text>
+                          <Text style={styles.profileInfoValue}>
+                            ₱
+                            {selectedUserProfile.totalContributions.toLocaleString(
+                              "en-US",
+                              {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              },
+                            )}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {selectedUserProfile.roomCount !== undefined && (
+                      <View style={styles.profileInfoItem}>
+                        <Ionicons
+                          name="home-outline"
+                          size={16}
+                          color={colors.accent}
+                        />
+                        <View>
+                          <Text style={styles.profileInfoLabel}>Rooms</Text>
+                          <Text style={styles.profileInfoValue}>
+                            {selectedUserProfile.roomCount}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {selectedUserProfile.isOnline !== undefined && (
+                      <View style={styles.profileInfoItem}>
+                        <Ionicons
+                          name="ellipse"
+                          size={12}
+                          color={
+                            selectedUserProfile.isOnline
+                              ? "#4CAF50"
+                              : selectedUserProfile.isRecentlyActive
+                                ? "#FFC107"
+                                : "#999"
+                          }
+                          style={{ marginTop: 2 }}
+                        />
+                        <View>
+                          <Text style={styles.profileInfoLabel}>Status</Text>
+                          <Text style={styles.profileInfoValue}>
+                            {selectedUserProfile.isOnline
+                              ? "Online"
+                              : selectedUserProfile.isRecentlyActive
+                                ? "Recently Active"
+                                : selectedUserProfile.lastActiveAt
+                                  ? `Active ${formatLastActive(
+                                      selectedUserProfile.lastActiveAt,
+                                    )}`
+                                  : "Offline"}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </ScrollView>
+              ) : (
+                <View style={styles.profileModalLoading}>
+                  <ActivityIndicator size="large" color={colors.accent} />
+                  <Text style={styles.profileLoadingText}>
+                    Loading profile...
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
       </View>
     </>
   );
@@ -3004,6 +3403,146 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontSize: 10,
       color: colors.textTertiary,
       fontStyle: "italic",
+    },
+
+    // ─── MEMBER ACTIVITY ───
+    activityCard: {
+      marginHorizontal: 16,
+      marginTop: 14,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    activityHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    activityTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+      flex: 1,
+    },
+    onlineCountChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+      backgroundColor: "#e8f5e9",
+    },
+    onlineDotSmall: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: "#4caf50",
+    },
+    onlineCountText: { fontSize: 11, fontWeight: "600", color: "#2e7d32" },
+    activityRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    activityAvatarWrap: { position: "relative" },
+    activityAvatarImg: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    activityAvatar: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    activityAvatarText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    statusDot: {
+      position: "absolute",
+      bottom: 0,
+      right: 0,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: colors.card,
+    },
+    activityNameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 3,
+    },
+    activityName: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+      flexShrink: 1,
+    },
+    onlineChip: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 6,
+      backgroundColor: "#e8f5e9",
+    },
+    onlineChipText: { fontSize: 9, fontWeight: "700", color: "#2e7d32" },
+    recentChip: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 6,
+      backgroundColor: "#fff3e0",
+    },
+    recentChipText: { fontSize: 9, fontWeight: "600", color: "#e65100" },
+    offlineText: { fontSize: 9, fontWeight: "500", color: colors.textTertiary },
+    contributionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    contributionText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.success,
+    },
+    contributionLabel: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      marginLeft: 2,
+    },
+    rankBadge: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    rankText: { fontSize: 10, fontWeight: "700", color: colors.textSecondary },
+    activityDivider: {
+      height: 1,
+      backgroundColor: colors.background,
+      marginHorizontal: 16,
     },
 
     // ─── EMPTY STATE ───
@@ -3714,6 +4253,127 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       height: 9,
       borderRadius: 5,
       backgroundColor: colors.card,
+    },
+
+    // ─── USER PROFILE MODAL ───
+    profileModalBackground: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.5)",
+      justifyContent: "flex-end",
+    },
+    profileModalContent: {
+      backgroundColor: colors.background,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: "90%",
+      paddingTop: 0,
+    },
+    profileModalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    profileModalTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    profileModalBody: {
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+    },
+    profileModalLoading: {
+      height: 200,
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 12,
+    },
+    profileLoadingText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    profileLargeAvatar: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      alignSelf: "center",
+      marginBottom: 16,
+      borderWidth: 2,
+      borderColor: colors.accent,
+    },
+    profileLargeAvatarPlaceholder: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      alignSelf: "center",
+      marginBottom: 16,
+      borderWidth: 2,
+      borderColor: "#f0e6c8",
+    },
+    profileLargeAvatarText: {
+      fontSize: 40,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    profileName: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: colors.text,
+      textAlign: "center",
+      marginBottom: 4,
+    },
+    profileUsername: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: "center",
+      marginBottom: 12,
+    },
+    profileRoleBadge: {
+      alignSelf: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: colors.accentSurface,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    profileRoleText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+    profileInfoGrid: {
+      gap: 12,
+    },
+    profileInfoItem: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    profileInfoLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      fontWeight: "500",
+      marginBottom: 2,
+    },
+    profileInfoValue: {
+      fontSize: 13,
+      color: colors.text,
+      fontWeight: "600",
     },
   });
 

@@ -59,6 +59,10 @@ export const authService = {
   // Fetch avatars for saved accounts (public, no auth)
   getAvatars: (emails) =>
     api.post("/api/v2/user/avatars", { emails }).then(extractData),
+
+  // Get public user profile by userId (no auth required)
+  getPublicProfile: (userId) =>
+    api.get(`/api/v2/user/public/${userId}`).then(extractData),
 };
 
 // Host Role Services
@@ -108,6 +112,10 @@ export const roomService = {
     api
       .put(`/api/v2/rooms/admin/${roomId}/members/${memberId}/toggle-payer`)
       .then(extractData),
+  getMemberActivity: (roomId) =>
+    api.get(`/api/v2/rooms/${roomId}/member-activity`).then(extractData),
+  getMemberStatus: (roomId) =>
+    api.get(`/api/v2/rooms/${roomId}/member-status`).then(extractData),
 };
 
 // Presence Services

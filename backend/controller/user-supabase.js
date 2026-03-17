@@ -5,6 +5,7 @@
 
 const express = require("express");
 const SupabaseService = require("../db/SupabaseService");
+const supabase = require("../db/SupabaseClient");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -18,6 +19,7 @@ const ActivationContent = require("../utils/ActivationContent");
 const ResetPasswordEmail = require("../utils/ResetPasswordEmail");
 const avatarCache = require("../utils/MemoryCache");
 const { uploadAvatarToStorage } = require("../utils/supabaseStorage");
+const activityTracker = require("../utils/activityTracker");
 
 // In-memory store for pending users (10-minute expiry)
 const pendingUsers = new Map();
@@ -951,6 +953,7 @@ router.post(
   "/logout",
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
+    activityTracker.setOffline(req.user.id);
     res.status(200).json({
       success: true,
       message: "Logout successful",
@@ -1658,6 +1661,76 @@ router.get(
     } catch (error) {
       return res.status(500).send("Error loading avatar");
     }
+  }),
+);
+
+/**
+ * Get public user profile by userId (no auth required)
+ * GET /api/v2/user/public/:userId
+ * Returns: { success: true, user: { id, name, username, avatar, role, is_admin, gender, date_of_birth, created_at, totalContributions, roomCount, isOnline, isRecentlyActive, lastActiveAt } }
+ */
+router.get(
+  "/public/:userId",
+  catchAsyncErrors(async (req, res, next) => {
+    const { userId } = req.params;
+    // console.log("[Public Profile] Fetching user:", userId);
+
+    // Fetch user with avatar
+    const user = await SupabaseService.findUserById(userId, {
+      withAvatar: true,
+    });
+
+    if (!user) {
+      // console.log("[Public Profile] User not found:", userId);
+      return next(new ErrorHandler("User not found", 404));
+    }
+
+    // console.log("[Public Profile] Found user:", user.name, "ID:", user.id);
+
+    // Fetch user's rooms (rooms where they are a member)
+    const userRooms = await SupabaseService.getUserRooms(userId);
+    const roomIds = (userRooms || []).map((r) => r.id);
+    const roomCount = roomIds.length;
+
+    // Calculate total contributions across all rooms (only select amount field to reduce egress)
+    let totalContributions = 0;
+    if (roomIds.length > 0) {
+      const { data: allPayments, error: paymentsError } = await supabase
+        .from("payments")
+        .select("amount, status")
+        .eq("paid_by", userId)
+        .in("status", ["completed", "verified"]);
+
+      if (!paymentsError && allPayments) {
+        totalContributions = allPayments.reduce(
+          (sum, p) => sum + (p.amount || 0),
+          0,
+        );
+      }
+    }
+
+    // Get activity status
+    const activityData = activityTracker.getActivityForUsers([userId]);
+    const userActivity = activityData[userId] || {};
+
+    const publicUser = {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      avatar: user.avatar || null,
+      role: user.role,
+      is_admin: user.is_admin,
+      gender: user.gender,
+      date_of_birth: user.date_of_birth,
+      created_at: user.created_at,
+      totalContributions: totalContributions,
+      roomCount: roomCount,
+      isOnline: userActivity.isOnline || false,
+      isRecentlyActive: userActivity.isRecentlyActive || false,
+      lastActiveAt: userActivity.lastActiveAt || null,
+    };
+
+    res.status(200).json({ success: true, user: publicUser });
   }),
 );
 
