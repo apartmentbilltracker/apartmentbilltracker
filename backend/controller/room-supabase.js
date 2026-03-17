@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
+const supabase = require("../db/SupabaseClient");
 const { isAuthenticated } = require("../middleware/auth");
 const ErrorHandler = require("../utils/ErrorHandler");
 const createNotification = require("../utils/createNotification");
@@ -10,6 +11,7 @@ const PDFDocument = require("pdfkit");
 const { enrichBillingCycle } = require("../utils/enrichBillingCycle");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 const cache = require("../utils/MemoryCache");
+const activityTracker = require("../utils/activityTracker");
 
 // Invalidate room caches on any mutating request
 router.use((req, res, next) => {
@@ -1999,5 +2001,119 @@ router.get("/:id/export", isAuthenticated, async (req, res, next) => {
     next(new ErrorHandler(error.message, 500));
   }
 });
+
+// ============================================================
+// MEMBER ACTIVITY & CONTRIBUTIONS
+// ============================================================
+router.get(
+  "/:roomId/member-activity",
+  isAuthenticated,
+  async (req, res, next) => {
+    try {
+      const { roomId } = req.params;
+
+      // Get room members
+      const members = await SupabaseService.getRoomMembers(roomId);
+      if (!members || members.length === 0) {
+        return res.status(200).json({ success: true, members: [] });
+      }
+
+      // Verify requesting user is a member of this room
+      const isMember = members.some((m) => m.user_id === req.user.id);
+      const role = (req.user.role || "").toLowerCase();
+      if (!isMember && !req.user.is_admin && role !== "host") {
+        return next(new ErrorHandler("Not a member of this room", 403));
+      }
+
+      const userIds = members.map((m) => m.user_id);
+
+      // Fetch user info + payments in parallel
+      // OPTIMIZATION: Only select amount+status for payment calculations to minimize egress
+      const [userMap, paymentResponse] = await Promise.all([
+        SupabaseService.findUsersByIds(userIds),
+        supabase
+          .from("payments")
+          .select("paid_by, amount, status")
+          .eq("room_id", roomId)
+          .in("status", ["completed", "verified"]),
+      ]);
+
+      const allPayments = paymentResponse.error
+        ? []
+        : paymentResponse.data || [];
+
+      // Calculate total completed payment amounts per user
+      const contributionMap = {};
+      for (const p of allPayments) {
+        const uid = String(p.paid_by);
+        contributionMap[uid] = (contributionMap[uid] || 0) + (p.amount || 0);
+      }
+
+      // Get activity status for all members
+      const activityData = activityTracker.getActivityForUsers(userIds);
+
+      // Build response
+      const result = members.map((m) => {
+        const user = userMap.get(m.user_id);
+        const uid = String(m.user_id);
+        const activity = activityData[uid] || {};
+        return {
+          userId: uid,
+          name: user?.name || "Unknown",
+          avatar: user?.avatar || null,
+          isPayer: m.is_payer !== false,
+          isOnline: activity.isOnline || false,
+          isRecentlyActive: activity.isRecentlyActive || false,
+          lastActiveAt: activity.lastActiveAt || null,
+          totalContributions: contributionMap[uid] || 0,
+        };
+      });
+
+      // Sort: online first, then recently active, then by contributions desc
+      result.sort((a, b) => {
+        if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+        if (a.isRecentlyActive !== b.isRecentlyActive)
+          return a.isRecentlyActive ? -1 : 1;
+        return b.totalContributions - a.totalContributions;
+      });
+
+      res.status(200).json({ success: true, members: result });
+    } catch (error) {
+      next(new ErrorHandler(error.message, 500));
+    }
+  },
+);
+
+// ============================================================
+// MEMBER STATUS ONLY (lightweight, zero DB queries)
+// Designed for frequent polling — reads only from in-memory tracker.
+// ============================================================
+router.get(
+  "/:roomId/member-status",
+  isAuthenticated,
+  async (req, res, next) => {
+    try {
+      const { roomId } = req.params;
+
+      // Use cached room members to avoid DB query on every poll
+      const cacheKey = `room_members:${roomId}`;
+      let members = cache.get(cacheKey);
+      if (!members) {
+        members = await SupabaseService.getRoomMembers(roomId);
+        if (members) cache.set(cacheKey, members, 120); // cache 2 min
+      }
+      if (!members || members.length === 0) {
+        return res.status(200).json({ success: true, statuses: {} });
+      }
+
+      const userIds = members.map((m) => m.user_id);
+      const statuses = activityTracker.getActivityForUsers(userIds);
+
+      res.status(200).json({ success: true, statuses });
+    } catch (error) {
+      next(new ErrorHandler(error.message, 500));
+    }
+  },
+);
 
 module.exports = router;

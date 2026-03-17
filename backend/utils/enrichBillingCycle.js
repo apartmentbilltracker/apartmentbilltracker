@@ -293,23 +293,23 @@ async function enrichBillingCycle(cycle, members, roomData) {
   const targetWaterTotal = rawTotalWater;
   const waterScale = 1;
 
-  console.log(
-    "[enrichBillingCycle] WATER DEBUG:",
-    JSON.stringify({
-      storedWaterAmount,
-      rawTotalWater,
-      waterScale,
-      targetWaterTotal,
-      nonPayorWaterTotal,
-      payerCount,
-      members: memberWaterOwn.map((m) => ({
-        name: m.member.name,
-        is_payer: m.member.is_payer,
-        presenceDays: m.presenceDays,
-        ownWater: m.ownWater,
-      })),
-    }),
-  );
+  // console.log(
+  //   "[enrichBillingCycle] WATER DEBUG:",
+  //   JSON.stringify({
+  //     storedWaterAmount,
+  //     rawTotalWater,
+  //     waterScale,
+  //     targetWaterTotal,
+  //     nonPayorWaterTotal,
+  //     payerCount,
+  //     members: memberWaterOwn.map((m) => ({
+  //       name: m.member.name,
+  //       is_payer: m.member.is_payer,
+  //       presenceDays: m.presenceDays,
+  //       ownWater: m.ownWater,
+  //     })),
+  //   }),
+  // );
 
   // ── PASS 2: Build final member charges (with non-payor water distributed) ──
   let totalWater = 0;

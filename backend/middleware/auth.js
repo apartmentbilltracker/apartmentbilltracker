@@ -3,6 +3,7 @@ const catchAsyncErrors = require("./catchAsyncErrors");
 const jwt = require("jsonwebtoken");
 const SupabaseService = require("../db/SupabaseService");
 const cache = require("../utils/MemoryCache");
+const activityTracker = require("../utils/activityTracker");
 
 exports.isAuthenticated = catchAsyncErrors(async (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1] || req.cookies.token;
@@ -38,6 +39,7 @@ exports.isAuthenticated = catchAsyncErrors(async (req, res, next) => {
     }
 
     req.user = user;
+    activityTracker.touch(user.id);
     next();
   } catch (error) {
     return next(new ErrorHandler("Please login to continue", 401));

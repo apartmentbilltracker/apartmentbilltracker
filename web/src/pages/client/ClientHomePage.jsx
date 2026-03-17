@@ -888,7 +888,7 @@ export default function ClientHomePage() {
                       {mp.memberName || "Member"}
                     </p>
                     <p className="text-xs text-gray-400 dark:text-white/30">
-                      {mp.isPayer ? "Payer" : "Non-payer"}
+                      {mp.isPayer ? "Payor" : "Non-payor"}
                     </p>
                   </div>
                 </div>
