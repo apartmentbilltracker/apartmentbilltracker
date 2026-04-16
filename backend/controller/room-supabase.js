@@ -96,6 +96,7 @@ const enrichRoomMembers = async (roomId) => {
       const members = await SupabaseService.getRoomMembers(roomId);
       const userMap = await SupabaseService.findUsersByIds(
         (members || []).map((m) => m.user_id),
+        { withAvatar: true },
       );
       return (members || []).map((member) => {
         const user = userMap.get(member.user_id);
@@ -367,7 +368,7 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
     );
 
     const [userMap, paymentsPerRoom, allCyclesPerRoom] = await Promise.all([
-      SupabaseService.findUsersByIds([...allUserIds]),
+      SupabaseService.findUsersByIds([...allUserIds], { withAvatar: true }),
       Promise.all(paymentPromises),
       Promise.all(closedCyclePromises),
     ]);
@@ -606,7 +607,7 @@ router.get("/admin/all", isAuthenticated, async (req, res, next) => {
           SupabaseService.getActiveBillingCycle(r.id),
         ),
       ),
-      SupabaseService.findUsersByIds(creatorIds),
+      SupabaseService.findUsersByIds(creatorIds, { withAvatar: true }),
     ]);
 
     // Batch user lookup for member emails
@@ -614,9 +615,10 @@ router.get("/admin/all", isAuthenticated, async (req, res, next) => {
     membersPerRoom.forEach((members) =>
       (members || []).forEach((m) => allMemberUserIds.add(m.user_id)),
     );
-    const memberUserMap = await SupabaseService.findUsersByIds([
-      ...allMemberUserIds,
-    ]);
+    const memberUserMap = await SupabaseService.findUsersByIds(
+      [...allMemberUserIds],
+      { withAvatar: true },
+    );
 
     const rooms = (allRooms || []).map((room, i) => {
       const members = membersPerRoom[i] || [];
@@ -877,7 +879,9 @@ router.get("/:id", async (req, res, next) => {
 
     // Batch user lookup instead of N sequential queries
     const memberUserIds = (members || []).map((m) => m.user_id);
-    const userMap = await SupabaseService.findUsersByIds(memberUserIds);
+    const userMap = await SupabaseService.findUsersByIds(memberUserIds, {
+      withAvatar: true,
+    });
 
     room.members = (members || []).map((member) => {
       const user = userMap.get(member.user_id);
@@ -2030,7 +2034,7 @@ router.get(
       // Fetch user info + payments in parallel
       // OPTIMIZATION: Only select amount+status for payment calculations to minimize egress
       const [userMap, paymentResponse] = await Promise.all([
-        SupabaseService.findUsersByIds(userIds),
+        SupabaseService.findUsersByIds(userIds, { withAvatar: true }),
         supabase
           .from("payments")
           .select("paid_by, amount, status")

@@ -421,6 +421,19 @@ const ClientHomeScreen = ({ navigation }) => {
           String(payor.user?.id || payor.user?._id || payor.user),
       );
 
+      // Extract avatar URL - handle both string and object formats
+      let avatarUrl = null;
+      if (payor.user?.avatar) {
+        if (typeof payor.user.avatar === "string") {
+          avatarUrl = payor.user.avatar;
+        } else if (
+          typeof payor.user.avatar === "object" &&
+          payor.user.avatar.url
+        ) {
+          avatarUrl = payor.user.avatar.url;
+        }
+      }
+
       const paymentData = payment || {
         rentStatus: "unpaid",
         electricityStatus: "unpaid",
@@ -431,6 +444,7 @@ const ClientHomeScreen = ({ navigation }) => {
       return {
         name: payor.user?.name || "Unknown",
         userId: String(payor.user?.id || payor.user?._id || payor.user),
+        avatar: avatarUrl,
         payment: {
           rent: paymentData.rentStatus || "unpaid",
           electricity: paymentData.electricityStatus || "unpaid",
@@ -2370,11 +2384,24 @@ const ClientHomeScreen = ({ navigation }) => {
                     {getPayorsPaymentStatus().map((payor, index) => (
                       <View key={payor.userId}>
                         <View style={styles.payorRow}>
-                          <View style={styles.payorAvatar}>
-                            <Text style={styles.payorAvatarText}>
-                              {(payor.name || "?").charAt(0).toUpperCase()}
-                            </Text>
-                          </View>
+                          {payor.avatar ? (
+                            <Image
+                              source={{ uri: payor.avatar }}
+                              style={styles.payorAvatarImg}
+                              onError={() =>
+                                console.log(
+                                  "Avatar load error for:",
+                                  payor.name,
+                                )
+                              }
+                            />
+                          ) : (
+                            <View style={styles.payorAvatar}>
+                              <Text style={styles.payorAvatarText}>
+                                {(payor.name || "?").charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
                           <View style={{ flex: 1 }}>
                             <View style={styles.payorNameRow}>
                               <Text style={styles.payorName}>{payor.name}</Text>
@@ -3356,6 +3383,13 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       backgroundColor: colors.accentSurface,
       justifyContent: "center",
       alignItems: "center",
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    payorAvatarImg: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
       borderWidth: 1,
       borderColor: "#f0e6c8",
     },

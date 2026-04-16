@@ -7,20 +7,88 @@ import {
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { apiService } from "../../services/apiService";
+import {
+  apiService,
+  roomService,
+  billingCycleService,
+} from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { useContext } from "react";
+import { AuthContext } from "../../context/AuthContext";
 
 const PaymentHistoryScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const authContext = useContext(AuthContext);
+  const user = authContext?.state?.user;
 
   const { roomId, roomName } = route.params;
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [selectedPayment, setSelectedPayment] = useState(null);
+  const [receiptRoomData, setReceiptRoomData] = useState(null);
+  const [receiptBillingData, setReceiptBillingData] = useState(null);
+  const [receiptMemberInfo, setReceiptMemberInfo] = useState(null);
+  const [receiptUserCharge, setReceiptUserCharge] = useState(null);
+
+  // Fetch room and billing data for receipt display
+  useEffect(() => {
+    const fetchReceiptData = async () => {
+      if (!selectedPayment) {
+        setReceiptRoomData(null);
+        setReceiptBillingData(null);
+        setReceiptMemberInfo(null);
+        setReceiptUserCharge(null);
+        return;
+      }
+
+      try {
+        const userId = user?.id || user?._id;
+        const roomResponse = await roomService.getRoomById(roomId);
+        const room =
+          roomResponse?.data?.room ||
+          roomResponse?.room ||
+          roomResponse?.data ||
+          roomResponse;
+        setReceiptRoomData(room);
+
+        // Get member info
+        if (room?.members && Array.isArray(room.members)) {
+          const member = room.members.find(
+            (m) =>
+              String(m.user?.id || m.user?._id || m.user) === String(userId),
+          );
+          setReceiptMemberInfo(member);
+        }
+
+        // Get billing cycle data
+        const cycles = await billingCycleService.getBillingCycles(roomId);
+        const cycles_arr = Array.isArray(cycles)
+          ? cycles
+          : cycles?.billingCycles || cycles?.data || [];
+        const activeCycle = cycles_arr.find((c) => c.status === "active");
+        setReceiptBillingData(activeCycle);
+
+        // Get user charge data
+        if (activeCycle?.memberCharges?.length > 0) {
+          const userCharge = activeCycle.memberCharges.find(
+            (c) => String(c.userId) === String(userId),
+          );
+          setReceiptUserCharge(userCharge);
+        }
+      } catch (err) {
+        console.error("Error fetching receipt data:", err);
+      }
+    };
+
+    fetchReceiptData();
+  }, [selectedPayment, roomId, user]);
 
   const fetchPaymentHistory = async () => {
     try {
@@ -175,12 +243,48 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
   /* ─── Reference helper ─── */
   const getReference = (payment) => {
     return (
+      payment.referenceNumber ||
       payment.reference ||
+      payment.transactionId ||
       payment.gcash?.referenceNumber ||
       payment.bankTransfer?.referenceNumber ||
       payment.cash?.receiptNumber ||
+      payment._id ||
       null
     );
+  };
+
+  /* ─── Helper functions for receipt ─── */
+  const getRoomAddress = () => {
+    return receiptRoomData?.address || "Apartment Address";
+  };
+
+  const getMemberSinceDate = () => {
+    const joinedDate =
+      receiptMemberInfo?.joinedAt || receiptMemberInfo?.joined_at;
+    if (!joinedDate) return "N/A";
+
+    const date = new Date(joinedDate);
+    return date.toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const getMemberStatus = () => {
+    if (receiptUserCharge) {
+      return receiptUserCharge.isPayer !== false ? "Payor" : "Non-Payor";
+    }
+    return receiptMemberInfo?.isPayer ? "Payor" : "Non-Payor";
+  };
+
+  const getReceiptTitle = () => {
+    const method = selectedPayment?.paymentMethod || "";
+    if (method.includes("bank")) return "BANK TRANSFER RECEIPT";
+    if (method.includes("gcash")) return "GCASH RECEIPT";
+    if (method.includes("cash")) return "CASH RECEIPT";
+    return "PAYMENT RECEIPT";
   };
 
   /* ─── Loading State ─── */
@@ -213,7 +317,11 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
     const ref = getReference(payment);
 
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => setSelectedPayment(payment)}
+        activeOpacity={0.7}
+      >
         {/* Top Row */}
         <View style={styles.cardTop}>
           <View style={styles.billIconWrap}>
@@ -281,103 +389,349 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
             <Text style={styles.refValue}>{payment.bankTransfer.bankName}</Text>
           </View>
         )}
-      </View>
+      </TouchableOpacity>
+    );
+  };
+
+  /* ─── Receipt Modal ─── */
+  const renderReceiptModal = () => {
+    if (!selectedPayment) return null;
+
+    const payment = selectedPayment;
+    const ref = getReference(payment) || "N/A";
+    const dateStr = new Date(payment.transactionDate).toLocaleDateString(
+      "en-PH",
+      { year: "numeric", month: "2-digit", day: "2-digit" },
+    );
+    const timeStr = new Date(payment.transactionDate).toLocaleTimeString(
+      "en-PH",
+      { hour: "2-digit", minute: "2-digit" },
+    );
+
+    // Calculate bill amounts from user charge data
+    const billAmounts = {
+      rent: receiptUserCharge?.rentShare || 0,
+      electricity: receiptUserCharge?.electricityShare || 0,
+      internet: receiptUserCharge?.internetShare || 0,
+      water:
+        receiptUserCharge?.isPayer !== false
+          ? receiptUserCharge?.waterBillShare || 0
+          : receiptUserCharge?.waterOwn || 0,
+      total: receiptUserCharge?.totalDue || parseFloat(payment.amount) || 0,
+    };
+
+    const barcodeNumber =
+      payment.barcodeNumber ||
+      Math.random().toString().slice(2, 14).padEnd(12, "0");
+
+    return (
+      <Modal
+        visible={true}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedPayment(null)}
+      >
+        <View style={styles.receiptModalOverlay}>
+          <View style={styles.receiptModalContent}>
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.receiptCloseBtn}
+              onPress={() => setSelectedPayment(null)}
+            >
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+
+            <ScrollView
+              style={styles.receiptScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Receipt Content */}
+              <View style={styles.receiptContent}>
+                {/* Title */}
+                <View style={styles.titleRow}>
+                  <Text style={styles.receiptTitle}>{getReceiptTitle()}</Text>
+                  <Text style={styles.titleSubtitle}>
+                    Apartment Bill Tracker
+                  </Text>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Receipt Header Info */}
+                <View style={styles.headerInfo}>
+                  <View style={styles.headerRow}>
+                    <Text style={styles.headerLabelRight}>
+                      Room: {roomName}
+                    </Text>
+                    <Text style={styles.headerLabel}>Receipt No. {ref}</Text>
+                  </View>
+                </View>
+
+                {/* Date */}
+                <View style={styles.dateSection}>
+                  <Text style={styles.dateText}>
+                    {dateStr} {timeStr}
+                  </Text>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Client Section */}
+                <Text style={styles.sectionTitle}>Client Information</Text>
+                <View style={styles.clientInfo}>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Name</Text>
+                    <Text style={styles.infoValue}>
+                      : {user?.name || "Tenant"}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Status</Text>
+                    <Text style={styles.infoValue}>: {getMemberStatus()}</Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Member Since</Text>
+                    <Text style={styles.infoValue}>
+                      : {getMemberSinceDate()}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Location</Text>
+                    <Text style={styles.infoValue}>: {getRoomAddress()}</Text>
+                  </View>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Cost Breakdown */}
+                <View style={styles.costBreakdown}>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Rent</Text>
+                    <Text style={styles.costDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.costAmount}>
+                      ₱{(billAmounts.rent || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Electricity</Text>
+                    <Text style={styles.costDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.costAmount}>
+                      ₱{(billAmounts.electricity || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Internet</Text>
+                    <Text style={styles.costDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.costAmount}>
+                      ₱{(billAmounts.internet || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Water</Text>
+                    <Text style={styles.costDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.costAmount}>
+                      ₱{(billAmounts.water || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Service Fee</Text>
+                    <Text style={styles.costDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.costAmount}>Free</Text>
+                  </View>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Total */}
+                <View style={styles.totalSection}>
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>TOTAL</Text>
+                    <Text style={styles.totalDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.totalAmount}>
+                      ₱{(billAmounts.total || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Barcode */}
+                <View style={styles.barcodeSection}>
+                  <View style={styles.barcode}>
+                    {Array(30)
+                      .fill(0)
+                      .map((_, i) => (
+                        <View
+                          key={i}
+                          style={{
+                            width: Math.random() > 0.4 ? 1.5 : 4,
+                            height: Math.random() > 0.1 ? 30 : 30,
+                            backgroundColor: "#333",
+                            marginHorizontal: 0.3,
+                          }}
+                        />
+                      ))}
+                  </View>
+                  <Text style={styles.barcodeNumber}>{barcodeNumber}</Text>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Thank You */}
+                <Text style={styles.thankYouText}>THANK YOU FOR TRUSTING!</Text>
+
+                {/* Footer */}
+                <Text style={styles.footerText}>
+                  Host your apartment with us and experience hassle-free
+                  management and seamless payments. Visit our website to learn
+                  more about our services and how we can help you manage your
+                  property efficiently.
+                </Text>
+                <Text style={styles.websiteText}>
+                  www.apartmentbilltracker-ph.onrender.com
+                </Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     );
   };
 
   /* ─── Main Render ─── */
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Payment History</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {roomName}
-          </Text>
-        </View>
-        <View style={styles.headerRight}>
-          <Text style={styles.countBadge}>
-            {payments.length} {payments.length === 1 ? "record" : "records"}
-          </Text>
-        </View>
-      </View>
-
-      {/* Summary Strip */}
-      {payments.length > 0 && (
-        <View style={styles.summaryStrip}>
-          <View style={styles.summaryItem}>
-            <View style={[styles.summaryDot, { backgroundColor: "#22c55e" }]} />
-            <Text style={styles.summaryLabel}>Verified</Text>
-            <Text style={[styles.summaryValue, { color: "#22c55e" }]}>
-              ₱{totalPaid.toFixed(2)}
-            </Text>
-          </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryItem}>
-            <View style={[styles.summaryDot, { backgroundColor: "#f59e0b" }]} />
-            <Text style={styles.summaryLabel}>Pending</Text>
-            <Text style={[styles.summaryValue, { color: "#f59e0b" }]}>
-              ₱{totalPending.toFixed(2)}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* Error */}
-      {error ? (
-        <View style={styles.errorBar}>
-          <Ionicons name="alert-circle-outline" size={16} color="#ef4444" />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
-
-      {/* List / Empty */}
-      {payments.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <View style={styles.emptyIconWrap}>
-            <Ionicons
-              name="receipt-outline"
-              size={48}
-              color={colors.textSecondary}
-            />
-          </View>
-          <Text style={styles.emptyTitle}>No Payments Yet</Text>
-          <Text style={styles.emptyText}>
-            Completed payments will appear here.
-          </Text>
+    <>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
           <TouchableOpacity
-            style={styles.emptyRefresh}
-            onPress={fetchPaymentHistory}
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
           >
-            <Ionicons name="refresh-outline" size={16} color={colors.accent} />
-            <Text style={styles.emptyRefreshText}>Refresh</Text>
+            <Ionicons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Payment History</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
+              {roomName}
+            </Text>
+          </View>
+          <View style={styles.headerRight}>
+            <Text style={styles.countBadge}>
+              {payments.length} {payments.length === 1 ? "record" : "records"}
+            </Text>
+          </View>
         </View>
-      ) : (
-        <FlatList
-          data={payments}
-          renderItem={renderPayment}
-          keyExtractor={(item, i) => item.id || item._id || String(i)}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={["#b38604"]}
-              tintcolor={colors.accent}
-            />
-          }
-        />
-      )}
-    </View>
+
+        {/* Summary Strip */}
+        {payments.length > 0 && (
+          <View style={styles.summaryStrip}>
+            <View style={styles.summaryItem}>
+              <View
+                style={[styles.summaryDot, { backgroundColor: "#22c55e" }]}
+              />
+              <Text style={styles.summaryLabel}>Verified</Text>
+              <Text style={[styles.summaryValue, { color: "#22c55e" }]}>
+                ₱{totalPaid.toFixed(2)}
+              </Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <View
+                style={[styles.summaryDot, { backgroundColor: "#f59e0b" }]}
+              />
+              <Text style={styles.summaryLabel}>Pending</Text>
+              <Text style={[styles.summaryValue, { color: "#f59e0b" }]}>
+                ₱{totalPending.toFixed(2)}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Error */}
+        {error ? (
+          <View style={styles.errorBar}>
+            <Ionicons name="alert-circle-outline" size={16} color="#ef4444" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        {/* List / Empty */}
+        {payments.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons
+                name="receipt-outline"
+                size={48}
+                color={colors.textSecondary}
+              />
+            </View>
+            <Text style={styles.emptyTitle}>No Payments Yet</Text>
+            <Text style={styles.emptyText}>
+              Completed payments will appear here.
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyRefresh}
+              onPress={fetchPaymentHistory}
+            >
+              <Ionicons
+                name="refresh-outline"
+                size={16}
+                color={colors.accent}
+              />
+              <Text style={styles.emptyRefreshText}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={payments}
+            renderItem={renderPayment}
+            keyExtractor={(item, i) => item.id || item._id || String(i)}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#b38604"]}
+                tintcolor={colors.accent}
+              />
+            }
+          />
+        )}
+      </View>
+      {renderReceiptModal()}
+    </>
   );
 };
 
@@ -639,6 +993,216 @@ const createStyles = (colors) =>
       fontWeight: "600",
       color: colors.textSecondary,
       flex: 1,
+    },
+
+    /* Receipt Modal */
+    receiptModalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.5)",
+      justifyContent: "flex-end",
+    },
+    receiptModalContent: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: "90%",
+      paddingBottom: 20,
+    },
+    receiptCloseBtn: {
+      alignSelf: "flex-end",
+      padding: 16,
+      zIndex: 10,
+    },
+    receiptScroll: {
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+    },
+    receiptContent: {
+      backgroundColor: "#f5f5f5",
+      borderRadius: 8,
+      padding: 16,
+      alignItems: "center",
+    },
+
+    /* Receipt Styles */
+    titleRow: {
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 10,
+    },
+    titleSubtitle: {
+      fontSize: 9,
+      color: "#666",
+      letterSpacing: 1,
+    },
+    receiptTitle: {
+      textAlign: "center",
+      fontSize: 16,
+      fontWeight: "bold",
+      marginBottom: 2,
+      letterSpacing: 2,
+      color: "#333",
+    },
+    dashedLine: {
+      textAlign: "center",
+      fontSize: 10,
+      color: "#999",
+      marginBottom: 10,
+      letterSpacing: 1,
+      width: "100%",
+    },
+    headerInfo: {
+      marginBottom: 2,
+      width: "100%",
+    },
+    headerRow: {
+      flexDirection: "column",
+      marginBottom: 2,
+      justifyContent: "space-between",
+      width: "100%",
+    },
+    headerLabel: {
+      fontSize: 9,
+      color: "#333",
+      flex: 0.5,
+    },
+    headerLabelRight: {
+      fontSize: 9,
+      color: "#333",
+      flex: 0.5,
+    },
+    dateSection: {
+      marginBottom: 10,
+      flexDirection: "column",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
+      width: "100%",
+    },
+    dateText: {
+      fontSize: 9,
+      color: "#333",
+      textAlign: "right",
+    },
+    sectionTitle: {
+      fontSize: 9,
+      fontWeight: "600",
+      marginBottom: 4,
+      color: "#333",
+      width: "100%",
+    },
+    clientInfo: {
+      marginBottom: 10,
+      width: "100%",
+    },
+    infoRow: {
+      flexDirection: "row",
+      marginBottom: 1,
+      width: "100%",
+    },
+    infoLabel: {
+      fontSize: 8,
+      color: "#333",
+      width: "40%",
+    },
+    infoValue: {
+      fontSize: 8,
+      color: "#333",
+    },
+    costBreakdown: {
+      marginBottom: 8,
+      paddingBottom: 8,
+      width: "100%",
+    },
+    costRow: {
+      flexDirection: "row",
+      marginBottom: 3,
+      alignItems: "center",
+      width: "100%",
+    },
+    costLabel: {
+      fontSize: 8,
+      color: "#333",
+      fontWeight: "600",
+      flex: 0.3,
+    },
+    costDots: {
+      fontSize: 8,
+      color: "#999",
+      flex: 1,
+      letterSpacing: 1,
+    },
+    costAmount: {
+      fontSize: 8,
+      color: "#333",
+      textAlign: "right",
+      width: "25%",
+    },
+    totalSection: {
+      marginBottom: 8,
+      width: "100%",
+    },
+    totalRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 4,
+      width: "100%",
+    },
+    totalLabel: {
+      fontSize: 10,
+      fontWeight: "bold",
+      color: "#333",
+      flex: 0.3,
+    },
+    totalDots: {
+      fontSize: 8,
+      color: "#999",
+      flex: 1,
+      letterSpacing: 1,
+    },
+    totalAmount: {
+      fontSize: 11,
+      fontWeight: "bold",
+      color: "#333",
+      textAlign: "right",
+      width: "28%",
+    },
+    barcodeSection: {
+      marginBottom: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      height: 45,
+    },
+    barcode: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "center",
+      marginBottom: 2,
+    },
+    barcodeNumber: {
+      fontSize: 7,
+      color: "#333",
+      letterSpacing: 1.5,
+      marginTop: 2,
+    },
+    thankYouText: {
+      textAlign: "center",
+      fontSize: 11,
+      fontWeight: "bold",
+      marginBottom: 6,
+      letterSpacing: 1,
+      color: "#333",
+    },
+    footerText: {
+      textAlign: "center",
+      fontSize: 7,
+      color: "#666",
+      marginBottom: 1,
+    },
+    websiteText: {
+      textAlign: "center",
+      fontSize: 7,
+      color: "#999",
+      marginTop: 2,
     },
   });
 
