@@ -592,4 +592,64 @@ export const chatService = {
       .then(extractData),
 };
 
+// Ads Service
+export const adsService = {
+  // Get active ads for display
+  getAds: (screen = "home") =>
+    api
+      .get(`/api/v2/ads/client/ads?screen=${screen}`)
+      .then(extractData)
+      .then((r) => r?.ads || []),
+
+  // Track ad click
+  trackAdClick: (adId) =>
+    api.post(`/api/v2/ads/client/ads/${adId}/click`).then(extractData),
+
+  // Dismiss ad for user
+  dismissAd: (adId) =>
+    api.post(`/api/v2/ads/client/ads/${adId}/dismiss`).then(extractData),
+
+  // Admin: Create new ad
+  createAd: (data) => api.post("/api/v2/ads/admin/ads", data).then(extractData),
+
+  // Admin: Get all ads
+  getAllAds: (screen, isActive) => {
+    let url = "/api/v2/ads/admin/ads";
+    const params = [];
+    if (screen) params.push(`screen=${screen}`);
+    if (isActive !== undefined) params.push(`isActive=${isActive}`);
+    if (params.length) url += `?${params.join("&")}`;
+    return api
+      .get(url)
+      .then(extractData)
+      .then((r) => r?.ads || []);
+  },
+
+  // Admin: Get single ad
+  getAd: (adId) =>
+    api
+      .get(`/api/v2/ads/admin/ads/${adId}`)
+      .then(extractData)
+      .then((r) => r?.ad || r),
+
+  // Admin: Update ad
+  updateAd: (adId, data) =>
+    api.put(`/api/v2/ads/admin/ads/${adId}`, data).then(extractData),
+
+  // Admin: Delete ad
+  deleteAd: (adId) =>
+    api.delete(`/api/v2/ads/admin/ads/${adId}`).then(extractData),
+
+  // Admin: Get ad analytics
+  getAdAnalytics: (adId) =>
+    api
+      .get(`/api/v2/ads/admin/ads/${adId}/analytics`)
+      .then(extractData)
+      .then((r) => r?.analytics || {}),
+
+  // Admin: Upload image to Cloudinary
+  uploadImage: (formData) =>
+    api.uploadFormData("/api/v2/ads/admin/upload-image", formData),
+};
+
 export default apiService;

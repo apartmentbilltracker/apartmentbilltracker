@@ -8,6 +8,7 @@ const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 const { sendPushNotification } = require("../utils/sendPushNotification");
+const cache = require("../utils/MemoryCache");
 
 // Helper: get payment settings for a specific room, falling back to host-level settings
 const getSettingsForRoom = async (roomId, hostUserId) => {
@@ -417,6 +418,7 @@ router.post(
         reference: referenceNumber,
         payment_method: "gcash",
         status: "pending",
+        payment_date: new Date().toISOString(),
         billing_cycle_start: targetCycle.start_date,
         billing_cycle_end: targetCycle.end_date,
       });
@@ -554,6 +556,7 @@ router.post(
         reference: referenceNumber,
         payment_method: "bank_transfer",
         status: "pending",
+        payment_date: new Date().toISOString(),
         billing_cycle_start: targetCycle.start_date,
         billing_cycle_end: targetCycle.end_date,
       });
@@ -692,6 +695,7 @@ router.post(
         reference: fullReference,
         payment_method: "cash",
         status: "completed",
+        payment_date: new Date().toISOString(),
         billing_cycle_start: targetCycle.start_date,
         billing_cycle_end: targetCycle.end_date,
       });
@@ -713,6 +717,10 @@ router.post(
 
       // Auto-close cycle if all payors have paid
       const autoClose = await checkAndAutoCloseCycle(roomId);
+
+      // Clear outstanding balance cache so clients see fresh data immediately
+      cache.del(`overdue:${roomId}`);
+      cache.invalidatePrefix(`outstanding:${roomId}:`);
 
       res.status(201).json({
         success: true,
@@ -787,18 +795,39 @@ router.get(
       // Filter out cancelled/deleted payments and normalize snake_case to camelCase
       const transactions = (payments || [])
         .filter((p) => p.status !== "cancelled" && p.status !== "deleted")
-        .map((p) => ({
-          ...p,
-          billType: p.bill_type || "total",
-          paymentMethod: p.payment_method || "cash",
-          paidBy: p.paid_by,
-          roomId: p.room_id,
-          billingCycleStart: p.billing_cycle_start,
-          billingCycleEnd: p.billing_cycle_end,
-          transactionDate: p.payment_date || p.created_at,
-          status: p.status || "pending",
-          amount: parseFloat(p.amount) || 0,
-        }));
+        .map((p) => {
+          // Ensure transactionDate is a proper ISO string with 'Z' suffix for consistent UTC timezone handling
+          let transactionDate = p.payment_date || p.created_at;
+          if (transactionDate) {
+            if (typeof transactionDate === "object") {
+              // If it's a Date object, convert to ISO string
+              transactionDate = transactionDate.toISOString();
+            } else if (typeof transactionDate === "string") {
+              // If it's a string and doesn't end with 'Z', add it for proper UTC parsing
+              if (
+                !transactionDate.endsWith("Z") &&
+                transactionDate.includes("T")
+              ) {
+                transactionDate = transactionDate + "Z";
+              } else if (!transactionDate.includes("T")) {
+                // If it's not ISO format, parse and convert
+                transactionDate = new Date(transactionDate).toISOString();
+              }
+            }
+          }
+          return {
+            ...p,
+            billType: p.bill_type || "total",
+            paymentMethod: p.payment_method || "cash",
+            paidBy: p.paid_by,
+            roomId: p.room_id,
+            billingCycleStart: p.billing_cycle_start,
+            billingCycleEnd: p.billing_cycle_end,
+            transactionDate: transactionDate,
+            status: p.status || "pending",
+            amount: parseFloat(p.amount) || 0,
+          };
+        });
 
       res.status(200).json({
         success: true,

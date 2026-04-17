@@ -47,16 +47,16 @@ const PaymentReminderContent = ({
   <title>Payment Reminder</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f5f6fa; font-family: 'Segoe UI', Arial, sans-serif; -webkit-font-smoothing: antialiased;">
-  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto;">
 
     <!-- Header -->
-    <div style="background: linear-gradient(135deg, #b38604 0%, #d4a017 100%); border-radius: 12px 12px 0 0; padding: 32px 30px; text-align: center;">
+    <div style="background: linear-gradient(135deg, #b38604 0%, #d4a017 100%); border-radius: 12px 12px 0 0; padding: 22px 20px; text-align: center;">
       <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px;">Apartment Bill Tracker</h1>
       <p style="margin: 6px 0 0; color: rgba(255,255,255,0.85); font-size: 13px;">Payment Reminder</p>
     </div>
 
     <!-- Body Card -->
-    <div style="background-color: #ffffff; padding: 32px 30px; border-radius: 0 0 12px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+    <div style="background-color: #ffffff; padding: 22px 20px; border-radius: 0 0 12px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
 
       <!-- Greeting -->
       <p style="margin: 0 0 20px; font-size: 15px; color: #333; line-height: 1.6;">

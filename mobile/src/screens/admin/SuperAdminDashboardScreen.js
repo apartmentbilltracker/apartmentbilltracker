@@ -545,6 +545,25 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             </View>
             <Text style={styles.quickActionLabel}>All Rooms</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickAction}
+            onPress={() =>
+              navigation
+                .getParent()
+                ?.navigate("DashboardStack", { screen: "AdminAds" })
+            }
+          >
+            <View
+              style={[
+                styles.quickActionIcon,
+                { backgroundColor: "rgba(211,47,47,0.12)" },
+              ]}
+            >
+              <Ionicons name="image-outline" size={20} color="#d32f2f" />
+            </View>
+            <Text style={styles.quickActionLabel}>Ads</Text>
+          </TouchableOpacity>
         </View>
       </View>
 

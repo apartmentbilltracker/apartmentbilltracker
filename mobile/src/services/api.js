@@ -111,6 +111,79 @@ class APIClient {
   delete(endpoint) {
     return this.makeRequest(endpoint, { method: "DELETE" });
   }
+
+  // FormData upload (for files) — doesn't stringify body, lets fetch handle multipart
+  async uploadFormData(endpoint, formData) {
+    try {
+      const url = `${this.baseURL}${endpoint}`;
+      console.log("[Upload] URL:", url);
+
+      if (_cachedToken === null) {
+        _cachedToken = (await SecureStore.getItemAsync("authToken")) ?? "";
+      }
+      const token = _cachedToken || null;
+
+      const headers = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      // DO NOT set Content-Type — fetch will set it with the correct boundary
+      console.log("[Upload] Headers:", headers);
+
+      const fetchPromise = fetch(url, {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+
+      const response = await Promise.race([
+        fetchPromise,
+        this.getTimeoutPromise(),
+      ]);
+
+      console.log(
+        "[Upload] Response status:",
+        response.status,
+        "Headers:",
+        response.headers.get("content-type"),
+      );
+
+      const contentType = response.headers.get("content-type") || "";
+      let data;
+
+      try {
+        if (contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          data = await response.text();
+        }
+      } catch (parseError) {
+        console.error("[Upload] Parse error:", parseError);
+        data = null;
+      }
+
+      console.log("[Upload] Response data:", data);
+
+      if (!response.ok) {
+        const error = new Error(
+          data?.message || `Upload failed (${response.status})`,
+        );
+        error.status = response.status;
+        error.data = data;
+        throw error;
+      }
+
+      return { data, status: response.status };
+    } catch (error) {
+      console.error(
+        "[Upload Error]",
+        error.status || "Network",
+        endpoint,
+        error.message,
+      );
+      throw error;
+    }
+  }
 }
 
 export default new APIClient();

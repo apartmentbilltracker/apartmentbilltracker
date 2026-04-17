@@ -29,6 +29,7 @@ import AdminAdjustmentsScreen from "../screens/admin/AdminAdjustmentsScreen";
 import AdminRemindersScreen from "../screens/admin/AdminRemindersScreen";
 import AdminPresenceRemindersScreen from "../screens/admin/AdminPresenceRemindersScreen";
 import AdminPaymentSettingsScreen from "../screens/admin/AdminPaymentSettingsScreen";
+import AdminAdsScreen from "../screens/admin/AdminAdsScreen";
 import TermsOfServiceScreen from "../screens/legal/TermsOfServiceScreen";
 import PrivacyPolicyScreen from "../screens/legal/PrivacyPolicyScreen";
 import { useTheme } from "../theme/ThemeContext";
@@ -71,6 +72,11 @@ const DashboardStack = () => {
         name="AdminDashboard"
         component={SuperAdminDashboardScreen}
         options={{ title: "Dashboard" }}
+      />
+      <Stack.Screen
+        name="AdminAds"
+        component={AdminAdsScreen}
+        options={{ title: "Ads Management" }}
       />
     </Stack.Navigator>
   );
