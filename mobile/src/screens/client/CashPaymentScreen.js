@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useContext } from "react";
 import {
   View,
   Text,
@@ -13,13 +13,20 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as MediaLibrary from "expo-media-library";
 import { captureRef } from "react-native-view-shot";
-import apiService from "../../services/apiService";
+import apiService, {
+  roomService,
+  billingCycleService,
+} from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { AuthContext } from "../../context/AuthContext";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const CashPaymentScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const authContext = useContext(AuthContext);
+  const currentUser = authContext?.state?.user;
+  const userId = currentUser?.id || currentUser?._id;
 
   const { roomId, roomName, amount, billType, billingCycleId } = route.params;
   const [step, setStep] = useState("form"); // form, success
@@ -31,7 +38,87 @@ const CashPaymentScreen = ({ navigation, route }) => {
   const [transactionId, setTransactionId] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [receiptLoading, setReceiptLoading] = useState(false);
+  const [roomData, setRoomData] = useState(null);
+  const [billingData, setBillingData] = useState(null);
+  const [billShares, setBillShares] = useState(null);
+  const [memberInfo, setMemberInfo] = useState(null);
+  const [userChargeData, setUserChargeData] = useState(null);
+  const [barcodeNumber] = useState(
+    Math.random().toString().slice(2, 14).padEnd(12, "0"),
+  );
   const receiptRef = React.useRef(null);
+
+  // Fetch room and billing data on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Use getRoomById to get complete room data including address (like RoomDetailsScreen does)
+        const roomResponse = await roomService.getRoomById(roomId);
+        const room =
+          roomResponse?.data?.room ||
+          roomResponse?.room ||
+          roomResponse?.data ||
+          roomResponse;
+
+        setRoomData(room);
+
+        // If billingCycleId is provided, fetch that specific cycle (handles closed cycles)
+        // Otherwise, fetch all cycles and find the active one
+        let targetCycle = null;
+        if (billingCycleId) {
+          const cycleResponse =
+            await billingCycleService.getBillingCycleById(billingCycleId);
+          targetCycle =
+            cycleResponse?.data?.billingCycle ||
+            cycleResponse?.billingCycle ||
+            cycleResponse?.data ||
+            cycleResponse;
+        } else {
+          const cycles = await billingCycleService.getBillingCycles(roomId);
+          const cycles_arr = Array.isArray(cycles)
+            ? cycles
+            : cycles?.billingCycles || cycles?.data || [];
+          targetCycle = cycles_arr.find((c) => c.status === "active");
+        }
+
+        setBillingData(targetCycle);
+
+        // Get current user's member info
+        if (room?.members && Array.isArray(room.members)) {
+          const member = room.members.find(
+            (m) =>
+              String(m.user?.id || m.user?._id || m.user) === String(userId),
+          );
+          setMemberInfo(member);
+        }
+
+        // Calculate bill shares if target cycle exists and has member charges
+        if (targetCycle?.memberCharges?.length > 0) {
+          const userCharge = targetCycle.memberCharges.find(
+            (c) => String(c.userId) === String(userId),
+          );
+          if (userCharge) {
+            setUserChargeData(userCharge);
+            setBillShares({
+              rent: userCharge.rentShare || 0,
+              electricity: userCharge.electricityShare || 0,
+              internet: userCharge.internetShare || 0,
+              water:
+                userCharge.isPayer !== false
+                  ? userCharge.waterBillShare || 0
+                  : userCharge.waterOwn || 0,
+              total: userCharge.totalDue || 0,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching room/billing data:", error);
+      }
+    };
+    if (roomId && userId) {
+      fetchData();
+    }
+  }, [roomId, userId, billingCycleId]);
 
   const handleRecordCash = async () => {
     if (!receiptNumber.trim()) {
@@ -98,6 +185,32 @@ const CashPaymentScreen = ({ navigation, route }) => {
     } finally {
       setReceiptLoading(false);
     }
+  };
+
+  // Helper functions
+  const getRoomAddress = () => {
+    // Use room.address (same as RoomDetailsScreen)
+    return roomData?.address || "Apartment Address";
+  };
+
+  const getMemberSinceDate = () => {
+    const joinedDate = memberInfo?.joinedAt || memberInfo?.joined_at;
+    if (!joinedDate) return "N/A";
+
+    const date = new Date(joinedDate);
+    return date.toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const getMemberStatus = () => {
+    // Use userCharge.isPayer for accurate status from billing cycle data
+    if (userChargeData) {
+      return userChargeData.isPayer !== false ? "Payor" : "Non-Payor";
+    }
+    return memberInfo?.isPayer ? "Payor" : "Non-Payor";
   };
 
   return (
@@ -275,47 +388,191 @@ const CashPaymentScreen = ({ navigation, route }) => {
               collapsable={false}
               style={styles.receiptCapture}
             >
-              <View style={styles.successIconCircle}>
-                <Ionicons name="checkmark-circle" size={56} color="#43a047" />
-              </View>
-
-              <Text style={styles.successTitle}>Payment Recorded!</Text>
-              <Text style={styles.successSubtitle}>
-                Awaiting admin verification
-              </Text>
-
-              <View style={styles.successCard}>
-                <View style={styles.successRow}>
-                  <Text style={styles.successLabel}>Amount</Text>
-                  <Text style={styles.successValue}>₱{amount.toFixed(2)}</Text>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.successRow}>
-                  <Text style={styles.successLabel}>Receipt No.</Text>
-                  <Text style={styles.successValue}>{receiptNumber}</Text>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.successRow}>
-                  <Text style={styles.successLabel}>Received By</Text>
-                  <Text style={styles.successValue}>{receivedBy}</Text>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.successRow}>
-                  <Text style={styles.successLabel}>Witness</Text>
-                  <Text style={styles.successValue}>{witnessName}</Text>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.successRow}>
-                  <Text style={styles.successLabel}>Bill Type</Text>
-                  <Text style={styles.successValue}>
-                    {billType.charAt(0).toUpperCase() + billType.slice(1)}
+              {/* Professional Receipt Format */}
+              <View style={styles.receiptContent}>
+                {/* Title */}
+                <View style={styles.titleRow}>
+                  <Text style={styles.receiptTitle}>CASH RECEIPT</Text>
+                  <Text style={styles.titleSubtitle}>
+                    Apartment Bill Tracker
                   </Text>
                 </View>
-                <View style={styles.divider} />
-                <View style={styles.successRow}>
-                  <Text style={styles.successLabel}>Room</Text>
-                  <Text style={styles.successValue}>{roomName}</Text>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Receipt Header Info */}
+                <View style={styles.headerInfo}>
+                  <View style={styles.headerRow}>
+                    <Text style={styles.headerLabelRight}>
+                      Room: {roomName}
+                    </Text>
+                    <Text style={styles.headerLabel}>
+                      Receipt No. {receiptNumber}
+                    </Text>
+                  </View>
                 </View>
+
+                {/* Date */}
+                <View style={styles.dateSection}>
+                  <Text style={styles.dateText}>
+                    {new Date().toLocaleDateString("en-PH", {
+                      year: "numeric",
+                      month: "2-digit",
+                      day: "2-digit",
+                    })}{" "}
+                    {new Date().toLocaleTimeString("en-PH", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Client Section */}
+                <Text style={styles.sectionTitle}>Client Information</Text>
+                <View style={styles.clientInfo}>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Name</Text>
+                    <Text style={styles.infoValue}>
+                      : {currentUser?.name || "Tenant"}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Status</Text>
+                    <Text style={styles.infoValue}>: {getMemberStatus()}</Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Member Since</Text>
+                    <Text style={styles.infoValue}>
+                      : {getMemberSinceDate()}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Location</Text>
+                    <Text style={styles.infoValue}>: {getRoomAddress()}</Text>
+                  </View>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Cost Breakdown */}
+                <View style={styles.costBreakdown}>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Rent</Text>
+                    <Text style={styles.costDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.costAmount}>
+                      ₱{(billShares?.rent || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Electricity</Text>
+                    <Text style={styles.costDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.costAmount}>
+                      ₱{(billShares?.electricity || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Internet</Text>
+                    <Text style={styles.costDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.costAmount}>
+                      ₱{(billShares?.internet || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Water</Text>
+                    <Text style={styles.costDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.costAmount}>
+                      ₱{(billShares?.water || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Service Fee</Text>
+                    <Text style={styles.costDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.costAmount}>Free</Text>
+                  </View>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Total */}
+                <View style={styles.totalSection}>
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>TOTAL</Text>
+                    <Text style={styles.totalDots}>
+                      {Array(26).fill(".").join("")}
+                    </Text>
+                    <Text style={styles.totalAmount}>
+                      ₱{(billShares?.total || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Barcode */}
+                <View style={styles.barcodeSection}>
+                  <View style={styles.barcode}>
+                    {Array(30)
+                      .fill(0)
+                      .map((_, i) => (
+                        <View
+                          key={i}
+                          style={{
+                            width: Math.random() > 0.4 ? 1.5 : 4,
+                            height: Math.random() > 0.1 ? 30 : 30,
+                            backgroundColor: "#333",
+                            marginHorizontal: 0.3,
+                          }}
+                        />
+                      ))}
+                  </View>
+                  <Text style={styles.barcodeNumber}>{barcodeNumber}</Text>
+                </View>
+
+                {/* Dashed Line */}
+                <Text style={styles.dashedLine}>
+                  {Array(42).fill("-").join("")}
+                </Text>
+
+                {/* Thank You */}
+                <Text style={styles.thankYouText}>THANK YOU FOR TRUSTING!</Text>
+
+                {/* Footer */}
+                <Text style={styles.footerText}>
+                  Host your apartment with us and experience hassle-free
+                  management and seamless payments. Visit our website to learn
+                  more about our services and how we can help you manage your
+                  property efficiently.
+                </Text>
+                <Text style={styles.websiteText}>
+                  www.apartmentbilltracker-ph.onrender.com
+                </Text>
               </View>
             </View>
 
@@ -736,9 +993,16 @@ const createStyles = (colors) =>
     },
     receiptCapture: {
       width: "100%",
-      alignItems: "center",
       backgroundColor: colors.background,
       paddingTop: 4,
+    },
+    receiptContent: {
+      backgroundColor: "#f5f5f5",
+      paddingHorizontal: 16,
+      paddingVertical: 20,
+      marginHorizontal: 16,
+      marginTop: 16,
+      marginBottom: 16,
     },
     downloadReceiptBtn: {
       flexDirection: "row",
@@ -905,6 +1169,184 @@ const createStyles = (colors) =>
       fontSize: 14,
       fontWeight: "700",
       color: "#fff",
+    },
+
+    /* Receipt Styles */
+    titleRow: {
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 10,
+    },
+    titleSubtitle: {
+      fontSize: 9,
+      color: "#666",
+      letterSpacing: 1,
+    },
+    receiptTitle: {
+      textAlign: "center",
+      fontSize: 16,
+      fontWeight: "bold",
+      marginBottom: 2,
+      letterSpacing: 2,
+      color: "#333",
+    },
+    dashedLine: {
+      textAlign: "center",
+      fontSize: 10,
+      color: "#999",
+      marginBottom: 10,
+      letterSpacing: 1,
+    },
+    headerInfo: {
+      marginBottom: 2,
+      width: "100%",
+    },
+    headerRow: {
+      flexDirection: "column",
+      marginBottom: 2,
+      justifyContent: "space-between",
+      width: "100%",
+    },
+    headerLabel: {
+      fontSize: 9,
+      color: "#333",
+      flex: 0.5,
+    },
+    headerLabelRight: {
+      fontSize: 9,
+      color: "#333",
+      flex: 0.5,
+    },
+    dateSection: {
+      marginBottom: 10,
+      flexDirection: "column",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
+    },
+    dateText: {
+      fontSize: 9,
+      color: "#333",
+      textAlign: "right",
+    },
+    sectionTitle: {
+      fontSize: 9,
+      fontWeight: "600",
+      marginBottom: 4,
+      color: "#333",
+    },
+    clientInfo: {
+      marginBottom: 10,
+      width: "100%",
+    },
+    infoRow: {
+      flexDirection: "row",
+      marginBottom: 1,
+      width: "100%",
+    },
+    infoLabel: {
+      fontSize: 8,
+      color: "#333",
+      width: "40%",
+    },
+    infoValue: {
+      fontSize: 8,
+      color: "#333",
+    },
+    costBreakdown: {
+      marginBottom: 8,
+      paddingBottom: 8,
+      width: "100%",
+    },
+    costRow: {
+      flexDirection: "row",
+      marginBottom: 3,
+      alignItems: "center",
+      width: "100%",
+    },
+    costLabel: {
+      fontSize: 8,
+      color: "#333",
+      fontWeight: "600",
+      flex: 0.3,
+    },
+    costDots: {
+      fontSize: 8,
+      color: "#999",
+      flex: 1,
+      letterSpacing: 1,
+    },
+    costAmount: {
+      fontSize: 8,
+      color: "#333",
+      textAlign: "right",
+      width: "25%",
+    },
+    totalSection: {
+      marginBottom: 8,
+      width: "100%",
+    },
+    totalRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 4,
+      width: "100%",
+    },
+    totalLabel: {
+      fontSize: 10,
+      fontWeight: "bold",
+      color: "#333",
+      flex: 0.3,
+    },
+    totalDots: {
+      fontSize: 8,
+      color: "#999",
+      flex: 1,
+      letterSpacing: 1,
+    },
+    totalAmount: {
+      fontSize: 11,
+      fontWeight: "bold",
+      color: "#333",
+      textAlign: "right",
+      width: "28%",
+    },
+    barcodeSection: {
+      marginBottom: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      height: 45,
+    },
+    barcode: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "center",
+      marginBottom: 2,
+    },
+    barcodeNumber: {
+      fontSize: 7,
+      color: "#333",
+      letterSpacing: 1.5,
+      marginTop: 2,
+    },
+    thankYouText: {
+      textAlign: "center",
+      fontSize: 11,
+      fontWeight: "bold",
+      marginBottom: 6,
+      letterSpacing: 1,
+      color: "#333",
+    },
+    footerText: {
+      textAlign: "center",
+      fontSize: 7,
+      color: "#666",
+      marginBottom: 1,
+    },
+    websiteText: {
+      textAlign: "center",
+      fontSize: 7,
+      color: "#999",
+      marginTop: 2,
     },
   });
 

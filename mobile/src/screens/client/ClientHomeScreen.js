@@ -26,6 +26,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import SafeMapView from "../../components/SafeMapView";
+import AdsCarousel from "../../components/AdsCarousel";
 import { AuthContext } from "../../context/AuthContext";
 import AnimatedAmount from "../../components/AnimatedAmount";
 import chatReadTracker from "../../services/chatReadTracker";
@@ -61,7 +62,7 @@ const AMENITY_MAP = {
   gym: { icon: "barbell", label: "Gym", color: "#d84315" },
 };
 
-const ClientHomeScreen = ({ navigation }) => {
+const ClientHomeScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = createStyles(colors, insets);
@@ -349,9 +350,17 @@ const ClientHomeScreen = ({ navigation }) => {
     const isPerPersonWater =
       (userJoinedRoom?.waterFixedType || userJoinedRoom?.water_fixed_type) ===
       "per_person";
+
+    // For per-person fixed water, redistribute non-payor shares to payors
+    const nonPayerCount = members.length - payorCount;
+    const nonPayorWaterPerPayor =
+      isFixedWater && isPerPersonWater && payorCount > 0
+        ? r2((nonPayerCount * fixedWaterAmt) / payorCount)
+        : 0;
+
     const water = isFixedWater
       ? isPerPersonWater
-        ? fixedWaterAmt
+        ? r2(fixedWaterAmt + nonPayorWaterPerPayor)
         : r2(fixedWaterAmt / payorCount)
       : calcWaterFromPresence(
           members,
@@ -421,6 +430,19 @@ const ClientHomeScreen = ({ navigation }) => {
           String(payor.user?.id || payor.user?._id || payor.user),
       );
 
+      // Extract avatar URL - handle both string and object formats
+      let avatarUrl = null;
+      if (payor.user?.avatar) {
+        if (typeof payor.user.avatar === "string") {
+          avatarUrl = payor.user.avatar;
+        } else if (
+          typeof payor.user.avatar === "object" &&
+          payor.user.avatar.url
+        ) {
+          avatarUrl = payor.user.avatar.url;
+        }
+      }
+
       const paymentData = payment || {
         rentStatus: "unpaid",
         electricityStatus: "unpaid",
@@ -431,6 +453,7 @@ const ClientHomeScreen = ({ navigation }) => {
       return {
         name: payor.user?.name || "Unknown",
         userId: String(payor.user?.id || payor.user?._id || payor.user),
+        avatar: avatarUrl,
         payment: {
           rent: paymentData.rentStatus || "unpaid",
           electricity: paymentData.electricityStatus || "unpaid",
@@ -496,13 +519,25 @@ const ClientHomeScreen = ({ navigation }) => {
 
   const fetchActiveBillingCycle = async (roomId) => {
     try {
-      // Use getActiveCycle instead of getBillingCycles to avoid fetching all cycles
-      const response = await billingCycleService.getActiveCycle(roomId);
-      const active = response?.billingCycle || response?.cycle || response;
-      if (active && active.id) {
+      // Try to fetch all cycles and find active or most recent completed
+      const response = await billingCycleService.getBillingCycles(roomId);
+      let cycles = Array.isArray(response)
+        ? response
+        : response?.billingCycles || response?.data || [];
+
+      // Prefer active cycle, but fall back to most recent completed cycle
+      const active = cycles.find((c) => c.status === "active");
+      if (active) {
         setActiveCycle(active);
       } else {
-        setActiveCycle(null);
+        const mostRecent = cycles
+          .filter((c) => c.status === "completed" || c.status === "closed")
+          .sort(
+            (a, b) =>
+              new Date(b.closedAt || b.closed_at || b.endDate || b.end_date) -
+              new Date(a.closedAt || a.closed_at || a.endDate || a.end_date),
+          )[0];
+        setActiveCycle(mostRecent || null);
       }
     } catch (error) {
       console.error("Error fetching active billing cycle:", error);
@@ -592,6 +627,16 @@ const ClientHomeScreen = ({ navigation }) => {
       );
     }
   };
+
+  // Immediately refresh outstanding balance when returning from payment with refresh param
+  useEffect(() => {
+    if (route.params?.refresh && userJoinedRoom) {
+      const roomId = userJoinedRoom.id || userJoinedRoom._id;
+      fetchOutstandingBalance(roomId);
+      // Clear the param so repeated navigation doesn't trigger multiple refreshes
+      route.params.refresh = false;
+    }
+  }, [route.params?.refresh, userJoinedRoom]);
 
   // Refresh room data when screen comes into focus (throttled: max once per 30s)
   // + start 30s status polling while screen is focused
@@ -1630,6 +1675,9 @@ const ClientHomeScreen = ({ navigation }) => {
           </TouchableOpacity>
         )}
 
+        {/* ─── ADS CAROUSEL ─── */}
+        <AdsCarousel screen="home" />
+
         {loading ? (
           <View style={styles.centerLoader}>
             <ActivityIndicator size="large" color={colors.accent} />
@@ -2370,11 +2418,24 @@ const ClientHomeScreen = ({ navigation }) => {
                     {getPayorsPaymentStatus().map((payor, index) => (
                       <View key={payor.userId}>
                         <View style={styles.payorRow}>
-                          <View style={styles.payorAvatar}>
-                            <Text style={styles.payorAvatarText}>
-                              {(payor.name || "?").charAt(0).toUpperCase()}
-                            </Text>
-                          </View>
+                          {payor.avatar ? (
+                            <Image
+                              source={{ uri: payor.avatar }}
+                              style={styles.payorAvatarImg}
+                              onError={() =>
+                                console.log(
+                                  "Avatar load error for:",
+                                  payor.name,
+                                )
+                              }
+                            />
+                          ) : (
+                            <View style={styles.payorAvatar}>
+                              <Text style={styles.payorAvatarText}>
+                                {(payor.name || "?").charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
                           <View style={{ flex: 1 }}>
                             <View style={styles.payorNameRow}>
                               <Text style={styles.payorName}>{payor.name}</Text>
@@ -3356,6 +3417,13 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       backgroundColor: colors.accentSurface,
       justifyContent: "center",
       alignItems: "center",
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    payorAvatarImg: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
       borderWidth: 1,
       borderColor: "#f0e6c8",
     },

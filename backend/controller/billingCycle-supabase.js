@@ -32,6 +32,17 @@ const normalizeCharge = (charge) => {
 // Helper to normalize snake_case Supabase fields to camelCase for mobile clients
 const normalizeBillingCycle = (cycle) => {
   if (!cycle) return cycle;
+
+  // Parse member_charges if it's stored as JSON string (from closed cycles)
+  let memberCharges = cycle.member_charges;
+  if (typeof memberCharges === "string") {
+    try {
+      memberCharges = JSON.parse(memberCharges);
+    } catch {
+      memberCharges = [];
+    }
+  }
+
   return {
     ...cycle,
     startDate: cycle.start_date,
@@ -44,7 +55,7 @@ const normalizeBillingCycle = (cycle) => {
     cycleNumber: cycle.cycle_number,
     previousMeterReading: cycle.previous_meter_reading ?? null,
     currentMeterReading: cycle.current_meter_reading ?? null,
-    memberCharges: (cycle.member_charges || []).map(normalizeCharge),
+    memberCharges: (memberCharges || []).map(normalizeCharge),
   };
 };
 

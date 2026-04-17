@@ -569,12 +569,12 @@ const styles = StyleSheet.create({
   },
   logo: { width: 100, height: 100, resizeMode: "contain" },
   title: {
-    fontSize: 32,
-    fontWeight: "800",
+    fontSize: 28,
+    fontWeight: "700",
     textAlign: "center",
     marginBottom: 10,
-    letterSpacing: 0.5,
-    lineHeight: 40,
+    letterSpacing: 0.8,
+    lineHeight: 36,
   },
   subtitle: {
     fontSize: 15,
