@@ -67,20 +67,62 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
           setReceiptMemberInfo(member);
         }
 
-        // Get billing cycle data
+        // IMPORTANT: Fetch the HISTORICAL billing cycle (from when payment was made)
+        let historicalCycle = null;
+
         const cycles = await billingCycleService.getBillingCycles(roomId);
         const cycles_arr = Array.isArray(cycles)
           ? cycles
           : cycles?.billingCycles || cycles?.data || [];
-        const activeCycle = cycles_arr.find((c) => c.status === "active");
-        setReceiptBillingData(activeCycle);
 
-        // Get user charge data
-        if (activeCycle?.memberCharges?.length > 0) {
-          const userCharge = activeCycle.memberCharges.find(
+        // Strategy 1: Match by billing_cycle_start and billing_cycle_end dates
+        // (Backend stores these dates with payments, not billingCycleId)
+        if (
+          selectedPayment.billing_cycle_start &&
+          selectedPayment.billing_cycle_end
+        ) {
+          const paymentCycleStart = selectedPayment.billing_cycle_start;
+          const paymentCycleEnd = selectedPayment.billing_cycle_end;
+          historicalCycle = cycles_arr.find((c) => {
+            const cycleStart = c.start_date || c.startDate;
+            const cycleEnd = c.end_date || c.endDate;
+            // Match cycles with same date range (compare YYYY-MM-DD only)
+            return (
+              String(cycleStart).slice(0, 10) ===
+                String(paymentCycleStart).slice(0, 10) &&
+              String(cycleEnd).slice(0, 10) ===
+                String(paymentCycleEnd).slice(0, 10)
+            );
+          });
+        }
+
+        // Strategy 2: Fallback to payment_date matching in CLOSED cycles
+        if (!historicalCycle && selectedPayment.payment_date) {
+          const paymentDate = new Date(selectedPayment.payment_date);
+          const closedCycles = cycles_arr.filter(
+            (c) => c.status !== "active" && c.status !== "pending",
+          );
+          historicalCycle = closedCycles.find((c) => {
+            const cycleStart = c.start_date
+              ? new Date(c.start_date)
+              : new Date(c.startDate);
+            const cycleEnd = c.end_date
+              ? new Date(c.end_date)
+              : new Date(c.endDate);
+            return paymentDate >= cycleStart && paymentDate <= cycleEnd;
+          });
+        }
+
+        setReceiptBillingData(historicalCycle);
+
+        // Get user charge data from the historical cycle
+        if (historicalCycle?.memberCharges?.length > 0) {
+          const userCharge = historicalCycle.memberCharges.find(
             (c) => String(c.userId) === String(userId),
           );
           setReceiptUserCharge(userCharge);
+        } else {
+          setReceiptUserCharge(null);
         }
       } catch (err) {
         console.error("Error fetching receipt data:", err);
@@ -132,10 +174,10 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
 
   const formatTime = (date) => {
     if (!date) return "";
-    return new Date(date).toLocaleTimeString("en-PH", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const d = new Date(date);
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
   };
 
   /* ─── Bill helpers ─── */
@@ -399,30 +441,70 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
 
     const payment = selectedPayment;
     const ref = getReference(payment) || "N/A";
-    const dateStr = new Date(payment.transactionDate).toLocaleDateString(
-      "en-PH",
-      { year: "numeric", month: "2-digit", day: "2-digit" },
+    // Ensure we have a valid date - use transactionDate from API response
+    // The backend stores payment_date in ISO format (UTC)
+    const paymentDate =
+      payment.transactionDate || payment.payment_date || payment.created_at;
+    if (!paymentDate) {
+      console.warn("Warning: Payment has no date field", payment);
+    }
+    // Ensure the ISO string has the 'Z' suffix for proper UTC parsing
+    let isoDateString = paymentDate;
+    if (
+      isoDateString &&
+      !isoDateString.endsWith("Z") &&
+      isoDateString.includes("T")
+    ) {
+      // Add 'Z' if missing so JavaScript treats it as UTC
+      isoDateString = isoDateString + "Z";
+    }
+    // Parse the ISO date string - JavaScript automatically converts UTC to local timezone
+    const transactionDateTime = new Date(isoDateString || new Date());
+    console.log(
+      `Payment date debug: paymentDate=${paymentDate}, isoWithZ=${isoDateString}, localTime=${transactionDateTime.toLocaleTimeString()}`,
     );
-    const timeStr = new Date(payment.transactionDate).toLocaleTimeString(
-      "en-PH",
-      { hour: "2-digit", minute: "2-digit" },
-    );
+    const dateStr = transactionDateTime.toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    // Manually format time in local timezone to ensure correct display across platforms
+    const hours = String(transactionDateTime.getHours()).padStart(2, "0");
+    const minutes = String(transactionDateTime.getMinutes()).padStart(2, "0");
+    const timeStr = `${hours}:${minutes}`;
 
-    // Calculate bill amounts from user charge data
+    // Calculate bill amounts - use HISTORICAL data from payment first
     const billAmounts = {
-      rent: receiptUserCharge?.rentShare || 0,
-      electricity: receiptUserCharge?.electricityShare || 0,
-      internet: receiptUserCharge?.internetShare || 0,
+      rent: payment.billBreakdown?.rent || receiptUserCharge?.rentShare || 0,
+      electricity:
+        payment.billBreakdown?.electricity ||
+        receiptUserCharge?.electricityShare ||
+        0,
+      internet:
+        payment.billBreakdown?.internet ||
+        receiptUserCharge?.internetShare ||
+        0,
       water:
-        receiptUserCharge?.isPayer !== false
-          ? receiptUserCharge?.waterBillShare || 0
-          : receiptUserCharge?.waterOwn || 0,
-      total: receiptUserCharge?.totalDue || parseFloat(payment.amount) || 0,
+        payment.billBreakdown?.water ||
+        (receiptUserCharge?.isPayer !== false
+          ? receiptUserCharge?.waterBillShare
+          : receiptUserCharge?.waterOwn) ||
+        0,
+      total:
+        payment.billBreakdown?.total ||
+        receiptUserCharge?.totalDue ||
+        parseFloat(payment.amount) ||
+        0,
     };
 
-    const barcodeNumber =
-      payment.barcodeNumber ||
-      Math.random().toString().slice(2, 14).padEnd(12, "0");
+    // Generate a deterministic numeric-only barcode from payment ID
+    // Match the numeric-only format used in BillsScreen for consistency
+    let barcodeNumber = "000000000000";
+    if (payment.id) {
+      // Extract only numeric characters from ID and pad to 12 digits
+      const numericOnly = String(payment.id).replace(/\D/g, "");
+      barcodeNumber = numericOnly.slice(0, 12).padEnd(12, "0");
+    }
 
     return (
       <Modal

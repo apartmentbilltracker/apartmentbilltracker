@@ -117,12 +117,26 @@ const GCashPaymentScreen = ({ navigation, route }) => {
           roomResponse;
         setRoomData(room);
 
-        const cycles = await billingCycleService.getBillingCycles(roomId);
-        const cycles_arr = Array.isArray(cycles)
-          ? cycles
-          : cycles?.billingCycles || cycles?.data || [];
-        const active = cycles_arr.find((c) => c.status === "active");
-        setBillingData(active);
+        // If billingCycleId is provided, fetch that specific cycle (handles closed cycles)
+        // Otherwise, fetch all cycles and find the active one
+        let targetCycle = null;
+        if (billingCycleId) {
+          const cycleResponse =
+            await billingCycleService.getBillingCycleById(billingCycleId);
+          targetCycle =
+            cycleResponse?.data?.billingCycle ||
+            cycleResponse?.billingCycle ||
+            cycleResponse?.data ||
+            cycleResponse;
+        } else {
+          const cycles = await billingCycleService.getBillingCycles(roomId);
+          const cycles_arr = Array.isArray(cycles)
+            ? cycles
+            : cycles?.billingCycles || cycles?.data || [];
+          targetCycle = cycles_arr.find((c) => c.status === "active");
+        }
+
+        setBillingData(targetCycle);
 
         // Get current user's member info
         if (room?.members && Array.isArray(room.members)) {
@@ -132,9 +146,9 @@ const GCashPaymentScreen = ({ navigation, route }) => {
           );
           setMemberInfo(member);
 
-          // Calculate bill shares if active cycle exists
-          if (active?.memberCharges?.length > 0) {
-            const userCharge = active.memberCharges.find(
+          // Calculate bill shares if target cycle exists and has member charges
+          if (targetCycle?.memberCharges?.length > 0) {
+            const userCharge = targetCycle.memberCharges.find(
               (c) => String(c.userId) === String(userId),
             );
             if (userCharge) {

@@ -48,7 +48,7 @@ const filterPresenceByDates = (presenceArr, start, end) => {
   });
 };
 
-const BillsScreen = ({ navigation }) => {
+const BillsScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const insets = useSafeAreaInsets();
@@ -110,6 +110,16 @@ const BillsScreen = ({ navigation }) => {
       fetchOutstandingBalance(roomId);
     }
   }, [selectedRoom]);
+
+  // Immediately refresh outstanding balance when returning from payment with refresh param
+  useEffect(() => {
+    if (route.params?.refresh && selectedRoom) {
+      const roomId = selectedRoom.id || selectedRoom._id;
+      fetchOutstandingBalance(roomId);
+      // Clear the param so repeated navigation doesn't trigger multiple refreshes
+      route.params.refresh = false;
+    }
+  }, [route.params?.refresh, selectedRoom]);
 
   // Extract presence from already-loaded room data — no extra API call needed
   const extractMemberPresence = (room) => {
@@ -307,8 +317,12 @@ const BillsScreen = ({ navigation }) => {
         return;
       }
 
-      // Generate unique receipt number
+      // Generate unique receipt number and barcode at creation time
       const receiptNumber = `RCP${Date.now()}`.slice(0, 12);
+      const barcodeNumber = Math.random()
+        .toString()
+        .slice(2, 14)
+        .padEnd(12, "0");
       const transactionDate = new Date();
 
       // Payment method details
@@ -326,18 +340,22 @@ const BillsScreen = ({ navigation }) => {
           gcash: "GCash transaction verified",
         }[paymentMethod] || "Payment processed";
 
+      // Use ISO format for consistency with database storage
+      const isoDateTime = transactionDate.toISOString();
+      // Format time in local timezone for display
+      const hours = String(transactionDate.getHours()).padStart(2, "0");
+      const minutes = String(transactionDate.getMinutes()).padStart(2, "0");
+      const seconds = String(transactionDate.getSeconds()).padStart(2, "0");
+
       const receipt = {
         receiptNumber,
+        barcodeNumber,
         transactionDate: transactionDate.toLocaleDateString("en-US", {
           year: "numeric",
           month: "2-digit",
           day: "2-digit",
         }),
-        transactionTime: transactionDate.toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }),
+        transactionTime: `${hours}:${minutes}:${seconds}`,
         paymentMethod,
         paymentMethodText,
         paymentDetails,
@@ -1229,10 +1247,7 @@ const BillsScreen = ({ navigation }) => {
                 year: "numeric",
                 month: "short",
                 day: "numeric",
-              })} ${new Date().toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}</p>
+              })} ${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}</p>
               <p>Please keep this receipt for your records</p>
             </div>
           </div>
@@ -1367,10 +1382,7 @@ const BillsScreen = ({ navigation }) => {
           month: "short",
           day: "numeric",
         }),
-        generatedTime: new Date().toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        generatedTime: `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`,
       };
 
       setReceiptData(receipt);
@@ -2382,6 +2394,8 @@ const BillsScreen = ({ navigation }) => {
                                 roomName: selectedRoom.name,
                                 amount: billShare.total,
                                 billType: "total",
+                                billingCycleId:
+                                  activeCycle?.id || activeCycle?._id,
                               });
                             }
                           }}
@@ -2408,6 +2422,8 @@ const BillsScreen = ({ navigation }) => {
                               roomName: selectedRoom.name,
                               amount: billShare.total,
                               billType: "total",
+                              billingCycleId:
+                                activeCycle?.id || activeCycle?._id,
                             });
                           }
                         }}
@@ -4094,8 +4110,6 @@ const BillsScreen = ({ navigation }) => {
                       <Text
                         style={{
                           fontSize: 10,
-                          borderBottomWidth: 1,
-                          borderBottomColor: "#999",
                           paddingBottom: 4,
                         }}
                       >
@@ -4164,7 +4178,7 @@ const BillsScreen = ({ navigation }) => {
                           textAlign: "right",
                         }}
                       >
-                        WATER PER MEMBER
+                        WATER/MEMBER
                       </Text>
                       <Text
                         style={{
@@ -4667,7 +4681,7 @@ const BillsScreen = ({ navigation }) => {
                       color: colors.text,
                     }}
                   >
-                    Thank You For Your Business!
+                    Thank You For Trusting Us!
                   </Text>
                 </View>
               </View>

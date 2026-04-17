@@ -26,6 +26,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import SafeMapView from "../../components/SafeMapView";
+import AdsCarousel from "../../components/AdsCarousel";
 import { AuthContext } from "../../context/AuthContext";
 import AnimatedAmount from "../../components/AnimatedAmount";
 import chatReadTracker from "../../services/chatReadTracker";
@@ -61,7 +62,7 @@ const AMENITY_MAP = {
   gym: { icon: "barbell", label: "Gym", color: "#d84315" },
 };
 
-const ClientHomeScreen = ({ navigation }) => {
+const ClientHomeScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = createStyles(colors, insets);
@@ -349,9 +350,17 @@ const ClientHomeScreen = ({ navigation }) => {
     const isPerPersonWater =
       (userJoinedRoom?.waterFixedType || userJoinedRoom?.water_fixed_type) ===
       "per_person";
+
+    // For per-person fixed water, redistribute non-payor shares to payors
+    const nonPayerCount = members.length - payorCount;
+    const nonPayorWaterPerPayor =
+      isFixedWater && isPerPersonWater && payorCount > 0
+        ? r2((nonPayerCount * fixedWaterAmt) / payorCount)
+        : 0;
+
     const water = isFixedWater
       ? isPerPersonWater
-        ? fixedWaterAmt
+        ? r2(fixedWaterAmt + nonPayorWaterPerPayor)
         : r2(fixedWaterAmt / payorCount)
       : calcWaterFromPresence(
           members,
@@ -510,13 +519,25 @@ const ClientHomeScreen = ({ navigation }) => {
 
   const fetchActiveBillingCycle = async (roomId) => {
     try {
-      // Use getActiveCycle instead of getBillingCycles to avoid fetching all cycles
-      const response = await billingCycleService.getActiveCycle(roomId);
-      const active = response?.billingCycle || response?.cycle || response;
-      if (active && active.id) {
+      // Try to fetch all cycles and find active or most recent completed
+      const response = await billingCycleService.getBillingCycles(roomId);
+      let cycles = Array.isArray(response)
+        ? response
+        : response?.billingCycles || response?.data || [];
+
+      // Prefer active cycle, but fall back to most recent completed cycle
+      const active = cycles.find((c) => c.status === "active");
+      if (active) {
         setActiveCycle(active);
       } else {
-        setActiveCycle(null);
+        const mostRecent = cycles
+          .filter((c) => c.status === "completed" || c.status === "closed")
+          .sort(
+            (a, b) =>
+              new Date(b.closedAt || b.closed_at || b.endDate || b.end_date) -
+              new Date(a.closedAt || a.closed_at || a.endDate || a.end_date),
+          )[0];
+        setActiveCycle(mostRecent || null);
       }
     } catch (error) {
       console.error("Error fetching active billing cycle:", error);
@@ -606,6 +627,16 @@ const ClientHomeScreen = ({ navigation }) => {
       );
     }
   };
+
+  // Immediately refresh outstanding balance when returning from payment with refresh param
+  useEffect(() => {
+    if (route.params?.refresh && userJoinedRoom) {
+      const roomId = userJoinedRoom.id || userJoinedRoom._id;
+      fetchOutstandingBalance(roomId);
+      // Clear the param so repeated navigation doesn't trigger multiple refreshes
+      route.params.refresh = false;
+    }
+  }, [route.params?.refresh, userJoinedRoom]);
 
   // Refresh room data when screen comes into focus (throttled: max once per 30s)
   // + start 30s status polling while screen is focused
@@ -1643,6 +1674,9 @@ const ClientHomeScreen = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={16} color="#e65100" />
           </TouchableOpacity>
         )}
+
+        {/* ─── ADS CAROUSEL ─── */}
+        <AdsCarousel screen="home" />
 
         {loading ? (
           <View style={styles.centerLoader}>
