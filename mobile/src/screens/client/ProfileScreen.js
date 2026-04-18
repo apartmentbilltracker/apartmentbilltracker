@@ -10,6 +10,7 @@ import {
   TextInput,
   Image,
   Alert,
+  Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -21,6 +22,7 @@ import {
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { getAPIBaseURL } from "../../config/config";
+import { biometricAuth } from "../../utils/biometricAuth";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const THEME_OPTIONS = [
@@ -33,8 +35,15 @@ const ProfileScreen = ({ navigation }) => {
   const { colors, preference, setTheme } = useTheme();
   const styles = createStyles(colors);
 
-  const { state, refreshUser, signOut, switchView, updateUserProfile } =
-    useContext(AuthContext);
+  const {
+    state,
+    refreshUser,
+    signOut,
+    switchView,
+    updateUserProfile,
+    disableBiometric,
+    updateBiometricCredentials,
+  } = useContext(AuthContext);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editName, setEditName] = useState("");
@@ -42,6 +51,11 @@ const ProfileScreen = ({ navigation }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [payorStatus, setPayorStatus] = useState(null);
   const [avatarError, setAvatarError] = useState(false);
+  const [biometricPasswordModalVisible, setBiometricPasswordModalVisible] =
+    useState(false);
+  const [biometricPassword, setBiometricPassword] = useState("");
+  const [enablingBiometric, setEnablingBiometric] = useState(false);
+  const [showBiometricPassword, setShowBiometricPassword] = useState(false);
 
   // Support Service States
   const [supportModalVisible, setSupportModalVisible] = useState(false);
@@ -65,6 +79,9 @@ const ProfileScreen = ({ navigation }) => {
   const [unreadBugReports, setUnreadBugReports] = useState(0);
   const [hostRequestStatus, setHostRequestStatus] = useState(null);
   const [requestingHost, setRequestingHost] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [disablingBiometric, setDisablingBiometric] = useState(false);
 
   const user = state.user || {};
   const userId = user.id || user._id;
@@ -205,13 +222,151 @@ const ProfileScreen = ({ navigation }) => {
     }
   }, [userId]);
 
+  // Load biometric status on mount and when screen focuses
+  React.useEffect(() => {
+    const loadBiometricStatus = async () => {
+      const available = await biometricAuth.isAvailable();
+      setBiometricAvailable(available);
+      // Use per-account check instead of global check
+      const enabled = await biometricAuth.isBiometricEnabledFor(user.email);
+      setBiometricEnabled(enabled);
+    };
+
+    // Load on mount
+    loadBiometricStatus();
+
+    // Refresh when screen comes into focus (user enables during login, then comes back to profile)
+    const unsubscribe = navigation.addListener("focus", () => {
+      loadBiometricStatus();
+    });
+
+    return unsubscribe;
+  }, [user.email, navigation]);
+
+  const handleToggleBiometric = (newValue) => {
+    if (newValue === biometricEnabled) return;
+
+    if (newValue === false) {
+      // Disabling biometric
+      Alert.alert(
+        "Disable Biometric Login",
+        "Are you sure you want to disable biometric login? You will need to enter your password on next login.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Disable",
+            style: "destructive",
+            onPress: async () => {
+              setDisablingBiometric(true);
+              try {
+                const result = await disableBiometric(user.email);
+                if (result.success) {
+                  setBiometricEnabled(false);
+                } else {
+                  Alert.alert(
+                    "Error",
+                    result.error || "Failed to disable biometric",
+                  );
+                  setBiometricEnabled(true);
+                }
+              } catch (error) {
+                Alert.alert(
+                  "Error",
+                  error.message || "Failed to disable biometric",
+                );
+                setBiometricEnabled(true);
+              } finally {
+                setDisablingBiometric(false);
+              }
+            },
+          },
+        ],
+      );
+    } else {
+      // Enabling biometric - show password modal for validation
+      setBiometricPassword("");
+      setBiometricPasswordModalVisible(true);
+    }
+  };
+
+  const handleEnableBiometric = async () => {
+    if (!biometricPassword.trim()) {
+      Alert.alert("Error", "Please enter your password");
+      return;
+    }
+
+    setEnablingBiometric(true);
+    try {
+      // Validate password with backend before enabling biometric
+      const validationResponse = await fetch(
+        `${getAPIBaseURL()}/api/v2/user/validate-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: user.email,
+            password: biometricPassword,
+          }),
+        },
+      );
+
+      let validationData;
+      try {
+        validationData = await validationResponse.json();
+      } catch (parseError) {
+        console.error(
+          "[Biometric] Failed to parse response:",
+          validationResponse.status,
+          parseError,
+        );
+        Alert.alert(
+          "Server Error",
+          `Server returned invalid response (${validationResponse.status}). Please try again later.`,
+        );
+        setBiometricEnabled(false);
+        setEnablingBiometric(false);
+        return;
+      }
+
+      if (!validationResponse.ok) {
+        Alert.alert(
+          "Invalid Password",
+          validationData?.message ||
+            "The password you entered is incorrect. Please try again.",
+        );
+        setBiometricEnabled(false);
+        setEnablingBiometric(false);
+        return;
+      }
+
+      // Password is valid, now enable biometric
+      const result = await updateBiometricCredentials(
+        user.email,
+        biometricPassword,
+        true,
+      );
+      if (result.success) {
+        setBiometricEnabled(true);
+        Alert.alert("Success", "Biometric login has been enabled");
+        setBiometricPasswordModalVisible(false);
+        setBiometricPassword("");
+      } else {
+        Alert.alert("Error", result.error || "Failed to enable biometric");
+        setBiometricEnabled(false);
+      }
+    } catch (error) {
+      Alert.alert("Error", error.message || "Failed to enable biometric");
+      setBiometricEnabled(false);
+    } finally {
+      setEnablingBiometric(false);
+    }
+  };
+
   const handleAdminButtonPress = () => {
     const userRole = user?.role?.toLowerCase();
     if (userRole === "admin") {
-      console.log("Switching to admin view...");
       switchView("admin");
     } else if (userRole === "host") {
-      console.log("Switching to host view...");
       switchView("host");
     }
   };
@@ -624,18 +779,18 @@ const ProfileScreen = ({ navigation }) => {
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 10,
-                backgroundColor: "#fff8e1",
+                backgroundColor: colors.infoBg,
                 padding: 14,
                 borderRadius: 10,
               }}
             >
-              <Ionicons name="time" size={22} color="#e67e22" />
+              <Ionicons name="time" size={22} color={colors.info} />
               <View style={{ flex: 1 }}>
                 <Text
                   style={{
                     fontSize: 14,
                     fontWeight: "600",
-                    color: "#e67e22",
+                    color: colors.info,
                   }}
                 >
                   Host Request Pending
@@ -658,18 +813,18 @@ const ProfileScreen = ({ navigation }) => {
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 10,
-                  backgroundColor: "#fce4ec",
+                  backgroundColor: colors.errorBg,
                   padding: 14,
                   borderRadius: 10,
                 }}
               >
-                <Ionicons name="close-circle" size={22} color="#c62828" />
+                <Ionicons name="close-circle" size={22} color={colors.error} />
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
                       fontSize: 14,
                       fontWeight: "600",
-                      color: "#c62828",
+                      color: colors.error,
                     }}
                   >
                     Host Request Rejected
@@ -688,7 +843,7 @@ const ProfileScreen = ({ navigation }) => {
               <TouchableOpacity
                 style={[
                   styles.adminBtn,
-                  { backgroundColor: "#b38604" },
+                  { backgroundColor: colors.accent },
                   requestingHost && { opacity: 0.6 },
                 ]}
                 onPress={handleRequestHost}
@@ -721,7 +876,7 @@ const ProfileScreen = ({ navigation }) => {
               <TouchableOpacity
                 style={[
                   styles.adminBtn,
-                  { backgroundColor: "#b38604" },
+                  { backgroundColor: colors.accent },
                   requestingHost && { opacity: 0.6 },
                 ]}
                 onPress={handleRequestHost}
@@ -798,6 +953,42 @@ const ProfileScreen = ({ navigation }) => {
           />
         </TouchableOpacity>
       </View>
+
+      {/* ─── SECURITY ─── */}
+      {biometricAvailable && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Security</Text>
+          <View style={styles.biometricRow}>
+            <View style={styles.biometricInfo}>
+              <View
+                style={[
+                  styles.menuIcon,
+                  { backgroundColor: colors.accentLight },
+                ]}
+              >
+                <Ionicons name="finger-print" size={18} color={colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuTitle}>Biometric Login</Text>
+                <Text style={styles.menuSub}>
+                  {biometricEnabled
+                    ? "Enabled - Use fingerprint or Face ID to login"
+                    : "Disabled - Enable during login to use biometric"}
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={biometricEnabled}
+              onValueChange={handleToggleBiometric}
+              disabled={disablingBiometric}
+              trackColor={{ false: colors.border, true: colors.accentLight }}
+              thumbColor={
+                biometricEnabled ? colors.accent : colors.textTertiary
+              }
+            />
+          </View>
+        </View>
+      )}
 
       {/* ─── LOGOUT ─── */}
       <View style={styles.logoutWrap}>
@@ -899,6 +1090,95 @@ const ProfileScreen = ({ navigation }) => {
                 </>
               )}
             </TouchableOpacity>
+            <ModalBottomSpacer />
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── BIOMETRIC PASSWORD MODAL ─── */}
+      <Modal
+        animationType="fade"
+        transparent
+        visible={biometricPasswordModalVisible}
+        onRequestClose={() =>
+          !enablingBiometric && setBiometricPasswordModalVisible(false)
+        }
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { maxHeight: "60%" }]}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Enable Biometric Login</Text>
+              <TouchableOpacity
+                style={styles.modalClose}
+                onPress={() =>
+                  !enablingBiometric && setBiometricPasswordModalVisible(false)
+                }
+                disabled={enablingBiometric}
+              >
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={[styles.formLabel, { marginBottom: 8 }]}>
+                Enter your account password to enable biometric login
+              </Text>
+              <View style={{ position: "relative", marginBottom: 16 }}>
+                <TextInput
+                  style={[styles.formInput]}
+                  placeholder="Password"
+                  secureTextEntry={!showBiometricPassword}
+                  value={biometricPassword}
+                  onChangeText={setBiometricPassword}
+                  editable={!enablingBiometric}
+                  placeholderTextColor={colors.textTertiary}
+                />
+                <TouchableOpacity
+                  style={{
+                    position: "absolute",
+                    right: 12,
+                    top: 0,
+                    bottom: 0,
+                    justifyContent: "center",
+                  }}
+                  onPress={() =>
+                    setShowBiometricPassword(!showBiometricPassword)
+                  }
+                  disabled={enablingBiometric}
+                >
+                  <Ionicons
+                    name={showBiometricPassword ? "eye" : "eye-off"}
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.saveBtn,
+                  (enablingBiometric || !biometricPassword.trim()) && {
+                    opacity: 0.6,
+                  },
+                ]}
+                onPress={handleEnableBiometric}
+                disabled={enablingBiometric || !biometricPassword.trim()}
+              >
+                {enablingBiometric ? (
+                  <ActivityIndicator color={colors.textOnAccent} />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="finger-print"
+                      size={18}
+                      color={colors.textOnAccent}
+                    />
+                    <Text style={styles.saveBtnText}>Enable Biometric</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
             <ModalBottomSpacer />
           </View>
         </View>
@@ -1409,6 +1689,20 @@ const createStyles = (colors) =>
       fontSize: 14,
       fontWeight: "500",
       color: colors.text,
+    },
+
+    /* ─── Biometric Settings ─── */
+    biometricRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    biometricInfo: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
     },
 
     /* ─── Logout ─── */

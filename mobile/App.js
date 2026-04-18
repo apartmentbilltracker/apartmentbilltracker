@@ -23,6 +23,7 @@ import { getAPIBaseURL } from "./src/config/config";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeContext";
 import { navigationRef } from "./src/navigation/navigationRef";
 import ChatNotificationBanner from "./src/components/ChatNotificationBanner";
+import BiometricSetupModal from "./src/components/BiometricSetupModal";
 
 export { navigationRef };
 
@@ -185,6 +186,7 @@ function ThemedNavigation() {
       {/* Rendered above all navigator native surfaces so position:absolute
           zIndex works correctly in production APK native stack builds */}
       <ChatNotificationBanner />
+      <BiometricSetupModal />
     </NavigationContainer>
   );
 }

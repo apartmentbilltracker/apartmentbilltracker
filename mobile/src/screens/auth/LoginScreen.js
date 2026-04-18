@@ -33,6 +33,7 @@ import { getAPIBaseURL } from "../../config/config";
 import { useTheme } from "../../theme/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import savedAccountsService from "../../services/savedAccountsService";
+import { biometricAuth } from "../../utils/biometricAuth";
 import AuthBubbles from "../../components/AuthBubbles";
 
 // Detect if running in Expo Go vs custom dev build
@@ -57,10 +58,16 @@ const LoginScreen = ({ navigation }) => {
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [failedAvatars, setFailedAvatars] = useState(new Set());
   const [rememberMe, setRememberMe] = useState(true); // default ON
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricStoredEmail, setBiometricStoredEmail] = useState(null);
+  const [accountsWithBiometric, setAccountsWithBiometric] = useState(new Set()); // Track which accounts have biometric
   const {
     signIn,
     signInWithGoogle,
     signInWithToken,
+    signInWithBiometric,
+    disableBiometric,
     state: authState,
     clearSessionExpired,
   } = useContext(AuthContext);
@@ -69,6 +76,9 @@ const LoginScreen = ({ navigation }) => {
   // Load saved accounts on mount and fetch fresh avatars
   useEffect(() => {
     const loadAccounts = async () => {
+      // Clean up all legacy biometric keys on app start (one-time cleanup)
+      await biometricAuth.cleanupAllLegacyKeys();
+
       // Restore the user's last "keep me logged in" preference
       try {
         const saved = await AsyncStorage.getItem("@remember_me");
@@ -79,6 +89,30 @@ const LoginScreen = ({ navigation }) => {
 
       const accounts = await savedAccountsService.getAccounts();
       setSavedAccounts(accounts);
+
+      // Check biometric availability
+      const available = await biometricAuth.isAvailable();
+      setBiometricAvailable(available);
+
+      // Check which accounts have biometric enabled
+      const bioAccounts = new Set();
+      if (accounts.length > 0) {
+        for (const account of accounts) {
+          const hasBio = await biometricAuth.isBiometricEnabledFor(
+            account.email,
+          );
+          if (hasBio) {
+            bioAccounts.add(account.email.toLowerCase());
+          }
+        }
+      }
+      setAccountsWithBiometric(bioAccounts);
+      setBiometricEnabled(bioAccounts.size > 0);
+
+      // Get the first account with biometric (for legacy compatibility)
+      const firstBioEmail =
+        bioAccounts.size > 0 ? Array.from(bioAccounts)[0] : null;
+      setBiometricStoredEmail(firstBioEmail);
 
       // Fetch fresh avatars from the API for all saved accounts
       if (accounts.length > 0) {
@@ -300,6 +334,21 @@ const LoginScreen = ({ navigation }) => {
     if (!result.success) {
       setError(result.error);
     } else {
+      // Login successful - biometric modal will be shown at root level if applicable
+      await registerPushToken();
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    setLoading(true);
+    setError("");
+    // If an account is selected, use its email; otherwise use the stored email
+    const emailForBiometric = selectedAccount?.email || null;
+    const result = await signInWithBiometric(rememberMe, emailForBiometric);
+    setLoading(false);
+    if (!result.success) {
+      setError(result.error);
+    } else {
       await registerPushToken();
     }
   };
@@ -442,6 +491,15 @@ const LoginScreen = ({ navigation }) => {
                     {account.email}
                   </Text>
                 </View>
+                {accountsWithBiometric.has(account.email.toLowerCase()) && (
+                  <View style={styles.biometricBadge}>
+                    <Ionicons
+                      name="finger-print"
+                      size={14}
+                      color={colors.accent}
+                    />
+                  </View>
+                )}
                 <TouchableOpacity
                   style={styles.savedRemoveBtn}
                   onPress={() => handleRemoveAccount(account.email)}
@@ -486,42 +544,101 @@ const LoginScreen = ({ navigation }) => {
               </TouchableOpacity>
             )}
 
-            {/* ─── Selected account header ─── */}
+            {/* ─── Selected account header (merged with biometric) ─── */}
             {selectedAccount && selectedAccount !== "manual" && (
-              <View style={styles.selectedHeader}>
-                <View style={styles.selectedAvatarWrap}>
-                  {selectedAccount.avatar &&
-                  typeof selectedAccount.avatar === "string" &&
-                  !failedAvatars.has(selectedAccount.email) ? (
-                    <Image
-                      source={{ uri: selectedAccount.avatar }}
-                      style={styles.selectedAvatar}
-                      onError={() =>
-                        setFailedAvatars((prev) =>
-                          new Set(prev).add(selectedAccount.email),
-                        )
-                      }
-                    />
-                  ) : (
-                    <View
-                      style={[
-                        styles.selectedAvatar,
-                        styles.savedAvatarFallback,
-                      ]}
-                    >
-                      <Text style={styles.selectedAvatarLetter}>
-                        {(selectedAccount.name ||
-                          selectedAccount.email)[0].toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
+              <View style={styles.accountCardContainer}>
+                <View style={styles.accountCardContent}>
+                  <View style={styles.selectedAvatarWrap}>
+                    {selectedAccount.avatar &&
+                    typeof selectedAccount.avatar === "string" &&
+                    !failedAvatars.has(selectedAccount.email) ? (
+                      <Image
+                        source={{ uri: selectedAccount.avatar }}
+                        style={styles.selectedAvatar}
+                        onError={() =>
+                          setFailedAvatars((prev) =>
+                            new Set(prev).add(selectedAccount.email),
+                          )
+                        }
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.selectedAvatar,
+                          styles.savedAvatarFallback,
+                        ]}
+                      >
+                        <Text style={styles.selectedAvatarLetter}>
+                          {(selectedAccount.name ||
+                            selectedAccount.email)[0].toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.accountInfo}>
+                    <Text style={styles.selectedName} numberOfLines={1}>
+                      {selectedAccount.name}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={styles.selectedName}>{selectedAccount.name}</Text>
+                {/* Biometric button on right */}
+                {biometricAvailable &&
+                  accountsWithBiometric.has(
+                    selectedAccount?.email?.toLowerCase(),
+                  ) && (
+                    <TouchableOpacity
+                      style={[
+                        styles.biometricSmallBtn,
+                        loading && { opacity: 0.5 },
+                      ]}
+                      onPress={handleBiometricLogin}
+                      disabled={loading}
+                      activeOpacity={0.7}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color={colors.accent} size="small" />
+                      ) : (
+                        <Ionicons
+                          name="finger-print"
+                          size={24}
+                          color={colors.accent}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  )}
               </View>
             )}
 
             {/* ─── Form ─── */}
             <View style={styles.form}>
+              {/* Biometric button ONLY for manual email entry (not selected account) */}
+              {!selectedAccount &&
+                biometricAvailable &&
+                accountsWithBiometric.size > 0 && (
+                  <View style={styles.biometricIconRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.biometricIconBtn,
+                        loading && { opacity: 0.5 },
+                      ]}
+                      onPress={handleBiometricLogin}
+                      disabled={loading}
+                      activeOpacity={0.7}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color={colors.accent} size="small" />
+                      ) : (
+                        <Ionicons
+                          name="finger-print"
+                          size={32}
+                          color={colors.accent}
+                        />
+                      )}
+                    </TouchableOpacity>
+                    <Text style={styles.biometricIconLabel}>Quick Login</Text>
+                  </View>
+                )}
+
               {/* Hide email field if account is selected (not manual) */}
               {(!selectedAccount || selectedAccount === "manual") && (
                 <View style={styles.inputWrap}>
@@ -867,18 +984,47 @@ const createStyles = (colors) =>
     dividerRow: {
       flexDirection: "row",
       alignItems: "center",
-      marginVertical: 22,
+      marginBottom: 20,
+      gap: 12,
     },
     dividerLine: {
       flex: 1,
-      height: StyleSheet.hairlineWidth,
+      height: 1,
       backgroundColor: colors.border,
     },
     dividerLabel: {
-      fontSize: 12,
-      color: colors.textTertiary,
-      marginHorizontal: 14,
+      fontSize: 13,
+      color: colors.textSecondary,
       fontWeight: "500",
+    },
+
+    /* Biometric Primary Button (at top of form) - REMOVED */
+
+    /* Biometric Icon Button */
+    biometricIconRow: {
+      flexDirection: "column",
+      alignItems: "center",
+      marginBottom: 20,
+      gap: 8,
+    },
+    biometricIconBtn: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.accentLight,
+      justifyContent: "center",
+      alignItems: "center",
+      shadowColor: "#b38604",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    biometricIconLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.accent,
+      textAlign: "center",
     },
 
     /* Social */
@@ -974,7 +1120,7 @@ const createStyles = (colors) =>
       borderRadius: 24,
     },
     savedAvatarFallback: {
-      backgroundColor: colors.accent + "20",
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1014,6 +1160,14 @@ const createStyles = (colors) =>
       fontSize: 13,
       color: colors.textSecondary,
     },
+    biometricBadge: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.accentLight,
+      justifyContent: "center",
+      alignItems: "center",
+    },
     savedRemoveBtn: {
       padding: 4,
     },
@@ -1045,25 +1199,70 @@ const createStyles = (colors) =>
       fontWeight: "600",
       color: colors.accent,
     },
-    selectedHeader: {
+    /* Account Card Container (integrated with biometric) */
+    accountCardContainer: {
+      flexDirection: "row",
       alignItems: "center",
-      marginBottom: 20,
+      justifyContent: "space-between",
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      marginBottom: 10,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
     },
+    accountCardContent: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    accountInfo: {
+      flex: 1,
+      justifyContent: "center",
+    },
+    selectedEmail: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    biometricSmallBtn: {
+      width: 35,
+      height: 35,
+      borderRadius: 20,
+      backgroundColor: colors.accentLight,
+      justifyContent: "center",
+      alignItems: "center",
+      shadowColor: "#b38604",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+      elevation: 2,
+      marginLeft: 8,
+    },
+
+    /* Selected Header - KEPT for backward compat but not used */
     selectedAvatarWrap: {
-      marginBottom: 8,
+      marginBottom: 0,
     },
     selectedAvatar: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
     },
     selectedAvatarLetter: {
-      fontSize: 26,
+      fontSize: 20,
       fontWeight: "700",
       color: colors.accent,
     },
     selectedName: {
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: "700",
       color: colors.text,
     },
