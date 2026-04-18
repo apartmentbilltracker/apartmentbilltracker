@@ -11,12 +11,17 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apartmentbilltracker.ios",
       "scheme": "aptbilltracker",
-      "userInterfaceStyle": "automatic"
+      "userInterfaceStyle": "automatic",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.apartmentbilltracker",
@@ -31,12 +36,22 @@
               "scheme": "com.googleusercontent.apps.280450131002-iv8nv3hnottf109ft2ruogaq4daqjpbh"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
-          "data": [{ "scheme": "fb1296319515642952" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "fb1296319515642952"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -45,8 +60,12 @@
         "expo-notifications",
         {
           "icon": "./src/assets/icon.png",
-          "colors": ["#b38604"],
-          "modes": ["production"]
+          "colors": [
+            "#b38604"
+          ],
+          "modes": [
+            "production"
+          ]
         }
       ]
     ],
