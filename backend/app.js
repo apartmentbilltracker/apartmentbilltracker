@@ -208,6 +208,7 @@ app.use("/api/v2/user/reset-password", authLimiter);
 app.use("/api/v2/user/verify-reset-code", authLimiter);
 app.use("/api/v2/user/google-login", authLimiter);
 app.use("/api/v2/user/facebook-login", authLimiter);
+app.use("/api/v2/user/validate-password", authLimiter);
 
 app.use("/api/v2/user", user);
 app.use("/api/v2/rooms", room);

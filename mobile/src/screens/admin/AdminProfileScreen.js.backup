@@ -22,7 +22,6 @@ import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { getAPIBaseURL } from "../../config/config";
 import { biometricAuth } from "../../utils/biometricAuth";
-import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const THEME_OPTIONS = [
   { key: "light", label: "Light", icon: "sunny" },
@@ -41,7 +40,6 @@ const AdminProfileScreen = ({ navigation }) => {
     switchView,
     disableBiometric,
     isBiometricEnabledFor,
-    updateBiometricCredentials,
   } = useContext(AuthContext);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editName, setEditName] = useState("");
@@ -53,11 +51,6 @@ const AdminProfileScreen = ({ navigation }) => {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [disablingBiometric, setDisablingBiometric] = useState(false);
-  const [biometricPasswordModalVisible, setBiometricPasswordModalVisible] =
-    useState(false);
-  const [biometricPassword, setBiometricPassword] = useState("");
-  const [enablingBiometric, setEnablingBiometric] = useState(false);
-  const [showBiometricPassword, setShowBiometricPassword] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
   const user = state.user || {};
@@ -204,12 +197,10 @@ const AdminProfileScreen = ({ navigation }) => {
 
   const handleToggleBiometric = (newValue) => {
     if (newValue === biometricEnabled) return;
-
     if (newValue === false) {
-      // Disabling biometric
       Alert.alert(
         "Disable Biometric Login",
-        "Are you sure you want to disable biometric login? You'll need to enter your password on next login.",
+        "Are you sure you want to disable biometric login? You will need to enter your password on next login.",
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -242,82 +233,12 @@ const AdminProfileScreen = ({ navigation }) => {
         ],
       );
     } else {
-      // Enabling biometric - show password modal for validation
-      setBiometricPassword("");
-      setBiometricPasswordModalVisible(true);
-    }
-  };
-
-  const handleEnableBiometric = async () => {
-    if (!biometricPassword.trim()) {
-      Alert.alert("Error", "Please enter your password");
-      return;
-    }
-
-    setEnablingBiometric(true);
-    try {
-      // Validate password with backend before enabling biometric
-      const validationResponse = await fetch(
-        `${getAPIBaseURL()}/api/v2/user/validate-password`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: user.email,
-            password: biometricPassword,
-          }),
-        },
+      Alert.alert(
+        "Enable During Login",
+        "Biometric login is enabled during the login process. Log out and log back in to set it up.",
+        [{ text: "OK" }],
       );
-
-      let validationData;
-      try {
-        validationData = await validationResponse.json();
-      } catch (parseError) {
-        console.error(
-          "[Biometric] Failed to parse response:",
-          validationResponse.status,
-          parseError,
-        );
-        Alert.alert(
-          "Server Error",
-          `Server returned invalid response (${validationResponse.status}). Please try again later.`,
-        );
-        setBiometricEnabled(false);
-        setEnablingBiometric(false);
-        return;
-      }
-
-      if (!validationResponse.ok) {
-        Alert.alert(
-          "Invalid Password",
-          validationData?.message ||
-            "The password you entered is incorrect. Please try again.",
-        );
-        setBiometricEnabled(false);
-        setEnablingBiometric(false);
-        return;
-      }
-
-      // Password is valid, now enable biometric
-      const result = await updateBiometricCredentials(
-        user.email,
-        biometricPassword,
-        true,
-      );
-      if (result.success) {
-        setBiometricEnabled(true);
-        Alert.alert("Success", "Biometric login has been enabled");
-        setBiometricPasswordModalVisible(false);
-        setBiometricPassword("");
-      } else {
-        Alert.alert("Error", result.error || "Failed to enable biometric");
-        setBiometricEnabled(false);
-      }
-    } catch (error) {
-      Alert.alert("Error", error.message || "Failed to enable biometric");
       setBiometricEnabled(false);
-    } finally {
-      setEnablingBiometric(false);
     }
   };
 
@@ -842,95 +763,6 @@ const AdminProfileScreen = ({ navigation }) => {
                 </>
               )}
             </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ─── BIOMETRIC PASSWORD MODAL ─── */}
-      <Modal
-        animationType="fade"
-        transparent
-        visible={biometricPasswordModalVisible}
-        onRequestClose={() =>
-          !enablingBiometric && setBiometricPasswordModalVisible(false)
-        }
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { maxHeight: "60%" }]}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Enable Biometric Login</Text>
-              <TouchableOpacity
-                style={styles.modalClose}
-                onPress={() =>
-                  !enablingBiometric && setBiometricPasswordModalVisible(false)
-                }
-                disabled={enablingBiometric}
-              >
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              <Text style={[styles.formLabel, { marginBottom: 8 }]}>
-                Enter your account password to enable biometric login
-              </Text>
-              <View style={{ position: "relative", marginBottom: 16 }}>
-                <TextInput
-                  style={[styles.formInput]}
-                  placeholder="Password"
-                  secureTextEntry={!showBiometricPassword}
-                  value={biometricPassword}
-                  onChangeText={setBiometricPassword}
-                  editable={!enablingBiometric}
-                  placeholderTextColor={colors.textTertiary}
-                />
-                <TouchableOpacity
-                  style={{
-                    position: "absolute",
-                    right: 12,
-                    top: 0,
-                    bottom: 0,
-                    justifyContent: "center",
-                  }}
-                  onPress={() =>
-                    setShowBiometricPassword(!showBiometricPassword)
-                  }
-                  disabled={enablingBiometric}
-                >
-                  <Ionicons
-                    name={showBiometricPassword ? "eye" : "eye-off"}
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.saveBtn,
-                  (enablingBiometric || !biometricPassword.trim()) && {
-                    opacity: 0.6,
-                  },
-                ]}
-                onPress={handleEnableBiometric}
-                disabled={enablingBiometric || !biometricPassword.trim()}
-              >
-                {enablingBiometric ? (
-                  <ActivityIndicator color={colors.textOnAccent} />
-                ) : (
-                  <>
-                    <Ionicons
-                      name="finger-print"
-                      size={18}
-                      color={colors.textOnAccent}
-                    />
-                    <Text style={styles.saveBtnText}>Enable Biometric</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-            <ModalBottomSpacer />
           </View>
         </View>
       </Modal>

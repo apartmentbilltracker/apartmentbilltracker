@@ -11,6 +11,7 @@ import {
   Linking,
   Modal,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { adsService } from "../services/apiService";
 import { useTheme } from "../theme/ThemeContext";
@@ -29,7 +30,11 @@ const AD_CONTAINER_WIDTH = (AD_CONTAINER_HEIGHT * 9) / 16; // 9:16 portrait aspe
  * - Dismiss functionality
  * - Dot indicators
  */
-export const AdsCarousel = ({ screen = "home", style = {} }) => {
+export const AdsCarousel = ({
+  screen = "home",
+  style = {},
+  navigation = null,
+}) => {
   const { colors } = useTheme();
   const [ads, setAds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -65,15 +70,75 @@ export const AdsCarousel = ({ screen = "home", style = {} }) => {
       // Track the click
       await adsService.trackAdClick(ad.id);
 
-      // Open link if available
+      // Handle link - supports both external URLs and app screen routes
       if (ad.buttonLink) {
-        const canOpen = await Linking.canOpenURL(ad.buttonLink);
-        if (canOpen) {
-          await Linking.openURL(ad.buttonLink);
+        // Check if it's an internal app route (starts with / or is a screen name)
+        const isInternalRoute =
+          ad.buttonLink.startsWith("/") || ad.buttonLink.match(/^[a-zA-Z]+$/);
+
+        if (isInternalRoute && navigation) {
+          // Internal app screen navigation with support for nested screens
+          const screenName = ad.buttonLink.startsWith("/")
+            ? ad.buttonLink.substring(1)
+            : ad.buttonLink;
+
+          // Map screens to their parent stacks (for nested navigation)
+          const screenToStackMap = {
+            // BillsStack
+            BillsMain: "BillsStack",
+            BillingHistory: "BillsStack",
+            PaymentMethod: "BillsStack",
+            GCashPayment: "BillsStack",
+            BankTransferPayment: "BillsStack",
+            CashPayment: "BillsStack",
+            PaymentHistory: "BillsStack",
+            Settlement: "BillsStack",
+
+            // HomeStack
+            ClientHome: "HomeStack",
+            RoomDetails: "HomeStack",
+            Presence: "HomeStack",
+
+            // PresenceStack
+            PresenceMain: "PresenceStack",
+            Billing: "HomeStack",
+
+            // ProfileStack
+            Profile: "ProfileStack",
+            MyTickets: "ProfileStack",
+            MyBugReports: "ProfileStack",
+            TermsOfService: "ProfileStack",
+            PrivacyPolicy: "ProfileStack",
+
+            // AnnouncementsStack
+            AnnouncementsMain: "AnnouncementsStack",
+
+            // NotificationsStack
+            NotificationsInbox: "NotificationsStack",
+
+            // Top-level/ChatRoom
+            ChatRoom: null, // Top-level, no parent
+          };
+
+          const parentStack = screenToStackMap[screenName];
+
+          if (parentStack) {
+            // Navigate to nested screen via parent stack
+            navigation.navigate(parentStack, { screen: screenName });
+          } else {
+            // Direct navigation for top-level screens
+            navigation.navigate(screenName);
+          }
+        } else {
+          // External URL - open in browser
+          const canOpen = await Linking.canOpenURL(ad.buttonLink);
+          if (canOpen) {
+            await Linking.openURL(ad.buttonLink);
+          }
         }
       }
     } catch (error) {
-      console.error("Error tracking ad click:", error);
+      console.error("Error handling ad click:", error);
     }
   };
 
@@ -137,200 +202,132 @@ export const AdsCarousel = ({ screen = "home", style = {} }) => {
       animationType="fade"
       onRequestClose={handleCloseModal}
     >
-      <View
-        style={[
-          styles.modalContainer,
-          { backgroundColor: "rgba(0, 0, 0, 0.5)" },
-        ]}
-      >
-        {/* Carousel */}
-        <ScrollView
-          ref={scrollViewRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onScroll={handleScroll}
-          onMomentumScrollEnd={handleScrollEnd}
-          scrollEventThrottle={16}
-          style={styles.carousel}
-        >
-          {visibleAds.map((ad, index) => (
-            <View
-              key={ad.id}
-              style={[
-                styles.adContainer,
-                {
-                  width: width,
-                  height: height,
-                  justifyContent: "center",
-                  alignItems: "center",
-                },
-              ]}
-            >
-              {/* Centered Portrait Ad Card */}
-              <View
-                style={{
-                  width: AD_CONTAINER_WIDTH,
-                  height: AD_CONTAINER_HEIGHT,
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  backgroundColor: "#000",
-                  borderWidth: 2,
-                  borderColor: colors.accent,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 8,
-                }}
-              >
-                {/* Close Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.closeButton,
-                    { backgroundColor: colors.surface },
-                  ]}
-                  onPress={handleCloseModal}
-                >
-                  <Ionicons name="close" size={18} color={colors.text} />
-                </TouchableOpacity>
-
-                {/* Ad Image - Full Card */}
-                <Image
-                  source={{ uri: ad.imageUrl }}
-                  style={styles.adImage}
-                  resizeMode="cover"
-                />
-
-                {/* Ad Content Overlay - More Transparent */}
-                <View
-                  style={[styles.adContent, { backgroundColor: "transparent" }]}
-                >
-                  {/* Title - Optional */}
-                  {ad.title && (
-                    <Text
-                      style={[styles.adTitle, { color: colors.textOnAccent }]}
-                      numberOfLines={2}
-                    >
-                      {ad.title}
-                    </Text>
-                  )}
-
-                  {/* Description - Optional */}
-                  {ad.description && (
-                    <Text
-                      style={[
-                        styles.adDescription,
-                        { color: colors.textOnAccent },
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {ad.description}
-                    </Text>
-                  )}
-
-                  {/* CTA Button - Only show if buttonLink exists */}
-                  {ad.buttonLink && (
-                    <TouchableOpacity
-                      style={[
-                        styles.ctaButton,
-                        { backgroundColor: colors.accent },
-                      ]}
-                      onPress={() => handleAdClick(ad)}
-                      activeOpacity={0.8}
-                    >
-                      <Text
-                        style={[styles.ctaText, { color: colors.textOnAccent }]}
-                      >
-                        {ad.buttonText || "Learn More"}
-                      </Text>
-                      <Ionicons
-                        name="arrow-forward"
-                        size={16}
-                        color={colors.textOnAccent}
-                        style={{ marginLeft: 4 }}
-                      />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-
-        {/* Ad Indicators - Shows Multiple Ads Info */}
+      <BlurView intensity={10} style={{ flex: 1 }}>
         <View
           style={[
-            styles.indicatorContainer,
-            { backgroundColor: colors.surface },
+            styles.modalContainer,
+            { backgroundColor: "rgba(0, 0, 0, 0.6)" },
           ]}
         >
-          {/* Swipe Hint for Multiple Ads */}
-          {visibleAds.length > 1 && (
-            <View style={styles.swipeHintContainer}>
-              <Ionicons
-                name="hand-left-outline"
-                size={14}
-                color={colors.textTertiary}
-              />
-              <Text
-                style={[styles.swipeHintText, { color: colors.textTertiary }]}
+          {/* Carousel */}
+          <ScrollView
+            ref={scrollViewRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={handleScroll}
+            onMomentumScrollEnd={handleScrollEnd}
+            scrollEventThrottle={16}
+            style={styles.carousel}
+          >
+            {visibleAds.map((ad, index) => (
+              <View
+                key={ad.id}
+                style={[
+                  styles.adContainer,
+                  {
+                    width: width,
+                    height: height,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  },
+                ]}
               >
-                Swipe for more ads
-              </Text>
-            </View>
-          )}
+                {/* Centered Portrait Ad Card - Clickable */}
+                <TouchableOpacity
+                  activeOpacity={ad.buttonLink ? 0.85 : 1}
+                  onPress={ad.buttonLink ? () => handleAdClick(ad) : null}
+                  disabled={!ad.buttonLink}
+                  style={{
+                    width: AD_CONTAINER_WIDTH,
+                    height: AD_CONTAINER_HEIGHT,
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    backgroundColor: "#000",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 8,
+                  }}
+                >
+                  {/* Ad Image - Full Card */}
+                  <Image
+                    source={{ uri: ad.imageUrl }}
+                    style={styles.adImage}
+                    resizeMode="cover"
+                  />
 
-          {/* Ad Counter */}
-          {visibleAds.length > 1 && (
-            <Text
-              style={[
-                styles.adCounter,
-                { color: colors.accent, backgroundColor: colors.accentSurface },
-              ]}
-            >
-              {currentIndex + 1} / {visibleAds.length}
-            </Text>
-          )}
+                  {/* Ad Content Overlay - More Transparent */}
+                  <View
+                    style={[
+                      styles.adContent,
+                      { backgroundColor: "transparent" },
+                    ]}
+                  >
+                    {/* Title - Optional */}
+                    {ad.title && (
+                      <Text
+                        style={[styles.adTitle, { color: colors.textOnAccent }]}
+                        numberOfLines={2}
+                      >
+                        {ad.title}
+                      </Text>
+                    )}
 
-          {/* Dot Indicators */}
-          <View style={styles.dotContainer}>
-            {visibleAds.map((_, index) => {
-              const inputRange = [
-                (index - 1) * width,
-                index * width,
-                (index + 1) * width,
-              ];
+                    {/* Description - Optional */}
+                    {ad.description && (
+                      <Text
+                        style={[
+                          styles.adDescription,
+                          { color: colors.textOnAccent },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {ad.description}
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
 
-              const dotWidth = scrollX.interpolate({
-                inputRange,
-                outputRange: [8, 24, 8],
-                extrapolate: "clamp",
-              });
-
-              const opacity = scrollX.interpolate({
-                inputRange,
-                outputRange: [0.5, 1, 0.5],
-                extrapolate: "clamp",
-              });
-
-              return (
-                <Animated.View
-                  key={index}
-                  style={[
-                    styles.dot,
-                    {
-                      width: dotWidth,
-                      opacity,
-                      backgroundColor: colors.accent,
-                    },
-                  ]}
-                />
-              );
-            })}
-          </View>
+                {/* Reminder Text - Outside Ad Card */}
+                <TouchableOpacity
+                  style={styles.reminderBar}
+                  onPress={handleCloseModal}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[styles.remindMeLaterText, { color: "#D0D0D0" }]}
+                  >
+                    Remind me later
+                  </Text>
+                  {visibleAds.length > 1 && (
+                    <View style={styles.counterContainer}>
+                      <Ionicons name="chevron-back" size={14} color="#D0D0D0" />
+                      <Text
+                        style={[
+                          {
+                            color: "#D0D0D0",
+                            fontWeight: "700",
+                            marginHorizontal: 4,
+                          },
+                        ]}
+                      >
+                        {currentIndex + 1}/{visibleAds.length}
+                      </Text>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={14}
+                        color="#D0D0D0"
+                      />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
         </View>
-      </View>
+      </BlurView>
     </Modal>
   );
 };
@@ -338,7 +335,8 @@ export const AdsCarousel = ({ screen = "home", style = {} }) => {
 const styles = {
   modalContainer: {
     flex: 1,
-    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    flexDirection: "column",
   },
   carousel: {
     flex: 1,
@@ -365,13 +363,27 @@ const styles = {
   },
   adContent: {
     position: "absolute",
-    bottom: 0,
+    bottom: 60,
     left: 0,
     right: 0,
     paddingHorizontal: 16,
     paddingBottom: 20,
     paddingTop: 40,
     justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  reminderBar: {
+    marginTop: -4,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
+    gap: 8,
+  },
+  counterContainer: {
+    flexDirection: "row",
     alignItems: "center",
   },
   adTitle: {
@@ -411,6 +423,22 @@ const styles = {
     borderTopWidth: 1,
     borderTopColor: "rgba(0,0,0,0.1)",
   },
+  adIndicatorContainer: {
+    marginTop: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.1)",
+  },
+  remindMeLaterText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
   swipeHintContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -426,16 +454,6 @@ const styles = {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-  },
-  dotContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-  },
-  dot: {
-    height: 8,
-    borderRadius: 4,
   },
 };
 

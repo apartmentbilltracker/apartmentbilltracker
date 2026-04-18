@@ -375,6 +375,59 @@ router.post(
   }),
 );
 
+/**
+ * Validate password for biometric setup
+ * POST /api/v2/user/validate-password
+ * Used by mobile app to verify password when enabling biometric
+ * Request: { email, password }
+ * Response: { success: true } or 401 error
+ */
+router.post(
+  "/validate-password",
+  catchAsyncErrors(async (req, res, next) => {
+    const { email, password } = req.body;
+
+    // Validation
+    if (!email || !password) {
+      return next(new ErrorHandler("Email and password are required", 400));
+    }
+
+    try {
+      // Find user with password hash
+      const user = await SupabaseService.findUserByEmail(email, {
+        withPassword: true,
+      });
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid email or password",
+        });
+      }
+
+      // Check password
+      const isPasswordMatch = await bcrypt.compare(
+        password,
+        user.password_hash,
+      );
+      if (!isPasswordMatch) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid email or password",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Password is valid",
+      });
+    } catch (error) {
+      return next(
+        new ErrorHandler(error.message || "Password validation failed", 500),
+      );
+    }
+  }),
+);
+
 // ============ SOCIAL / OAUTH LOGIN ============
 
 /**

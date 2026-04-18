@@ -1676,7 +1676,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
         )}
 
         {/* ─── ADS CAROUSEL ─── */}
-        <AdsCarousel screen="home" />
+        <AdsCarousel screen="home" navigation={navigation} />
 
         {loading ? (
           <View style={styles.centerLoader}>
@@ -3015,7 +3015,9 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     )}
 
                     {selectedUserProfile.isOnline !== undefined && (
-                      <View style={styles.profileInfoItem}>
+                      <View
+                        style={[styles.profileInfoItem, { marginBottom: 30 }]}
+                      >
                         <Ionicons
                           name="ellipse"
                           size={12}

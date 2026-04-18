@@ -2042,13 +2042,6 @@ const BillsScreen = ({ navigation, route }) => {
                   </View>
                 )}
 
-                {/* Temporary button for receipt ui */}
-                <TouchableOpacity
-                  onPress={() => navigation.navigate("ReceiptPreview")}
-                >
-                  <Text>Preview Receipt</Text>
-                </TouchableOpacity>
-
                 {/* ─── MEMBERS & WATER BILL ─── */}
                 {selectedRoom.members && selectedRoom.members.length > 0 && (
                   <View style={styles.card}>

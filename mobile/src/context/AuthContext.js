@@ -6,6 +6,7 @@ import { authService } from "../services/apiService";
 import api from "../services/api";
 import notificationService from "../services/notificationService";
 import savedAccountsService from "../services/savedAccountsService";
+import { biometricAuth } from "../utils/biometricAuth";
 
 // Inactivity timeout in milliseconds (5 minutes)
 const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -23,6 +24,9 @@ const initialState = {
   error: null,
   currentView: "admin", // "admin" or "client" - which navigator to show for admins
   sessionExpiredReason: null, // e.g. "inactivity" — shown as banner on login screen
+  showBiometricSetupModal: false, // Show biometric setup after login
+  pendingBiometricEmail: null,
+  pendingBiometricPassword: null,
 };
 
 const reducer = (state, action) => {
@@ -92,6 +96,20 @@ const reducer = (state, action) => {
         ...state,
         user: action.payload,
       };
+    case "SHOW_BIOMETRIC_SETUP":
+      return {
+        ...state,
+        showBiometricSetupModal: true,
+        pendingBiometricEmail: action.payload.email,
+        pendingBiometricPassword: action.payload.password,
+      };
+    case "HIDE_BIOMETRIC_SETUP":
+      return {
+        ...state,
+        showBiometricSetupModal: false,
+        pendingBiometricEmail: null,
+        pendingBiometricPassword: null,
+      };
     default:
       return state;
   }
@@ -158,6 +176,9 @@ export const AuthProvider = ({ children }) => {
         "lastActivityTime",
         REMEMBER_ME_KEY,
       ]);
+      // Note: Biometric credentials are NOT cleared on logout
+      // They persist for quick login on next session, tied to the stored email account
+      // Security is maintained through email verification in isBiometricEnabledFor()
     } catch (e) {
       // Silently fail
     }
@@ -394,6 +415,26 @@ export const AuthProvider = ({ children }) => {
         // Schedule daily presence reminder notification at 9 AM
         await notificationService.scheduleDailyPresenceReminder(20, 0);
 
+        // Check if biometric is available and not already enabled for this account
+        const isBioAvailable = await biometricAuth.isAvailable();
+        if (isBioAvailable) {
+          const isBioEnabled = await biometricAuth.isBiometricEnabledFor(email);
+          if (!isBioEnabled) {
+            // Check if enough time has passed since last biometric modal (once per day)
+            const shouldShow =
+              await biometricAuth.shouldShowBiometricModal(email);
+            if (shouldShow) {
+              // Mark that modal will be shown today
+              await biometricAuth.markBiometricModalShown(email);
+              // Show biometric setup modal at root level
+              dispatch({
+                type: "SHOW_BIOMETRIC_SETUP",
+                payload: { email, password },
+              });
+            }
+          }
+        }
+
         return { success: true };
       } catch (error) {
         const message = error.data?.message || error.message || "Login failed";
@@ -401,6 +442,89 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: message };
       }
     }, []),
+
+    isBiometricEnabledFor: useCallback(async (email) => {
+      try {
+        return await biometricAuth.isBiometricEnabledFor(email);
+      } catch (error) {
+        console.error("Error checking biometric status:", error);
+        return false;
+      }
+    }, []),
+
+    signInWithBiometric: useCallback(
+      async (rememberMe = false, emailForBiometric = null) => {
+        try {
+          // Use provided email or get the first stored biometric email
+          let emailToUse = emailForBiometric;
+          if (!emailToUse) {
+            emailToUse = await biometricAuth.getStoredBiometricEmail();
+          }
+
+          if (!emailToUse) {
+            throw new Error("No biometric account found");
+          }
+
+          // Authenticate with biometric and get stored credentials for this specific account
+          const bioResult = await biometricAuth.authenticate(emailToUse);
+          if (!bioResult.success) {
+            dispatch({ type: "SET_ERROR", payload: bioResult.error });
+            return { success: false, error: bioResult.error };
+          }
+
+          // Use the retrieved credentials to sign in
+          const response = await authService.login({
+            email: bioResult.email,
+            password: bioResult.password,
+          });
+          const data = response.data || response;
+          const { token, user } = data;
+          await SecureStore.setItemAsync("authToken", token);
+          api.setTokenCache(token);
+          await cacheUserData(user);
+          await saveRememberMe(rememberMe);
+          if (!rememberMe) await saveLastActivity();
+          dispatch({ type: "SIGN_IN", payload: { token, user } });
+
+          // Save account for quick login
+          await savedAccountsService.saveAccount(user);
+
+          // Schedule daily presence reminder notification at 9 AM
+          await notificationService.scheduleDailyPresenceReminder(20, 0);
+
+          return { success: true };
+        } catch (error) {
+          const message =
+            error.data?.message || error.message || "Biometric login failed";
+          dispatch({ type: "SET_ERROR", payload: message });
+          return { success: false, error: message };
+        }
+      },
+      [],
+    ),
+
+    updateBiometricCredentials: useCallback(
+      async (email, password, enable = true) => {
+        try {
+          if (enable) {
+            const result = await biometricAuth.enableBiometric(email, password);
+            if (!result.success) {
+              return { success: false, error: result.error };
+            }
+          } else {
+            const result = await biometricAuth.disableBiometric();
+            if (!result.success) {
+              return { success: false, error: result.error };
+            }
+          }
+          return { success: true };
+        } catch (error) {
+          console.error("Error updating biometric credentials:", error);
+          return { success: false, error: error.message };
+        }
+      },
+      [],
+    ),
 
     signUp: useCallback(async (name, email, password) => {
       try {
@@ -430,15 +554,14 @@ export const AuthProvider = ({ children }) => {
 
     signOut: useCallback(async () => {
       try {
-        // Clear push token first so this device stops receiving pushes for this account
-        await api
-          .delete("/api/v2/notifications/register-token")
-          .catch(() => {});
-        await authService.logout();
+        // Clear push token and logout in background (don't wait)
+        // This speeds up the logout UX
+        api.delete("/api/v2/notifications/register-token").catch(() => {});
+        authService.logout().catch(() => {});
       } catch (error) {
         // Logout API call may fail if server unreachable — proceed anyway
       } finally {
-        // Cancel all notifications when signing out
+        // Cancel all notifications immediately
         await notificationService.cancelAllNotifications();
         await clearCachedData();
         dispatch({ type: "SIGN_OUT" });
@@ -582,6 +705,35 @@ export const AuthProvider = ({ children }) => {
           "Profile update failed";
         return { success: false, error: message };
       }
+    }, []),
+
+    disableBiometric: useCallback(
+      async (email = null) => {
+        try {
+          // Use provided email or get from current user state
+          const emailToDisable = email || state?.user?.email;
+          if (!emailToDisable) {
+            throw new Error("Email is required to disable biometric");
+          }
+          const result = await biometricAuth.disableBiometric(emailToDisable);
+          return result;
+        } catch (error) {
+          console.error("Error disabling biometric:", error);
+          return { success: false, error: error.message };
+        }
+      },
+      [state?.user?.email],
+    ),
+
+    showBiometricSetupModal: useCallback((email, password) => {
+      dispatch({
+        type: "SHOW_BIOMETRIC_SETUP",
+        payload: { email, password },
+      });
+    }, []),
+
+    hideBiometricSetupModal: useCallback(() => {
+      dispatch({ type: "HIDE_BIOMETRIC_SETUP" });
     }, []),
   };
 

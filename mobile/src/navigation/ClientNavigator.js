@@ -22,7 +22,6 @@ import BankTransferPaymentScreen from "../screens/client/BankTransferPaymentScre
 import CashPaymentScreen from "../screens/client/CashPaymentScreen";
 import PaymentHistoryScreen from "../screens/client/PaymentHistoryScreen";
 import SettlementScreen from "../screens/client/SettlementScreen";
-import ReceiptPreviewScreen from "../screens/ReceiptPreviewScreen";
 import ChatRoomScreen from "../screens/chat/ChatRoomScreen";
 import NotificationsInboxScreen from "../screens/NotificationsInboxScreen";
 import AnnouncementsScreen from "../screens/client/AnnouncementsScreen";
@@ -159,11 +158,6 @@ const BillsStack = () => {
       <Stack.Screen
         name="Settlement"
         component={SettlementScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="ReceiptPreview"
-        component={ReceiptPreviewScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
