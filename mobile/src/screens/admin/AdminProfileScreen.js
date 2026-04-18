@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Platform,
   Switch,
+  KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -855,7 +856,11 @@ const AdminProfileScreen = ({ navigation }) => {
           !enablingBiometric && setBiometricPasswordModalVisible(false)
         }
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+          style={styles.modalOverlay}
+        >
           <View style={[styles.modalSheet, { maxHeight: "60%" }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
@@ -932,7 +937,7 @@ const AdminProfileScreen = ({ navigation }) => {
             </View>
             <ModalBottomSpacer />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScrollView>
   );
