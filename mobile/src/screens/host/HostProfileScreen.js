@@ -489,81 +489,6 @@ const HostProfileScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* ─── BIOMETRIC ─── */}
-      {biometricAvailable && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconWrap}>
-              <Ionicons name="finger-print" size={16} color={colors.accent} />
-            </View>
-            <Text style={styles.sectionTitle}>Biometric Login</Text>
-            <TouchableOpacity
-              style={{ marginLeft: "auto" }}
-              onPress={() => {
-                if (biometricEnabled) {
-                  Alert.alert(
-                    "Disable Biometric Login",
-                    "Disable biometric login? You'll need to enter your password next time.",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Disable",
-                        style: "destructive",
-                        onPress: async () => {
-                          setDisablingBiometric(true);
-                          try {
-                            const result = await disableBiometric(user.email);
-                            if (result.success) {
-                              setBiometricEnabled(false);
-                            } else {
-                              Alert.alert(
-                                "Error",
-                                result.error || "Failed to disable biometric",
-                              );
-                              setBiometricEnabled(true);
-                            }
-                          } catch (error) {
-                            Alert.alert(
-                              "Error",
-                              error.message || "Failed to disable biometric",
-                            );
-                            setBiometricEnabled(true);
-                          } finally {
-                            setDisablingBiometric(false);
-                          }
-                        },
-                      },
-                    ],
-                  );
-                } else {
-                  Alert.alert(
-                    "Enable During Login",
-                    "Biometric login is enabled during the login process. Log out and log back in to set it up.",
-                    [{ text: "OK" }],
-                  );
-                }
-              }}
-              disabled={disablingBiometric}
-              activeOpacity={0.7}
-            >
-              <View
-                style={[
-                  styles.rememberCheckbox,
-                  biometricEnabled && {
-                    backgroundColor: colors.accent,
-                    borderColor: colors.accent,
-                  },
-                ]}
-              >
-                {biometricEnabled && (
-                  <Ionicons name="checkmark" size={13} color="#fff" />
-                )}
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
       {/* Switch to Client View */}
       <View style={styles.section}>
         <TouchableOpacity
@@ -1073,8 +998,43 @@ const createStyles = (colors) =>
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0, 0, 0, 0.45)",
-      justifyContent: "center",
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
       paddingHorizontal: 20,
+      paddingBottom: 8,
+      maxHeight: "90%",
+    },
+    modalHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.skeleton,
+      alignSelf: "center",
+      marginTop: 10,
+      marginBottom: 12,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 18,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    modalClose: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
     },
     modalContent: {
       backgroundColor: colors.card,
@@ -1149,6 +1109,9 @@ const createStyles = (colors) =>
       gap: 6,
     },
     changeAvatarText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+    modalBody: {
+      maxHeight: 500,
+    },
     formSection: { marginBottom: 18, paddingHorizontal: 20 },
     formLabel: {
       fontSize: 13,
@@ -1165,6 +1128,30 @@ const createStyles = (colors) =>
       fontSize: 14,
       color: colors.text,
       backgroundColor: colors.cardAlt,
+    },
+    formInput: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+      backgroundColor: colors.cardAlt,
+    },
+    saveBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+    },
+    saveBtnText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
     },
     saveButton: {
       flexDirection: "row",

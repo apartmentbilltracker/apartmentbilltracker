@@ -3,7 +3,7 @@
     "name": "Apartment Bill Tracker",
     "slug": "apartment-bill-tracker",
     "icon": "./src/assets/icon.png",
-    "version": "1.2.4",
+    "version": "1.2.5",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "aptbilltracker",
@@ -11,9 +11,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apartmentbilltracker.ios",
@@ -36,10 +34,7 @@
               "scheme": "com.googleusercontent.apps.280450131002-iv8nv3hnottf109ft2ruogaq4daqjpbh"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         },
         {
           "action": "VIEW",
@@ -48,10 +43,7 @@
               "scheme": "fb1296319515642952"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
@@ -60,12 +52,8 @@
         "expo-notifications",
         {
           "icon": "./src/assets/icon.png",
-          "colors": [
-            "#b38604"
-          ],
-          "modes": [
-            "production"
-          ]
+          "colors": ["#b38604"],
+          "modes": ["production"]
         }
       ]
     ],
