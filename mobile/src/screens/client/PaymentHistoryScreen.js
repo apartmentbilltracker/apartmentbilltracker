@@ -460,9 +460,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
     }
     // Parse the ISO date string - JavaScript automatically converts UTC to local timezone
     const transactionDateTime = new Date(isoDateString || new Date());
-    console.log(
-      `Payment date debug: paymentDate=${paymentDate}, isoWithZ=${isoDateString}, localTime=${transactionDateTime.toLocaleTimeString()}`,
-    );
+
     const dateStr = transactionDateTime.toLocaleDateString("en-PH", {
       year: "numeric",
       month: "2-digit",
@@ -1088,7 +1086,7 @@ const createStyles = (colors) =>
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
       maxHeight: "90%",
-      paddingBottom: 20,
+      paddingBottom: 40,
     },
     receiptCloseBtn: {
       alignSelf: "flex-end",

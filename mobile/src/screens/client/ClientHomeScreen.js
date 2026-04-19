@@ -42,6 +42,7 @@ import {
 } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
+import { getAPIBaseURL } from "../../config/config";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -95,12 +96,29 @@ const ClientHomeScreen = ({ navigation, route }) => {
   const [memberActivity, setMemberActivity] = useState([]);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
+  const [avatarError, setAvatarError] = useState(false);
   const initialLoadDone = useRef(false);
   const lastFocusFetch = useRef(0);
 
   const userId = state?.user?.id || state?.user?._id;
   const userName = state?.user?.name || "User";
-  const userAvatar = state?.user?.avatar?.url || null;
+  const userEmail = state?.user?.email || "";
+
+  const getAvatarSource = () => {
+    if (avatarError) return require("../../assets/default-avatar.png");
+    // External URL (Google/Facebook): kept in /getuser response
+    if (state?.user?.avatar?.url?.startsWith("http")) {
+      return { uri: state.user.avatar.url };
+    }
+    // Base64 avatars are stripped from /getuser to save Supabase egress.
+    // Use the server's cached avatar-image endpoint instead (1-hour TTL).
+    if (userEmail) {
+      return {
+        uri: `${getAPIBaseURL()}/api/v2/user/avatar-image/${encodeURIComponent(userEmail)}`,
+      };
+    }
+    return require("../../assets/default-avatar.png");
+  };
 
   const getTimeBasedGreeting = () => {
     const hour = new Date().getHours();
@@ -192,11 +210,6 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
     // CRITICAL: Only show countdown if the current cycle is still active (not completed)
     if (activeCycle && activeCycle.status !== "active") {
-      console.log(
-        "📌 Billing cycle is",
-        activeCycle.status,
-        "- hiding countdown",
-      );
       return null;
     }
 
@@ -1617,16 +1630,20 @@ const ClientHomeScreen = ({ navigation, route }) => {
               <Text style={styles.greeting}>{getTimeBasedGreeting()},</Text>
               <Text style={styles.userName}>{userName}</Text>
             </View>
-            <View style={styles.headerIconBg}>
-              {userAvatar ? (
-                <Image
-                  source={{ uri: userAvatar }}
-                  style={styles.headerAvatar}
-                />
-              ) : (
-                <Ionicons name="person" size={20} color={colors.textOnAccent} />
-              )}
-            </View>
+            <TouchableOpacity
+              style={styles.headerIconBg}
+              onPress={() =>
+                navigation.navigate("ProfileStack", { screen: "Profile" })
+              }
+              activeOpacity={0.7}
+            >
+              <Image
+                source={getAvatarSource()}
+                style={styles.headerAvatar}
+                defaultSource={require("../../assets/default-avatar.png")}
+                onError={() => setAvatarError(true)}
+              />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -3016,7 +3033,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
                     {selectedUserProfile.isOnline !== undefined && (
                       <View
-                        style={[styles.profileInfoItem, { marginBottom: 30 }]}
+                        style={[styles.profileInfoItem, { marginBottom: 45 }]}
                       >
                         <Ionicons
                           name="ellipse"
@@ -3101,6 +3118,8 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       width: 42,
       height: 42,
       borderRadius: 21,
+      borderWidth: 1,
+      borderColor: colors.accent,
     },
 
     // ─── HOST ANNOUNCEMENT BANNER ───
