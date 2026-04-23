@@ -274,12 +274,39 @@ const BillingScreen = ({ route }) => {
         )
       : null;
 
-  let rentShare, elecShare, waterShare, netShare, totalShare;
+  let rentShare,
+    elecShare,
+    waterShare,
+    netShare,
+    customChargesShare,
+    totalShare;
+
+  // Get custom charges from active cycle
+  let customCharges = [];
+  let customChargesTotal = 0;
+  if (activeCycle?.customCharges) {
+    try {
+      customCharges = Array.isArray(activeCycle.customCharges)
+        ? activeCycle.customCharges
+        : typeof activeCycle.customCharges === "string"
+          ? JSON.parse(activeCycle.customCharges)
+          : [];
+      customChargesTotal = customCharges.reduce(
+        (sum, c) => sum + parseFloat(c.amount || 0),
+        0,
+      );
+    } catch (_) {
+      customCharges = [];
+      customChargesTotal = 0;
+    }
+  }
+
   if (currentUserCharge?.isPayer) {
     rentShare = currentUserCharge.rentShare || 0;
     elecShare = currentUserCharge.electricityShare || 0;
     waterShare = currentUserCharge.waterBillShare || 0;
     netShare = currentUserCharge.internetShare || 0;
+    customChargesShare = currentUserCharge.customChargesShare || 0;
     totalShare = currentUserCharge.totalDue || 0;
   } else {
     // FALLBACK: local calculation when backend data unavailable
@@ -287,7 +314,11 @@ const BillingScreen = ({ route }) => {
     elecShare = calculateShare(billing?.billing?.electricity, payorCount);
     waterShare = calculatePayorWaterShare();
     netShare = r2((billing?.billing?.internet || 0) / payorCount);
-    totalShare = r2(rentShare + elecShare + waterShare + netShare);
+    customChargesShare =
+      payorCount > 0 ? r2(customChargesTotal / payorCount) : 0;
+    totalShare = r2(
+      rentShare + elecShare + waterShare + netShare + customChargesShare,
+    );
   }
   const waterBreakdown = getPayorWaterBreakdown();
 
@@ -295,7 +326,8 @@ const BillingScreen = ({ route }) => {
     parseFloat(billing?.billing?.rent || 0) +
     parseFloat(billing?.billing?.electricity || 0) +
     calculateTotalWaterBill() +
-    parseFloat(billing?.billing?.internet || 0);
+    parseFloat(billing?.billing?.internet || 0) +
+    customChargesTotal;
 
   // ── render ──
   // Only show full-screen spinner on the very first load (no cached data yet)
@@ -333,6 +365,15 @@ const BillingScreen = ({ route }) => {
       color: BILL_COLORS.internet,
       amount: billing?.billing?.internet || 0,
     },
+    // Expand each custom charge individually instead of showing as total
+    ...(customCharges && customCharges.length > 0
+      ? customCharges.map((charge) => ({
+          label: charge.name || "Charge",
+          icon: "pricetag-outline",
+          color: colors.accent,
+          amount: parseFloat(charge.amount || 0),
+        }))
+      : []),
   ];
 
   const shareItems = [
@@ -345,6 +386,14 @@ const BillingScreen = ({ route }) => {
       breakdown: waterBreakdown,
     },
     { label: "Internet", color: BILL_COLORS.internet, amount: netShare },
+    // Expand each custom charge individually
+    ...(customCharges && customCharges.length > 0 && payorCount > 0
+      ? customCharges.map((charge) => ({
+          label: charge.name || "Charge",
+          color: colors.accent,
+          amount: r2(parseFloat(charge.amount || 0) / payorCount),
+        }))
+      : []),
   ];
 
   return (

@@ -488,6 +488,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
           ? receiptUserCharge?.waterBillShare
           : receiptUserCharge?.waterOwn) ||
         0,
+      customCharges: receiptUserCharge?.custom_charges_share || 0,
       total:
         payment.billBreakdown?.total ||
         receiptUserCharge?.totalDue ||
@@ -630,6 +631,34 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
                       ₱{(billAmounts.water || 0).toFixed(2)}
                     </Text>
                   </View>
+                  {receiptBillingData?.customCharges &&
+                    receiptBillingData.customCharges.length > 0 &&
+                    receiptBillingData.customCharges.map((charge, idx) => {
+                      const totalCustomCharges =
+                        receiptBillingData.customCharges.reduce(
+                          (sum, c) => sum + parseFloat(c.amount || 0),
+                          0,
+                        );
+                      const userShareOfCharge =
+                        totalCustomCharges > 0
+                          ? (parseFloat(charge.amount || 0) /
+                              totalCustomCharges) *
+                            billAmounts.customCharges
+                          : 0;
+                      return (
+                        <View key={idx} style={styles.costRow}>
+                          <Text style={styles.costLabel}>
+                            {charge.name || "Charge"}
+                          </Text>
+                          <Text style={styles.costDots}>
+                            {Array(26).fill(".").join("")}
+                          </Text>
+                          <Text style={styles.costAmount}>
+                            ₱{userShareOfCharge.toFixed(2)}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   <View style={styles.costRow}>
                     <Text style={styles.costLabel}>Service Fee</Text>
                     <Text style={styles.costDots}>

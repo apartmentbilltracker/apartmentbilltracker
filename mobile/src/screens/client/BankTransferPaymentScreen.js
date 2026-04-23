@@ -111,6 +111,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
                 userCharge.isPayer !== false
                   ? userCharge.waterBillShare || 0
                   : userCharge.waterOwn || 0,
+              customCharges: userCharge.custom_charges_share || 0,
               total: userCharge.totalDue || 0,
             });
           }
@@ -887,6 +888,38 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
                       ₱{(billShares?.water || 0).toFixed(2)}
                     </Text>
                   </View>
+                  {billShares?.customCharges &&
+                    billShares.customCharges > 0 &&
+                    billingData?.customCharges &&
+                    billingData.customCharges.length > 0 &&
+                    (() => {
+                      const totalCustomCharges =
+                        billingData.customCharges.reduce(
+                          (sum, c) => sum + parseFloat(c.amount || 0),
+                          0,
+                        );
+                      return billingData.customCharges.map((charge, idx) => {
+                        const userShareOfCharge =
+                          totalCustomCharges > 0
+                            ? (parseFloat(charge.amount || 0) /
+                                totalCustomCharges) *
+                              billShares.customCharges
+                            : 0;
+                        return (
+                          <View key={idx} style={styles.costRow}>
+                            <Text style={styles.costLabel}>
+                              {charge.name || "Charge"}
+                            </Text>
+                            <Text style={styles.costDots}>
+                              {Array(26).fill(".").join("")}
+                            </Text>
+                            <Text style={styles.costAmount}>
+                              ₱{userShareOfCharge.toFixed(2)}
+                            </Text>
+                          </View>
+                        );
+                      });
+                    })()}
                   <View style={styles.costRow}>
                     <Text style={styles.costLabel}>Service Fee</Text>
                     <Text style={styles.costDots}>

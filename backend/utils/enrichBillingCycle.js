@@ -36,6 +36,7 @@ async function enrichBillingCycle(cycle, members, roomData) {
   // the original presence-based water split). Only fall back to equal split
   // if no snapshot was stored (legacy cycles closed before this fix).
   if (cycle.status === "completed" || cycle.status === "closed") {
+    // console.log("[ENRICH] Using completed/closed cycle path");
     // Parse stored member_charges if it's a JSON string
     let stored = cycle.member_charges;
     if (typeof stored === "string") {
@@ -46,15 +47,67 @@ async function enrichBillingCycle(cycle, members, roomData) {
       }
     }
     if (Array.isArray(stored) && stored.length > 0) {
+      // console.log("[ENRICH] Using stored member_charges");
+
+      // CRITICAL: Add custom_charges_share if missing (for old cycles before this field existed)
+      const rent = parseFloat(cycle.rent || 0);
+      const electricity = parseFloat(cycle.electricity || 0);
+      const internet = parseFloat(cycle.internet || 0);
+      let customCharges = [];
+      if (cycle.custom_charges) {
+        try {
+          customCharges =
+            typeof cycle.custom_charges === "string"
+              ? JSON.parse(cycle.custom_charges)
+              : cycle.custom_charges;
+        } catch (_) {}
+      }
+      const customChargesTotal = customCharges.reduce(
+        (sum, c) => sum + parseFloat(c.amount || 0),
+        0,
+      );
+      const payerCount = stored.filter((c) => c.is_payer !== false).length;
+
+      // Ensure every member has custom_charges_share
+      const customShare =
+        payerCount > 0 ? r2(customChargesTotal / payerCount) : 0;
+      stored = stored.map((charge) => ({
+        ...charge,
+        custom_charges_share:
+          charge.custom_charges_share !== undefined
+            ? charge.custom_charges_share
+            : charge.is_payer !== false
+              ? customShare
+              : 0,
+      }));
+
       cycle.member_charges = stored;
       return cycle;
     }
+    // console.log("[ENRICH] No stored member_charges, falling back to legacy");
 
     // Legacy fallback: no snapshot — split stored totals evenly among payers
     const rent = parseFloat(cycle.rent || 0);
     const electricity = parseFloat(cycle.electricity || 0);
     const internet = parseFloat(cycle.internet || 0);
     const water = parseFloat(cycle.water_bill_amount || 0);
+
+    // Parse custom charges
+    let customCharges = [];
+    if (cycle.custom_charges) {
+      try {
+        customCharges =
+          typeof cycle.custom_charges === "string"
+            ? JSON.parse(cycle.custom_charges)
+            : cycle.custom_charges;
+      } catch (_) {
+        customCharges = [];
+      }
+    }
+    const customChargesTotal = customCharges.reduce(
+      (sum, c) => sum + parseFloat(c.amount || 0),
+      0,
+    );
 
     const payingMembers = members.filter((m) => m.is_payer !== false);
     const payerCount = payingMembers.length;
@@ -63,18 +116,22 @@ async function enrichBillingCycle(cycle, members, roomData) {
     const elecShare = payerCount > 0 ? r2(electricity / payerCount) : 0;
     const internetShare = payerCount > 0 ? r2(internet / payerCount) : 0;
     const waterShare = payerCount > 0 ? r2(water / payerCount) : 0;
+    const customChargeShare =
+      payerCount > 0 ? r2(customChargesTotal / payerCount) : 0;
 
     let rentAssigned = 0,
       elecAssigned = 0,
       internetAssigned = 0,
-      waterAssigned = 0;
+      waterAssigned = 0,
+      customAssigned = 0;
     let pidx = 0;
 
     const memberCharges = members.map((member) => {
       let memberRent = 0,
         memberElec = 0,
         memberInternet = 0,
-        memberWater = 0;
+        memberWater = 0,
+        memberCustom = 0;
 
       if (member.is_payer !== false) {
         pidx++;
@@ -83,16 +140,19 @@ async function enrichBillingCycle(cycle, members, roomData) {
           memberElec = r2(electricity - elecAssigned);
           memberInternet = r2(internet - internetAssigned);
           memberWater = r2(water - waterAssigned);
+          memberCustom = r2(customChargesTotal - customAssigned);
         } else {
           memberRent = rentShare;
           memberElec = elecShare;
           memberInternet = internetShare;
           memberWater = waterShare;
+          memberCustom = customChargeShare;
         }
         rentAssigned = r2(rentAssigned + memberRent);
         elecAssigned = r2(elecAssigned + memberElec);
         internetAssigned = r2(internetAssigned + memberInternet);
         waterAssigned = r2(waterAssigned + memberWater);
+        customAssigned = r2(customAssigned + memberCustom);
       }
 
       return {
@@ -106,12 +166,17 @@ async function enrichBillingCycle(cycle, members, roomData) {
         water_own: memberWater,
         water_shared_nonpayor: 0,
         internet_share: memberInternet,
-        total_due: r2(memberRent + memberElec + memberWater + memberInternet),
+        custom_charges_share: memberCustom,
+        total_due: r2(
+          memberRent + memberElec + memberWater + memberInternet + memberCustom,
+        ),
       };
     });
 
     cycle.member_charges = memberCharges;
-    cycle.total_billed_amount = r2(rent + electricity + water + internet);
+    cycle.total_billed_amount = r2(
+      rent + electricity + water + internet + customChargesTotal,
+    );
     return cycle;
   }
 
@@ -126,7 +191,10 @@ async function enrichBillingCycle(cycle, members, roomData) {
     waterFixedAmount = parseFloat(room?.water_fixed_amount || 0) || 0;
     waterFixedType = room?.water_fixed_type || "by_room";
   } catch (_) {}
-
+  // console.log("[ENRICH] Cycle ID:", cycle.id);
+  // console.log("[ENRICH] Cycle Status:", cycle.status);
+  // console.log("[ENRICH] Water Billing Mode:", waterBillingMode);
+  // console.log("[ENRICH] Member count:", members?.length);
   const cycleStart = new Date(cycle.start_date);
   const cycleEnd = new Date(cycle.end_date);
   // For active cycles that have run past their end date, count any presence
@@ -151,6 +219,29 @@ async function enrichBillingCycle(cycle, members, roomData) {
   let elecAssigned = 0;
   let internetAssigned = 0;
   let payerIndex = 0;
+
+  // Parse custom charges once (used in all branches)
+  let customCharges = [];
+  if (cycle.custom_charges) {
+    try {
+      customCharges =
+        typeof cycle.custom_charges === "string"
+          ? JSON.parse(cycle.custom_charges)
+          : cycle.custom_charges;
+    } catch (_) {}
+  }
+  const customChargesTotal = customCharges.reduce(
+    (sum, c) => sum + parseFloat(c.amount || 0),
+    0,
+  );
+  const customChargeShare =
+    payerCount > 0 ? r2(customChargesTotal / payerCount) : 0;
+  // console.log(
+  //   "[ENRICH] Custom charges total:",
+  //   customChargesTotal,
+  //   "share per payer:",
+  //   customChargeShare,
+  // );
 
   // ── FIXED MONTHLY WATER ──
   if (waterBillingMode === "fixed_monthly") {
@@ -231,14 +322,17 @@ async function enrichBillingCycle(cycle, members, roomData) {
             ? r2(waterBillShare - waterFixedAmount)
             : 0,
         internet_share: memberInternetShare,
-        total_due: totalDue,
+        custom_charges_share: member.is_payer !== false ? customChargeShare : 0,
+        total_due: r2(
+          totalDue + (member.is_payer !== false ? customChargeShare : 0),
+        ),
       };
     });
 
     cycle.member_charges = memberCharges;
     cycle.water_bill_amount = totalFixedWater;
     cycle.total_billed_amount = r2(
-      rent + electricity + totalFixedWater + internet,
+      rent + electricity + totalFixedWater + internet + customChargesTotal,
     );
 
     // Correct last payer total_due for any rounding
@@ -371,7 +465,8 @@ async function enrichBillingCycle(cycle, members, roomData) {
           ? r2(waterBillShare - scaledOwnWater)
           : 0,
         internet_share: memberInternetShare,
-        total_due: totalDue,
+        custom_charges_share: member.is_payer ? customChargeShare : 0,
+        total_due: r2(totalDue + (member.is_payer ? customChargeShare : 0)),
       };
     },
   );
@@ -382,9 +477,9 @@ async function enrichBillingCycle(cycle, members, roomData) {
   // live-computed total so the DB stays in sync with actual presence data.
   cycle.water_bill_amount = targetWaterTotal;
 
-  // Recalculate total_billed_amount to include the (possibly scaled) target water
+  // Recalculate total_billed_amount to include the (possibly scaled) target water and custom charges
   cycle.total_billed_amount = r2(
-    rent + electricity + targetWaterTotal + internet,
+    rent + electricity + targetWaterTotal + internet + customChargesTotal,
   );
 
   // ── Final pass: correct last payer's total_due so sum matches total_billed_amount ──

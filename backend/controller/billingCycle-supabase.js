@@ -25,6 +25,7 @@ const normalizeCharge = (charge) => {
     waterOwn: charge.water_own,
     waterSharedNonpayor: charge.water_shared_nonpayor,
     internetShare: charge.internet_share,
+    customChargesShare: charge.custom_charges_share,
     totalDue: charge.total_due,
   };
 };
@@ -43,6 +44,16 @@ const normalizeBillingCycle = (cycle) => {
     }
   }
 
+  // Parse custom_charges if present
+  let customCharges = cycle.custom_charges;
+  if (customCharges && typeof customCharges === "string") {
+    try {
+      customCharges = JSON.parse(customCharges);
+    } catch {
+      customCharges = [];
+    }
+  }
+
   return {
     ...cycle,
     startDate: cycle.start_date,
@@ -55,6 +66,7 @@ const normalizeBillingCycle = (cycle) => {
     cycleNumber: cycle.cycle_number,
     previousMeterReading: cycle.previous_meter_reading ?? null,
     currentMeterReading: cycle.current_meter_reading ?? null,
+    customCharges: customCharges || [],
     memberCharges: (memberCharges || []).map(normalizeCharge),
   };
 };
@@ -114,28 +126,28 @@ const computeCycleStats = async (
           const d = new Date(dateStr);
           return d >= sd && d <= ed;
         }).length;
-        console.log(
-          "[computeCycleStats]",
-          member.name,
-          "| presence count:",
-          presence.length,
-          "| days in range:",
-          days,
-          "| sd:",
-          sd.toISOString(),
-          "| ed:",
-          ed.toISOString(),
-          "| sample dates:",
-          presence.slice(0, 3),
-        );
+        // console.log(
+        //   "[computeCycleStats]",
+        //   member.name,
+        //   "| presence count:",
+        //   presence.length,
+        //   "| days in range:",
+        //   days,
+        //   "| sd:",
+        //   sd.toISOString(),
+        //   "| ed:",
+        //   ed.toISOString(),
+        //   "| sample dates:",
+        //   presence.slice(0, 3),
+        // );
         return total + days * 5;
       }, 0);
-      console.log(
-        "[computeCycleStats] Final waterBillAmount:",
-        waterBillAmount,
-        "| fixedWaterAmount:",
-        fixedWaterAmount,
-      );
+      // console.log(
+      //   "[computeCycleStats] Final waterBillAmount:",
+      //   waterBillAmount,
+      //   "| fixedWaterAmount:",
+      //   fixedWaterAmount,
+      // );
       // Fallback: if presence yields 0 but admin sent a value, keep it
       if (!waterBillAmount && Number(fixedWaterAmount) > 0) {
         waterBillAmount = Number(fixedWaterAmount);
@@ -164,6 +176,7 @@ router.post("/", isAuthenticated, async (req, res, next) => {
       water,
       waterBillAmount,
       internet,
+      customCharges,
     } = req.body;
 
     // Validation
@@ -194,6 +207,19 @@ router.post("/", isAuthenticated, async (req, res, next) => {
         waterBillAmount || water || activeCycle.water_bill_amount || 0;
       const updInternet = internet || activeCycle.internet || 0;
 
+      // Calculate custom charges total
+      const customChargesArray = Array.isArray(customCharges)
+        ? customCharges
+        : activeCycle.custom_charges
+          ? typeof activeCycle.custom_charges === "string"
+            ? JSON.parse(activeCycle.custom_charges)
+            : activeCycle.custom_charges
+          : [];
+      const customChargesTotal = customChargesArray.reduce(
+        (sum, c) => sum + parseFloat(c.amount || 0),
+        0,
+      );
+
       // Recompute members_count and water from live DB data
       const { membersCount: updMembersCount, waterBillAmount: updWater } =
         await computeCycleStats(
@@ -218,8 +244,15 @@ router.post("/", isAuthenticated, async (req, res, next) => {
           parseFloat(updRent) +
           parseFloat(updElec) +
           parseFloat(updWater) +
-          parseFloat(updInternet),
+          parseFloat(updInternet) +
+          customChargesTotal,
       };
+      // Update custom charges if provided, otherwise preserve existing
+      if (customCharges && customCharges.length > 0) {
+        updatePayload.custom_charges = JSON.stringify(customCharges);
+      } else if (activeCycle.custom_charges) {
+        updatePayload.custom_charges = activeCycle.custom_charges;
+      }
       if (previousMeterReading != null)
         updatePayload.previous_meter_reading = previousMeterReading;
       else if (activeCycle.previous_meter_reading != null)
@@ -263,11 +296,22 @@ router.post("/", isAuthenticated, async (req, res, next) => {
         room.water_fixed_amount,
       );
 
+    // Calculate custom charges total
+    const customChargesArray = Array.isArray(customCharges)
+      ? customCharges
+      : [];
+    console.log("[BILLING-CREATE] Received customCharges:", customChargesArray);
+    const customChargesTotal = customChargesArray.reduce(
+      (sum, charge) => sum + parseFloat(charge.amount || 0),
+      0,
+    );
+
     const totalAmount =
       parseFloat(rentVal) +
       parseFloat(elecVal) +
       parseFloat(waterVal) +
-      parseFloat(internetVal);
+      parseFloat(internetVal) +
+      customChargesTotal;
 
     const billingCycle = await SupabaseService.createBillingCycle({
       room_id: roomId,
@@ -278,6 +322,10 @@ router.post("/", isAuthenticated, async (req, res, next) => {
       electricity: elecVal,
       water_bill_amount: waterVal,
       internet: internetVal,
+      custom_charges:
+        customChargesArray.length > 0
+          ? JSON.stringify(customChargesArray)
+          : null,
       members_count: newMembersCount,
       previous_meter_reading:
         previousMeterReading != null ? previousMeterReading : null,
@@ -287,6 +335,11 @@ router.post("/", isAuthenticated, async (req, res, next) => {
       status: "active",
       created_by: req.user.id,
     });
+
+    console.log(
+      "[BILLING-CREATE] Created cycle custom_charges:",
+      billingCycle?.custom_charges,
+    );
 
     // Auto-create a pinned announcement banner for all room members
     try {
@@ -305,6 +358,14 @@ router.post("/", isAuthenticated, async (req, res, next) => {
         lines.push(`💧 Water: ₱${parseFloat(waterVal).toFixed(2)}`);
       if (parseFloat(internetVal) > 0)
         lines.push(`📶 Internet: ₱${parseFloat(internetVal).toFixed(2)}`);
+      // Add custom charges to announcement if present
+      customChargesArray.forEach((charge) => {
+        if (parseFloat(charge.amount) > 0) {
+          lines.push(
+            `📌 ${charge.name}: ₱${parseFloat(charge.amount).toFixed(2)}`,
+          );
+        }
+      });
       lines.push(`\n💰 Total: ₱${totalAmount.toFixed(2)}`);
 
       // Unpin any existing pinned cycle announcements first
@@ -587,13 +648,31 @@ router.get("/totals/latest", isAuthenticated, async (req, res, next) => {
     // Enrich with presence-based water charges
     await enrichBillingCycle(latestCycle);
 
+    // Parse custom charges
+    let customCharges = [];
+    if (latestCycle.custom_charges) {
+      try {
+        customCharges =
+          typeof latestCycle.custom_charges === "string"
+            ? JSON.parse(latestCycle.custom_charges)
+            : latestCycle.custom_charges;
+      } catch (_) {
+        customCharges = [];
+      }
+    }
+    const customChargesTotal = customCharges.reduce(
+      (sum, c) => sum + parseFloat(c.amount || 0),
+      0,
+    );
+
     // Calculate totalBilled from enriched values
     const totalBilled = latestCycle.total_billed_amount
       ? parseFloat(latestCycle.total_billed_amount)
       : parseFloat(latestCycle.rent || 0) +
         parseFloat(latestCycle.electricity || 0) +
         parseFloat(latestCycle.water_bill_amount || 0) +
-        parseFloat(latestCycle.internet || 0);
+        parseFloat(latestCycle.internet || 0) +
+        customChargesTotal;
 
     // Get payments matched by billing cycle columns (not payment_date)
     const cyclePayments =
@@ -684,6 +763,23 @@ router.get("/totals/month", isAuthenticated, async (req, res, next) => {
       // Enrich with presence-based water charges
       await enrichBillingCycle(cycle);
 
+      // Parse custom charges
+      let customCharges = [];
+      if (cycle.custom_charges) {
+        try {
+          customCharges =
+            typeof cycle.custom_charges === "string"
+              ? JSON.parse(cycle.custom_charges)
+              : cycle.custom_charges;
+        } catch (_) {
+          customCharges = [];
+        }
+      }
+      const customChargesTotal = customCharges.reduce(
+        (sum, c) => sum + parseFloat(c.amount || 0),
+        0,
+      );
+
       // Get payments matched by billing cycle columns (not payment_date)
       const cyclePayments =
         (await SupabaseService.getPaymentsForCycle(
@@ -697,7 +793,8 @@ router.get("/totals/month", isAuthenticated, async (req, res, next) => {
         : parseFloat(cycle.rent || 0) +
           parseFloat(cycle.electricity || 0) +
           parseFloat(cycle.water_bill_amount || 0) +
-          parseFloat(cycle.internet || 0);
+          parseFloat(cycle.internet || 0) +
+          customChargesTotal;
       const rawCollected = cyclePayments
         .filter((p) => p.status === "completed" || p.status === "verified")
         .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
@@ -770,7 +867,10 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
       status,
       previousMeterReading,
       currentMeterReading,
+      customCharges,
     } = req.body;
+
+    // console.log("[BILLING-UPDATE] Received customCharges:", customCharges);
 
     const updateData = {};
     if (rent !== undefined) updateData.rent = rent;
@@ -785,13 +885,25 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
     if (currentMeterReading != null)
       updateData.current_meter_reading = currentMeterReading;
 
+    // Handle custom charges
+    if (customCharges !== undefined) {
+      const customChargesArray = Array.isArray(customCharges)
+        ? customCharges
+        : [];
+      updateData.custom_charges =
+        customChargesArray.length > 0
+          ? JSON.stringify(customChargesArray)
+          : null;
+    }
+
     // Recalculate total_billed_amount if any amount field changed
     if (
       rent !== undefined ||
       electricity !== undefined ||
       waterBillAmount !== undefined ||
       water !== undefined ||
-      internet !== undefined
+      internet !== undefined ||
+      customCharges !== undefined
     ) {
       // Fetch current cycle to get existing values for fields not being updated
       const currentCycle = await SupabaseService.selectByColumn(
@@ -829,7 +941,16 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
       const w = computedWater;
       updateData.water_bill_amount = w;
       updateData.members_count = updMembersCount;
-      updateData.total_billed_amount = r + e + w + i;
+
+      // Add custom charges to total if they exist
+      const customChargesArray = Array.isArray(customCharges)
+        ? customCharges
+        : [];
+      const customChargesTotal = customChargesArray.reduce(
+        (sum, charge) => sum + parseFloat(charge.amount || 0),
+        0,
+      );
+      updateData.total_billed_amount = r + e + w + i + customChargesTotal;
     }
 
     const updatedCycle = await SupabaseService.update(
@@ -838,10 +959,17 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
       updateData,
     );
 
+    // console.log(
+    //   "[BILLING-UPDATE] Updated cycle custom_charges:",
+    //   updatedCycle?.custom_charges,
+    // );
+    const normalized = normalizeBillingCycle(updatedCycle);
+    // console.log("[BILLING-UPDATE] Normalized response:", normalized);
+
     res.status(200).json({
       success: true,
       message: "Billing cycle updated successfully",
-      billingCycle: normalizeBillingCycle(updatedCycle),
+      billingCycle: normalized,
     });
   } catch (error) {
     next(new ErrorHandler(error.message, 500));

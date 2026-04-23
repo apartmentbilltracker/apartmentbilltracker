@@ -111,11 +111,12 @@ const BillsScreen = ({ navigation, route }) => {
     }
   }, [selectedRoom]);
 
-  // Immediately refresh outstanding balance when returning from payment with refresh param
+  // Immediately refresh outstanding balance and active billing cycle when returning from payment with refresh param
   useEffect(() => {
     if (route.params?.refresh && selectedRoom) {
       const roomId = selectedRoom.id || selectedRoom._id;
       fetchOutstandingBalance(roomId);
+      fetchActiveBillingCycle(roomId); // Refresh the active billing cycle to get updated payment status
       // Clear the param so repeated navigation doesn't trigger multiple refreshes
       route.params.refresh = false;
     }
@@ -489,6 +490,7 @@ const BillsScreen = ({ navigation, route }) => {
             userCharge.isPayer !== false
               ? userCharge.waterBillShare || 0
               : userCharge.waterOwn || 0,
+          customCharges: userCharge.custom_charges_share || 0,
           total: userCharge.totalDue || 0,
           payorCount: activeCycle.memberCharges.filter((c) => c.isPayer).length,
         };
@@ -565,13 +567,29 @@ const BillsScreen = ({ navigation, route }) => {
       waterShare = r2(userOwnWater + sharedNonPayorWater);
     }
 
+    // Calculate custom charges share for payors
+    let customChargesShare = 0;
+    if (currentUserMember?.isPayer && activeCycle?.customCharges?.length > 0) {
+      const totalCustomCharges = activeCycle.customCharges.reduce(
+        (sum, c) => sum + parseFloat(c.amount || 0),
+        0,
+      );
+      customChargesShare =
+        totalCustomCharges > 0 ? r2(totalCustomCharges / payorCount) : 0;
+    }
+
     return {
       rent: rentPerPayor,
       electricity: electricityPerPayor,
       internet: internetPerPayor,
       water: waterShare,
+      customCharges: customChargesShare,
       total: r2(
-        rentPerPayor + electricityPerPayor + internetPerPayor + waterShare,
+        rentPerPayor +
+          electricityPerPayor +
+          internetPerPayor +
+          waterShare +
+          customChargesShare,
       ),
       payorCount,
     };
@@ -631,11 +649,15 @@ const BillsScreen = ({ navigation, route }) => {
     );
     if (!userPayment) return false;
 
+    const hasCustomCharges =
+      activeCycle?.customCharges && activeCycle.customCharges.length > 0;
+
     return (
       userPayment.rentStatus === "paid" &&
       userPayment.electricityStatus === "paid" &&
       userPayment.waterStatus === "paid" &&
-      userPayment.internetStatus === "paid"
+      userPayment.internetStatus === "paid" &&
+      (!hasCustomCharges || userPayment.customChargesStatus === "paid")
     );
   };
 
@@ -824,6 +846,18 @@ const BillsScreen = ({ navigation, route }) => {
 
   // Check if payment is allowed based on billing cycle end date
   const isPaymentAllowed = () => {
+    // Payments allowed on active cycles and manually closed cycles
+    // Only block if cycle is completed (auto-closed after all paid)
+    if (activeCycle?.status === "completed") {
+      return false;
+    }
+
+    // Allow payments on "closed" status (manually closed by host) even if past end date
+    if (activeCycle?.status === "closed") {
+      return true;
+    }
+
+    // For active cycles, check if we're past the billing end date
     if (!selectedRoom?.billing?.end) return true; // Allow if no end date
 
     const today = new Date();
@@ -844,6 +878,37 @@ const BillsScreen = ({ navigation, route }) => {
       month: "short",
       day: "numeric",
     });
+  };
+
+  // Check if there's a new active cycle (when current is closed)
+  const hasNewActiveCycle = () => {
+    // If current cycle is not closed, return false
+    if (activeCycle?.status !== "closed") return false;
+
+    // If there's an active cycle in the cycles list OR selectedRoom has currentCycleId,
+    // then a new cycle was created
+    try {
+      if (selectedRoom?.currentCycleId) return true;
+
+      // Fallback: Check if we can fetch cycles and find an active one
+      // This is handled by fetchActiveBillingCycle which prioritizes active cycles
+      return false;
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const getCustomChargeIcon = (chargeName) => {
+    const name = chargeName?.toLowerCase() || "";
+    if (name.includes("maintenance")) return "home-repair-service";
+    if (name.includes("groceries") || name.includes("grocery"))
+      return "local-grocery-store";
+    if (name.includes("housekeeping")) return "cleaning-services";
+    if (name.includes("cleaning")) return "cleaning-services";
+    if (name.includes("parking")) return "local-parking";
+    if (name.includes("pet") || name.includes("pets")) return "pets";
+    if (name.includes("laundry")) return "local-laundry-service";
+    return "add-home"; // fallback
   };
 
   // Calendar helper functions for presence modal
@@ -1272,11 +1337,34 @@ const BillsScreen = ({ navigation, route }) => {
       const internetPerPayor = billing.internet
         ? r2(billing.internet / payorCount)
         : 0;
+      const customChargesPerPayor = customChargesTotal
+        ? r2(customChargesTotal / payorCount)
+        : 0;
 
       // Helper to get backend charge for a member
       const getBackendCharge = (memberId) =>
         backendCharges?.find((c) => String(c.userId) === String(memberId)) ||
         null;
+
+      // Parse custom charges
+      let customCharges = [];
+      let customChargesTotal = 0;
+      if (activeCycle?.customCharges) {
+        try {
+          customCharges = Array.isArray(activeCycle.customCharges)
+            ? activeCycle.customCharges
+            : typeof activeCycle.customCharges === "string"
+              ? JSON.parse(activeCycle.customCharges)
+              : [];
+          customChargesTotal = customCharges.reduce(
+            (sum, c) => sum + parseFloat(c.amount || 0),
+            0,
+          );
+        } catch (_) {
+          customCharges = [];
+          customChargesTotal = 0;
+        }
+      }
 
       const receipt = {
         roomName: selectedRoom.name,
@@ -1289,11 +1377,16 @@ const BillsScreen = ({ navigation, route }) => {
           electricity: (billing.electricity || 0).toFixed(2),
           water: totalWater,
           internet: (billing.internet || 0).toFixed(2),
+          customCharges: customCharges.map((c) => ({
+            name: c.name || "Charge",
+            amount: parseFloat(c.amount || 0).toFixed(2),
+          })),
           total: (
             (billing.rent || 0) +
             (billing.electricity || 0) +
             parseFloat(totalWater) +
-            (billing.internet || 0)
+            (billing.internet || 0) +
+            customChargesTotal
           ).toFixed(2),
         },
         members: selectedRoom.members.map((member) => {
@@ -1322,13 +1415,18 @@ const BillsScreen = ({ navigation, route }) => {
                     ? bc.internetShare
                     : internetPerPayor
                   ).toFixed(2),
+                  customCharges: (useBE
+                    ? bc.custom_charges_share || 0
+                    : customChargesPerPayor
+                  ).toFixed(2),
                   total: (useBE
                     ? bc.totalDue
                     : r2(
                         rentPerPayor +
                           electricityPerPayor +
                           calculateMemberWaterShare(mid) +
-                          internetPerPayor,
+                          internetPerPayor +
+                          customChargesPerPayor,
                       )
                   ).toFixed(2),
                 }
@@ -1355,6 +1453,10 @@ const BillsScreen = ({ navigation, route }) => {
                     ? bc.internetShare
                     : internetPerPayor
                   ).toFixed(2),
+                  customCharges: (useBE
+                    ? bc.custom_charges_share || 0
+                    : customChargesPerPayor
+                  ).toFixed(2),
                   waterBreakdown: getWaterShareBreakdown()
                     ? {
                         ownWater: getWaterShareBreakdown().ownWater.toFixed(2),
@@ -1370,7 +1472,8 @@ const BillsScreen = ({ navigation, route }) => {
                         rentPerPayor +
                           electricityPerPayor +
                           calculateMemberWaterShare(uid) +
-                          internetPerPayor,
+                          internetPerPayor +
+                          customChargesPerPayor,
                       )
                   ).toFixed(2),
                   payorCount: payorCount,
@@ -1977,18 +2080,88 @@ const BillsScreen = ({ navigation, route }) => {
                             {fmt(billing.internet)}
                           </Text>
                         </View>
+                        {/* Display each custom charge individually */}
+                        {(() => {
+                          let customCharges = [];
+                          if (activeCycle?.customCharges) {
+                            try {
+                              customCharges = Array.isArray(
+                                activeCycle.customCharges,
+                              )
+                                ? activeCycle.customCharges
+                                : typeof activeCycle.customCharges === "string"
+                                  ? JSON.parse(activeCycle.customCharges)
+                                  : [];
+                            } catch (_) {
+                              customCharges = [];
+                            }
+                          }
+                          return customCharges.map((charge, idx) => (
+                            <View
+                              key={`custom-${idx}`}
+                              style={styles.billGridItem}
+                            >
+                              <View
+                                style={[
+                                  styles.billIconCircle,
+                                  {
+                                    backgroundColor:
+                                      colors.accentSurface || colors.purpleBg,
+                                  },
+                                ]}
+                              >
+                                <MaterialIcons
+                                  name={getCustomChargeIcon(charge.name)}
+                                  size={18}
+                                  color={colors.accent}
+                                />
+                              </View>
+                              <Text
+                                style={styles.billGridLabel}
+                                numberOfLines={1}
+                              >
+                                {charge.name || "Charge"}
+                              </Text>
+                              <Text style={styles.billGridAmount}>
+                                {fmt(parseFloat(charge.amount || 0))}
+                              </Text>
+                            </View>
+                          ));
+                        })()}
                       </View>
 
                       {/* Grand Total */}
                       <View style={styles.grandTotalStrip}>
                         <Text style={styles.grandTotalLabel}>Total</Text>
                         <Text style={styles.grandTotalAmount}>
-                          {fmt(
-                            (billing.rent || 0) +
-                              (billing.electricity || 0) +
-                              calculateTotalWaterBill() +
-                              (billing.internet || 0),
-                          )}
+                          {(() => {
+                            let customTotal = 0;
+                            if (activeCycle?.customCharges) {
+                              try {
+                                const customCharges = Array.isArray(
+                                  activeCycle.customCharges,
+                                )
+                                  ? activeCycle.customCharges
+                                  : typeof activeCycle.customCharges ===
+                                      "string"
+                                    ? JSON.parse(activeCycle.customCharges)
+                                    : [];
+                                customTotal = customCharges.reduce(
+                                  (sum, c) => sum + parseFloat(c.amount || 0),
+                                  0,
+                                );
+                              } catch (_) {
+                                customTotal = 0;
+                              }
+                            }
+                            return fmt(
+                              (billing.rent || 0) +
+                                (billing.electricity || 0) +
+                                calculateTotalWaterBill() +
+                                (billing.internet || 0) +
+                                customTotal,
+                            );
+                          })()}
                         </Text>
                       </View>
                     </View>
@@ -2265,6 +2438,55 @@ const BillsScreen = ({ navigation, route }) => {
                           </Text>
                         </View>
                       </View>
+
+                      {/* Display each custom charge individually */}
+                      {(() => {
+                        let customCharges = [];
+                        const payorCount = billShare?.payorCount || 1;
+                        if (activeCycle?.customCharges) {
+                          try {
+                            customCharges = Array.isArray(
+                              activeCycle.customCharges,
+                            )
+                              ? activeCycle.customCharges
+                              : typeof activeCycle.customCharges === "string"
+                                ? JSON.parse(activeCycle.customCharges)
+                                : [];
+                          } catch (_) {
+                            customCharges = [];
+                          }
+                        }
+                        return customCharges.map((charge, idx) => (
+                          <View
+                            key={`share-custom-${idx}`}
+                            style={styles.shareItem}
+                          >
+                            <View style={styles.shareItemLeft}>
+                              <MaterialIcons
+                                name={getCustomChargeIcon(charge.name)}
+                                size={18}
+                                color={colors.accent}
+                              />
+                              <Text
+                                style={styles.shareItemLabel}
+                                numberOfLines={1}
+                              >
+                                {charge.name || "Charge"}
+                              </Text>
+                            </View>
+                            <View style={styles.shareItemRight}>
+                              <Text style={styles.shareItemValue}>
+                                {fmt(
+                                  parseFloat(charge.amount || 0) / payorCount,
+                                )}
+                              </Text>
+                              <Text
+                                style={styles.shareItemNote}
+                              >{`÷ ${payorCount}`}</Text>
+                            </View>
+                          </View>
+                        ));
+                      })()}
                     </View>
 
                     {/* Total Due */}
@@ -2404,10 +2626,33 @@ const BillsScreen = ({ navigation, route }) => {
                           </Text>
                         </TouchableOpacity>
                       </View>
+                    ) : activeCycle?.status === "closed" &&
+                      !hasNewActiveCycle() ? (
+                      /* ── Closed Cycle, No New Cycle ── */
+                      <View style={styles.paymentLockedBox}>
+                        <MaterialIcons
+                          name="lock"
+                          size={20}
+                          color={colors.electricityColor}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.paymentLockedText}>
+                            Billing Cycle Closed
+                          </Text>
+                          <Text style={styles.paymentLockedSubtext}>
+                            Pay your unpaid bills in the Outstanding Balance
+                            card above
+                          </Text>
+                        </View>
+                      </View>
                     ) : isPaymentAllowed() ? (
                       /* ── Normal Pay Now ── */
                       <TouchableOpacity
-                        style={styles.payNowButton}
+                        style={[
+                          styles.payNowButton,
+                          activeCycle?.status === "completed" &&
+                            styles.payNowButtonDisabled,
+                        ]}
                         onPress={() => {
                           if (selectedRoom && billShare) {
                             navigation.navigate("PaymentMethod", {
@@ -2421,6 +2666,7 @@ const BillsScreen = ({ navigation, route }) => {
                           }
                         }}
                         activeOpacity={0.8}
+                        disabled={activeCycle?.status === "completed"}
                       >
                         <MaterialIcons
                           name="payment"
@@ -2561,6 +2807,40 @@ const BillsScreen = ({ navigation, route }) => {
                             value: billShare.internet,
                             color: colors.internetColor,
                           },
+                          ...(() => {
+                            let customCharges = [];
+                            if (activeCycle?.customCharges) {
+                              try {
+                                customCharges = Array.isArray(
+                                  activeCycle.customCharges,
+                                )
+                                  ? activeCycle.customCharges
+                                  : typeof activeCycle.customCharges ===
+                                      "string"
+                                    ? JSON.parse(activeCycle.customCharges)
+                                    : [];
+                              } catch (_) {
+                                customCharges = [];
+                              }
+                            }
+                            return customCharges.map((charge) => {
+                              const totalCustomCharges = customCharges.reduce(
+                                (sum, c) => sum + parseFloat(c.amount || 0),
+                                0,
+                              );
+                              return {
+                                label: charge.name || "Charge",
+                                value:
+                                  billShare.customCharges &&
+                                  totalCustomCharges > 0
+                                    ? (parseFloat(charge.amount || 0) /
+                                        totalCustomCharges) *
+                                      billShare.customCharges
+                                    : 0,
+                                color: colors.accent,
+                              };
+                            });
+                          })(),
                         ].map((item, i) => (
                           <View key={i} style={styles.shareItemPaid}>
                             <View style={styles.shareItemLeft}>
@@ -2826,6 +3106,14 @@ const BillsScreen = ({ navigation, route }) => {
                   ₱{receiptData.bills.internet}
                 </Text>
               </View>
+              {receiptData.bills.customCharges &&
+                receiptData.bills.customCharges.length > 0 &&
+                receiptData.bills.customCharges.map((charge, idx) => (
+                  <View key={idx} style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>{charge.name}</Text>
+                    <Text style={styles.receiptAmount}>₱{charge.amount}</Text>
+                  </View>
+                ))}
               <View style={styles.receiptTotalRow}>
                 <Text style={styles.receiptTotalLabel}>TOTAL BILLS</Text>
                 <Text style={styles.receiptTotalAmount}>
@@ -2899,6 +3187,11 @@ const BillsScreen = ({ navigation, route }) => {
                             <Text style={styles.receiptBillPerMemberDetail}>
                               Internet: ₱{member.billShare.internet}
                             </Text>
+                            {parseFloat(member.billShare.customCharges) > 0 && (
+                              <Text style={styles.receiptBillPerMemberDetail}>
+                                Custom: ₱{member.billShare.customCharges}
+                              </Text>
+                            )}
                           </View>
                           <Text style={styles.receiptBillPerMemberTotal}>
                             Total: ₱{member.billShare.total}
@@ -2971,6 +3264,14 @@ const BillsScreen = ({ navigation, route }) => {
                       ) > 0
                         ? ` + Non-payors share: ₱${receiptData.userShare.waterBreakdown.nonPayorShare}`
                         : ""}
+                    </Text>
+                  </View>
+                )}
+                {parseFloat(receiptData.userShare.customCharges) > 0 && (
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>Custom Charges:</Text>
+                    <Text style={styles.receiptAmount}>
+                      ₱{receiptData.userShare.customCharges}
                     </Text>
                   </View>
                 )}
@@ -4496,7 +4797,7 @@ const BillsScreen = ({ navigation, route }) => {
                           textAlign: "right",
                         }}
                       >
-                        {fmt(selectedRoom.billing.water || 0)}
+                        {fmt(calculateTotalWaterBill())}
                       </Text>
                       <Text
                         style={{
@@ -4509,6 +4810,76 @@ const BillsScreen = ({ navigation, route }) => {
                         {fmt(calculateBillShare()?.water || 0)}
                       </Text>
                     </View>
+
+                    {/* Custom Charges Rows */}
+                    {activeCycle?.customCharges &&
+                      Array.isArray(activeCycle.customCharges) &&
+                      activeCycle.customCharges.length > 0 &&
+                      (() => {
+                        const currentUserMember = selectedRoom.members?.find(
+                          (m) =>
+                            String(m.user?.id || m.user?._id || m.user) ===
+                            String(userId),
+                        );
+                        const isPayer = currentUserMember?.isPayer !== false;
+                        const payorCount = Math.max(
+                          1,
+                          (selectedRoom?.members || []).filter(
+                            (m) => m.isPayer !== false,
+                          ).length,
+                        );
+                        return activeCycle.customCharges.map(
+                          (charge, chargeIdx) => {
+                            const chargeAmount = parseFloat(charge.amount || 0);
+                            const userShare =
+                              isPayer && payorCount > 0
+                                ? r2(chargeAmount / payorCount)
+                                : 0;
+                            return (
+                              <View
+                                key={`custom-charge-${chargeIdx}`}
+                                style={{
+                                  flexDirection: "row",
+                                  backgroundColor:
+                                    chargeIdx % 2 === 0 ? "white" : "#fff9e6",
+                                  borderBottomWidth: 1,
+                                  borderBottomColor: "#eee",
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    flex: 1.5,
+                                    padding: 5,
+                                    fontSize: 8,
+                                  }}
+                                >
+                                  {charge.name}
+                                </Text>
+                                <Text
+                                  style={{
+                                    flex: 1,
+                                    padding: 5,
+                                    fontSize: 8,
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  {fmt(chargeAmount)}
+                                </Text>
+                                <Text
+                                  style={{
+                                    flex: 1,
+                                    padding: 5,
+                                    fontSize: 8,
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  {fmt(userShare)}
+                                </Text>
+                              </View>
+                            );
+                          },
+                        );
+                      })()}
 
                     {/* Total Bills Row */}
                     <View
@@ -4541,8 +4912,14 @@ const BillsScreen = ({ navigation, route }) => {
                         {fmt(
                           (selectedRoom.billing.rent || 0) +
                             (selectedRoom.billing.electricity || 0) +
-                            (selectedRoom.billing.water || 0) +
-                            (selectedRoom.billing.internet || 0),
+                            calculateTotalWaterBill() +
+                            (selectedRoom.billing.internet || 0) +
+                            (Array.isArray(activeCycle?.customCharges)
+                              ? activeCycle.customCharges.reduce(
+                                  (sum, c) => sum + parseFloat(c.amount || 0),
+                                  0,
+                                )
+                              : 0),
                         )}
                       </Text>
                       <Text
@@ -5627,6 +6004,10 @@ const createStyles = (colors) =>
       alignItems: "center",
       justifyContent: "center",
       gap: 8,
+    },
+    payNowButtonDisabled: {
+      backgroundColor: colors.textTertiary,
+      opacity: 0.5,
     },
     payNowButtonText: {
       fontSize: 15,

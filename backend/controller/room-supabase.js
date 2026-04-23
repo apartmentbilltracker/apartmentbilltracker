@@ -435,6 +435,8 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
             isTotalPaid || mp.some((p) => p.bill_type === "water");
           const internetPaid =
             isTotalPaid || mp.some((p) => p.bill_type === "internet");
+          const customChargesPaid =
+            isTotalPaid || mp.some((p) => p.bill_type === "custom_charges");
           return {
             member: member.user_id,
             memberName: member.name,
@@ -443,7 +445,13 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
             electricityStatus: elecPaid ? "paid" : "unpaid",
             waterStatus: waterPaid ? "paid" : "unpaid",
             internetStatus: internetPaid ? "paid" : "unpaid",
-            allPaid: rentPaid && elecPaid && waterPaid && internetPaid,
+            customChargesStatus: customChargesPaid ? "paid" : "unpaid",
+            allPaid:
+              rentPaid &&
+              elecPaid &&
+              waterPaid &&
+              internetPaid &&
+              customChargesPaid,
           };
         });
 
@@ -518,6 +526,8 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
               isTotalPaid || mp.some((p) => p.bill_type === "water");
             const internetPaid =
               isTotalPaid || mp.some((p) => p.bill_type === "internet");
+            const customChargesPaid =
+              isTotalPaid || mp.some((p) => p.bill_type === "custom_charges");
             return {
               member: member.user_id,
               memberName: member.name,
@@ -526,7 +536,13 @@ router.get("/client/my-rooms", isAuthenticated, async (req, res, next) => {
               electricityStatus: elecPaid ? "paid" : "unpaid",
               waterStatus: waterPaid ? "paid" : "unpaid",
               internetStatus: internetPaid ? "paid" : "unpaid",
-              allPaid: rentPaid && elecPaid && waterPaid && internetPaid,
+              customChargesStatus: customChargesPaid ? "paid" : "unpaid",
+              allPaid:
+                rentPaid &&
+                elecPaid &&
+                waterPaid &&
+                internetPaid &&
+                customChargesPaid,
             };
           });
         }
@@ -946,6 +962,8 @@ router.get("/:id", async (req, res, next) => {
           isTotalPaid || mp.some((p) => p.bill_type === "water");
         const internetPaid =
           isTotalPaid || mp.some((p) => p.bill_type === "internet");
+        const customChargesPaid =
+          isTotalPaid || mp.some((p) => p.bill_type === "custom_charges");
         return {
           member: member.user_id,
           memberName: member.name,
@@ -954,7 +972,13 @@ router.get("/:id", async (req, res, next) => {
           electricityStatus: elecPaid ? "paid" : "unpaid",
           waterStatus: waterPaid ? "paid" : "unpaid",
           internetStatus: internetPaid ? "paid" : "unpaid",
-          allPaid: rentPaid && elecPaid && waterPaid && internetPaid,
+          customChargesStatus: customChargesPaid ? "paid" : "unpaid",
+          allPaid:
+            rentPaid &&
+            elecPaid &&
+            waterPaid &&
+            internetPaid &&
+            customChargesPaid,
         };
       });
 
@@ -1020,6 +1044,8 @@ router.get("/:id", async (req, res, next) => {
             isTotalPaid || mp.some((p) => p.bill_type === "water");
           const internetPaid =
             isTotalPaid || mp.some((p) => p.bill_type === "internet");
+          const customChargesPaid =
+            isTotalPaid || mp.some((p) => p.bill_type === "custom_charges");
           return {
             member: member.user_id,
             memberName: member.name,
@@ -1028,7 +1054,13 @@ router.get("/:id", async (req, res, next) => {
             electricityStatus: elecPaid ? "paid" : "unpaid",
             waterStatus: waterPaid ? "paid" : "unpaid",
             internetStatus: internetPaid ? "paid" : "unpaid",
-            allPaid: rentPaid && elecPaid && waterPaid && internetPaid,
+            customChargesStatus: customChargesPaid ? "paid" : "unpaid",
+            allPaid:
+              rentPaid &&
+              elecPaid &&
+              waterPaid &&
+              internetPaid &&
+              customChargesPaid,
           };
         });
       }

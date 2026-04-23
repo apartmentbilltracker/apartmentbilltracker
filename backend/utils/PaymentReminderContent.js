@@ -1,4 +1,48 @@
 /**
+ * Plain-text notification content for in-app display.
+ *
+ * @param {Object} opts
+ * @param {string} opts.recipientName   - Member name
+ * @param {string} opts.roomName        - Room name
+ * @param {string[]} opts.unpaidBills   - e.g. ["Rent", "Electricity"]
+ * @param {string} opts.billingPeriod   - e.g. "January 1, 2026 – January 31, 2026"
+ * @param {number} opts.daysOverdue     - Negative or zero means "due now"
+ * @param {string} [opts.customMessage] - Optional extra note from admin
+ */
+const PaymentReminderTextContent = ({
+  recipientName,
+  roomName,
+  unpaidBills = [],
+  billingPeriod,
+  daysOverdue,
+  customMessage,
+}) => {
+  const isOverdue = daysOverdue > 0;
+  const urgencyLabel = isOverdue
+    ? `${daysOverdue} day${daysOverdue !== 1 ? "s" : ""} overdue`
+    : "Due now";
+
+  const billsList = unpaidBills.join(", ");
+
+  let text = `Payment Reminder for ${roomName}\n\n`;
+  text += `Dear ${recipientName},\n\n`;
+  text += `You have outstanding payment(s) that need your attention:\n\n`;
+  text += `Unpaid Bills: ${billsList}\n`;
+  text += `Billing Period: ${billingPeriod}\n`;
+  text += `Status: ${urgencyLabel}\n\n`;
+
+  if (customMessage) {
+    text += `Note from admin:\n${customMessage}\n\n`;
+  }
+
+  text += `Please settle the above balance at your earliest convenience.\n`;
+  text += `If you have already made this payment, please disregard this notice.\n\n`;
+  text += `Regards,\n${roomName} Management`;
+
+  return text;
+};
+
+/**
  * Professional HTML email template for payment reminders.
  *
  * @param {Object} opts
@@ -126,3 +170,4 @@ const PaymentReminderContent = ({
 };
 
 module.exports = PaymentReminderContent;
+module.exports.PaymentReminderTextContent = PaymentReminderTextContent;

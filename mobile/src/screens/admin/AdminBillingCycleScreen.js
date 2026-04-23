@@ -47,6 +47,10 @@ const AdminBillingCycleScreen = ({ route }) => {
   const [endDateStr, setEndDateStr] = useState(
     new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
   );
+  const [customCharges, setCustomCharges] = useState([]);
+  const [showCustomChargeInput, setShowCustomChargeInput] = useState(false);
+  const [tempChargeName, setTempChargeName] = useState("");
+  const [tempChargeAmount, setTempChargeAmount] = useState("");
 
   useFocusEffect(
     React.useCallback(() => {
@@ -125,6 +129,9 @@ const AdminBillingCycleScreen = ({ route }) => {
       };
       if (formData.internet) {
         payload.internet = parseFloat(formData.internet);
+      }
+      if (customCharges.length > 0) {
+        payload.customCharges = customCharges;
       }
       const response = await apiService.post("/api/v2/billing-cycles", payload);
       if (response.success) {
@@ -249,6 +256,37 @@ const AdminBillingCycleScreen = ({ route }) => {
     });
     setStartDateStr(newStart.toISOString().split("T")[0]);
     setEndDateStr(newEnd.toISOString().split("T")[0]);
+    setCustomCharges([]);
+    setShowCustomChargeInput(false);
+    setTempChargeName("");
+    setTempChargeAmount("");
+  };
+
+  const handleAddCustomCharge = () => {
+    if (!tempChargeName.trim() || !tempChargeAmount.trim()) {
+      Alert.alert("Error", "Please enter both charge name and amount");
+      return;
+    }
+    const amount = parseFloat(tempChargeAmount);
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert("Error", "Amount must be greater than 0");
+      return;
+    }
+    if (customCharges.length >= 10) {
+      Alert.alert("Error", "Maximum 10 custom charges per cycle");
+      return;
+    }
+    setCustomCharges([
+      ...customCharges,
+      { name: tempChargeName.trim(), amount },
+    ]);
+    setTempChargeName("");
+    setTempChargeAmount("");
+    setShowCustomChargeInput(false);
+  };
+
+  const handleRemoveCustomCharge = (index) => {
+    setCustomCharges(customCharges.filter((_, i) => i !== index));
   };
 
   const formatDate = (date) =>
@@ -502,6 +540,37 @@ const AdminBillingCycleScreen = ({ route }) => {
                     </Text>
                   </View>
                 </View>
+
+                {/* Custom Charges */}
+                {cycle.custom_charges &&
+                  (Array.isArray(cycle.custom_charges)
+                    ? cycle.custom_charges
+                    : typeof cycle.custom_charges === "string"
+                      ? JSON.parse(cycle.custom_charges)
+                      : []
+                  ).length > 0 && (
+                    <View style={styles.customChargesGrid}>
+                      {(Array.isArray(cycle.custom_charges)
+                        ? cycle.custom_charges
+                        : JSON.parse(cycle.custom_charges)
+                      ).map((charge, idx) => (
+                        <View key={idx} style={styles.customChargeCell}>
+                          <View
+                            style={[
+                              styles.billDot,
+                              { backgroundColor: colors.accent },
+                            ]}
+                          />
+                          <Text style={styles.billCellLabel}>
+                            {charge.name}
+                          </Text>
+                          <Text style={styles.billCellAmount}>
+                            {fmt(charge.amount)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
 
                 {/* Meter Readings */}
                 {(prevReading != null || currReading != null) && (
@@ -849,6 +918,110 @@ const AdminBillingCycleScreen = ({ route }) => {
                   </View>
                 )}
 
+              {/* Custom Charges Section */}
+              <Text style={styles.formSectionLabel}>
+                Additional Charges (Optional)
+              </Text>
+              {customCharges.length > 0 && (
+                <View style={styles.customChargesList}>
+                  {customCharges.map((charge, index) => (
+                    <View key={index} style={styles.customChargeItem}>
+                      <View style={styles.customChargeInfo}>
+                        <Text style={styles.customChargeName}>
+                          {charge.name}
+                        </Text>
+                        <Text style={styles.customChargeAmount}>
+                          {String.fromCharCode(8369)}
+                          {parseFloat(charge.amount).toFixed(2)}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveCustomCharge(index)}
+                        style={styles.customChargeRemoveBtn}
+                      >
+                        <MaterialIcons
+                          name="close"
+                          size={18}
+                          color={colors.textTertiary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {showCustomChargeInput ? (
+                <View style={styles.customChargeInputBox}>
+                  <View style={styles.inputRow}>
+                    <View style={[styles.inputHalf, { marginRight: 8 }]}>
+                      <Text style={styles.inputLabel}>Charge Name *</Text>
+                      <View style={styles.inputWrapper}>
+                        <TextInput
+                          style={styles.amountInput}
+                          placeholder="e.g., Maintenance"
+                          value={tempChargeName}
+                          onChangeText={setTempChargeName}
+                          placeholderTextColor={colors.textTertiary}
+                        />
+                      </View>
+                    </View>
+                    <View style={[styles.inputHalf, { marginLeft: 8 }]}>
+                      <Text style={styles.inputLabel}>Amount *</Text>
+                      <View style={styles.inputWrapper}>
+                        <Text style={styles.inputPrefix}>
+                          {String.fromCharCode(8369)}
+                        </Text>
+                        <TextInput
+                          style={styles.amountInput}
+                          placeholder="0.00"
+                          keyboardType="decimal-pad"
+                          value={tempChargeAmount}
+                          onChangeText={setTempChargeAmount}
+                          placeholderTextColor={colors.textTertiary}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.customChargeButtonRow}>
+                    <TouchableOpacity
+                      style={[styles.cancelBtn, { flex: 1 }]}
+                      onPress={() => {
+                        setShowCustomChargeInput(false);
+                        setTempChargeName("");
+                        setTempChargeAmount("");
+                      }}
+                    >
+                      <Text style={styles.cancelBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.submitBtn, { flex: 1, marginLeft: 8 }]}
+                      onPress={handleAddCustomCharge}
+                    >
+                      <Ionicons
+                        name="add"
+                        size={18}
+                        color={colors.textOnAccent}
+                      />
+                      <Text style={styles.submitBtnText}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : customCharges.length < 10 ? (
+                <TouchableOpacity
+                  style={styles.addCustomChargeBtn}
+                  onPress={() => setShowCustomChargeInput(true)}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={20}
+                    color={colors.accent}
+                  />
+                  <Text style={styles.addCustomChargeBtnText}>
+                    Add Custom Charge
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
               {/* Buttons */}
               <View style={styles.modalButtons}>
                 <TouchableOpacity
@@ -1065,6 +1238,25 @@ const createStyles = (colors) =>
     },
     billCellAmount: { fontSize: 14, fontWeight: "700", color: colors.text },
 
+    // CUSTOM CHARGES GRID
+    customChargesGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      paddingHorizontal: 12,
+      gap: 8,
+      paddingBottom: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+      paddingTop: 10,
+    },
+    customChargeCell: {
+      width: (SCREEN_WIDTH - 72) / 2,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 8,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+    },
+
     // METER SECTION
     meterSection: {
       flexDirection: "row",
@@ -1263,6 +1455,75 @@ const createStyles = (colors) =>
       borderRadius: 8,
     },
     usagePreviewText: { fontSize: 12, fontWeight: "600", color: "#e65100" },
+
+    // CUSTOM CHARGES
+    customChargesList: {
+      marginVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.cardAlt,
+      overflow: "hidden",
+    },
+    customChargeItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    customChargeInfo: {
+      flex: 1,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    customChargeName: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.text,
+    },
+    customChargeAmount: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.accent,
+      marginLeft: 12,
+    },
+    customChargeRemoveBtn: {
+      padding: 8,
+      marginLeft: 12,
+    },
+    customChargeInputBox: {
+      marginVertical: 12,
+      padding: 12,
+      borderRadius: 10,
+      backgroundColor: colors.cardAlt,
+      borderWidth: 1,
+      borderColor: colors.accent,
+    },
+    customChargeButtonRow: {
+      flexDirection: "row",
+      marginTop: 12,
+      gap: 8,
+    },
+    addCustomChargeBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginVertical: 12,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.cardAlt,
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+      borderStyle: "dashed",
+    },
+    addCustomChargeBtnText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accent,
+    },
 
     // MODAL BUTTONS
     modalButtons: {

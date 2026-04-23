@@ -18,7 +18,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import SafeMapView from "../../components/SafeMapView";
-import { roomService } from "../../services/apiService";
+import { roomService, billingCycleService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -68,6 +68,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
   const { roomId } = route.params;
   const { state } = useContext(AuthContext);
   const [room, setRoom] = useState(null);
+  const [activeCycle, setActiveCycle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showFullMap, setShowFullMap] = useState(false);
@@ -85,6 +86,18 @@ const RoomDetailsScreen = ({ route, navigation }) => {
     Linking.openURL(url).catch(() =>
       Linking.openURL(`https://maps.google.com/?q=${lat},${lng}`),
     );
+  };
+
+  const getCustomChargeIcon = (chargeName) => {
+    const name = chargeName?.toLowerCase() || "";
+    if (name.includes("maintenance")) return "home-repair-service";
+    if (name.includes("groceries") || name.includes("grocery"))
+      return "local-grocery-store";
+    if (name.includes("cleaning")) return "cleaning-services";
+    if (name.includes("parking")) return "local-parking";
+    if (name.includes("pet") || name.includes("pets")) return "pets";
+    if (name.includes("laundry")) return "local-laundry-service";
+    return "pricetag"; // fallback
   };
 
   useEffect(() => {
@@ -105,6 +118,21 @@ const RoomDetailsScreen = ({ route, navigation }) => {
       // Extract the room object (it might be wrapped)
       const room = roomData.room || roomData;
       setRoom(room);
+
+      // Fetch active billing cycle for custom charges
+      try {
+        const activeCycleData =
+          await billingCycleService.getActiveCycle(roomId);
+        if (activeCycleData) {
+          // Extract billingCycle from response
+          const cycle = activeCycleData.billingCycle || activeCycleData;
+          if (cycle) {
+            setActiveCycle(cycle);
+          }
+        }
+      } catch (cycleError) {
+        console.error("Error fetching billing cycle:", cycleError.message);
+      }
     } catch (error) {
       console.error("Error fetching room details:", error.message);
       Alert.alert("Error", "Failed to load room details");
@@ -475,6 +503,15 @@ const RoomDetailsScreen = ({ route, navigation }) => {
                 color: colors.internetColor,
                 value: billing.billing.internet,
               },
+              ...(activeCycle?.customCharges &&
+              activeCycle.customCharges.length > 0
+                ? activeCycle.customCharges.map((charge) => ({
+                    label: charge.name || "Charge",
+                    icon: "pricetag",
+                    color: colors.accent,
+                    value: parseFloat(charge.amount || 0),
+                  }))
+                : []),
             ].map((item, idx) => (
               <View key={idx} style={styles.billRow}>
                 <View style={styles.billRowLeft}>
@@ -499,15 +536,28 @@ const RoomDetailsScreen = ({ route, navigation }) => {
               <Text style={styles.totalLabel}>Grand Total</Text>
               <Text style={styles.totalValue}>
                 ₱
-                {(
-                  parseFloat(billing.billing.rent || 0) +
-                  parseFloat(billing.billing.electricity || 0) +
-                  calculateTotalWaterBill() +
-                  parseFloat(billing.billing.internet || 0)
-                ).toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {(() => {
+                  let customTotal = 0;
+                  if (
+                    activeCycle?.customCharges &&
+                    activeCycle.customCharges.length > 0
+                  ) {
+                    customTotal = activeCycle.customCharges.reduce(
+                      (sum, c) => sum + parseFloat(c.amount || 0),
+                      0,
+                    );
+                  }
+                  return (
+                    parseFloat(billing.billing.rent || 0) +
+                    parseFloat(billing.billing.electricity || 0) +
+                    calculateTotalWaterBill() +
+                    parseFloat(billing.billing.internet || 0) +
+                    customTotal
+                  ).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  });
+                })()}
               </Text>
             </View>
 
