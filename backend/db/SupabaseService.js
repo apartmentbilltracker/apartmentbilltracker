@@ -245,7 +245,7 @@ class SupabaseService {
 
   /** Specific columns for billing_cycles — avoids fetching unused metadata. */
   static BILLING_CYCLE_COLS =
-    "id, room_id, start_date, end_date, status, cycle_number, rent, electricity, internet, water_bill_amount, total_billed_amount, previous_meter_reading, current_meter_reading, closed_at, created_at, created_by, updated_at, member_charges";
+    "id, room_id, start_date, end_date, status, cycle_number, rent, electricity, internet, water_bill_amount, total_billed_amount, custom_charges, previous_meter_reading, current_meter_reading, closed_at, created_at, created_by, updated_at, member_charges";
 
   /** Specific columns for payments — avoids fetching unused metadata. */
   static PAYMENT_COLS =

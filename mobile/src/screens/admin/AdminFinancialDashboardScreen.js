@@ -453,6 +453,32 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
                   </View>
                 );
               })}
+              {/* Custom Charges */}
+              {dashboard?.customCharges &&
+                dashboard.customCharges.length > 0 && (
+                  <View style={styles.breakdownChip}>
+                    <View
+                      style={[
+                        styles.breakdownChipIcon,
+                        { backgroundColor: colors.purpleBg },
+                      ]}
+                    >
+                      <Ionicons name="layers" size={14} color={colors.accent} />
+                    </View>
+                    <View>
+                      <Text style={styles.breakdownChipLabel}>Custom</Text>
+                      <Text style={styles.breakdownChipValue}>
+                        ₱
+                        {dashboard.customCharges
+                          .reduce(
+                            (sum, c) => sum + parseFloat(c.amount || 0),
+                            0,
+                          )
+                          .toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
             </View>
 
             {/* Progress Bars */}
@@ -495,6 +521,49 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
                   </View>
                 );
               })}
+              {/* Custom Charges Progress */}
+              {dashboard?.customCharges &&
+                dashboard.customCharges.length > 0 && (
+                  <View style={styles.progressItem}>
+                    <View style={styles.progressHeader}>
+                      <View style={styles.progressLabelRow}>
+                        <Ionicons
+                          name="layers"
+                          size={12}
+                          color={colors.accent}
+                        />
+                        <Text style={styles.progressLabel}>Custom Charges</Text>
+                      </View>
+                      <Text
+                        style={[styles.progressPct, { color: colors.accent }]}
+                      >
+                        {pct(
+                          dashboard?.paymentBreakdown?.customCharges
+                            ?.collected || 0,
+                          dashboard?.paymentBreakdown?.customCharges
+                            ?.expected || 0,
+                        )}
+                        %
+                      </Text>
+                    </View>
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${pct(
+                              dashboard?.paymentBreakdown?.customCharges
+                                ?.collected || 0,
+                              dashboard?.paymentBreakdown?.customCharges
+                                ?.expected || 0,
+                            )}%`,
+                            backgroundColor: colors.accent,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                )}
             </View>
           </View>
         </View>
@@ -577,6 +646,56 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
                     ₱{(cycle.totalBilled || 0).toFixed(2)}
                   </Text>
                 </View>
+                {cycle.customCharges && cycle.customCharges.length > 0 && (
+                  <View
+                    style={[
+                      styles.trendAmountRow,
+                      { borderTopColor: colors.borderLight },
+                    ]}
+                  >
+                    <View>
+                      <Text style={styles.trendAmountLabel}>
+                        Additional Charges
+                      </Text>
+                      <View
+                        style={{ flexDirection: "row", gap: 4, marginTop: 4 }}
+                      >
+                        {cycle.customCharges.slice(0, 2).map((charge, idx) => (
+                          <Text
+                            key={idx}
+                            style={{
+                              fontSize: 10,
+                              color: colors.textTertiary,
+                              backgroundColor: colors.cardAlt,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderRadius: 4,
+                            }}
+                          >
+                            {charge.name}
+                          </Text>
+                        ))}
+                        {cycle.customCharges.length > 2 && (
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              color: colors.textTertiary,
+                              backgroundColor: colors.cardAlt,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderRadius: 4,
+                            }}
+                          >
+                            +{cycle.customCharges.length - 2}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <Text style={styles.trendAmountValue}>
+                      ₱{(cycle.customChargesTotal || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                )}
               </View>
             );
           })}

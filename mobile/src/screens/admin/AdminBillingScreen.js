@@ -64,6 +64,12 @@ const AdminBillingScreen = ({ navigation }) => {
   // the host explicitly starts a new cycle from the completed-cycle screen.
   const [newCycleMode, setNewCycleMode] = useState(false);
 
+  // Custom charges state
+  const [customCharges, setCustomCharges] = useState([]);
+  const [showCustomChargeInput, setShowCustomChargeInput] = useState(false);
+  const [tempChargeName, setTempChargeName] = useState("");
+  const [tempChargeAmount, setTempChargeAmount] = useState("");
+
   // Fetch rooms on mount and when screen regains focus
   useEffect(() => {
     if (isFocused) {
@@ -116,6 +122,10 @@ const AdminBillingScreen = ({ navigation }) => {
       setCycleClosedManually(false);
       setPriorUnpaidData(null);
       setNewCycleMode(false); // reset on room switch
+      setCustomCharges([]);
+      setShowCustomChargeInput(false);
+      setTempChargeName("");
+      setTempChargeAmount("");
 
       // Preload from cache for instant display (skip if host just started a new cycle)
       const roomId = selectedRoom.id || selectedRoom._id;
@@ -135,6 +145,9 @@ const AdminBillingScreen = ({ navigation }) => {
             if (cached.cycleCompleted !== undefined)
               setCycleCompleted(cached.cycleCompleted);
             if (cached.members !== undefined) setMembers(cached.members);
+            if (cached.customCharges !== undefined) {
+              setCustomCharges(cached.customCharges);
+            }
           }
         });
         checkAndResetIfCycleClosed();
@@ -197,7 +210,12 @@ const AdminBillingScreen = ({ navigation }) => {
     if (!selectedRoom) return;
 
     const roomId = selectedRoom.id || selectedRoom._id;
-    const writeCycleCache = (billing, cycleCompleted, roomMembers) => {
+    const writeCycleCache = (
+      billing,
+      cycleCompleted,
+      roomMembers,
+      customChargesData = [],
+    ) => {
       if (!billing) return;
       screenCache.write("admin_billing_cycle_" + roomId, {
         cycleCompleted,
@@ -213,6 +231,7 @@ const AdminBillingScreen = ({ navigation }) => {
         prevReading: String(billing.previousReading || ""),
         currReading: String(billing.currentReading || ""),
         members: roomMembers || [],
+        customCharges: customChargesData,
       });
     };
 
@@ -246,7 +265,34 @@ const AdminBillingScreen = ({ navigation }) => {
         setPrevReading(String(billing.previousReading || ""));
         setCurrReading(String(billing.currentReading || ""));
         setMembers(latestRoom.members || []);
-        writeCycleCache(billing, true, latestRoom.members || []);
+        // Fetch custom charges from billing cycle API since they're not in room.billing
+        // Use closedCycleId for closed cycles, currentCycleId for completed cycles
+        const cycleIdToFetch =
+          latestRoom.closedCycleId || latestRoom.currentCycleId;
+        let parsedCharges = [];
+        try {
+          if (cycleIdToFetch) {
+            const cycleRes = await apiService.get(
+              `/api/v2/billing-cycles/${cycleIdToFetch}`,
+            );
+            const customChargesData =
+              cycleRes?.billingCycle?.customCharges ||
+              cycleRes?.billingCycle?.custom_charges ||
+              cycleRes?.data?.billingCycle?.customCharges ||
+              cycleRes?.data?.billingCycle?.custom_charges;
+            if (customChargesData) {
+              parsedCharges = Array.isArray(customChargesData)
+                ? customChargesData
+                : typeof customChargesData === "string"
+                  ? JSON.parse(customChargesData)
+                  : [];
+            }
+          }
+        } catch (chargeError) {
+          parsedCharges = [];
+        }
+        setCustomCharges(parsedCharges);
+        writeCycleCache(billing, true, latestRoom.members || [], parsedCharges);
         return;
       }
 
@@ -261,17 +307,20 @@ const AdminBillingScreen = ({ navigation }) => {
         setPrevReading("");
         setCurrReading("");
         setMembers([]);
+        setCustomCharges([]);
         screenCache.clear("admin_billing_cycle_" + roomId);
         return;
       }
 
       // Fetch the billing cycle to check its status
+      let cycleResponse = null;
+      let parsedCharges = [];
       try {
-        const response = await apiService.get(
+        cycleResponse = await apiService.get(
           `/api/v2/billing-cycles/${latestRoom.currentCycleId}`,
         );
 
-        const cycleStatus = response?.data?.status;
+        const cycleStatus = cycleResponse?.billingCycle?.status;
         if (cycleStatus === "completed" || cycleStatus === "cycle_closed") {
           setCycleCompleted(true);
           setCycleClosedManually(cycleStatus === "cycle_closed");
@@ -293,7 +342,26 @@ const AdminBillingScreen = ({ navigation }) => {
             setPrevReading(String(billing.previousReading || ""));
             setCurrReading(String(billing.currentReading || ""));
             setMembers(latestRoom.members || []);
-            writeCycleCache(billing, true, latestRoom.members || []);
+            // Extract custom charges from already-fetched response
+            const customChargesData =
+              cycleResponse?.billingCycle?.customCharges ||
+              cycleResponse?.billingCycle?.custom_charges ||
+              cycleResponse?.data?.billingCycle?.customCharges ||
+              cycleResponse?.data?.billingCycle?.custom_charges;
+            if (customChargesData) {
+              parsedCharges = Array.isArray(customChargesData)
+                ? customChargesData
+                : typeof customChargesData === "string"
+                  ? JSON.parse(customChargesData)
+                  : [];
+            }
+            setCustomCharges(parsedCharges);
+            writeCycleCache(
+              billing,
+              true,
+              latestRoom.members || [],
+              parsedCharges,
+            );
           }
           return;
         }
@@ -318,9 +386,52 @@ const AdminBillingScreen = ({ navigation }) => {
       setPrevReading(String(billing.previousReading || ""));
       setCurrReading(String(billing.currentReading || ""));
       setMembers(latestRoom.members || []);
-      writeCycleCache(billing, false, latestRoom.members || []);
+
+      // Use already-fetched cycle response if available, otherwise fetch
+      parsedCharges = [];
+      try {
+        if (!cycleResponse && !latestRoom.currentCycleId) {
+          setCustomCharges([]);
+        } else if (!cycleResponse && latestRoom.currentCycleId) {
+          // Only fetch if we haven't already fetched above
+          const cycleFetchResponse = await apiService.get(
+            `/api/v2/billing-cycles/${latestRoom.currentCycleId}`,
+          );
+          const customChargesData =
+            cycleFetchResponse?.billingCycle?.customCharges ||
+            cycleFetchResponse?.billingCycle?.custom_charges;
+          if (customChargesData) {
+            parsedCharges = Array.isArray(customChargesData)
+              ? customChargesData
+              : typeof customChargesData === "string"
+                ? JSON.parse(customChargesData)
+                : [];
+            setCustomCharges(parsedCharges);
+          } else {
+            setCustomCharges([]);
+          }
+        } else if (cycleResponse) {
+          // Reuse the response from status check above
+          const customChargesData =
+            cycleResponse?.billingCycle?.customCharges ||
+            cycleResponse?.billingCycle?.custom_charges;
+          if (customChargesData) {
+            parsedCharges = Array.isArray(customChargesData)
+              ? customChargesData
+              : typeof customChargesData === "string"
+                ? JSON.parse(customChargesData)
+                : [];
+            setCustomCharges(parsedCharges);
+          } else {
+            setCustomCharges([]);
+          }
+        }
+      } catch (chargeError) {
+        setCustomCharges([]);
+      }
+
+      writeCycleCache(billing, false, latestRoom.members || [], parsedCharges);
     } catch (error) {
-      console.error("Error checking cycle status:", error);
       const billing = selectedRoom.billing;
       if (billing && billing.rent) {
         setStartDate(
@@ -336,6 +447,18 @@ const AdminBillingScreen = ({ navigation }) => {
         setPrevReading(String(billing.previousReading || ""));
         setCurrReading(String(billing.currentReading || ""));
         setMembers(selectedRoom.members || []);
+        // Load custom charges if present
+        let parsedCharges = [];
+        if (billing.customCharges) {
+          parsedCharges = Array.isArray(billing.customCharges)
+            ? billing.customCharges
+            : typeof billing.customCharges === "string"
+              ? JSON.parse(billing.customCharges)
+              : [];
+          setCustomCharges(parsedCharges);
+        } else {
+          setCustomCharges([]);
+        }
       }
     }
   };
@@ -356,8 +479,6 @@ const AdminBillingScreen = ({ navigation }) => {
         ? allRooms.find((r) => r.id === currentId || r._id === currentId)
         : null;
       setSelectedRoom(updatedRoom || allRooms[0] || null);
-    } catch (error) {
-      console.error("Error fetching rooms:", error);
     } finally {
       if (isRefresh) setRefreshing(false);
       else setLoading(false);
@@ -370,7 +491,7 @@ const AdminBillingScreen = ({ navigation }) => {
       const room = response.room || response.data?.room;
       setMembers(room.members || []);
     } catch (error) {
-      console.error("Error fetching room details:", error);
+      // Silently handle error
     }
   };
 
@@ -391,6 +512,40 @@ const AdminBillingScreen = ({ navigation }) => {
       const presenceDays = getFilteredPresenceDays(member);
       return total + calculateWaterBill(presenceDays);
     }, 0);
+  };
+
+  const calculateTotalCustomCharges = () => {
+    return customCharges.reduce(
+      (sum, charge) => sum + parseFloat(charge.amount || 0),
+      0,
+    );
+  };
+
+  const handleAddCustomCharge = () => {
+    if (!tempChargeName.trim() || !tempChargeAmount.trim()) {
+      Alert.alert("Error", "Please enter both charge name and amount");
+      return;
+    }
+    const amount = parseFloat(tempChargeAmount);
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert("Error", "Amount must be greater than 0");
+      return;
+    }
+    if (customCharges.length >= 10) {
+      Alert.alert("Error", "Maximum 10 custom charges per cycle");
+      return;
+    }
+    setCustomCharges([
+      ...customCharges,
+      { name: tempChargeName.trim(), amount },
+    ]);
+    setTempChargeName("");
+    setTempChargeAmount("");
+    setShowCustomChargeInput(false);
+  };
+
+  const handleRemoveCustomCharge = (index) => {
+    setCustomCharges(customCharges.filter((_, i) => i !== index));
   };
 
   const handleSaveWaterMode = async () => {
@@ -560,6 +715,10 @@ const AdminBillingScreen = ({ navigation }) => {
         currentMeterReading: currReading ? parseFloat(currReading) : null,
       };
 
+      if (customCharges.length > 0) {
+        cyclePayload.customCharges = customCharges;
+      }
+
       if (!selectedRoom.currentCycleId) {
         const createResponse = await apiService.post(
           "/api/v2/billing-cycles",
@@ -577,16 +736,20 @@ const AdminBillingScreen = ({ navigation }) => {
         setNewCycleMode(false); // new cycle exists on server now — normal mode
       } else {
         // EXISTING CYCLE: Update the active cycle
+        const updatePayload = {
+          rent: cyclePayload.rent,
+          electricity: cyclePayload.electricity,
+          waterBillAmount: cyclePayload.waterBillAmount,
+          internet: cyclePayload.internet,
+          previousMeterReading: cyclePayload.previousMeterReading,
+          currentMeterReading: cyclePayload.currentMeterReading,
+        };
+        if (customCharges.length > 0) {
+          updatePayload.customCharges = customCharges;
+        }
         const updateResponse = await apiService.put(
           `/api/v2/billing-cycles/${selectedRoom.currentCycleId}`,
-          {
-            rent: cyclePayload.rent,
-            electricity: cyclePayload.electricity,
-            waterBillAmount: cyclePayload.waterBillAmount,
-            internet: cyclePayload.internet,
-            previousMeterReading: cyclePayload.previousMeterReading,
-            currentMeterReading: cyclePayload.currentMeterReading,
-          },
+          updatePayload,
         );
 
         if (!updateResponse.success) {
@@ -598,6 +761,21 @@ const AdminBillingScreen = ({ navigation }) => {
           "Billing amounts updated. Member presence preserved. Click Archive & Close Cycle when ready.",
         );
       }
+
+      // Cache the cycle data immediately for instant display
+      const roomId = selectedRoom.id || selectedRoom._id;
+      screenCache.write("admin_billing_cycle_" + roomId, {
+        cycleCompleted: false,
+        rent: String(cyclePayload.rent || ""),
+        electricity: String(cyclePayload.electricity || ""),
+        internet: String(cyclePayload.internet || ""),
+        startDate: startDate,
+        endDate: endDate,
+        prevReading: String(cyclePayload.previousMeterReading || ""),
+        currReading: String(cyclePayload.currentMeterReading || ""),
+        members: selectedRoom.members || [],
+        customCharges: customCharges,
+      });
 
       await fetchRooms();
 
@@ -1340,11 +1518,29 @@ const AdminBillingScreen = ({ navigation }) => {
                     style={styles.summaryCellAmount}
                   />
                 </View>
+                {customCharges.map((charge, idx) => (
+                  <View key={idx} style={styles.summaryCell}>
+                    <View
+                      style={[
+                        styles.summaryDot,
+                        { backgroundColor: colors.accent },
+                      ]}
+                    />
+                    <Text style={styles.summaryCellLabel} numberOfLines={1}>
+                      {charge.name}
+                    </Text>
+                    <AnimatedAmount
+                      value={parseFloat(charge.amount) || 0}
+                      formatter={fmt}
+                      style={styles.summaryCellAmount}
+                    />
+                  </View>
+                ))}
               </View>
               <View style={styles.totalBar}>
                 <Text style={styles.totalBarLabel}>Total Billing</Text>
                 <AnimatedAmount
-                  value={getTotalBilling()}
+                  value={getTotalBilling() + calculateTotalCustomCharges()}
                   formatter={fmt}
                   style={styles.totalBarAmount}
                 />
@@ -1353,7 +1549,7 @@ const AdminBillingScreen = ({ navigation }) => {
 
             {/* ─── ADMIN TOOLS ─── */}
             <View style={styles.toolsSection}>
-              <Text style={styles.sectionLabel}>ADMIN TOOLS</Text>
+              <Text style={styles.sectionLabel}>HOST TOOLS</Text>
               <View style={styles.toolsGrid}>
                 <TouchableOpacity
                   style={styles.toolCard}
@@ -2017,6 +2213,118 @@ const AdminBillingScreen = ({ navigation }) => {
                   </Text>
                 </View>
               )}
+
+              {/* ─── ADDITIONAL CHARGES SECTION ─── */}
+              <Text style={[styles.formSectionLabel, { marginTop: 12 }]}>
+                ADDITIONAL CHARGES (Optional)
+              </Text>
+
+              {customCharges.length > 0 && (
+                <View style={styles.customChargesList}>
+                  {customCharges.map((charge, index) => (
+                    <View key={index} style={styles.customChargeItem}>
+                      <View style={styles.customChargeInfo}>
+                        <Text style={styles.customChargeName}>
+                          {charge.name}
+                        </Text>
+                        <Text style={styles.customChargeAmount}>
+                          {String.fromCharCode(8369)}
+                          {parseFloat(charge.amount).toFixed(2)}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveCustomCharge(index)}
+                        style={styles.customChargeRemoveBtn}
+                      >
+                        <MaterialIcons
+                          name="close"
+                          size={18}
+                          color={colors.textTertiary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {editMode && showCustomChargeInput ? (
+                <View style={styles.customChargeInputBox}>
+                  <View style={styles.inputPairRow}>
+                    <View
+                      style={[styles.inputPairCol, { flex: 1, marginRight: 6 }]}
+                    >
+                      <Text style={styles.fieldLabel}>Charge Name *</Text>
+                      <View style={styles.fieldWrapper}>
+                        <TextInput
+                          style={styles.fieldInput}
+                          placeholder="e.g., Maintenance"
+                          value={tempChargeName}
+                          onChangeText={setTempChargeName}
+                          editable={!saving}
+                          placeholderTextColor={colors.textTertiary}
+                        />
+                      </View>
+                    </View>
+                    <View
+                      style={[styles.inputPairCol, { flex: 1, marginLeft: 6 }]}
+                    >
+                      <Text style={styles.fieldLabel}>Amount *</Text>
+                      <View style={styles.fieldWrapper}>
+                        <Text style={styles.pesoPrefix}>{"\u20B1"}</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          placeholder="0.00"
+                          keyboardType="decimal-pad"
+                          value={tempChargeAmount}
+                          onChangeText={setTempChargeAmount}
+                          editable={!saving}
+                          placeholderTextColor={colors.textTertiary}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.customChargeButtonRow}>
+                    <TouchableOpacity
+                      style={[styles.cancelBtn, { flex: 1 }]}
+                      onPress={() => {
+                        setShowCustomChargeInput(false);
+                        setTempChargeName("");
+                        setTempChargeAmount("");
+                      }}
+                      disabled={saving}
+                    >
+                      <Text style={styles.cancelBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.saveBtn, { flex: 1, marginLeft: 8 }]}
+                      onPress={handleAddCustomCharge}
+                      disabled={saving}
+                    >
+                      <Ionicons
+                        name="add"
+                        size={16}
+                        color={colors.textOnAccent}
+                      />
+                      <Text style={styles.saveBtnText}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : editMode && customCharges.length < 10 ? (
+                <TouchableOpacity
+                  style={styles.addCustomChargeBtn}
+                  onPress={() => setShowCustomChargeInput(true)}
+                  disabled={saving}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={20}
+                    color={colors.accent}
+                  />
+                  <Text style={styles.addCustomChargeBtnText}>
+                    Add Custom Charge
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
 
               {/* Action Buttons */}
               {editMode && (
@@ -2874,6 +3182,16 @@ const createStyles = (colors) =>
       elevation: 3,
     },
     saveBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+    cancelBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: 13,
+      borderRadius: 10,
+      backgroundColor: colors.border,
+    },
+    cancelBtnText: { color: colors.text, fontWeight: "700", fontSize: 14 },
     archiveBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -2885,6 +3203,80 @@ const createStyles = (colors) =>
     },
     archiveBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
     btnDisabled: { opacity: 0.5 },
+
+    // ─── CUSTOM CHARGES ───
+    customChargesList: {
+      marginHorizontal: 16,
+      marginVertical: 10,
+      borderRadius: 10,
+      backgroundColor: colors.cardAlt,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    customChargeItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    customChargeInfo: {
+      flex: 1,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    customChargeName: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.text,
+    },
+    customChargeAmount: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.accent,
+      marginLeft: 12,
+    },
+    customChargeRemoveBtn: {
+      padding: 8,
+      marginLeft: 12,
+    },
+    customChargeInputBox: {
+      marginHorizontal: 16,
+      marginVertical: 10,
+      padding: 12,
+      borderRadius: 10,
+      backgroundColor: colors.cardAlt,
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+    },
+    customChargeButtonRow: {
+      flexDirection: "row",
+      marginTop: 12,
+      gap: 8,
+    },
+    addCustomChargeBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginHorizontal: 16,
+      marginVertical: 10,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.cardAlt,
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+      borderStyle: "dashed",
+    },
+    addCustomChargeBtnText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accent,
+    },
 
     // ─── READY CARD ───
     readyCard: {

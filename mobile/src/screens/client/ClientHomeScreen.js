@@ -181,27 +181,65 @@ const ClientHomeScreen = ({ navigation, route }) => {
       electricityStatus: "unpaid",
       waterStatus: "unpaid",
       internetStatus: "unpaid",
+      customChargesStatus: "unpaid",
     };
+
+    // Check for custom charges
+    let hasCustomCharges = false;
+    if (activeCycle?.customCharges) {
+      try {
+        const customCharges = Array.isArray(activeCycle.customCharges)
+          ? activeCycle.customCharges
+          : typeof activeCycle.customCharges === "string"
+            ? JSON.parse(activeCycle.customCharges)
+            : [];
+        hasCustomCharges = customCharges.length > 0;
+      } catch (_) {
+        hasCustomCharges = false;
+      }
+    }
 
     const allPaid =
       paymentData.rentStatus === "paid" &&
       paymentData.electricityStatus === "paid" &&
       paymentData.waterStatus === "paid" &&
       (paymentData.internetStatus === "paid" ||
-        !userJoinedRoom.billing?.internet);
+        !userJoinedRoom.billing?.internet) &&
+      (!hasCustomCharges || paymentData.customChargesStatus === "paid");
 
-    const pendingCount = [
+    const pendingStatuses = [
       paymentData.rentStatus,
       paymentData.electricityStatus,
       paymentData.waterStatus,
       paymentData.internetStatus,
-    ].filter((status) => status === "unpaid").length;
+    ];
+
+    if (hasCustomCharges) {
+      pendingStatuses.push(paymentData.customChargesStatus || "unpaid");
+    }
+
+    const pendingCount = pendingStatuses.filter(
+      (status) => status === "unpaid",
+    ).length;
 
     return {
       allPaid,
       pendingCount,
       status: paymentData,
     };
+  };
+
+  const getCustomChargeIcon = (chargeName) => {
+    const name = chargeName?.toLowerCase() || "";
+    if (name.includes("maintenance")) return "home-repair-service";
+    if (name.includes("groceries") || name.includes("grocery"))
+      return "local-grocery-store";
+    if (name.includes("cleaning")) return "cleaning-services";
+    if (name.includes("housekeeping")) return "cleaning-services";
+    if (name.includes("parking")) return "local-parking";
+    if (name.includes("pet") || name.includes("pets")) return "pets";
+    if (name.includes("laundry")) return "local-laundry-service";
+    return "add-home"; // fallback
   };
 
   // Calculate billing countdown
@@ -280,6 +318,26 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
   // Get expense breakdown for modal
   const getExpenseBreakdown = () => {
+    // Parse custom charges from active cycle
+    let customCharges = [];
+    let customChargesTotal = 0;
+    if (activeCycle?.customCharges) {
+      try {
+        customCharges = Array.isArray(activeCycle.customCharges)
+          ? activeCycle.customCharges
+          : typeof activeCycle.customCharges === "string"
+            ? JSON.parse(activeCycle.customCharges)
+            : [];
+        customChargesTotal = customCharges.reduce(
+          (sum, c) => sum + parseFloat(c.amount || 0),
+          0,
+        );
+      } catch (_) {
+        customCharges = [];
+        customChargesTotal = 0;
+      }
+    }
+
     // Use activeCycle memberCharges if populated (backend pre-calculated)
     if (activeCycle?.memberCharges?.length > 0) {
       const payorCount =
@@ -316,6 +374,14 @@ const ClientHomeScreen = ({ navigation, route }) => {
             percentage:
               total > 0 ? ((userCharge.waterBillShare || 0) / total) * 100 : 0,
           },
+          customCharges: customCharges.map((c) => ({
+            name: c.name || "Charge",
+            amount: r2(parseFloat(c.amount || 0) / payorCount),
+            percentage:
+              total > 0
+                ? (parseFloat(c.amount || 0) / payorCount / total) * 100
+                : 0,
+          })),
           total,
           perPayor,
           payorCount,
@@ -350,6 +416,9 @@ const ClientHomeScreen = ({ navigation, route }) => {
     const rent = r2(billing.rent / payorCount);
     const electricity = r2(billing.electricity / payorCount);
     const internet = r2(billing.internet / payorCount);
+    const customChargesPerPayor =
+      payorCount > 0 ? r2(customChargesTotal / payorCount) : 0;
+
     // Water: fixed monthly or presence-based
     const isFixedWater =
       userJoinedRoom?.waterBillingMode === "fixed_monthly" ||
@@ -382,7 +451,9 @@ const ClientHomeScreen = ({ navigation, route }) => {
           activeCycle?.end_date || activeCycle?.endDate,
         );
 
-    const total = r2(rent + electricity + internet + water);
+    const total = r2(
+      rent + electricity + internet + water + customChargesPerPayor,
+    );
     const perPayor = total;
 
     return {
@@ -399,6 +470,14 @@ const ClientHomeScreen = ({ navigation, route }) => {
         amount: water,
         percentage: total > 0 ? (water / total) * 100 : 0,
       },
+      customCharges: customCharges.map((c) => ({
+        name: c.name || "Charge",
+        amount: r2(parseFloat(c.amount || 0) / payorCount),
+        percentage:
+          total > 0
+            ? (parseFloat(c.amount || 0) / payorCount / total) * 100
+            : 0,
+      })),
       total,
       perPayor,
       payorCount,
@@ -641,11 +720,12 @@ const ClientHomeScreen = ({ navigation, route }) => {
     }
   };
 
-  // Immediately refresh outstanding balance when returning from payment with refresh param
+  // Immediately refresh outstanding balance and billing cycle when returning from payment with refresh param
   useEffect(() => {
     if (route.params?.refresh && userJoinedRoom) {
       const roomId = userJoinedRoom.id || userJoinedRoom._id;
       fetchOutstandingBalance(roomId);
+      fetchActiveBillingCycle(roomId); // NEWLY ADDED - refreshes memberPayments with customChargesStatus
       // Clear the param so repeated navigation doesn't trigger multiple refreshes
       route.params.refresh = false;
     }
@@ -1325,12 +1405,12 @@ const ClientHomeScreen = ({ navigation, route }) => {
                   },
                   {
                     bill: "Electricity",
-                    icon: "flash",
+                    icon: "flash-on",
                     status: getPaymentStatus().status.electricityStatus,
                   },
                   {
                     bill: "Water",
-                    icon: "water",
+                    icon: "water-drop",
                     status: getPaymentStatus().status.waterStatus,
                   },
                   {
@@ -1338,10 +1418,31 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     icon: "wifi",
                     status: getPaymentStatus().status.internetStatus,
                   },
+                  ...(() => {
+                    let customCharges = [];
+                    if (activeCycle?.customCharges) {
+                      try {
+                        customCharges = Array.isArray(activeCycle.customCharges)
+                          ? activeCycle.customCharges
+                          : typeof activeCycle.customCharges === "string"
+                            ? JSON.parse(activeCycle.customCharges)
+                            : [];
+                      } catch (_) {
+                        customCharges = [];
+                      }
+                    }
+                    return customCharges.map((charge) => ({
+                      bill: charge.name || "Charge",
+                      icon: getCustomChargeIcon(charge.name),
+                      status:
+                        getPaymentStatus().status.customChargesStatus ||
+                        "unpaid",
+                    }));
+                  })(),
                 ].map((item, idx) => (
                   <View key={idx} style={styles.statusRow}>
                     <View style={styles.statusRowLeft}>
-                      <Ionicons
+                      <MaterialIcons
                         name={item.icon}
                         size={18}
                         color={colors.textSecondary}
@@ -1493,6 +1594,18 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     color: colors.internetColor,
                     data: getExpenseBreakdown().internet,
                   },
+                  ...(getExpenseBreakdown().customCharges &&
+                  getExpenseBreakdown().customCharges.length > 0
+                    ? getExpenseBreakdown().customCharges.map((charge) => ({
+                        name: charge.name,
+                        icon: "pricetag",
+                        color: colors.accent,
+                        data: {
+                          amount: charge.amount,
+                          percentage: charge.percentage,
+                        },
+                      }))
+                    : []),
                 ].map((item, idx) => (
                   <View key={idx} style={styles.expenseRow}>
                     <View style={styles.expenseRowLeft}>
@@ -1847,7 +1960,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                       <View style={styles.billingCardTop}>
                         <View>
                           <Text style={styles.billingCardLabel}>
-                            Your Share
+                            Total Bills
                           </Text>
                           <AnimatedAmount
                             value={getExpenseBreakdown()?.perPayor || 0}
@@ -1923,6 +2036,21 @@ const ClientHomeScreen = ({ navigation, route }) => {
                             amount: getExpenseBreakdown()?.internet?.amount,
                             color: colors.internetColor,
                           },
+                          ...(getExpenseBreakdown().customCharges &&
+                          getExpenseBreakdown().customCharges.length > 0
+                            ? [
+                                {
+                                  label: "Additional",
+                                  icon: "pricetag",
+                                  amount:
+                                    getExpenseBreakdown().customCharges.reduce(
+                                      (sum, c) => sum + c.amount,
+                                      0,
+                                    ),
+                                  color: colors.accent,
+                                },
+                              ]
+                            : []),
                         ].map((item, idx) => (
                           <View key={idx} style={styles.billingMiniCell}>
                             <Ionicons
@@ -2439,12 +2567,9 @@ const ClientHomeScreen = ({ navigation, route }) => {
                             <Image
                               source={{ uri: payor.avatar }}
                               style={styles.payorAvatarImg}
-                              onError={() =>
-                                console.log(
-                                  "Avatar load error for:",
-                                  payor.name,
-                                )
-                              }
+                              onError={() => {
+                                // Avatar failed to load, fallback will be shown
+                              }}
                             />
                           ) : (
                             <View style={styles.payorAvatar}>

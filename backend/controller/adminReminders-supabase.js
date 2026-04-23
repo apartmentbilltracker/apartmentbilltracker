@@ -9,6 +9,9 @@ const sendMail = require("../utils/sendMail");
 const { sendPushNotification } = require("../utils/sendPushNotification");
 const { enrichBillingCycle } = require("../utils/enrichBillingCycle");
 const PaymentReminderContent = require("../utils/PaymentReminderContent");
+const {
+  PaymentReminderTextContent,
+} = require("../utils/PaymentReminderContent");
 const PresenceReminderContent = require("../utils/PresenceReminderContent");
 const cache = require("../utils/MemoryCache");
 
@@ -376,6 +379,16 @@ router.post(
         customMessage,
       });
 
+      // Plain-text version for in-app notifications
+      const notificationMessage = PaymentReminderTextContent({
+        recipientName: member?.name || "Valued Resident",
+        roomName: room.name,
+        unpaidBills,
+        billingPeriod,
+        daysOverdue,
+        customMessage,
+      });
+
       // Send email
       try {
         await sendMail({
@@ -420,7 +433,7 @@ router.post(
           recipient_id: memberId,
           notification_type: "payment_reminder",
           title: "💰 Payment Reminder",
-          message: reminderMessage,
+          message: notificationMessage,
           related_data: {
             roomId,
             billingCycleId: activeCycle.id,

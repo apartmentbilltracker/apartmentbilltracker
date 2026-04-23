@@ -46,13 +46,20 @@ async function checkAndAutoCloseCycle(roomId) {
       (p) => p.status === "completed" || p.status === "verified",
     );
 
-    // 4. Check each payer
+    // 4. Check each payer - must have paid rent, electricity, water, internet, AND custom_charges if they exist
+    const customChargesExist =
+      activeCycle.custom_charges &&
+      (Array.isArray(activeCycle.custom_charges)
+        ? activeCycle.custom_charges.length > 0
+        : typeof activeCycle.custom_charges === "string" &&
+          JSON.parse(activeCycle.custom_charges || "[]").length > 0);
+
     const allPaid = payingMembers.every((member) => {
       const memberPayments = completedPayments.filter(
         (p) => p.paid_by === member.user_id,
       );
 
-      // A "total" payment covers everything
+      // A "total" payment covers everything (including custom charges)
       const hasTotalPayment = memberPayments.some(
         (p) => p.bill_type === "total",
       );
@@ -67,8 +74,14 @@ async function checkAndAutoCloseCycle(roomId) {
       const hasInternet = memberPayments.some(
         (p) => p.bill_type === "internet",
       );
+      // CRITICAL: If custom charges exist, must also pay them
+      const hasCustomCharges =
+        !customChargesExist ||
+        memberPayments.some((p) => p.bill_type === "custom_charges");
 
-      return hasRent && hasElectricity && hasWater && hasInternet;
+      return (
+        hasRent && hasElectricity && hasWater && hasInternet && hasCustomCharges
+      );
     });
 
     if (!allPaid) return { closed: false, reason: "not_all_paid" };

@@ -82,6 +82,22 @@ const BillingHistoryScreen = ({ route, navigation }) => {
   };
 
   const getCycleTotal = (cycle) => {
+    let customChargesTotal = 0;
+    if (cycle.customCharges) {
+      try {
+        const charges = Array.isArray(cycle.customCharges)
+          ? cycle.customCharges
+          : typeof cycle.customCharges === "string"
+            ? JSON.parse(cycle.customCharges)
+            : [];
+        customChargesTotal = charges.reduce(
+          (sum, c) => sum + parseFloat(c.amount || 0),
+          0,
+        );
+      } catch (_) {
+        customChargesTotal = 0;
+      }
+    }
     if (
       cycle.totalBilledAmount !== undefined &&
       cycle.totalBilledAmount !== null
@@ -92,7 +108,8 @@ const BillingHistoryScreen = ({ route, navigation }) => {
       (parseFloat(cycle.rent) || 0) +
       (parseFloat(cycle.electricity) || 0) +
       (parseFloat(cycle.waterBillAmount) || 0) +
-      (parseFloat(cycle.internet) || 0)
+      (parseFloat(cycle.internet) || 0) +
+      customChargesTotal
     );
   };
 
@@ -426,6 +443,20 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                       label: "Internet",
                       value: selectedCycle.internet,
                     },
+                    ...(selectedCycle.customCharges &&
+                    selectedCycle.customCharges.length > 0
+                      ? [
+                          {
+                            type: "custom_charges",
+                            label: "Additional Charges",
+                            value: selectedCycle.customCharges.reduce(
+                              (sum, c) => sum + parseFloat(c.amount || 0),
+                              0,
+                            ),
+                            isCustom: true,
+                          },
+                        ]
+                      : []),
                   ].map((bill, i, arr) => (
                     <View
                       key={bill.type}
@@ -575,6 +606,18 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                                   </Text>
                                   <Text style={styles.breakdownValue}>
                                     {formatCurrency(member.internetShare)}
+                                  </Text>
+                                </View>
+                              )}
+                              {member.custom_charges_share > 0 && (
+                                <View style={styles.breakdownRow}>
+                                  <Text style={styles.breakdownLabel}>
+                                    Additional Charges Share
+                                  </Text>
+                                  <Text style={styles.breakdownValue}>
+                                    {formatCurrency(
+                                      member.custom_charges_share,
+                                    )}
                                   </Text>
                                 </View>
                               )}

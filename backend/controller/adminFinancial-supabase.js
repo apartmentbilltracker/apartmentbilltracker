@@ -36,7 +36,41 @@ router.get(
       // Enrich active cycle with presence-based water charges
       if (activeCycle) {
         await enrichBillingCycle(activeCycle, members);
+        console.log(
+          "[DASHBOARD] After enriching - First member charge:",
+          activeCycle.member_charges?.[0],
+        );
+        console.log(
+          "[DASHBOARD] All member charges has custom_charges_share?",
+          activeCycle.member_charges?.every(
+            (c) => typeof c.custom_charges_share === "number",
+          ),
+        );
       }
+
+      // Parse custom charges
+      let customCharges = [];
+      if (activeCycle?.custom_charges) {
+        try {
+          customCharges =
+            typeof activeCycle.custom_charges === "string"
+              ? JSON.parse(activeCycle.custom_charges)
+              : activeCycle.custom_charges;
+        } catch (_) {
+          customCharges = [];
+        }
+      }
+      const customChargesTotal = customCharges.reduce(
+        (sum, c) => sum + parseFloat(c.amount || 0),
+        0,
+      );
+      console.log("[DASHBOARD] Cycle ID:", activeCycle?.id);
+      console.log(
+        "[DASHBOARD] Custom Charges from DB:",
+        activeCycle?.custom_charges,
+      );
+      console.log("[DASHBOARD] Parsed Custom Charges:", customCharges);
+      console.log("[DASHBOARD] Custom Charges Total:", customChargesTotal);
 
       const totalBilled =
         activeCycle?.total_billed_amount ||
@@ -44,17 +78,20 @@ router.get(
           ? (parseFloat(activeCycle.rent) || 0) +
             (parseFloat(activeCycle.electricity) || 0) +
             (parseFloat(activeCycle.water_bill_amount) || 0) +
-            (parseFloat(activeCycle.internet) || 0)
+            (parseFloat(activeCycle.internet) || 0) +
+            customChargesTotal
           : 0);
 
       let rentCollected = 0,
         electricityCollected = 0,
         waterCollected = 0,
-        internetCollected = 0;
+        internetCollected = 0,
+        customChargesCollected = 0;
       let rentPending = 0,
         electricityPending = 0,
         waterPending = 0,
-        internetPending = 0;
+        internetPending = 0,
+        customChargesPending = 0;
 
       if (activeCycle) {
         // Get payments for active cycle
@@ -66,6 +103,19 @@ router.get(
           )) || [];
         const completedPayments = payments.filter(
           (p) => p.status === "completed" || p.status === "verified",
+        );
+
+        console.log(
+          "[DASHBOARD] Member charges count:",
+          activeCycle.member_charges?.length || 0,
+        );
+        console.log(
+          "[DASHBOARD] First member charge:",
+          activeCycle.member_charges?.[0],
+        );
+        console.log(
+          "[DASHBOARD] Completed payments:",
+          completedPayments.length,
         );
 
         // Process each member charge
@@ -97,6 +147,9 @@ router.get(
           const hasInternetPayment = memberPayments.some(
             (p) => p.bill_type === "internet",
           );
+          const hasCustomChargesPayment = memberPayments.some(
+            (p) => p.bill_type === "custom_charges",
+          );
           const hasTotalPayment = memberPayments.some(
             (p) => p.bill_type === "total",
           );
@@ -107,6 +160,11 @@ router.get(
             electricityCollected += charge.electricity_share || 0;
             waterCollected += charge.water_bill_share || 0;
             internetCollected += charge.internet_share || 0;
+            customChargesCollected +=
+              charge.custom_charges_share ||
+              (customChargesTotal > 0
+                ? r2(customChargesTotal / payerCount)
+                : 0);
           } else {
             if (hasRentPayment) rentCollected += perPayerShare;
             else rentPending += perPayerShare;
@@ -119,22 +177,55 @@ router.get(
 
             if (hasInternetPayment) internetCollected += internetShare;
             else internetPending += internetShare;
+
+            const customChargeShare =
+              payerCount > 0 ? r2(customChargesTotal / payerCount) : 0;
+            if (hasCustomChargesPayment)
+              customChargesCollected += customChargeShare;
+            else customChargesPending += customChargeShare;
           }
         });
       }
+
+      console.log(
+        "[DASHBOARD] Calculated Pending: rent=",
+        rentPending,
+        "elec=",
+        electricityPending,
+        "water=",
+        waterPending,
+        "internet=",
+        internetPending,
+        "customCharges=",
+        customChargesPending,
+      );
+      console.log(
+        "[DASHBOARD] Calculated Collected: rent=",
+        rentCollected,
+        "elec=",
+        electricityCollected,
+        "water=",
+        waterCollected,
+        "internet=",
+        internetCollected,
+        "customCharges=",
+        customChargesCollected,
+      );
 
       const rawTotalCollected =
         rentCollected +
         electricityCollected +
         waterCollected +
-        internetCollected;
+        internetCollected +
+        customChargesCollected;
       const activeCycleBilled =
         activeCycle?.total_billed_amount ||
         (activeCycle
           ? (parseFloat(activeCycle.rent) || 0) +
             (parseFloat(activeCycle.electricity) || 0) +
             (parseFloat(activeCycle.water_bill_amount) || 0) +
-            (parseFloat(activeCycle.internet) || 0)
+            (parseFloat(activeCycle.internet) || 0) +
+            customChargesTotal
           : 0);
       // Cap collected at billed to prevent rounding overshoot
       const totalCollected = Math.min(rawTotalCollected, activeCycleBilled);
@@ -149,7 +240,7 @@ router.get(
         dashboard: {
           roomName: room.name,
           roomCode: room.code,
-          totalBilled: Number(totalBilled.toFixed(2)),
+          totalBilled: Number(activeCycleBilled.toFixed(2)),
           totalCollected: Number(totalCollected.toFixed(2)),
           outstanding: Number(outstanding.toFixed(2)),
           collectionRate,
@@ -160,6 +251,7 @@ router.get(
           activeCycleStart: activeCycle?.start_date,
           activeCycleEnd: activeCycle?.end_date,
           activeCycleBilled: activeCycleBilled,
+          customCharges: customCharges,
           paymentBreakdown: {
             rent: {
               expected: activeCycle?.rent || 0,
@@ -180,6 +272,11 @@ router.get(
               expected: activeCycle?.internet || 0,
               collected: Number(internetCollected.toFixed(2)),
               pending: Number(internetPending.toFixed(2)),
+            },
+            customCharges: {
+              expected: Number(customChargesTotal.toFixed(2)),
+              collected: Number(customChargesCollected.toFixed(2)),
+              pending: Number(customChargesPending.toFixed(2)),
             },
           },
         },
@@ -214,17 +311,36 @@ router.get(
 
       const trends = cycles
         .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
-        .map((cycle) => ({
-          cycleNumber: cycle.cycle_number,
-          startDate: cycle.start_date,
-          endDate: cycle.end_date,
-          totalBilled: cycle.total_billed_amount,
-          rent: cycle.rent,
-          electricity: cycle.electricity,
-          water: cycle.water_bill_amount,
-          internet: cycle.internet,
-          status: cycle.status,
-        }));
+        .map((cycle) => {
+          let customCharges = [];
+          if (cycle.custom_charges) {
+            try {
+              customCharges =
+                typeof cycle.custom_charges === "string"
+                  ? JSON.parse(cycle.custom_charges)
+                  : cycle.custom_charges;
+            } catch (_) {
+              customCharges = [];
+            }
+          }
+          const customChargesTotal = customCharges.reduce(
+            (sum, c) => sum + parseFloat(c.amount || 0),
+            0,
+          );
+          return {
+            cycleNumber: cycle.cycle_number,
+            startDate: cycle.start_date,
+            endDate: cycle.end_date,
+            totalBilled: cycle.total_billed_amount,
+            rent: cycle.rent,
+            electricity: cycle.electricity,
+            water: cycle.water_bill_amount,
+            internet: cycle.internet,
+            customCharges: customCharges,
+            customChargesTotal: customChargesTotal,
+            status: cycle.status,
+          };
+        });
 
       res.status(200).json({
         success: true,

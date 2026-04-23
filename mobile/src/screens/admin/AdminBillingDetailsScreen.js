@@ -278,6 +278,17 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
                   <tr><td>Electricity</td><td>₱${(breakdown?.billBreakdown?.electricity?.total || 0).toFixed(2)}</td></tr>
                   <tr><td>Water</td><td>₱${(breakdown?.billBreakdown?.water?.total || 0).toFixed(2)}</td></tr>
                   <tr><td>Internet</td><td>₱${(breakdown?.billBreakdown?.internet?.total || 0).toFixed(2)}</td></tr>
+                  ${
+                    breakdown?.customCharges &&
+                    breakdown.customCharges.length > 0
+                      ? `<tr><td>Additional Charges</td><td>₱${breakdown.customCharges
+                          .reduce(
+                            (sum, c) => sum + parseFloat(c.amount || 0),
+                            0,
+                          )
+                          .toFixed(2)}</td></tr>`
+                      : ""
+                  }
                   <tr class="total-row"><td>Total Billed</td><td>₱${(breakdown?.totalBilled || 0).toFixed(2)}</td></tr>
                 </table>
               </div>
@@ -403,6 +414,16 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
                 value: `₱${(item.internetShare || 0).toFixed(2)}`,
                 ...BILL_META.internet,
               },
+              ...(item.customChargesShare && item.customChargesShare > 0
+                ? [
+                    {
+                      label: "Additional Charges Share",
+                      value: `₱${(item.customChargesShare || 0).toFixed(2)}`,
+                      icon: "layers",
+                      color: colors.accent,
+                    },
+                  ]
+                : []),
             ].map((row) => (
               <View key={row.label} style={styles.detailRow}>
                 <View style={styles.detailLeft}>
@@ -456,6 +477,19 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
         amount: item.internetAmount,
         ...BILL_META.internet,
       },
+      ...(item.customChargesAmount && item.customChargesAmount > 0
+        ? [
+            {
+              key: "custom_charges",
+              label: "Additional Charges",
+              status: item.customChargesStatus,
+              amount: item.customChargesAmount,
+              icon: "layers",
+              color: colors.accent,
+              bg: colors.accentSurface,
+            },
+          ]
+        : []),
     ];
 
     return (
@@ -666,6 +700,28 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
                 </View>
               );
             })}
+            {/* Custom Charges */}
+            {breakdown?.customCharges && breakdown.customCharges.length > 0 && (
+              <View style={styles.breakdownChip}>
+                <View
+                  style={[
+                    styles.breakdownChipIcon,
+                    { backgroundColor: colors.accentSurface },
+                  ]}
+                >
+                  <Ionicons name="layers" size={14} color={colors.accent} />
+                </View>
+                <View>
+                  <Text style={styles.breakdownChipLabel}>Custom</Text>
+                  <Text style={styles.breakdownChipValue}>
+                    ₱
+                    {breakdown.customCharges
+                      .reduce((sum, c) => sum + parseFloat(c.amount || 0), 0)
+                      .toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           {/* Total */}
@@ -772,7 +828,7 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
             <Text style={styles.emptyTitle}>No Payment Data</Text>
             <Text style={styles.emptySubtitle}>
               Payment status will appear here once members join the room and are
-              marked as payers.
+              marked as payors.
             </Text>
             {breakdown?.totalBilled > 0 && (
               <View style={styles.billedBadge}>
