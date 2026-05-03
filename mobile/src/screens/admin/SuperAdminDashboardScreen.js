@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { hostRoleService, supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 
 const SuperAdminDashboardScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -198,7 +199,7 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
   }
 
   return (
-    <ScrollView
+    <ScrollViewWithDetection
       style={styles.container}
       refreshControl={
         <RefreshControl
@@ -568,7 +569,7 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
       </View>
 
       <View style={{ height: 32 }} />
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

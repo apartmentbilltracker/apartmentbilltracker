@@ -18,6 +18,7 @@ import apiService, {
   billingCycleService,
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
 import { AuthContext } from "../../context/AuthContext";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
@@ -28,7 +29,15 @@ const CashPaymentScreen = ({ navigation, route }) => {
   const currentUser = authContext?.state?.user;
   const userId = currentUser?.id || currentUser?._id;
 
-  const { roomId, roomName, amount, billType, billingCycleId } = route.params;
+  const {
+    roomId,
+    roomName,
+    amount,
+    billType,
+    billTypes,
+    billingCycleId,
+    breakdown,
+  } = route.params;
   const [step, setStep] = useState("form"); // form, success
   const [receiptNumber, setReceiptNumber] = useState("");
   const [receivedBy, setReceivedBy] = useState("");
@@ -121,6 +130,49 @@ const CashPaymentScreen = ({ navigation, route }) => {
     }
   }, [roomId, userId, billingCycleId]);
 
+  // Helper function to get bill labels to display in receipt
+  // Returns only the bills that were selected for payment (based on breakdown)
+  const getDisplayedBillLabels = () => {
+    if (!breakdown) return [];
+
+    const labels = [];
+    const billLabelMap = {
+      rent: "Rent",
+      electricity: "Electricity",
+      internet: "Internet",
+      water: "Water",
+      custom_charges: "Custom Charges",
+      customCharges: "Custom Charges",
+    };
+
+    // Check which bills were selected
+    Object.entries(breakdown).forEach(([key, isSelected]) => {
+      if (isSelected) {
+        labels.push(key);
+      }
+    });
+
+    return labels;
+  };
+
+  // Helper function to get amount for a specific bill from breakdown
+  const getDisplayedAmount = (billKey) => {
+    if (!billShares || !breakdown) return 0;
+
+    // Map breakdown keys to billShares keys
+    const keyMap = {
+      rent: "rent",
+      electricity: "electricity",
+      internet: "internet",
+      water: "water",
+      custom_charges: "customCharges",
+      customCharges: "customCharges",
+    };
+
+    const shareKey = keyMap[billKey];
+    return shareKey && breakdown[billKey] ? billShares[shareKey] || 0 : 0;
+  };
+
   const handleRecordCash = async () => {
     if (!receiptNumber.trim()) {
       Alert.alert("Required", "Please enter the receipt number");
@@ -145,19 +197,95 @@ const CashPaymentScreen = ({ navigation, route }) => {
       setLoading(true);
       setShowConfirm(false);
 
-      const response = await apiService.recordCash({
-        roomId,
-        amount,
-        billType,
-        receiptNumber,
-        receivedBy,
-        witnessName,
-        notes,
-        billingCycleId,
-      });
+      // Check if this is a batch payment (multiple bills selected)
+      // Ensure billTypes is an array and normalize values
+      let selectedBillTypes = Array.isArray(billTypes) ? billTypes : [billType];
+
+      // Sanitize: ensure all values are valid snake_case bill types
+      selectedBillTypes = selectedBillTypes
+        .map((bt) => {
+          if (typeof bt !== "string") return null;
+          const normalized = bt.trim().toLowerCase();
+          // Valid: rent, electricity, water, internet, custom_charges
+          if (
+            [
+              "rent",
+              "electricity",
+              "water",
+              "internet",
+              "custom_charges",
+            ].includes(normalized)
+          ) {
+            return normalized;
+          }
+          // Handle camelCase -> snake_case conversion
+          if (normalized === "customcharges") return "custom_charges";
+          return null;
+        })
+        .filter((bt) => bt !== null);
+
+      if (selectedBillTypes.length === 0) {
+        Alert.alert("Error", "Invalid bill types selected. Please try again.");
+        return;
+      }
+
+      const isBatch = selectedBillTypes.length > 1;
+
+      let response;
+      if (isBatch) {
+        // For batch payments, call recordCash for each bill type
+        // Split the total amount equally across selected bills
+        const amountPerBill = amount / selectedBillTypes.length;
+        const responses = [];
+
+        for (let i = 0; i < selectedBillTypes.length; i++) {
+          const billTypeItem = selectedBillTypes[i];
+          const billAmount =
+            i === selectedBillTypes.length - 1
+              ? amount - amountPerBill * (selectedBillTypes.length - 1)
+              : amountPerBill;
+
+          const res = await apiService.recordCash({
+            roomId,
+            amount: billAmount,
+            billType: billTypeItem,
+            receiptNumber,
+            receivedBy,
+            witnessName,
+            notes: notes
+              ? `${notes} (Part ${i + 1}/${selectedBillTypes.length})`
+              : `(Part ${i + 1}/${selectedBillTypes.length})`,
+            billingCycleId,
+          });
+          responses.push(res);
+        }
+
+        // Combine responses
+        response = {
+          success: responses.every((r) => r.success),
+          transaction: responses[0]?.transaction,
+          transactions: responses.map((r) => r.transaction),
+        };
+      } else {
+        // Use single bill endpoint for single bill
+        response = await apiService.recordCash({
+          roomId,
+          amount,
+          billType: selectedBillTypes[0],
+          receiptNumber,
+          receivedBy,
+          witnessName,
+          notes,
+          billingCycleId,
+        });
+      }
 
       if (response.success) {
-        setTransactionId(response.transaction.id || response.transaction._id);
+        setTransactionId(
+          response.transaction?.id ||
+            response.transaction?._id ||
+            response.transactions?.[0]?.id,
+        );
         setStep("success");
       }
     } catch (error) {
@@ -231,7 +359,10 @@ const CashPaymentScreen = ({ navigation, route }) => {
         <View style={styles.backButton} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollViewWithDetection
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {step === "form" && (
           <>
             {/* Amount Card */}
@@ -468,81 +599,187 @@ const CashPaymentScreen = ({ navigation, route }) => {
 
                 {/* Cost Breakdown */}
                 <View style={styles.costBreakdown}>
-                  <View style={styles.costRow}>
-                    <Text style={styles.costLabel}>Rent</Text>
-                    <Text style={styles.costDots}>
-                      {Array(26).fill(".").join("")}
-                    </Text>
-                    <Text style={styles.costAmount}>
-                      ₱{(billShares?.rent || 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={styles.costRow}>
-                    <Text style={styles.costLabel}>Electricity</Text>
-                    <Text style={styles.costDots}>
-                      {Array(26).fill(".").join("")}
-                    </Text>
-                    <Text style={styles.costAmount}>
-                      ₱{(billShares?.electricity || 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={styles.costRow}>
-                    <Text style={styles.costLabel}>Internet</Text>
-                    <Text style={styles.costDots}>
-                      {Array(26).fill(".").join("")}
-                    </Text>
-                    <Text style={styles.costAmount}>
-                      ₱{(billShares?.internet || 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={styles.costRow}>
-                    <Text style={styles.costLabel}>Water</Text>
-                    <Text style={styles.costDots}>
-                      {Array(26).fill(".").join("")}
-                    </Text>
-                    <Text style={styles.costAmount}>
-                      ₱{(billShares?.water || 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  {billShares?.customCharges &&
-                    billShares.customCharges > 0 &&
-                    billingData?.customCharges &&
-                    billingData.customCharges.length > 0 &&
-                    (() => {
-                      const totalCustomCharges =
-                        billingData.customCharges.reduce(
-                          (sum, c) => sum + parseFloat(c.amount || 0),
-                          0,
-                        );
-                      return billingData.customCharges.map((charge, idx) => {
-                        const userShareOfCharge =
-                          totalCustomCharges > 0
-                            ? (parseFloat(charge.amount || 0) /
-                                totalCustomCharges) *
-                              billShares.customCharges
-                            : 0;
-                        return (
-                          <View key={idx} style={styles.costRow}>
-                            <Text style={styles.costLabel}>
-                              {charge.name || "Charge"}
-                            </Text>
-                            <Text style={styles.costDots}>
-                              {Array(26).fill(".").join("")}
-                            </Text>
-                            <Text style={styles.costAmount}>
-                              ₱{userShareOfCharge.toFixed(2)}
-                            </Text>
-                          </View>
-                        );
-                      });
-                    })()}
-                  <View style={styles.costRow}>
-                    <Text style={styles.costLabel}>Service Fee</Text>
-                    <Text style={styles.costDots}>
-                      {Array(26).fill(".").join("")}
-                    </Text>
-                    <Text style={styles.costAmount}>Free</Text>
-                  </View>
+                  {/* Display only the bills that were selected for payment */}
+                  {breakdown ? (
+                    <>
+                      {/* Rent */}
+                      {breakdown.rent && (
+                        <View style={styles.costRow}>
+                          <Text style={styles.costLabel}>Rent</Text>
+                          <Text style={styles.costDots}>
+                            {Array(26).fill(".").join("")}
+                          </Text>
+                          <Text style={styles.costAmount}>
+                            ₱{(getDisplayedAmount("rent") || 0).toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                      {/* Electricity */}
+                      {breakdown.electricity && (
+                        <View style={styles.costRow}>
+                          <Text style={styles.costLabel}>Electricity</Text>
+                          <Text style={styles.costDots}>
+                            {Array(26).fill(".").join("")}
+                          </Text>
+                          <Text style={styles.costAmount}>
+                            ₱
+                            {(getDisplayedAmount("electricity") || 0).toFixed(
+                              2,
+                            )}
+                          </Text>
+                        </View>
+                      )}
+                      {/* Internet */}
+                      {breakdown.internet && (
+                        <View style={styles.costRow}>
+                          <Text style={styles.costLabel}>Internet</Text>
+                          <Text style={styles.costDots}>
+                            {Array(26).fill(".").join("")}
+                          </Text>
+                          <Text style={styles.costAmount}>
+                            ₱{(getDisplayedAmount("internet") || 0).toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                      {/* Water */}
+                      {breakdown.water && (
+                        <View style={styles.costRow}>
+                          <Text style={styles.costLabel}>Water</Text>
+                          <Text style={styles.costDots}>
+                            {Array(26).fill(".").join("")}
+                          </Text>
+                          <Text style={styles.costAmount}>
+                            ₱{(getDisplayedAmount("water") || 0).toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                      {/* Custom Charges */}
+                      {(breakdown.custom_charges || breakdown.customCharges) &&
+                        billShares?.customCharges &&
+                        billShares.customCharges > 0 &&
+                        billingData?.customCharges &&
+                        billingData.customCharges.length > 0 &&
+                        (() => {
+                          const totalCustomCharges =
+                            billingData.customCharges.reduce(
+                              (sum, c) => sum + parseFloat(c.amount || 0),
+                              0,
+                            );
+                          return billingData.customCharges.map(
+                            (charge, idx) => {
+                              const userShareOfCharge =
+                                totalCustomCharges > 0
+                                  ? (parseFloat(charge.amount || 0) /
+                                      totalCustomCharges) *
+                                    billShares.customCharges
+                                  : 0;
+                              return (
+                                <View key={idx} style={styles.costRow}>
+                                  <Text style={styles.costLabel}>
+                                    {charge.name || "Charge"}
+                                  </Text>
+                                  <Text style={styles.costDots}>
+                                    {Array(26).fill(".").join("")}
+                                  </Text>
+                                  <Text style={styles.costAmount}>
+                                    ₱{userShareOfCharge.toFixed(2)}
+                                  </Text>
+                                </View>
+                              );
+                            },
+                          );
+                        })()}
+                      {/* Service Fee */}
+                      <View style={styles.costRow}>
+                        <Text style={styles.costLabel}>Service Fee</Text>
+                        <Text style={styles.costDots}>
+                          {Array(26).fill(".").join("")}
+                        </Text>
+                        <Text style={styles.costAmount}>Free</Text>
+                      </View>
+                    </>
+                  ) : (
+                    // Fallback: show all bills if breakdown is not provided
+                    <>
+                      <View style={styles.costRow}>
+                        <Text style={styles.costLabel}>Rent</Text>
+                        <Text style={styles.costDots}>
+                          {Array(26).fill(".").join("")}
+                        </Text>
+                        <Text style={styles.costAmount}>
+                          ₱{(billShares?.rent || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.costRow}>
+                        <Text style={styles.costLabel}>Electricity</Text>
+                        <Text style={styles.costDots}>
+                          {Array(26).fill(".").join("")}
+                        </Text>
+                        <Text style={styles.costAmount}>
+                          ₱{(billShares?.electricity || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.costRow}>
+                        <Text style={styles.costLabel}>Internet</Text>
+                        <Text style={styles.costDots}>
+                          {Array(26).fill(".").join("")}
+                        </Text>
+                        <Text style={styles.costAmount}>
+                          ₱{(billShares?.internet || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.costRow}>
+                        <Text style={styles.costLabel}>Water</Text>
+                        <Text style={styles.costDots}>
+                          {Array(26).fill(".").join("")}
+                        </Text>
+                        <Text style={styles.costAmount}>
+                          ₱{(billShares?.water || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                      {billShares?.customCharges &&
+                        billShares.customCharges > 0 &&
+                        billingData?.customCharges &&
+                        billingData.customCharges.length > 0 &&
+                        (() => {
+                          const totalCustomCharges =
+                            billingData.customCharges.reduce(
+                              (sum, c) => sum + parseFloat(c.amount || 0),
+                              0,
+                            );
+                          return billingData.customCharges.map(
+                            (charge, idx) => {
+                              const userShareOfCharge =
+                                totalCustomCharges > 0
+                                  ? (parseFloat(charge.amount || 0) /
+                                      totalCustomCharges) *
+                                    billShares.customCharges
+                                  : 0;
+                              return (
+                                <View key={idx} style={styles.costRow}>
+                                  <Text style={styles.costLabel}>
+                                    {charge.name || "Charge"}
+                                  </Text>
+                                  <Text style={styles.costDots}>
+                                    {Array(26).fill(".").join("")}
+                                  </Text>
+                                  <Text style={styles.costAmount}>
+                                    ₱{userShareOfCharge.toFixed(2)}
+                                  </Text>
+                                </View>
+                              );
+                            },
+                          );
+                        })()}
+                      <View style={styles.costRow}>
+                        <Text style={styles.costLabel}>Service Fee</Text>
+                        <Text style={styles.costDots}>
+                          {Array(26).fill(".").join("")}
+                        </Text>
+                        <Text style={styles.costAmount}>Free</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 {/* Dashed Line */}
@@ -558,7 +795,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
                       {Array(26).fill(".").join("")}
                     </Text>
                     <Text style={styles.totalAmount}>
-                      ₱{(billShares?.total || 0).toFixed(2)}
+                      ₱{(amount || 0).toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -661,7 +898,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
         )}
 
         <View style={{ height: 20 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* Confirmation Modal */}
       <Modal
@@ -953,7 +1190,7 @@ const createStyles = (colors) =>
       paddingVertical: 14,
       alignItems: "center",
       justifyContent: "center",
-      marginBottom: 16,
+      marginBottom: 30,
     },
     submitButtonText: {
       color: "#fff",

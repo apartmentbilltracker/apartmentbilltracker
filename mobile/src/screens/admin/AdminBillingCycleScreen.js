@@ -17,6 +17,7 @@ import {
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { apiService, announcementService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -403,7 +404,7 @@ const AdminBillingCycleScreen = ({ route }) => {
       </View>
 
       {/* CYCLES LIST */}
-      <ScrollView
+      <ScrollViewWithDetection
         style={styles.cyclesList}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
         showsVerticalScrollIndicator={false}
@@ -664,7 +665,7 @@ const AdminBillingCycleScreen = ({ route }) => {
             </Text>
           </TouchableOpacity>
         )}
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* CREATE MODAL */}
       <Modal
@@ -701,7 +702,7 @@ const AdminBillingCycleScreen = ({ route }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <ScrollViewWithDetection
               style={styles.modalContent}
               showsVerticalScrollIndicator={false}
             >
@@ -1058,7 +1059,7 @@ const AdminBillingCycleScreen = ({ route }) => {
                 </TouchableOpacity>
               </View>
               <ModalBottomSpacer />
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>

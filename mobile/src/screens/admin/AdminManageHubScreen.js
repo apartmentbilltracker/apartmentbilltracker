@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthContext } from "../../context/AuthContext";
 import { hostRoleService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 
 const AdminManageHubScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
@@ -100,7 +101,7 @@ const AdminManageHubScreen = ({ navigation }) => {
   }
 
   return (
-    <ScrollView
+    <ScrollViewWithDetection
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       refreshControl={
@@ -403,7 +404,7 @@ const AdminManageHubScreen = ({ navigation }) => {
       </View>
 
       <View style={{ height: 32 }} />
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

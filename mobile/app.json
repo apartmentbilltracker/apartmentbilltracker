@@ -26,6 +26,12 @@
       "scheme": "aptbilltracker",
       "userInterfaceStyle": "automatic",
       "googleServicesFile": "./google-services.json",
+      "softwareKeyboardLayoutMode": "pan",
+      "useNextNotificationApi": true,
+      "navigationBar": {
+        "barStyle": "dark-content",
+        "backgroundColor": "transparent"
+      },
       "intentFilters": [
         {
           "action": "VIEW",
@@ -54,6 +60,13 @@
           "icon": "./src/assets/icon.png",
           "colors": ["#b38604"],
           "modes": ["production"]
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-navigation-bar",
+        {
+          "visibility": "hidden"
         }
       ]
     ],

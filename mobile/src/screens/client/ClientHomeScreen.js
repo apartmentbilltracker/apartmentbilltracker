@@ -42,6 +42,7 @@ import {
 } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
 import { getAPIBaseURL } from "../../config/config";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
@@ -227,6 +228,92 @@ const ClientHomeScreen = ({ navigation, route }) => {
       pendingCount,
       status: paymentData,
     };
+  };
+
+  // Calculate remaining due (total - paid amounts)
+  const getRemainingDue = () => {
+    const breakdown = getExpenseBreakdown();
+    if (!breakdown || !isCurrentUserPayor()) return 0;
+
+    const paymentStatus = getPaymentStatus();
+    if (!paymentStatus) return breakdown.perPayor;
+
+    let totalDue = breakdown.perPayor;
+    let totalPaid = 0;
+
+    // Calculate paid amounts based on payment status
+    if (paymentStatus.status.rentStatus === "paid") {
+      totalPaid += breakdown.rent?.amount || 0;
+    }
+    if (paymentStatus.status.electricityStatus === "paid") {
+      totalPaid += breakdown.electricity?.amount || 0;
+    }
+    if (paymentStatus.status.waterStatus === "paid") {
+      totalPaid += breakdown.water?.amount || 0;
+    }
+    if (paymentStatus.status.internetStatus === "paid") {
+      totalPaid += breakdown.internet?.amount || 0;
+    }
+    if (paymentStatus.status.customChargesStatus === "paid") {
+      totalPaid +=
+        breakdown.customCharges?.reduce((sum, c) => sum + c.amount, 0) || 0;
+    }
+
+    return Math.max(0, totalDue - totalPaid);
+  };
+
+  // Calculate remaining amount for a specific bill type
+  const getRemainingAmountForBill = (billType) => {
+    const breakdown = getExpenseBreakdown();
+    if (!breakdown || !isCurrentUserPayor()) return 0;
+
+    const paymentStatus = getPaymentStatus();
+    if (!paymentStatus) return 0;
+
+    let fullAmount = 0;
+    switch (billType) {
+      case "rent":
+        fullAmount = breakdown.rent?.amount || 0;
+        return paymentStatus.status.rentStatus === "paid" ? 0 : fullAmount;
+      case "electricity":
+        fullAmount = breakdown.electricity?.amount || 0;
+        return paymentStatus.status.electricityStatus === "paid"
+          ? 0
+          : fullAmount;
+      case "water":
+        fullAmount = breakdown.water?.amount || 0;
+        return paymentStatus.status.waterStatus === "paid" ? 0 : fullAmount;
+      case "internet":
+        fullAmount = breakdown.internet?.amount || 0;
+        return paymentStatus.status.internetStatus === "paid" ? 0 : fullAmount;
+      case "customCharges":
+        return paymentStatus.status.customChargesStatus === "paid"
+          ? 0
+          : breakdown.customCharges?.reduce((sum, c) => sum + c.amount, 0) || 0;
+      default:
+        return 0;
+    }
+  };
+
+  // Check if a bill type is paid
+  const isBillPaid = (billType) => {
+    const paymentStatus = getPaymentStatus();
+    if (!paymentStatus) return false;
+
+    switch (billType) {
+      case "rent":
+        return paymentStatus.status.rentStatus === "paid";
+      case "electricity":
+        return paymentStatus.status.electricityStatus === "paid";
+      case "water":
+        return paymentStatus.status.waterStatus === "paid";
+      case "internet":
+        return paymentStatus.status.internetStatus === "paid";
+      case "customCharges":
+        return paymentStatus.status.customChargesStatus === "paid";
+      default:
+        return false;
+    }
   };
 
   const getCustomChargeIcon = (chargeName) => {
@@ -1063,7 +1150,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <ScrollViewWithDetection
               style={styles.roomInfoBody}
               showsVerticalScrollIndicator={false}
             >
@@ -1071,7 +1158,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
               {previewPhotos.length > 0 && (
                 <View>
                   <View style={{ position: "relative" }}>
-                    <ScrollView
+                    <ScrollViewWithDetection
                       horizontal
                       pagingEnabled
                       showsHorizontalScrollIndicator={false}
@@ -1092,7 +1179,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                           resizeMode="cover"
                         />
                       ))}
-                    </ScrollView>
+                    </ScrollViewWithDetection>
                     {/* Overlay: photo count + full view button */}
                     <View style={styles.photoModalOverlay}>
                       <View style={styles.photoCountBadge}>
@@ -1264,7 +1351,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                 </View>
               )}
               <ModalBottomSpacer />
-            </ScrollView>
+            </ScrollViewWithDetection>
 
             {/* Bottom action */}
             <View style={styles.roomInfoFooter}>
@@ -1339,7 +1426,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody}>
+          <ScrollViewWithDetection style={styles.modalBody}>
             {userJoinedRoom?.cycleStatus === "completed" && (
               <View
                 style={{
@@ -1488,7 +1575,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
               </View>
             )}
             <ModalBottomSpacer />
-          </ScrollView>
+          </ScrollViewWithDetection>
 
           <TouchableOpacity
             style={styles.modalActionBtn}
@@ -1540,7 +1627,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody}>
+          <ScrollViewWithDetection style={styles.modalBody}>
             {getExpenseBreakdown() && (
               <View>
                 <View style={styles.expenseSummaryCard}>
@@ -1564,19 +1651,20 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     {getExpenseBreakdown().payorCount !== 1 ? "s" : ""})
                   </Text>
                 </View>
-
                 {[
                   {
                     name: "Rent",
                     icon: "home",
                     color: "#e65100",
                     data: getExpenseBreakdown().rent,
+                    billType: "rent",
                   },
                   {
                     name: "Electricity",
                     icon: "flash",
                     color: colors.electricityColor,
                     data: getExpenseBreakdown().electricity,
+                    billType: "electricity",
                   },
                   {
                     name:
@@ -1587,12 +1675,14 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     icon: "water",
                     color: colors.waterColor,
                     data: getExpenseBreakdown().water,
+                    billType: "water",
                   },
                   {
                     name: "Internet",
                     icon: "wifi",
                     color: colors.internetColor,
                     data: getExpenseBreakdown().internet,
+                    billType: "internet",
                   },
                   ...(getExpenseBreakdown().customCharges &&
                   getExpenseBreakdown().customCharges.length > 0
@@ -1604,50 +1694,81 @@ const ClientHomeScreen = ({ navigation, route }) => {
                           amount: charge.amount,
                           percentage: charge.percentage,
                         },
+                        billType: "customCharges",
                       }))
                     : []),
-                ].map((item, idx) => (
-                  <View key={idx} style={styles.expenseRow}>
-                    <View style={styles.expenseRowLeft}>
-                      <View
-                        style={[
-                          styles.expenseDot,
-                          { backgroundColor: item.color },
-                        ]}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.expenseRowName}>{item.name}</Text>
-                        <View style={styles.expenseBarBg}>
-                          <View
-                            style={[
-                              styles.expenseBarFill,
-                              {
-                                width: `${item.data.percentage}%`,
-                                backgroundColor: item.color,
-                              },
-                            ]}
-                          />
+                ].map((item, idx) => {
+                  const remainingAmount = getRemainingAmountForBill(
+                    item.billType,
+                  );
+                  const isPaid = isBillPaid(item.billType);
+                  return (
+                    <View key={idx} style={styles.expenseRow}>
+                      <View style={styles.expenseRowLeft}>
+                        <View
+                          style={[
+                            styles.expenseDot,
+                            { backgroundColor: item.color },
+                          ]}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.expenseRowName}>{item.name}</Text>
+                          <View style={styles.expenseBarBg}>
+                            <View
+                              style={[
+                                styles.expenseBarFill,
+                                {
+                                  width: `${item.data.percentage}%`,
+                                  backgroundColor: item.color,
+                                },
+                              ]}
+                            />
+                          </View>
                         </View>
                       </View>
+                      <View style={styles.expenseRowRight}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                            gap: 6,
+                          }}
+                        >
+                          <Text style={styles.expenseRowAmount}>
+                            {"\u20B1"}
+                            {item.data.amount.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </Text>
+                          {isPaid && (
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "600",
+                                color: "#22c55e",
+                                backgroundColor: "rgba(34, 197, 94, 0.15)",
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 10,
+                              }}
+                            >
+                              ✓ Paid
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={styles.expenseRowPct}>
+                          {item.data.percentage.toFixed(0)}%
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.expenseRowRight}>
-                      <Text style={styles.expenseRowAmount}>
-                        {"\u20B1"}
-                        {item.data.amount.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </Text>
-                      <Text style={styles.expenseRowPct}>
-                        {item.data.percentage.toFixed(0)}%
-                      </Text>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             )}
             <ModalBottomSpacer />
-          </ScrollView>
+          </ScrollViewWithDetection>
         </View>
       </View>
     </Modal>
@@ -1698,7 +1819,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
               {photoViewIdx + 1} / {photoViewData?.photos?.length || 0}
             </Text>
           </View>
-          <ScrollView
+          <ScrollViewWithDetection
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
@@ -1719,7 +1840,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                 resizeMode="contain"
               />
             ))}
-          </ScrollView>
+          </ScrollViewWithDetection>
           {(photoViewData?.photos?.length || 0) > 1 && (
             <View style={styles.pvDotRow}>
               {photoViewData.photos.map((_, idx) => (
@@ -1813,7 +1934,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
             <ActivityIndicator size="large" color={colors.accent} />
           </View>
         ) : (
-          <ScrollView
+          <ScrollViewWithDetection
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingBottom: 30 }}
             showsVerticalScrollIndicator={false}
@@ -1941,341 +2062,579 @@ const ClientHomeScreen = ({ navigation, route }) => {
                 </View>
 
                 {/* ─── BILLING OVERVIEW (payors only) ─── */}
-                {userJoinedRoom.billing &&
-                  isCurrentUserPayor() &&
-                  !getPaymentStatus()?.allPaid &&
-                  userJoinedRoom.cycleStatus !== "completed" && (
-                    <TouchableOpacity
-                      style={styles.billingCard}
-                      onPress={() => {
-                        if (userJoinedRoom?.id || userJoinedRoom?._id) {
-                          fetchActiveBillingCycle(
-                            userJoinedRoom.id || userJoinedRoom._id,
-                          );
-                        }
-                        setShowExpenseModal(true);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.billingCardTop}>
-                        <View>
-                          <Text style={styles.billingCardLabel}>
-                            Total Bills
-                          </Text>
-                          <AnimatedAmount
-                            value={getExpenseBreakdown()?.perPayor || 0}
-                            formatter={fmtShort}
-                            style={styles.billingCardAmount}
-                          />
-                          {hasPendingPayment && !getPaymentStatus()?.allPaid ? (
-                            <Text
-                              style={{
-                                fontSize: 10,
-                                color: "#f59e0b",
-                                fontWeight: "600",
-                                marginTop: 2,
-                              }}
-                            >
-                              ⏳ Awaiting Payment Verification
-                            </Text>
-                          ) : !hasPendingPayment &&
-                            getPaymentStatus()?.allPaid ? (
-                            <Text
-                              style={{
-                                fontSize: 10,
-                                color: "#16a34a",
-                                fontWeight: "600",
-                                marginTop: 2,
-                              }}
-                            >
-                              ✓ Payment Verified
-                            </Text>
-                          ) : null}
-                        </View>
-                        <View style={styles.billingBadge}>
-                          <Text style={styles.billingBadgeText}>
-                            Tap for details
-                          </Text>
-                          <Ionicons
-                            name="chevron-forward"
-                            size={14}
-                            color={colors.accent}
-                          />
-                        </View>
-                      </View>
+                {(() => {
+                  const breakdownDaysRemaining = activeCycle
+                    ? Math.max(
+                        0,
+                        Math.ceil(
+                          (new Date(
+                            activeCycle.end_date || activeCycle.endDate,
+                          ).getTime() -
+                            Date.now()) /
+                            (1000 * 60 * 60 * 24),
+                        ),
+                      )
+                    : 0;
 
-                      <View style={styles.billingBreakdownRow}>
-                        {[
-                          {
-                            label: "Rent",
-                            icon: "home",
-                            amount: getExpenseBreakdown()?.rent?.amount,
-                            color: "#e65100",
-                          },
-                          {
-                            label: "Elec",
-                            icon: "flash",
-                            amount: getExpenseBreakdown()?.electricity?.amount,
-                            color: colors.electricityColor,
-                          },
-                          {
-                            label:
-                              userJoinedRoom?.waterBillingMode ===
-                                "fixed_monthly" ||
-                              userJoinedRoom?.water_billing_mode ===
-                                "fixed_monthly"
-                                ? "Fixed"
-                                : "Water",
-                            icon: "water",
-                            amount: getExpenseBreakdown()?.water?.amount,
-                            color: colors.waterColor,
-                          },
-                          {
-                            label: "Net",
-                            icon: "wifi",
-                            amount: getExpenseBreakdown()?.internet?.amount,
-                            color: colors.internetColor,
-                          },
-                          ...(getExpenseBreakdown().customCharges &&
-                          getExpenseBreakdown().customCharges.length > 0
-                            ? [
-                                {
-                                  label: "Additional",
-                                  icon: "pricetag",
-                                  amount:
-                                    getExpenseBreakdown().customCharges.reduce(
-                                      (sum, c) => sum + c.amount,
-                                      0,
-                                    ),
-                                  color: colors.accent,
-                                },
-                              ]
-                            : []),
-                        ].map((item, idx) => (
-                          <View key={idx} style={styles.billingMiniCell}>
+                  return (
+                    <>
+                      {userJoinedRoom.billing &&
+                        isCurrentUserPayor() &&
+                        !getPaymentStatus()?.allPaid &&
+                        userJoinedRoom.cycleStatus !== "completed" && (
+                          <TouchableOpacity
+                            style={styles.billingCard}
+                            onPress={() => {
+                              if (userJoinedRoom?.id || userJoinedRoom?._id) {
+                                fetchActiveBillingCycle(
+                                  userJoinedRoom.id || userJoinedRoom._id,
+                                );
+                              }
+                              setShowExpenseModal(true);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.billingCardTop}>
+                              <View>
+                                <Text style={styles.billingCardLabel}>
+                                  {breakdownDaysRemaining === 0
+                                    ? "Total bills to pay"
+                                    : `Total Upcoming Bills`}
+                                </Text>
+                                <AnimatedAmount
+                                  value={getRemainingDue()}
+                                  formatter={fmtShort}
+                                  style={styles.billingCardAmount}
+                                />
+                                {hasPendingPayment &&
+                                !getPaymentStatus()?.allPaid ? (
+                                  <Text
+                                    style={{
+                                      fontSize: 10,
+                                      color: "#f59e0b",
+                                      fontWeight: "600",
+                                      marginTop: 2,
+                                    }}
+                                  >
+                                    ⏳ Awaiting Payment Verification
+                                  </Text>
+                                ) : !hasPendingPayment &&
+                                  getPaymentStatus()?.allPaid ? (
+                                  <Text
+                                    style={{
+                                      fontSize: 10,
+                                      color: "#16a34a",
+                                      fontWeight: "600",
+                                      marginTop: 2,
+                                    }}
+                                  >
+                                    ✓ Payment Verified
+                                  </Text>
+                                ) : null}
+                              </View>
+                              <View style={styles.billingBadge}>
+                                <Text style={styles.billingBadgeText}>
+                                  Tap for details
+                                </Text>
+                                <Ionicons
+                                  name="chevron-forward"
+                                  size={14}
+                                  color={colors.accent}
+                                />
+                              </View>
+                            </View>
+
+                            <View style={styles.billingBreakdownRow}>
+                              {(() => {
+                                const paymentStatus = getPaymentStatus();
+                                return [
+                                  {
+                                    label: "Rent",
+                                    icon: "home",
+                                    amount: getExpenseBreakdown()?.rent?.amount,
+                                    color: "#e65100",
+                                    status:
+                                      paymentStatus?.status?.rentStatus ||
+                                      "unpaid",
+                                    billType: "rent",
+                                  },
+                                  {
+                                    label: "Elec",
+                                    icon: "flash",
+                                    amount:
+                                      getExpenseBreakdown()?.electricity
+                                        ?.amount,
+                                    color: colors.electricityColor,
+                                    status:
+                                      paymentStatus?.status
+                                        ?.electricityStatus || "unpaid",
+                                    billType: "electricity",
+                                  },
+                                  {
+                                    label:
+                                      userJoinedRoom?.waterBillingMode ===
+                                        "fixed_monthly" ||
+                                      userJoinedRoom?.water_billing_mode ===
+                                        "fixed_monthly"
+                                        ? "Fixed"
+                                        : "Water",
+                                    icon: "water",
+                                    amount:
+                                      getExpenseBreakdown()?.water?.amount,
+                                    color: colors.waterColor,
+                                    status:
+                                      paymentStatus?.status?.waterStatus ||
+                                      "unpaid",
+                                    billType: "water",
+                                  },
+                                  {
+                                    label: "Net",
+                                    icon: "wifi",
+                                    amount:
+                                      getExpenseBreakdown()?.internet?.amount,
+                                    color: colors.internetColor,
+                                    status:
+                                      paymentStatus?.status?.internetStatus ||
+                                      "unpaid",
+                                    billType: "internet",
+                                  },
+                                  ...(getExpenseBreakdown().customCharges &&
+                                  getExpenseBreakdown().customCharges.length > 0
+                                    ? [
+                                        {
+                                          label: "Others",
+                                          icon: "pricetag",
+                                          amount:
+                                            getExpenseBreakdown().customCharges.reduce(
+                                              (sum, c) => sum + c.amount,
+                                              0,
+                                            ),
+                                          color: colors.accent,
+                                          status:
+                                            paymentStatus?.status
+                                              ?.customChargesStatus || "unpaid",
+                                          billType: "customCharges",
+                                        },
+                                      ]
+                                    : []),
+                                ].map((item, idx) => {
+                                  const remainingAmount =
+                                    getRemainingAmountForBill(item.billType);
+                                  return (
+                                    <View
+                                      key={idx}
+                                      style={styles.billingMiniCell}
+                                    >
+                                      <Ionicons
+                                        name={item.icon}
+                                        size={14}
+                                        color={item.color}
+                                      />
+                                      <Text style={styles.billingMiniLabel}>
+                                        {item.label}
+                                      </Text>
+                                      {item.status === "paid" && (
+                                        <View
+                                          style={{
+                                            position: "absolute",
+                                            top: 4,
+                                            right: 4,
+                                            backgroundColor: colors.success,
+                                            borderRadius: 8,
+                                            width: 16,
+                                            height: 16,
+                                            justifyContent: "center",
+                                            alignItems: "center",
+                                          }}
+                                        >
+                                          <Text
+                                            style={{
+                                              color: colors.textOnAccent,
+                                              fontSize: 9,
+                                              fontWeight: "700",
+                                            }}
+                                          >
+                                            ✓
+                                          </Text>
+                                        </View>
+                                      )}
+                                      <AnimatedAmount
+                                        value={item.amount || 0}
+                                        formatter={fmtShort}
+                                        style={styles.billingMiniAmount}
+                                      />
+                                    </View>
+                                  );
+                                });
+                              })()}
+                            </View>
+                          </TouchableOpacity>
+                        )}
+
+                      {/* ─── ALL BILLS PAID BANNER ─── */}
+                      {isCurrentUserPayor() &&
+                        (getPaymentStatus()?.allPaid ||
+                          userJoinedRoom.cycleStatus === "completed") && (
+                          <View
+                            style={{
+                              marginHorizontal: 16,
+                              marginTop: 12,
+                              paddingHorizontal: 16,
+                              paddingVertical: 16,
+                              backgroundColor: colors.successBg || "#e8f5e9",
+                              borderRadius: 14,
+                              borderWidth: 1,
+                              borderColor: colors.success || "#4caf50",
+                              borderLeftWidth: 4,
+                              alignItems: "center",
+                            }}
+                          >
                             <Ionicons
-                              name={item.icon}
-                              size={14}
-                              color={item.color}
+                              name="checkmark-done-circle"
+                              size={36}
+                              color={colors.success || "#4caf50"}
                             />
-                            <Text style={styles.billingMiniLabel}>
-                              {item.label}
+                            <Text
+                              style={{
+                                color: colors.success || "#2e7d32",
+                                fontWeight: "700",
+                                fontSize: 15,
+                                marginTop: 8,
+                                textAlign: "center",
+                              }}
+                            >
+                              All bills paid!
                             </Text>
-                            <AnimatedAmount
-                              value={item.amount || 0}
-                              formatter={fmtShort}
-                              style={styles.billingMiniAmount}
-                            />
+                            <Text
+                              style={{
+                                color: colors.textSecondary,
+                                fontSize: 12,
+                                marginTop: 4,
+                                textAlign: "center",
+                                lineHeight: 18,
+                              }}
+                            >
+                              Please wait for the host to create a new billing
+                              cycle. You can review your payments in the Bills
+                              screen.
+                            </Text>
+                            <TouchableOpacity
+                              style={{
+                                marginTop: 10,
+                                paddingHorizontal: 16,
+                                paddingVertical: 8,
+                                backgroundColor: colors.success || "#4caf50",
+                                borderRadius: 8,
+                              }}
+                              onPress={() =>
+                                navigation.navigate("BillsStack", {
+                                  screen: "BillsMain",
+                                })
+                              }
+                              activeOpacity={0.7}
+                            >
+                              <Text
+                                style={{
+                                  color: "#fff",
+                                  fontWeight: "600",
+                                  fontSize: 13,
+                                }}
+                              >
+                                View Payment History
+                              </Text>
+                            </TouchableOpacity>
                           </View>
-                        ))}
-                      </View>
-                    </TouchableOpacity>
-                  )}
+                        )}
 
-                {/* ─── ALL BILLS PAID BANNER ─── */}
-                {isCurrentUserPayor() &&
-                  (getPaymentStatus()?.allPaid ||
-                    userJoinedRoom.cycleStatus === "completed") && (
-                    <View
-                      style={{
-                        marginHorizontal: 16,
-                        marginTop: 12,
-                        paddingHorizontal: 16,
-                        paddingVertical: 16,
-                        backgroundColor: colors.successBg || "#e8f5e9",
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: colors.success || "#4caf50",
-                        borderLeftWidth: 4,
-                        alignItems: "center",
-                      }}
-                    >
-                      <Ionicons
-                        name="checkmark-done-circle"
-                        size={36}
-                        color={colors.success || "#4caf50"}
-                      />
-                      <Text
-                        style={{
-                          color: colors.success || "#2e7d32",
-                          fontWeight: "700",
-                          fontSize: 15,
-                          marginTop: 8,
-                          textAlign: "center",
-                        }}
-                      >
-                        All bills paid!
-                      </Text>
-                      <Text
-                        style={{
-                          color: colors.textSecondary,
-                          fontSize: 12,
-                          marginTop: 4,
-                          textAlign: "center",
-                          lineHeight: 18,
-                        }}
-                      >
-                        Please wait for the host to create a new billing cycle.
-                        You can review your payments in the Bills screen.
-                      </Text>
-                      <TouchableOpacity
-                        style={{
-                          marginTop: 10,
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          backgroundColor: colors.success || "#4caf50",
-                          borderRadius: 8,
-                        }}
-                        onPress={() =>
-                          navigation.navigate("BillsStack", {
-                            screen: "BillsMain",
-                          })
-                        }
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={{
-                            color: "#fff",
-                            fontWeight: "600",
-                            fontSize: 13,
-                          }}
-                        >
-                          View Payment History
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                      {/* ─── NON-PAYER: ALL PAYORS PAID BANNER ─── */}
+                      {!isCurrentUserPayor() &&
+                        userJoinedRoom?.billing &&
+                        (() => {
+                          const payors = getPayorsPaymentStatus();
+                          return (
+                            payors.length > 0 && payors.every((p) => p.allPaid)
+                          );
+                        })() && (
+                          <View
+                            style={{
+                              marginHorizontal: 16,
+                              marginTop: 12,
+                              paddingHorizontal: 16,
+                              paddingVertical: 16,
+                              backgroundColor: colors.successBg || "#e8f5e9",
+                              borderRadius: 14,
+                              borderWidth: 1,
+                              borderColor: colors.success || "#4caf50",
+                              borderLeftWidth: 4,
+                              alignItems: "center",
+                            }}
+                          >
+                            <Ionicons
+                              name="checkmark-done-circle"
+                              size={36}
+                              color={colors.success || "#4caf50"}
+                            />
+                            <Text
+                              style={{
+                                color: colors.success || "#2e7d32",
+                                fontWeight: "700",
+                                fontSize: 15,
+                                marginTop: 8,
+                                textAlign: "center",
+                              }}
+                            >
+                              Billing cycle complete!
+                            </Text>
+                            <Text
+                              style={{
+                                color: colors.textSecondary,
+                                fontSize: 12,
+                                marginTop: 4,
+                                textAlign: "center",
+                                lineHeight: 18,
+                              }}
+                            >
+                              All payors in your room have settled their bills
+                              for this cycle. Please wait for the host to start
+                              a new billing period.
+                            </Text>
+                          </View>
+                        )}
 
-                {/* ─── NON-PAYER: ALL PAYORS PAID BANNER ─── */}
-                {!isCurrentUserPayor() &&
-                  userJoinedRoom?.billing &&
-                  (() => {
-                    const payors = getPayorsPaymentStatus();
-                    return payors.length > 0 && payors.every((p) => p.allPaid);
-                  })() && (
-                    <View
-                      style={{
-                        marginHorizontal: 16,
-                        marginTop: 12,
-                        paddingHorizontal: 16,
-                        paddingVertical: 16,
-                        backgroundColor: colors.successBg || "#e8f5e9",
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: colors.success || "#4caf50",
-                        borderLeftWidth: 4,
-                        alignItems: "center",
-                      }}
-                    >
-                      <Ionicons
-                        name="checkmark-done-circle"
-                        size={36}
-                        color={colors.success || "#4caf50"}
-                      />
-                      <Text
-                        style={{
-                          color: colors.success || "#2e7d32",
-                          fontWeight: "700",
-                          fontSize: 15,
-                          marginTop: 8,
-                          textAlign: "center",
-                        }}
-                      >
-                        Billing cycle complete!
-                      </Text>
-                      <Text
-                        style={{
-                          color: colors.textSecondary,
-                          fontSize: 12,
-                          marginTop: 4,
-                          textAlign: "center",
-                          lineHeight: 18,
-                        }}
-                      >
-                        All payors in your room have settled their bills for
-                        this cycle. Please wait for the host to start a new
-                        billing period.
-                      </Text>
-                    </View>
-                  )}
+                      {/* ─── OUTSTANDING BALANCE BANNER ─── */}
+                      {isCurrentUserPayor() &&
+                        outstandingBalance.totalOutstanding > 0 && (
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              marginHorizontal: 16,
+                              marginTop: 12,
+                              paddingHorizontal: 14,
+                              paddingVertical: 13,
+                              backgroundColor: "#fdecea",
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor: "#ef9a9a",
+                              borderLeftWidth: 4,
+                              borderLeftColor: "#c62828",
+                            }}
+                            onPress={() =>
+                              navigation.navigate("BillsStack", {
+                                screen: "BillsMain",
+                              })
+                            }
+                            activeOpacity={0.8}
+                          >
+                            <MaterialIcons
+                              name="error"
+                              size={22}
+                              color="#c62828"
+                              style={{ marginRight: 12 }}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={{
+                                  color: "#b71c1c",
+                                  fontWeight: "700",
+                                  fontSize: 14,
+                                }}
+                              >
+                                Outstanding Balance
+                              </Text>
+                              <Text
+                                style={{
+                                  color: "#c62828",
+                                  fontWeight: "800",
+                                  fontSize: 16,
+                                  marginTop: 1,
+                                }}
+                              >
+                                ₱
+                                {outstandingBalance.totalOutstanding.toFixed(2)}
+                              </Text>
+                              <Text
+                                style={{
+                                  color: "#b71c1c",
+                                  fontSize: 12,
+                                  marginTop: 3,
+                                  opacity: 0.85,
+                                }}
+                              >
+                                {outstandingBalance.unpaidCycles.length} unpaid
+                                closed cycle
+                                {outstandingBalance.unpaidCycles.length !== 1
+                                  ? "s"
+                                  : ""}
+                                {" · "}Tap to settle
+                              </Text>
+                            </View>
+                            <MaterialIcons
+                              name="chevron-right"
+                              size={20}
+                              color="#c62828"
+                            />
+                          </TouchableOpacity>
+                        )}
 
-                {/* ─── OUTSTANDING BALANCE BANNER ─── */}
-                {isCurrentUserPayor() &&
-                  outstandingBalance.totalOutstanding > 0 && (
-                    <TouchableOpacity
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        marginHorizontal: 16,
-                        marginTop: 12,
-                        paddingHorizontal: 14,
-                        paddingVertical: 13,
-                        backgroundColor: "#fdecea",
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: "#ef9a9a",
-                        borderLeftWidth: 4,
-                        borderLeftColor: "#c62828",
-                      }}
-                      onPress={() =>
-                        navigation.navigate("BillsStack", {
-                          screen: "BillsMain",
-                        })
-                      }
-                      activeOpacity={0.8}
-                    >
-                      <MaterialIcons
-                        name="error"
-                        size={22}
-                        color="#c62828"
-                        style={{ marginRight: 12 }}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            color: "#b71c1c",
-                            fontWeight: "700",
-                            fontSize: 14,
-                          }}
-                        >
-                          Outstanding Balance
-                        </Text>
-                        <Text
-                          style={{
-                            color: "#c62828",
-                            fontWeight: "800",
-                            fontSize: 16,
-                            marginTop: 1,
-                          }}
-                        >
-                          ₱{outstandingBalance.totalOutstanding.toFixed(2)}
-                        </Text>
-                        <Text
-                          style={{
-                            color: "#b71c1c",
-                            fontSize: 12,
-                            marginTop: 3,
-                            opacity: 0.85,
-                          }}
-                        >
-                          {outstandingBalance.unpaidCycles.length} unpaid closed
-                          cycle
-                          {outstandingBalance.unpaidCycles.length !== 1
-                            ? "s"
-                            : ""}
-                          {" · "}Tap to settle
-                        </Text>
-                      </View>
-                      <MaterialIcons
-                        name="chevron-right"
-                        size={20}
-                        color="#c62828"
-                      />
-                    </TouchableOpacity>
-                  )}
+                      {/* BILL BREAKDOWN - INDIVIDUAL BILLS */}
+                      {isCurrentUserPayor() && activeCycle && (
+                        <View style={styles.breakdownCard}>
+                          <View style={styles.breakdownHeader}>
+                            <Text style={styles.breakdownTitle}>
+                              {breakdownDaysRemaining === 0
+                                ? "Due Today"
+                                : breakdownDaysRemaining === 1
+                                  ? "Due Tomorrow"
+                                  : `Upcoming Bills`}
+                            </Text>
+                            <TouchableOpacity
+                              onPress={() => setShowExpenseModal(true)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.breakdownViewAllText}>
+                                View All
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          <View>
+                            {(() => {
+                              const breakdown = getExpenseBreakdown();
+                              const paymentStatus = getPaymentStatus();
+
+                              const bills = [
+                                {
+                                  name: "Rent",
+                                  icon: "home",
+                                  color: "#e65100",
+                                  amount: breakdown?.rent?.amount || 0,
+                                  status:
+                                    paymentStatus?.status?.rentStatus ||
+                                    "unpaid",
+                                },
+                                {
+                                  name: "Electricity",
+                                  icon: "flash",
+                                  color: colors.electricityColor,
+                                  amount: breakdown?.electricity?.amount || 0,
+                                  status:
+                                    paymentStatus?.status?.electricityStatus ||
+                                    "unpaid",
+                                },
+                                {
+                                  name: "Water",
+                                  icon: "water",
+                                  color: colors.waterColor,
+                                  amount: breakdown?.water?.amount || 0,
+                                  status:
+                                    paymentStatus?.status?.waterStatus ||
+                                    "unpaid",
+                                },
+                                {
+                                  name: "Internet",
+                                  icon: "wifi",
+                                  color: colors.internetColor,
+
+                                  amount: breakdown?.internet?.amount || 0,
+                                  status:
+                                    paymentStatus?.status?.internetStatus ||
+                                    "unpaid",
+                                },
+                                ...(breakdown?.customCharges &&
+                                breakdown.customCharges.length > 0
+                                  ? breakdown.customCharges.map((charge) => ({
+                                      name: charge.name || "Charge",
+                                      icon: "pricetag",
+                                      color: colors.accent,
+                                      amount: charge.amount || 0,
+                                      status:
+                                        paymentStatus?.status
+                                          ?.customChargesStatus || "unpaid",
+                                    }))
+                                  : []),
+                              ].filter((bill) => bill.amount > 0);
+
+                              return bills.map((bill, idx) => (
+                                <View key={idx}>
+                                  <View style={styles.breakdownRow}>
+                                    <View style={styles.breakdownBillIconWrap}>
+                                      <View
+                                        style={[styles.breakdownBillIconBg]}
+                                      >
+                                        <Ionicons
+                                          name={bill.icon}
+                                          size={14}
+                                          color={bill.color}
+                                        />
+                                      </View>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                      <View style={styles.billBreakdownInfoRow}>
+                                        <Text
+                                          style={styles.billBreakdownName}
+                                          numberOfLines={1}
+                                        >
+                                          {bill.name}
+                                        </Text>
+                                      </View>
+                                      <View style={styles.billBreakdownDueRow}>
+                                        {bill.status === "paid" ? (
+                                          <Text
+                                            style={{
+                                              fontSize: 10,
+                                              fontWeight: "600",
+                                              color: "#22c55e",
+                                              backgroundColor:
+                                                "rgba(34, 197, 94, 0.15)",
+                                              paddingHorizontal: 5,
+                                              paddingVertical: 1,
+                                              borderRadius: 10,
+                                            }}
+                                          >
+                                            ✓ Paid
+                                          </Text>
+                                        ) : (
+                                          <Text
+                                            style={styles.billBreakdownDueText}
+                                          >
+                                            {breakdownDaysRemaining === 0
+                                              ? "Due Today"
+                                              : breakdownDaysRemaining === 1
+                                                ? "Due Tomorrow"
+                                                : `Due in ${breakdownDaysRemaining} days`}
+                                          </Text>
+                                        )}
+                                      </View>
+                                    </View>
+                                    <View style={styles.billBreakdownAmoutRow}>
+                                      <Text
+                                        style={styles.billBreakdownAmoutText}
+                                      >
+                                        {fmt(bill.amount)}
+                                      </Text>
+                                      <Ionicons
+                                        name="chevron-forward"
+                                        size={16}
+                                        color={colors.accent}
+                                      />
+                                    </View>
+                                  </View>
+                                  {idx < bills.length - 1 && (
+                                    <View style={styles.activityDivider} />
+                                  )}
+                                </View>
+                              ));
+                            })()}
+                          </View>
+                        </View>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* ─── PAYMENT STATUS ─── */}
-                {isCurrentUserPayor() &&
+                {/* {isCurrentUserPayor() &&
                   (getPaymentStatus() ||
                     userJoinedRoom?.cycleStatus === "completed" ||
                     userJoinedRoom?.cycleStatus === "cycle_closed") && (
@@ -2361,10 +2720,10 @@ const ClientHomeScreen = ({ navigation, route }) => {
                         color={colors.textSecondary}
                       />
                     </TouchableOpacity>
-                  )}
+                  )} */}
 
                 {/* ─── BILLING COUNTDOWN ─── */}
-                {getBillingCountdown() &&
+                {/* {getBillingCountdown() &&
                   isCurrentUserPayor() &&
                   !getPaymentStatus()?.allPaid &&
                   userJoinedRoom.cycleStatus !== "completed" && (
@@ -2388,7 +2747,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                         />
                         <Text style={styles.countdownText}>
                           {getBillingCountdown().daysRemaining === 0
-                            ? "Cycle ends today"
+                            ? "Bills due today"
                             : getBillingCountdown().daysRemaining > 0
                               ? `${getBillingCountdown().daysRemaining} day${getBillingCountdown().daysRemaining !== 1 ? "s" : ""} remaining`
                               : "Cycle overdue"}
@@ -2414,7 +2773,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                         />
                       </View>
                     </TouchableOpacity>
-                  )}
+                  )} */}
 
                 {/* ─── QUICK ACTIONS ─── */}
                 <View style={styles.actionsRow}>
@@ -2993,7 +3352,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                 </Text>
               </View>
             )}
-          </ScrollView>
+          </ScrollViewWithDetection>
         )}
 
         {/* ─── USER PROFILE MODAL ─── */}
@@ -3014,7 +3373,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
               </View>
 
               {selectedUserProfile ? (
-                <ScrollView style={styles.profileModalBody}>
+                <ScrollViewWithDetection style={styles.profileModalBody}>
                   {/* Avatar */}
                   {selectedUserProfile.avatar?.url ? (
                     <Image
@@ -3189,7 +3548,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                       </View>
                     )}
                   </View>
-                </ScrollView>
+                </ScrollViewWithDetection>
               ) : (
                 <View style={styles.profileModalLoading}>
                   <ActivityIndicator size="large" color={colors.accent} />
@@ -3408,6 +3767,108 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontWeight: "500",
     },
     billingMiniAmount: { fontSize: 12, fontWeight: "700", color: colors.text },
+
+    // BILL BREAKDOWN
+    breakdownCard: {
+      marginHorizontal: 16,
+      marginTop: 14,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    breakdownHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    breakdownTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+      flex: 1,
+    },
+    breakdownViewAllText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.accent,
+    },
+    breakdownRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    breakdownBillIconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+    },
+    breakdownBillIconBg: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    breakdownAvatarText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    billStatusBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+    },
+    billStatusText: {
+      fontSize: 11,
+      fontWeight: "600",
+    },
+    billBreakdownInfoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 3,
+    },
+    billBreakdownName: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+      flexShrink: 1,
+    },
+    billBreakdownDueRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    billBreakdownDueText: {
+      fontSize: 10,
+      color: colors.accent,
+      marginLeft: 2,
+    },
+    billBreakdownAmoutRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+    },
+    billBreakdownAmoutText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.accent,
+    },
 
     // ─── PAYMENT STATUS ───
     paymentCard: {

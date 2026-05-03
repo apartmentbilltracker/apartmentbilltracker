@@ -18,6 +18,7 @@ import { roundTo2 as r2 } from "../../utils/helpers";
 import { screenCache } from "../../hooks/useScreenCache";
 import AnimatedAmount from "../../components/AnimatedAmount";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
 
 const WATER_BILL_PER_DAY = 5;
 
@@ -397,7 +398,7 @@ const BillingScreen = ({ route }) => {
   ];
 
   return (
-    <ScrollView
+    <ScrollViewWithDetection
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 32 }}
       refreshControl={
@@ -622,7 +623,7 @@ const BillingScreen = ({ route }) => {
           </View>
         )}
       </View>
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

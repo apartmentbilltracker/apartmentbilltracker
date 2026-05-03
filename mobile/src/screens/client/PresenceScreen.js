@@ -18,6 +18,7 @@ import {
 } from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
 
 const PresenceScreen = () => {
   const { colors } = useTheme();
@@ -663,7 +664,7 @@ const PresenceScreen = () => {
   }
 
   return (
-    <ScrollView
+    <ScrollViewWithDetection
       style={styles.container}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -693,7 +694,7 @@ const PresenceScreen = () => {
       {/* ─── ROOM PILLS ─── */}
       {rooms.length > 0 && (
         <View style={styles.roomPillsWrap}>
-          <ScrollView
+          <ScrollViewWithDetection
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.roomPillsRow}
@@ -724,7 +725,7 @@ const PresenceScreen = () => {
                 </TouchableOpacity>
               );
             })}
-          </ScrollView>
+          </ScrollViewWithDetection>
         </View>
       )}
 
@@ -1161,7 +1162,7 @@ const PresenceScreen = () => {
       )}
 
       <View style={{ height: 30 }} />
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

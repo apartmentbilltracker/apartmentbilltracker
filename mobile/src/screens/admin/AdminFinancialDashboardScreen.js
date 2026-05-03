@@ -20,6 +20,7 @@ import { useRoute, useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { apiService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
@@ -148,7 +149,7 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
   // ─── Cycle Closed ───
   if (isCycleClosed) {
     return (
-      <ScrollView
+      <ScrollViewWithDetection
         style={styles.container}
         contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={
@@ -226,7 +227,7 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
             Amounts have been reset for the new cycle
           </Text>
         </View>
-      </ScrollView>
+      </ScrollViewWithDetection>
     );
   }
 
@@ -240,7 +241,7 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
         : "#c62828";
 
   return (
-    <ScrollView
+    <ScrollViewWithDetection
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 32 }}
       showsVerticalScrollIndicator={false}
@@ -756,7 +757,7 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

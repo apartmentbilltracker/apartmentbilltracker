@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRoute } from "@react-navigation/native";
 import { apiService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 
 const getBillColors = (c) => ({
   electricity: { bg: c.accentSurface, text: c.electricityColor, icon: "flash" },
@@ -385,7 +386,7 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
+        <FlatListWithDetection
           data={pendingPayments}
           renderItem={renderPaymentItem}
           keyExtractor={(item) => `${item.id || item._id}-${item.billType}`}
@@ -590,7 +591,7 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <ScrollViewWithDetection
               style={{ maxHeight: 340 }}
               showsVerticalScrollIndicator={false}
             >
@@ -664,7 +665,7 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
                   />
                 </View>
               </View>
-            </ScrollView>
+            </ScrollViewWithDetection>
 
             <View style={styles.modalBtnRow}>
               <TouchableOpacity

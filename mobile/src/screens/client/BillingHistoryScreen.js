@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { apiService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/ClientNavigator";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const BillingHistoryScreen = ({ route, navigation }) => {
@@ -321,7 +322,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
+        <FlatListWithDetection
           data={cycles}
           renderItem={renderCycleCard}
           keyExtractor={(item) => item.id || item._id}
@@ -372,7 +373,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
             </View>
 
             {selectedCycle && (
-              <ScrollView
+              <ScrollViewWithDetection
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 4 }}
@@ -674,7 +675,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                   </View>
                 )}
                 <ModalBottomSpacer />
-              </ScrollView>
+              </ScrollViewWithDetection>
             )}
           </View>
         </View>

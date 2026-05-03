@@ -207,6 +207,26 @@ export const paymentService = {
       })
       .then(extractData),
 
+  // Batch payment for multiple bill types
+  markBillsPaidBatch: (
+    roomId,
+    memberId,
+    billTypes,
+    amount,
+    paymentMethod,
+    reference,
+  ) =>
+    api
+      .post("/api/v2/payments/mark-bills-paid-batch", {
+        roomId,
+        memberId,
+        billTypes,
+        amount,
+        paymentMethod,
+        reference,
+      })
+      .then(extractData),
+
   getPaymentHistory: (roomId) =>
     api.get(`/api/v2/payments/payment-history/${roomId}`).then(extractData),
 

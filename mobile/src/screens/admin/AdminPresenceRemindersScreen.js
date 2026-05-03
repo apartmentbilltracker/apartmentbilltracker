@@ -17,6 +17,7 @@ import { useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { apiService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 
 const AdminPresenceRemindersScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -321,7 +322,7 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
             )}
           </View>
 
-          <FlatList
+          <FlatListWithDetection
             data={membersWithoutPresence}
             renderItem={renderMember}
             keyExtractor={(item) => item.memberId}
@@ -412,7 +413,7 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <ScrollViewWithDetection
               style={styles.form}
               showsVerticalScrollIndicator={false}
             >
@@ -465,7 +466,7 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
                   {room?.name || "[Room]"} Management
                 </Text>
               </View>
-            </ScrollView>
+            </ScrollViewWithDetection>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity

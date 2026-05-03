@@ -23,6 +23,7 @@ import {
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 import AnimatedAmount from "../../components/AnimatedAmount";
 
 const WATER_RATE = 5; // ₱5 per day
@@ -713,11 +714,8 @@ const AdminBillingScreen = ({ navigation }) => {
         internet: internetValue,
         previousMeterReading: prevReading ? parseFloat(prevReading) : null,
         currentMeterReading: currReading ? parseFloat(currReading) : null,
+        customCharges: customCharges,
       };
-
-      if (customCharges.length > 0) {
-        cyclePayload.customCharges = customCharges;
-      }
 
       if (!selectedRoom.currentCycleId) {
         const createResponse = await apiService.post(
@@ -743,10 +741,8 @@ const AdminBillingScreen = ({ navigation }) => {
           internet: cyclePayload.internet,
           previousMeterReading: cyclePayload.previousMeterReading,
           currentMeterReading: cyclePayload.currentMeterReading,
+          customCharges: customCharges,
         };
-        if (customCharges.length > 0) {
-          updatePayload.customCharges = customCharges;
-        }
         const updateResponse = await apiService.put(
           `/api/v2/billing-cycles/${selectedRoom.currentCycleId}`,
           updatePayload,
@@ -1120,7 +1116,7 @@ const AdminBillingScreen = ({ navigation }) => {
         </View>
       ) : null}
 
-      <ScrollView
+      <ScrollViewWithDetection
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 30 }}
         showsVerticalScrollIndicator={false}
@@ -2689,7 +2685,7 @@ const AdminBillingScreen = ({ navigation }) => {
             </TouchableOpacity>
           </>
         )}
-      </ScrollView>
+      </ScrollViewWithDetection>
     </View>
   );
 };

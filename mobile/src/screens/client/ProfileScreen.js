@@ -23,6 +23,7 @@ import {
   hostRoleService,
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
 import { getAPIBaseURL } from "../../config/config";
 import { biometricAuth } from "../../utils/biometricAuth";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
@@ -531,7 +532,7 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollViewWithDetection style={styles.container} showsVerticalScrollIndicator={false}>
       {/* ─── PROFILE HEADER ─── */}
       <View style={styles.headerBg}>
         <View style={styles.avatarWrap}>
@@ -1210,7 +1211,7 @@ const ProfileScreen = ({ navigation }) => {
                 <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-            <ScrollView
+            <ScrollViewWithDetection
               style={styles.modalBody}
               showsVerticalScrollIndicator={false}
             >
@@ -1282,7 +1283,7 @@ const ProfileScreen = ({ navigation }) => {
                 </Text>
               </TouchableOpacity>
               <ModalBottomSpacer />
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>
@@ -1306,7 +1307,7 @@ const ProfileScreen = ({ navigation }) => {
                 <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-            <ScrollView
+            <ScrollViewWithDetection
               style={styles.modalBody}
               showsVerticalScrollIndicator={false}
             >
@@ -1341,7 +1342,7 @@ const ProfileScreen = ({ navigation }) => {
                 </View>
               )}
               <ModalBottomSpacer />
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>
@@ -1366,7 +1367,7 @@ const ProfileScreen = ({ navigation }) => {
                 <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-            <ScrollView
+            <ScrollViewWithDetection
               style={styles.modalBody}
               showsVerticalScrollIndicator={false}
             >
@@ -1473,11 +1474,11 @@ const ProfileScreen = ({ navigation }) => {
                 </Text>
               </TouchableOpacity>
               <ModalBottomSpacer />
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

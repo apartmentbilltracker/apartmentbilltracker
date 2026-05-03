@@ -374,6 +374,30 @@ router.post(
         );
       }
 
+      // Normalize billType to snake_case format (database constraint requirement)
+      let normalizedBillType = String(billType).trim().toLowerCase();
+      if (normalizedBillType === "customcharges") {
+        normalizedBillType = "custom_charges";
+      }
+
+      // Validate against allowed bill types
+      const VALID_BILL_TYPES = [
+        "rent",
+        "electricity",
+        "water",
+        "internet",
+        "custom_charges",
+        "total",
+      ];
+      if (!VALID_BILL_TYPES.includes(normalizedBillType)) {
+        return next(
+          new ErrorHandler(
+            `Invalid bill type: ${billType}. Must be one of: ${VALID_BILL_TYPES.join(", ")}`,
+            400,
+          ),
+        );
+      }
+
       const room = await SupabaseService.findRoomById(roomId);
       if (!room) {
         return next(new ErrorHandler("Room not found", 404));
@@ -413,7 +437,7 @@ router.post(
       const payment = await SupabaseService.createPayment({
         room_id: roomId,
         paid_by: req.user.id,
-        bill_type: billType,
+        bill_type: normalizedBillType,
         amount: Number(amount),
         reference: referenceNumber,
         payment_method: "gcash",
@@ -512,6 +536,30 @@ router.post(
         );
       }
 
+      // Normalize billType to snake_case format (database constraint requirement)
+      let normalizedBillType = String(billType).trim().toLowerCase();
+      if (normalizedBillType === "customcharges") {
+        normalizedBillType = "custom_charges";
+      }
+
+      // Validate against allowed bill types
+      const VALID_BILL_TYPES = [
+        "rent",
+        "electricity",
+        "water",
+        "internet",
+        "custom_charges",
+        "total",
+      ];
+      if (!VALID_BILL_TYPES.includes(normalizedBillType)) {
+        return next(
+          new ErrorHandler(
+            `Invalid bill type: ${billType}. Must be one of: ${VALID_BILL_TYPES.join(", ")}`,
+            400,
+          ),
+        );
+      }
+
       const room = await SupabaseService.findRoomById(roomId);
       if (!room) {
         return next(new ErrorHandler("Room not found", 404));
@@ -551,7 +599,7 @@ router.post(
       const payment = await SupabaseService.createPayment({
         room_id: roomId,
         paid_by: req.user.id,
-        bill_type: billType,
+        bill_type: normalizedBillType,
         amount: Number(amount),
         reference: referenceNumber,
         payment_method: "bank_transfer",
@@ -659,6 +707,30 @@ router.post(
         );
       }
 
+      // Normalize billType to snake_case format (database constraint requirement)
+      let normalizedBillType = String(billType).trim().toLowerCase();
+      if (normalizedBillType === "customcharges") {
+        normalizedBillType = "custom_charges";
+      }
+
+      // Validate against allowed bill types
+      const VALID_BILL_TYPES = [
+        "rent",
+        "electricity",
+        "water",
+        "internet",
+        "custom_charges",
+        "total",
+      ];
+      if (!VALID_BILL_TYPES.includes(normalizedBillType)) {
+        return next(
+          new ErrorHandler(
+            `Invalid bill type: ${billType}. Must be one of: ${VALID_BILL_TYPES.join(", ")}`,
+            400,
+          ),
+        );
+      }
+
       const room = await SupabaseService.findRoomById(roomId);
       if (!room) {
         return next(new ErrorHandler("Room not found", 404));
@@ -690,7 +762,7 @@ router.post(
       const payment = await SupabaseService.createPayment({
         room_id: roomId,
         paid_by: req.user.id,
-        bill_type: billType,
+        bill_type: normalizedBillType,
         amount: Number(amount),
         reference: fullReference,
         payment_method: "cash",

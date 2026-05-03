@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { roomService, memberService } from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 
 const AdminMembersScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -267,7 +268,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
   const payerCount = members.filter((m) => m.isPayer || m.is_payer).length;
 
   return (
-    <ScrollView
+    <ScrollViewWithDetection
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 30 }}
       showsVerticalScrollIndicator={false}
@@ -283,7 +284,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
       {/* Room Selector */}
       <View style={styles.roomSelector}>
         <Text style={styles.roomSelectorLabel}>Select Room</Text>
-        <ScrollView
+        <ScrollViewWithDetection
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ gap: 8 }}
@@ -314,7 +315,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </ScrollViewWithDetection>
       </View>
 
       {selectedRoom && (
@@ -607,7 +608,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
                 </View>
               </View>
 
-              <FlatList
+              <FlatListWithDetection
                 data={filteredMembers}
                 keyExtractor={(item) => item.id || item._id}
                 scrollEnabled={false}
@@ -736,7 +737,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
           )}
         </>
       )}
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

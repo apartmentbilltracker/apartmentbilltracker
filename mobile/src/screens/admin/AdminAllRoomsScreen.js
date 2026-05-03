@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -402,7 +403,7 @@ const AdminAllRoomsScreen = ({ navigation }) => {
       </View>
 
       {/* Rooms List */}
-      <FlatList
+      <FlatListWithDetection
         data={filteredRooms}
         renderItem={renderRoom}
         keyExtractor={(item) => item.id}
@@ -451,7 +452,7 @@ const AdminAllRoomsScreen = ({ navigation }) => {
           </View>
 
           {/* Photos */}
-          <ScrollView
+          <ScrollViewWithDetection
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
@@ -472,7 +473,7 @@ const AdminAllRoomsScreen = ({ navigation }) => {
                 resizeMode="contain"
               />
             ))}
-          </ScrollView>
+          </ScrollViewWithDetection>
 
           {/* Dot indicators */}
           {(photoViewRoom?.parsedPhotos?.length || 0) > 1 && (

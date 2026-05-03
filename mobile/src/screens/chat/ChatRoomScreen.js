@@ -29,6 +29,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { chatService } from "../../services/apiService";
 import chatReadTracker from "../../services/chatReadTracker";
 import { useTheme } from "../../theme/ThemeContext";
+import { FlatListWithDetection } from "../../navigation/HostNavigator";
 
 const POLL_INTERVAL = 30000; // 30 seconds (was 15s — halved to save Supabase egress)
 
@@ -585,7 +586,7 @@ const ChatRoomScreen = ({ route, navigation }) => {
               </Text>
             </View>
 
-            <FlatList
+            <FlatListWithDetection
               ref={flatListRef}
               data={messages}
               renderItem={renderMessage}

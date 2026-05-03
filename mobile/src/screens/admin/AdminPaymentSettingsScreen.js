@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { settingsService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 import { useFocusEffect } from "@react-navigation/native";
 
 // Common Philippine bank names for quick selection
@@ -384,7 +385,7 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
         </View>
       </View>
 
-      <ScrollView
+      <ScrollViewWithDetection
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -755,7 +756,7 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* ─── Add / Edit Bank Account Modal ─── */}
       <Modal

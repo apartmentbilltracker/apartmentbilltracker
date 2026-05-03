@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/HostNavigator";
 import AuthBubbles from "../../components/AuthBubbles";
 
 const TermsOfServiceScreen = ({ navigation }) => {
@@ -100,7 +101,7 @@ const TermsOfServiceScreen = ({ navigation }) => {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView
+      <ScrollViewWithDetection
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -131,7 +132,7 @@ const TermsOfServiceScreen = ({ navigation }) => {
         ))}
 
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
     </View>
   );
 };

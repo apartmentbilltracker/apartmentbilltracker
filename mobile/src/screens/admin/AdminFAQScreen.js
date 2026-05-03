@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 
 const GOLD = "#b38604";
 const getCategoryColor = (category) => {
@@ -232,7 +233,7 @@ const AdminFAQScreen = () => {
       </View>
 
       {/* Category Filter */}
-      <ScrollView
+      <ScrollViewWithDetection
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
@@ -288,10 +289,10 @@ const AdminFAQScreen = () => {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* FAQ List */}
-      <FlatList
+      <FlatListWithDetection
         data={filteredFAQs}
         keyExtractor={(item) => item.id || item._id}
         contentContainerStyle={{ paddingBottom: 20 }}
@@ -453,7 +454,7 @@ const AdminFAQScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <ScrollViewWithDetection
               style={styles.modalBody}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 30 }}
@@ -615,7 +616,7 @@ const AdminFAQScreen = () => {
                   <Text style={styles.deleteBtnText}>Delete This FAQ</Text>
                 </TouchableOpacity>
               )}
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>
