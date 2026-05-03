@@ -23,6 +23,7 @@ import { apiService } from "../../services/apiService";
 import * as Sharing from "expo-sharing";
 import * as Print from "expo-print";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
@@ -613,7 +614,7 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
         : "#c62828";
 
   return (
-    <ScrollView
+    <ScrollViewWithDetection
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 32 }}
       showsVerticalScrollIndicator={false}
@@ -741,7 +742,7 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>Member Charges</Text>
         </View>
         {breakdown?.memberBreakdown?.length > 0 ? (
-          <FlatList
+          <FlatListWithDetection
             data={breakdown.memberBreakdown.filter((m) => m.isPayer !== false)}
             renderItem={renderMemberBreakdown}
             keyExtractor={(item) => item.userId}
@@ -813,7 +814,7 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
               ))}
             </View>
 
-            <FlatList
+            <FlatListWithDetection
               data={collectionStatus?.memberStatus}
               renderItem={renderPaymentStatus}
               keyExtractor={(item) => item.userId}
@@ -900,7 +901,7 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
           />
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

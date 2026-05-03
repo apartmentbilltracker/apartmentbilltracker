@@ -21,6 +21,7 @@ import * as Application from "expo-application";
 import { AuthContext } from "../../context/AuthContext";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 import { getAPIBaseURL } from "../../config/config";
 import { biometricAuth } from "../../utils/biometricAuth";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
@@ -323,7 +324,7 @@ const AdminProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollViewWithDetection style={styles.container}>
       {/* Profile Header Card */}
       <View style={styles.profileCard}>
         <View style={styles.avatarContainer}>
@@ -939,7 +940,7 @@ const AdminProfileScreen = ({ navigation }) => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

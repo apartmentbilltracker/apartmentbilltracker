@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 
 const GOLD = "#b38604";
 const AdminBugReportsScreen = ({ navigation }) => {
@@ -261,7 +262,7 @@ const AdminBugReportsScreen = ({ navigation }) => {
       </View>
 
       {/* Severity Filter */}
-      <ScrollView
+      <ScrollViewWithDetection
         horizontal
         showsHorizontalScrollIndicator={false}
         style={{ flexGrow: 0 }}
@@ -300,10 +301,10 @@ const AdminBugReportsScreen = ({ navigation }) => {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* Bug Reports List */}
-      <FlatList
+      <FlatListWithDetection
         data={filteredBugs}
         keyExtractor={(item) => item.id || item._id}
         contentContainerStyle={{ paddingBottom: 20 }}
@@ -440,7 +441,7 @@ const AdminBugReportsScreen = ({ navigation }) => {
             </View>
 
             {selectedBug && (
-              <ScrollView
+              <ScrollViewWithDetection
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 30 }}
@@ -748,7 +749,7 @@ const AdminBugReportsScreen = ({ navigation }) => {
                     )}
                   </TouchableOpacity>
                 </View>
-              </ScrollView>
+              </ScrollViewWithDetection>
             )}
           </View>
         </View>

@@ -1,21 +1,19 @@
 /**
- * Database Migration Runner
- * Executes SQL migration files for Supabase
- *
- * Usage: node run-migration.js <migration_file_name>
- * Example: node run-migration.js add_custom_charges_column.sql
+ * Database Migration Runner (Fixed for Supabase)
+ * Executes SQL migration files using Supabase API
  */
 
 require("dotenv").config({ path: __dirname + "/config/.env" });
 
 const fs = require("fs");
 const path = require("path");
-const { Client } = require("pg");
+const { createClient } = require("@supabase/supabase-js");
 
 async function runMigration(filename) {
-  const client = new Client({
-    connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
-  });
+  const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
 
   try {
     const migrationPath = path.join(__dirname, "migrations", filename);
@@ -29,15 +27,25 @@ async function runMigration(filename) {
     console.log(`📝 Running migration: ${filename}`);
     console.log("─".repeat(60));
 
-    await client.connect();
-    await client.query(sql);
+    const { data, error } = await supabase.rpc("exec_sql_unsafe", {
+      sql: sql,
+    });
+
+    if (error) {
+      if (error.message && error.message.includes("does not exist")) {
+        console.error("❌ RPC method 'exec_sql_unsafe' not available");
+        console.error("Please run the SQL manually in Supabase SQL Editor:\n");
+        console.log(sql);
+      } else {
+        throw error;
+      }
+      process.exit(1);
+    }
 
     console.log("✅ Migration completed successfully!");
-    await client.end();
   } catch (err) {
     console.error("❌ Error running migration:");
     console.error(err.message);
-    await client.end().catch(() => {});
     process.exit(1);
   }
 }
@@ -45,7 +53,7 @@ async function runMigration(filename) {
 const filename = process.argv[2];
 if (!filename) {
   console.error("❌ Please provide a migration filename");
-  console.error("Usage: node run-migration.js <filename>");
+  console.error("Usage: node run-migration-fixed.js <filename>");
   process.exit(1);
 }
 

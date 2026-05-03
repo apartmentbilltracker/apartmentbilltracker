@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { roomService } from "../../services/apiService";
 import SafeMapView from "../../components/SafeMapView";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -188,7 +189,7 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      <ScrollViewWithDetection
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
@@ -301,7 +302,7 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
                 </Text>
               </View>
             </View>
-            <ScrollView
+            <ScrollViewWithDetection
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
@@ -321,7 +322,7 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
                   resizeMode="cover"
                 />
               ))}
-            </ScrollView>
+            </ScrollViewWithDetection>
             {photos.length > 1 && (
               <View style={styles.photoDotRow}>
                 {photos.map((_, idx) => (
@@ -835,7 +836,7 @@ const AdminRoomDetailScreen = ({ navigation, route }) => {
         </View>
 
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* Full-Screen Map Modal */}
       {fullMapRoom &&

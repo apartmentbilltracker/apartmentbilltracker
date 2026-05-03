@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/ClientNavigator";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const MyBugReportsScreen = ({ navigation }) => {
@@ -327,7 +328,7 @@ const MyBugReportsScreen = ({ navigation }) => {
 
       {/* Empty */}
       {bugReports.length === 0 ? (
-        <ScrollView
+        <ScrollViewWithDetection
           contentContainerStyle={styles.emptyWrap}
           refreshControl={
             <RefreshControl
@@ -353,9 +354,9 @@ const MyBugReportsScreen = ({ navigation }) => {
             <Ionicons name="refresh-outline" size={16} color={colors.accent} />
             <Text style={styles.emptyRefreshText}>Refresh</Text>
           </TouchableOpacity>
-        </ScrollView>
+        </ScrollViewWithDetection>
       ) : (
-        <FlatList
+        <FlatListWithDetection
           data={bugReports}
           renderItem={renderReport}
           keyExtractor={(item) => item.id || item._id}
@@ -403,7 +404,7 @@ const MyBugReportsScreen = ({ navigation }) => {
             </View>
 
             {selectedReport && (
-              <ScrollView
+              <ScrollViewWithDetection
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 4 }}
@@ -580,7 +581,7 @@ const MyBugReportsScreen = ({ navigation }) => {
                   </TouchableOpacity>
                 </View>
                 <ModalBottomSpacer />
-              </ScrollView>
+              </ScrollViewWithDetection>
             )}
           </View>
         </TouchableOpacity>

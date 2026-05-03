@@ -14,6 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { apiService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 
 const AdminBroadcastScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -170,7 +171,7 @@ const AdminBroadcastScreen = ({ navigation }) => {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView
+      <ScrollViewWithDetection
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -305,7 +306,7 @@ const AdminBroadcastScreen = ({ navigation }) => {
               {rooms.length === 0 ? (
                 <Text style={styles.noRoomsText}>No rooms found</Text>
               ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <ScrollViewWithDetection horizontal showsHorizontalScrollIndicator={false}>
                   {rooms.map((room) => {
                     const id = room.id || room._id;
                     const active = selectedRoomId === id;
@@ -330,7 +331,7 @@ const AdminBroadcastScreen = ({ navigation }) => {
                       </TouchableOpacity>
                     );
                   })}
-                </ScrollView>
+                </ScrollViewWithDetection>
               )}
             </View>
           )}
@@ -380,7 +381,7 @@ const AdminBroadcastScreen = ({ navigation }) => {
               {filteredUsers.length === 0 ? (
                 <Text style={styles.noRoomsText}>No users found</Text>
               ) : (
-                <ScrollView
+                <ScrollViewWithDetection
                   style={{ maxHeight: 180 }}
                   nestedScrollEnabled
                   showsVerticalScrollIndicator
@@ -422,7 +423,7 @@ const AdminBroadcastScreen = ({ navigation }) => {
                       </TouchableOpacity>
                     );
                   })}
-                </ScrollView>
+                </ScrollViewWithDetection>
               )}
             </View>
           )}
@@ -536,7 +537,7 @@ const AdminBroadcastScreen = ({ navigation }) => {
         </View>
 
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
     </View>
   );
 };

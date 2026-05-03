@@ -20,6 +20,7 @@ import { AuthContext } from "../../context/AuthContext";
 import SafeMapView from "../../components/SafeMapView";
 import { roomService, billingCycleService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -234,7 +235,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
 
   return (
     <>
-      <ScrollView
+      <ScrollViewWithDetection
         style={styles.container}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -288,7 +289,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
                 </View>
               </View>
               <View style={{ position: "relative" }}>
-                <ScrollView
+                <ScrollViewWithDetection
                   horizontal
                   pagingEnabled
                   showsHorizontalScrollIndicator={false}
@@ -317,7 +318,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
                       />
                     </TouchableOpacity>
                   ))}
-                </ScrollView>
+                </ScrollViewWithDetection>
                 {/* Overlay badge */}
                 <View style={styles.galOverlay}>
                   <TouchableOpacity
@@ -710,7 +711,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
         </View>
 
         <View style={{ height: 30 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* ─── FULL-SCREEN MAP MODAL ─── */}
       {room.latitude != null && room.longitude != null && (
@@ -788,7 +789,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
               {photoViewIdx + 1} / {(room?.photos || []).length}
             </Text>
           </View>
-          <ScrollView
+          <ScrollViewWithDetection
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
@@ -810,7 +811,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
                 resizeMode="contain"
               />
             ))}
-          </ScrollView>
+          </ScrollViewWithDetection>
           {(room?.photos?.length || 0) > 1 && (
             <View style={styles.pvDotRow}>
               {room.photos.map((_, idx) => (

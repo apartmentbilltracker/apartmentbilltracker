@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { announcementService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const REACTION_TYPES = [
@@ -349,7 +350,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
       {/* Room Selector */}
       {adminRooms.length > 1 && (
         <View style={styles.roomSelectorWrapper}>
-          <ScrollView
+          <ScrollViewWithDetection
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.roomSelectorContent}
@@ -381,7 +382,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                 </TouchableOpacity>
               );
             })}
-          </ScrollView>
+          </ScrollViewWithDetection>
         </View>
       )}
 
@@ -420,7 +421,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
         </View>
       </View>
 
-      <FlatList
+      <FlatListWithDetection
         data={announcements}
         keyExtractor={(item) => item.id || item._id}
         renderItem={({ item }) => {
@@ -805,7 +806,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollViewWithDetection style={styles.modalBody}>
               <Text style={styles.inputLabel}>Title</Text>
               <TextInput
                 style={styles.input}
@@ -829,7 +830,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
               {roomMembers.length > 0 && (
                 <>
                   <Text style={styles.inputLabel}>Visible To</Text>
-                  <ScrollView
+                  <ScrollViewWithDetection
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.targetScrollView}
@@ -897,7 +898,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                         </TouchableOpacity>
                       );
                     })}
-                  </ScrollView>
+                  </ScrollViewWithDetection>
                 </>
               )}
 
@@ -949,7 +950,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                 <Text style={styles.submitButtonText}>Create Announcement</Text>
               </TouchableOpacity>
               <ModalBottomSpacer />
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>
@@ -982,7 +983,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollViewWithDetection style={styles.modalBody}>
               <Text style={styles.inputLabel}>Your Comment</Text>
               <TextInput
                 style={[styles.input, styles.contentInput]}
@@ -1002,7 +1003,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
                 <Text style={styles.submitButtonText}>Post Comment</Text>
               </TouchableOpacity>
               <ModalBottomSpacer />
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>

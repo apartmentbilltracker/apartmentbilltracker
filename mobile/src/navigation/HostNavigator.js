@@ -1,5 +1,11 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import {
+  View,
+  StyleSheet,
+  useColorScheme,
+  ScrollView,
+  FlatList,
+} from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { CommonActions } from "@react-navigation/native";
@@ -10,6 +16,60 @@ import {
   memberService,
   paymentService,
 } from "../services/apiService";
+
+// Context for tracking scroll position
+const ScrollContext = React.createContext({
+  isScrolledToBottom: true,
+  setIsScrolledToBottom: () => {},
+});
+
+// Hook for screens to use to track scroll position
+export const useScrollToBottom = () => {
+  const context = React.useContext(ScrollContext);
+  if (!context) {
+    console.warn(
+      "useScrollToBottom must be used within ScrollContext.Provider",
+    );
+    return { isScrolledToBottom: true, setIsScrolledToBottom: () => {} };
+  }
+  return context;
+};
+
+// Wrapper component for ScrollView to automatically track scroll position
+export const ScrollViewWithDetection = ({ children, ...props }) => {
+  const context = useScrollToBottom();
+
+  const handleScroll = (event) => {
+    if (!event?.nativeEvent) return;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const isAtBottom =
+      contentOffset.y + layoutMeasurement.height >= contentSize.height - 50; // 50px tolerance
+    context.setIsScrolledToBottom(isAtBottom);
+  };
+
+  return (
+    <ScrollView {...props} onScroll={handleScroll} scrollEventThrottle={16}>
+      {children}
+    </ScrollView>
+  );
+};
+
+// Wrapper component for FlatList to automatically track scroll position
+export const FlatListWithDetection = (props) => {
+  const context = useScrollToBottom();
+
+  const handleScroll = (event) => {
+    if (!event?.nativeEvent) return;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const isAtBottom =
+      contentOffset.y + layoutMeasurement.height >= contentSize.height - 50;
+    context.setIsScrolledToBottom(isAtBottom);
+  };
+
+  return (
+    <FlatList {...props} onScroll={handleScroll} scrollEventThrottle={16} />
+  );
+};
 
 // Reuse existing admin screens for host
 import AdminDashboardScreen from "../screens/admin/AdminDashboardScreen";
@@ -204,7 +264,9 @@ const ProfileStack = () => {
 const HostTabNavigator = () => {
   const [pendingMemberCount, setPendingMemberCount] = React.useState(0);
   const [pendingVerifCount, setPendingVerifCount] = React.useState(0);
+  const [isScrolledToBottom, setIsScrolledToBottom] = React.useState(false);
   const { colors } = useTheme();
+  const colorScheme = useColorScheme();
   const tabInsets = useSafeAreaInsets();
   const lastPendingFetch = React.useRef(0);
 
@@ -266,201 +328,224 @@ const HostTabNavigator = () => {
   }, []);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Tab.Navigator
-        sceneContainerStyle={{ backgroundColor: colors.background }}
-        safeAreaInsets={{ bottom: 0 }}
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarIcon: ({ focused, color }) => {
-            let iconName;
-            if (route.name === "DashboardStack") {
-              iconName = focused ? "bar-chart" : "bar-chart-outline";
-            } else if (route.name === "RoomStack") {
-              iconName = focused ? "home" : "home-outline";
-            } else if (route.name === "BillingStack") {
-              iconName = focused ? "wallet" : "wallet-outline";
-            } else if (route.name === "AnnouncementsStack") {
-              iconName = focused ? "megaphone" : "megaphone-outline";
-            } else if (route.name === "MembersStack") {
-              iconName = focused ? "people" : "people-outline";
-            } else if (route.name === "ProfileStack") {
-              iconName = focused ? "person" : "person-outline";
-            }
-            return (
-              <View style={{ alignItems: "center", justifyContent: "center" }}>
-                {focused && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -4,
-                      width: 48,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: colors.accentLight,
-                    }}
-                  />
-                )}
-                <Ionicons name={iconName} size={22} color={color} />
-              </View>
-            );
-          },
-          tabBarActiveTintColor: colors.tabBarActive,
-          tabBarInactiveTintColor: colors.tabBarInactive,
-          tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: "600",
-            marginTop: 0,
-          },
-          tabBarStyle: {
-            backgroundColor: colors.tabBarBg,
-            borderTopWidth: 0,
-            elevation: 12,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: -3 },
-            shadowOpacity: 0.08,
-            shadowRadius: 8,
-            paddingTop: 4,
-            paddingBottom: tabInsets.bottom + 10,
-            height: 56 + tabInsets.bottom + 10,
-          },
-          tabBarBadgeStyle: {
-            backgroundColor: "#e74c3c",
-            fontSize: 10,
-            fontWeight: "700",
-            minWidth: 18,
-            height: 18,
-            borderRadius: 9,
-            lineHeight: 17,
-            top: -2,
-          },
-        })}
+    <View style={{ flex: 1, overflow: "visible" }}>
+      <ScrollContext.Provider
+        value={{ isScrolledToBottom, setIsScrolledToBottom }}
       >
-        <Tab.Screen
-          name="DashboardStack"
-          component={DashboardStack}
-          options={{ title: "Dashboard" }}
-          listeners={({ navigation }) => ({
-            tabPress: () =>
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "DashboardStack",
-                      state: { routes: [{ name: "HostDashboard" }] },
-                    },
-                  ],
-                }),
-              ),
-          })}
-        />
-        <Tab.Screen
-          name="RoomStack"
-          component={RoomManagementStack}
-          options={{ title: "Rooms" }}
-          listeners={({ navigation }) => ({
-            tabPress: () =>
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "RoomStack",
-                      state: { routes: [{ name: "RoomManagement" }] },
-                    },
-                  ],
-                }),
-              ),
-          })}
-        />
-        <Tab.Screen
-          name="BillingStack"
-          component={BillingStack}
-          options={{
-            title: "Billing",
-            tabBarBadge: pendingVerifCount > 0 ? pendingVerifCount : null,
+        <Tab.Navigator
+          sceneContainerStyle={{
+            overflow: "visible",
+            backgroundColor: colors.background,
+            paddingBottom: isScrolledToBottom ? 60 : 0,
           }}
-          listeners={({ navigation }) => ({
-            tabPress: () => {
-              fetchPendingVerifCount();
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "BillingStack",
-                      state: { routes: [{ name: "HostBilling" }] },
-                    },
-                  ],
-                }),
+          safeAreaInsets={{ bottom: 0 }}
+          screenOptions={({ route }) => ({
+            headerShown: false,
+            tabBarShowLabel: false,
+            tabBarIcon: ({ focused, color }) => {
+              let iconName;
+              if (route.name === "DashboardStack") {
+                iconName = focused ? "bar-chart" : "bar-chart-outline";
+              } else if (route.name === "RoomStack") {
+                iconName = focused ? "home" : "home-outline";
+              } else if (route.name === "BillingStack") {
+                iconName = focused ? "wallet" : "wallet-outline";
+              } else if (route.name === "AnnouncementsStack") {
+                iconName = focused ? "megaphone" : "megaphone-outline";
+              } else if (route.name === "MembersStack") {
+                iconName = focused ? "people" : "people-outline";
+              } else if (route.name === "ProfileStack") {
+                iconName = focused ? "person" : "person-outline";
+              }
+              return (
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 10,
+                    paddingVertical: 10,
+                    borderRadius: 50,
+                    backgroundColor: focused ? colors.accent : "transparent",
+                  }}
+                >
+                  <Ionicons
+                    name={iconName}
+                    size={22}
+                    color={focused ? "white" : color}
+                  />
+                </View>
               );
             },
-          })}
-        />
-        <Tab.Screen
-          name="AnnouncementsStack"
-          component={AnnouncementsStack}
-          options={{ title: "News" }}
-          listeners={({ navigation }) => ({
-            tabPress: () =>
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "AnnouncementsStack",
-                      state: { routes: [{ name: "HostAnnouncements" }] },
-                    },
-                  ],
-                }),
-              ),
-          })}
-        />
-        <Tab.Screen
-          name="MembersStack"
-          component={MembersStack}
-          options={{
-            title: "Members",
-            tabBarBadge: pendingMemberCount > 0 ? pendingMemberCount : null,
-          }}
-          listeners={({ navigation }) => ({
-            tabPress: () => {
-              fetchPendingMemberCount();
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "MembersStack",
-                      state: { routes: [{ name: "Members" }] },
-                    },
-                  ],
-                }),
-              );
+            tabBarActiveTintColor: colors.tabBarActive,
+            tabBarInactiveTintColor: colors.tabBarInactive,
+            tabBarStyle: {
+              position: "absolute",
+              bottom: 20,
+              left: 20,
+              right: 20,
+              backgroundColor: colors.tabBarBg,
+              borderRadius: 50,
+              elevation: 30,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: -10 },
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+              paddingVertical: 4,
+              paddingBottom: 4,
+              paddingHorizontal: 4,
+              height: 60,
+            },
+            tabBarBadgeStyle: {
+              backgroundColor: "#e74c3c",
+              fontSize: 10,
+              fontWeight: "700",
+              minWidth: 18,
+              height: 18,
+              borderRadius: 9,
+              lineHeight: 17,
+              top: 6,
             },
           })}
-        />
-        <Tab.Screen
-          name="ProfileStack"
-          component={ProfileStack}
-          options={{ title: "Profile" }}
-          listeners={({ navigation }) => ({
-            tabPress: () =>
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "ProfileStack",
-                      state: { routes: [{ name: "HostProfile" }] },
-                    },
-                  ],
-                }),
-              ),
-          })}
-        />
-      </Tab.Navigator>
+        >
+          <Tab.Screen
+            name="DashboardStack"
+            component={DashboardStack}
+            options={{ title: "Dashboard" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "DashboardStack",
+                        state: { routes: [{ name: "HostDashboard" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+          <Tab.Screen
+            name="RoomStack"
+            component={RoomManagementStack}
+            options={{ title: "Rooms" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "RoomStack",
+                        state: { routes: [{ name: "RoomManagement" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+          <Tab.Screen
+            name="BillingStack"
+            component={BillingStack}
+            options={{
+              title: "Billing",
+              tabBarBadge: pendingVerifCount > 0 ? pendingVerifCount : null,
+            }}
+            listeners={({ navigation }) => ({
+              tabPress: () => {
+                fetchPendingVerifCount();
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "BillingStack",
+                        state: { routes: [{ name: "HostBilling" }] },
+                      },
+                    ],
+                  }),
+                );
+              },
+            })}
+          />
+          <Tab.Screen
+            name="AnnouncementsStack"
+            component={AnnouncementsStack}
+            options={{ title: "News" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "AnnouncementsStack",
+                        state: { routes: [{ name: "HostAnnouncements" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+          <Tab.Screen
+            name="MembersStack"
+            component={MembersStack}
+            options={{
+              title: "Members",
+              tabBarBadge: pendingMemberCount > 0 ? pendingMemberCount : null,
+            }}
+            listeners={({ navigation }) => ({
+              tabPress: () => {
+                fetchPendingMemberCount();
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "MembersStack",
+                        state: { routes: [{ name: "Members" }] },
+                      },
+                    ],
+                  }),
+                );
+              },
+            })}
+          />
+          <Tab.Screen
+            name="ProfileStack"
+            component={ProfileStack}
+            options={{ title: "Profile" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "ProfileStack",
+                        state: { routes: [{ name: "HostProfile" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+        </Tab.Navigator>
+      </ScrollContext.Provider>
+      <View
+        style={{
+          position: "absolute",
+          bottom: 20,
+          left: 20,
+          right: 20,
+          height: 60,
+          borderRadius: 50,
+          borderColor: colorScheme === "dark" ? "#666666" : "#E0E0E0",
+          borderWidth: 0.3,
+          pointerEvents: "none",
+        }}
+      />
     </View>
   );
 };
@@ -473,4 +558,5 @@ const HostNavigator = () => (
   </Stack.Navigator>
 );
 
+export { ScrollContext };
 export default HostNavigator;

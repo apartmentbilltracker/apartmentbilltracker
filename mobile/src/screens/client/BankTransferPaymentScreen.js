@@ -22,6 +22,7 @@ import apiService, {
 import { settingsService } from "../../services/apiService";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
 import { AuthContext } from "../../context/AuthContext";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
@@ -32,7 +33,8 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const user = authContext?.state?.user;
   const userId = user?.id || user?._id;
 
-  const { roomId, roomName, amount, billType, billingCycleId } = route.params;
+  const { roomId, roomName, amount, billType, billTypes, billingCycleId } =
+    route.params;
   const [step, setStep] = useState("bankDetails"); // bankDetails, qr, success
   const [bankName, setBankName] = useState("");
   const [showBankSelector, setShowBankSelector] = useState(false);
@@ -310,19 +312,97 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const initiateBankTransfer = async () => {
     try {
       setLoading(true);
-      const response = await apiService.initiateBankTransfer({
-        roomId,
-        amount,
-        billType,
-        bankName,
-        billingCycleId,
-      });
 
-      if (response.success) {
-        setQrData(response.qrData);
-        setReferenceNumber(response.transaction.referenceNumber);
-        setTransactionId(response.transaction.id || response.transaction._id);
-        setStep("qr");
+      // Check if this is a batch payment (multiple bills selected)
+      // Ensure billTypes is an array and normalize values
+      let selectedBillTypes = Array.isArray(billTypes) ? billTypes : [billType];
+
+      // Sanitize: ensure all values are valid snake_case bill types
+      selectedBillTypes = selectedBillTypes
+        .map((bt) => {
+          if (typeof bt !== "string") return null;
+          const normalized = bt.trim().toLowerCase();
+          if (
+            [
+              "rent",
+              "electricity",
+              "water",
+              "internet",
+              "custom_charges",
+            ].includes(normalized)
+          ) {
+            return normalized;
+          }
+          if (normalized === "customcharges") return "custom_charges";
+          return null;
+        })
+        .filter((bt) => bt !== null);
+
+      if (selectedBillTypes.length === 0) {
+        Alert.alert("Error", "Invalid bill types selected. Please try again.");
+        navigation.goBack();
+        return;
+      }
+
+      const isBatch = selectedBillTypes.length > 1;
+
+      if (isBatch) {
+        // For batch payments, initiate separate transactions for each bill type
+        const amountPerBill = amount / selectedBillTypes.length;
+        const responses = [];
+        const transactionIds = [];
+
+        for (let i = 0; i < selectedBillTypes.length; i++) {
+          const billTypeItem = selectedBillTypes[i];
+          const billAmount =
+            i === selectedBillTypes.length - 1
+              ? amount - amountPerBill * (selectedBillTypes.length - 1)
+              : amountPerBill;
+
+          const response = await apiService.initiateBankTransfer({
+            roomId,
+            amount: billAmount,
+            billType: billTypeItem,
+            bankName,
+            billingCycleId,
+          });
+
+          if (response.success) {
+            responses.push(response);
+            transactionIds.push(
+              response.transaction.id || response.transaction._id,
+            );
+          }
+        }
+
+        if (
+          responses.length === selectedBillTypes.length &&
+          responses.every((r) => r.success)
+        ) {
+          setQrData(responses[0].qrData);
+          setReferenceNumber(responses[0].transaction.referenceNumber);
+          // Store all transaction IDs for batch confirmation
+          setTransactionId(JSON.stringify(transactionIds));
+          setStep("qr");
+        } else {
+          throw new Error("Failed to initiate one or more transfers");
+        }
+      } else {
+        // Single bill payment
+        const response = await apiService.initiateBankTransfer({
+          roomId,
+          amount,
+          billType,
+          bankName,
+          billingCycleId,
+        });
+
+        if (response.success) {
+          setQrData(response.qrData);
+          setReferenceNumber(response.transaction.referenceNumber);
+          setTransactionId(response.transaction.id || response.transaction._id);
+          setStep("qr");
+        }
       }
     } catch (error) {
       Alert.alert("Error", error.message || "Failed to initiate bank transfer");
@@ -335,14 +415,43 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const handleConfirmTransfer = async () => {
     try {
       setVerifyLoading(true);
-      const response = await apiService.confirmBankTransfer({
-        transactionId,
-        bankName,
-      });
 
-      if (response.success) {
-        setStep("success");
-        setPaymentDate(new Date());
+      // Check if this is a batch transaction (multiple IDs stored as JSON)
+      let transactionIdsToConfirm = [];
+      try {
+        transactionIdsToConfirm = JSON.parse(transactionId);
+      } catch (e) {
+        transactionIdsToConfirm = [transactionId];
+      }
+
+      if (transactionIdsToConfirm.length > 1) {
+        // Confirm all transactions in the batch
+        const responses = [];
+        for (const txnId of transactionIdsToConfirm) {
+          const response = await apiService.confirmBankTransfer({
+            transactionId: txnId,
+            bankName,
+          });
+          responses.push(response);
+        }
+
+        if (responses.every((r) => r.success)) {
+          setStep("success");
+          setPaymentDate(new Date());
+        } else {
+          throw new Error("Failed to confirm one or more transfers");
+        }
+      } else {
+        // Single transaction confirmation
+        const response = await apiService.confirmBankTransfer({
+          transactionId,
+          bankName,
+        });
+
+        if (response.success) {
+          setStep("success");
+          setPaymentDate(new Date());
+        }
       }
     } catch (error) {
       Alert.alert(
@@ -416,7 +525,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
         <View style={styles.backButton} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollViewWithDetection style={styles.content} showsVerticalScrollIndicator={false}>
         {step === "bankDetails" && (
           <>
             {/* Amount Card */}
@@ -1060,7 +1169,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
         )}
 
         <View style={{ height: 20 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* Bank Selector Modal */}
       <Modal
@@ -1082,7 +1191,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.bankList}>
+            <ScrollViewWithDetection style={styles.bankList}>
               {availableBanks.map((bank) => (
                 <TouchableOpacity
                   key={bank.name}
@@ -1135,7 +1244,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
                 </TouchableOpacity>
               ))}
               <ModalBottomSpacer />
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>

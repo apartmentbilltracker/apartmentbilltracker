@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused, useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View,
@@ -29,6 +29,8 @@ import {
   downloadPaymentReceiptImage,
 } from "../../utils/receiptGenerator";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
+import SelectivePaymentModal from "../../components/SelectivePaymentModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -66,6 +68,7 @@ const BillsScreen = ({ navigation, route }) => {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showPaymentReceipt, setShowPaymentReceipt] = useState(false); // For payment receipt display
   const [paymentReceiptData, setPaymentReceiptData] = useState(null); // Payment receipt data
+  const [currentPaymentBreakdown, setCurrentPaymentBreakdown] = useState(null); // Track which bills user selected for current payment
   const [selectedMemberPresence, setSelectedMemberPresence] = useState(null); // For presence modal
   const [showPresenceModal, setShowPresenceModal] = useState(false);
   const [presenceMonth, setPresenceMonth] = useState(new Date()); // For calendar navigation
@@ -79,6 +82,8 @@ const BillsScreen = ({ navigation, route }) => {
   const billingStmtRef = useRef(null);
   const paymentReceiptRef = useRef(null); // For payment receipt capture
   const [showBillingStmt, setShowBillingStmt] = useState(false);
+  const [showSelectivePaymentModal, setShowSelectivePaymentModal] =
+    useState(false);
 
   const userId = state?.user?.id || state?.user?._id;
 
@@ -121,6 +126,20 @@ const BillsScreen = ({ navigation, route }) => {
       route.params.refresh = false;
     }
   }, [route.params?.refresh, selectedRoom]);
+
+  // Use useFocusEffect to refresh payment data when screen comes into focus
+  // This ensures bills display updated payment status after completing a payment
+  useFocusEffect(
+    React.useCallback(() => {
+      if (selectedRoom) {
+        const roomId = selectedRoom.id || selectedRoom._id;
+        // Refresh all payment-related data when screen is focused
+        fetchActiveBillingCycle(roomId);
+        fetchUserPendingPayment(roomId);
+        fetchOutstandingBalance(roomId);
+      }
+    }, [selectedRoom]),
+  );
 
   // Extract presence from already-loaded room data — no extra API call needed
   const extractMemberPresence = (room) => {
@@ -311,12 +330,19 @@ const BillsScreen = ({ navigation, route }) => {
     }
   };
 
-  const generatePaymentReceipt = async (paymentMethod, amountPaid) => {
+  const generatePaymentReceipt = async (
+    paymentMethod,
+    amountPaid,
+    breakdown = null,
+  ) => {
     try {
       if (!selectedRoom?.billing) {
         Alert.alert("Error", "No billing information available");
         return;
       }
+
+      // Use provided breakdown or fall back to current payment breakdown state
+      const effectiveBreakdown = breakdown || currentPaymentBreakdown;
 
       // Generate unique receipt number and barcode at creation time
       const receiptNumber = `RCP${Date.now()}`.slice(0, 12);
@@ -348,6 +374,28 @@ const BillsScreen = ({ navigation, route }) => {
       const minutes = String(transactionDate.getMinutes()).padStart(2, "0");
       const seconds = String(transactionDate.getSeconds()).padStart(2, "0");
 
+      // Generate lineItems based on breakdown if provided
+      let lineItems = [];
+      if (effectiveBreakdown && billShare) {
+        const billDescriptions = {
+          rent: "Rent",
+          electricity: "Electricity",
+          water: "Water",
+          internet: "Internet",
+          custom_charges: "Additional Charges",
+        };
+
+        Object.entries(effectiveBreakdown).forEach(([billKey, isSelected]) => {
+          if (isSelected) {
+            const amount = billShare[billKey] || 0;
+            lineItems.push({
+              description: billDescriptions[billKey] || billKey,
+              amount: amount,
+            });
+          }
+        });
+      }
+
       const receipt = {
         receiptNumber,
         barcodeNumber,
@@ -366,6 +414,7 @@ const BillsScreen = ({ navigation, route }) => {
         roomAddress: "General Maxilom, Carreta, Cebu City, Philippines, 6000",
         managerInfo: "Apartment Bill Tracker",
         amountWords: convertNumberToWords(amountPaid),
+        lineItems: lineItems,
       };
 
       setPaymentReceiptData(receipt);
@@ -640,13 +689,49 @@ const BillsScreen = ({ navigation, route }) => {
     return typeof result === "number" ? result : 0;
   };
 
+  // Get current user's payment status object
+  const getUserPaymentStatus = () => {
+    if (!selectedRoom || !userId) return null;
+    return (
+      selectedRoom.memberPayments?.find(
+        (mp) => String(mp.member) === String(userId),
+      ) || null
+    );
+  };
+
+  // Calculate remaining due (total - paid amounts)
+  const getRemainingDue = () => {
+    if (!billShare) return 0;
+
+    const userPayment = getUserPaymentStatus();
+    if (!userPayment) return billShare.total; // If no payment status, all is due
+
+    let totalDue = billShare.total;
+    let totalPaid = 0;
+
+    // Calculate paid amounts based on payment status
+    if (userPayment.rentStatus === "paid") {
+      totalPaid += billShare.rent || 0;
+    }
+    if (userPayment.electricityStatus === "paid") {
+      totalPaid += billShare.electricity || 0;
+    }
+    if (userPayment.waterStatus === "paid") {
+      totalPaid += billShare.water || 0;
+    }
+    if (userPayment.internetStatus === "paid") {
+      totalPaid += billShare.internet || 0;
+    }
+    if (userPayment.customChargesStatus === "paid") {
+      totalPaid += billShare.customCharges || 0;
+    }
+
+    return Math.max(0, r2(totalDue - totalPaid));
+  };
+
   // Check if current user has paid all their bills
   const hasUserPaidAllBills = () => {
-    if (!selectedRoom || !userId) return false;
-
-    const userPayment = selectedRoom.memberPayments?.find(
-      (mp) => String(mp.member) === String(userId),
-    );
+    const userPayment = getUserPaymentStatus();
     if (!userPayment) return false;
 
     const hasCustomCharges =
@@ -1535,7 +1620,7 @@ const BillsScreen = ({ navigation, route }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView
+      <ScrollViewWithDetection
         style={styles.container}
         refreshControl={
           <RefreshControl
@@ -1578,7 +1663,7 @@ const BillsScreen = ({ navigation, route }) => {
         {/* ─── ROOM SELECTOR ─── */}
         {rooms.length > 0 && (
           <View style={styles.roomSelectorContainer}>
-            <ScrollView
+            <ScrollViewWithDetection
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
@@ -1614,7 +1699,7 @@ const BillsScreen = ({ navigation, route }) => {
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         )}
 
@@ -2365,84 +2450,151 @@ const BillsScreen = ({ navigation, route }) => {
                           color={colors.textOnAccent}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Your Share</Text>
+                      <Text style={styles.cardTitle}>Bills to pay</Text>
                     </View>
 
                     <View style={styles.shareList}>
-                      {[
-                        {
-                          label: "Rent",
-                          value: billShare.rent,
-                          icon: "house",
-                          color: "#e65100",
-                        },
-                        {
-                          label: "Electricity",
-                          value: billShare.electricity,
-                          icon: "flash-on",
-                          color: colors.electricityColor,
-                        },
-                        {
-                          label: "Internet",
-                          value: billShare.internet,
-                          icon: "wifi",
-                          color: colors.internetColor,
-                        },
-                      ].map((item, i) => (
-                        <View key={i} style={styles.shareItem}>
-                          <View style={styles.shareItemLeft}>
-                            <MaterialIcons
-                              name={item.icon}
-                              size={18}
-                              color={item.color}
-                            />
-                            <Text style={styles.shareItemLabel}>
-                              {item.label}
-                            </Text>
+                      {(() => {
+                        const userPayment = getUserPaymentStatus();
+                        return [
+                          {
+                            label: "Rent",
+                            value: billShare.rent,
+                            icon: "house",
+                            color: "#e65100",
+                            status: userPayment?.rentStatus || "unpaid",
+                            key: "rent",
+                          },
+                          {
+                            label: "Electricity",
+                            value: billShare.electricity,
+                            icon: "flash-on",
+                            color: colors.electricityColor,
+                            status: userPayment?.electricityStatus || "unpaid",
+                            key: "electricity",
+                          },
+                          {
+                            label: "Internet",
+                            value: billShare.internet,
+                            icon: "wifi",
+                            color: colors.internetColor,
+                            status: userPayment?.internetStatus || "unpaid",
+                            key: "internet",
+                          },
+                        ].map((item, i) => (
+                          <View key={i} style={styles.shareItem}>
+                            <View style={styles.shareItemLeft}>
+                              <MaterialIcons
+                                name={item.icon}
+                                size={18}
+                                color={item.color}
+                              />
+                              <Text style={styles.shareItemLabel}>
+                                {item.label}
+                              </Text>
+                              {item.status === "paid" && (
+                                <View
+                                  style={{
+                                    backgroundColor: colors.success,
+                                    borderRadius: 12,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 2,
+                                    marginLeft: 8,
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      color: colors.textOnAccent,
+                                      fontSize: 10,
+                                      fontWeight: "600",
+                                    }}
+                                  >
+                                    ✓ Paid
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                            <View style={styles.shareItemRight}>
+                              <Text style={styles.shareItemValue}>
+                                {fmt(item.value)}
+                              </Text>
+                              {item.status === "unpaid" && (
+                                <Text
+                                  style={styles.shareItemNote}
+                                >{`÷ ${billShare.payorCount}`}</Text>
+                              )}
+                            </View>
                           </View>
-                          <View style={styles.shareItemRight}>
-                            <Text style={styles.shareItemValue}>
-                              {fmt(item.value)}
-                            </Text>
-                            <Text
-                              style={styles.shareItemNote}
-                            >{`÷ ${billShare.payorCount}`}</Text>
-                          </View>
-                        </View>
-                      ))}
+                        ));
+                      })()}
 
                       {/* Water share with breakdown */}
-                      <View style={styles.shareItem}>
-                        <View style={styles.shareItemLeft}>
-                          <Ionicons
-                            name="water"
-                            size={18}
-                            color={colors.info}
-                          />
-                          <View>
-                            <Text style={styles.shareItemLabel}>Water</Text>
-                            {getWaterShareBreakdown() && (
-                              <Text style={styles.waterBreakdownNote}>
-                                Own: {fmt(getWaterShareBreakdown().ownWater)}
-                                {getWaterShareBreakdown().sharedNonPayorWater >
-                                0
-                                  ? ` + Shared: ${fmt(getWaterShareBreakdown().sharedNonPayorWater)}`
-                                  : ""}
+                      {(() => {
+                        const userPayment = getUserPaymentStatus();
+                        const waterStatus =
+                          userPayment?.waterStatus || "unpaid";
+                        return (
+                          <View style={styles.shareItem}>
+                            <View style={styles.shareItemLeft}>
+                              <Ionicons
+                                name="water"
+                                size={18}
+                                color={colors.info}
+                              />
+                              <View>
+                                <Text style={styles.shareItemLabel}>Water</Text>
+                                {getWaterShareBreakdown() && (
+                                  <Text style={styles.waterBreakdownNote}>
+                                    Own:{" "}
+                                    {fmt(getWaterShareBreakdown().ownWater)}
+                                    {getWaterShareBreakdown()
+                                      .sharedNonPayorWater > 0
+                                      ? ` + Shared: ${fmt(getWaterShareBreakdown().sharedNonPayorWater)}`
+                                      : ""}
+                                  </Text>
+                                )}
+                              </View>
+                              {waterStatus === "paid" && (
+                                <View
+                                  style={{
+                                    backgroundColor: colors.success,
+                                    borderRadius: 12,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 2,
+                                    marginLeft: 8,
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      color: colors.textOnAccent,
+                                      fontSize: 11,
+                                      fontWeight: "600",
+                                    }}
+                                  >
+                                    ✓ Paid
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                            <View style={styles.shareItemRight}>
+                              <Text style={styles.shareItemValue}>
+                                {fmt(billShare.water)}
                               </Text>
-                            )}
+                              {waterStatus === "unpaid" && (
+                                <Text style={styles.shareItemNote}></Text>
+                              )}
+                            </View>
                           </View>
-                        </View>
-                        <View style={styles.shareItemRight}>
-                          <Text style={styles.shareItemValue}>
-                            {fmt(billShare.water)}
-                          </Text>
-                        </View>
-                      </View>
+                        );
+                      })()}
 
                       {/* Display each custom charge individually */}
                       {(() => {
                         let customCharges = [];
                         const payorCount = billShare?.payorCount || 1;
+                        const userPayment = getUserPaymentStatus();
+                        const customChargesStatus =
+                          userPayment?.customChargesStatus || "unpaid";
                         if (activeCycle?.customCharges) {
                           try {
                             customCharges = Array.isArray(
@@ -2473,6 +2625,27 @@ const BillsScreen = ({ navigation, route }) => {
                               >
                                 {charge.name || "Charge"}
                               </Text>
+                              {customChargesStatus === "paid" && (
+                                <View
+                                  style={{
+                                    backgroundColor: colors.success,
+                                    borderRadius: 12,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 2,
+                                    marginLeft: 8,
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      color: colors.textOnAccent,
+                                      fontSize: 10,
+                                      fontWeight: "600",
+                                    }}
+                                  >
+                                    ✓ Paid
+                                  </Text>
+                                </View>
+                              )}
                             </View>
                             <View style={styles.shareItemRight}>
                               <Text style={styles.shareItemValue}>
@@ -2480,9 +2653,11 @@ const BillsScreen = ({ navigation, route }) => {
                                   parseFloat(charge.amount || 0) / payorCount,
                                 )}
                               </Text>
-                              <Text
-                                style={styles.shareItemNote}
-                              >{`÷ ${payorCount}`}</Text>
+                              {customChargesStatus === "unpaid" && (
+                                <Text
+                                  style={styles.shareItemNote}
+                                >{`÷ ${payorCount}`}</Text>
+                              )}
                             </View>
                           </View>
                         ));
@@ -2493,7 +2668,7 @@ const BillsScreen = ({ navigation, route }) => {
                     <View style={styles.totalDueStrip}>
                       <Text style={styles.totalDueLabel}>Total Due</Text>
                       <Text style={styles.totalDueAmount}>
-                        {fmt(billShare.total)}
+                        {fmt(getRemainingDue())}
                       </Text>
                     </View>
 
@@ -2655,14 +2830,7 @@ const BillsScreen = ({ navigation, route }) => {
                         ]}
                         onPress={() => {
                           if (selectedRoom && billShare) {
-                            navigation.navigate("PaymentMethod", {
-                              roomId: selectedRoom.id || selectedRoom._id,
-                              roomName: selectedRoom.name,
-                              amount: billShare.total,
-                              billType: "total",
-                              billingCycleId:
-                                activeCycle?.id || activeCycle?._id,
-                            });
+                            setShowSelectivePaymentModal(true);
                           }
                         }}
                         activeOpacity={0.8}
@@ -3033,7 +3201,32 @@ const BillsScreen = ({ navigation, route }) => {
         )}
 
         <View style={{ height: 30 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
+
+      {/* ─── SELECTIVE PAYMENT MODAL ─── */}
+      <SelectivePaymentModal
+        visible={showSelectivePaymentModal}
+        onClose={() => setShowSelectivePaymentModal(false)}
+        onProceed={(paymentData) => {
+          setShowSelectivePaymentModal(false);
+          if (selectedRoom && activeCycle) {
+            // Store the breakdown so generatePaymentReceipt can use it later
+            setCurrentPaymentBreakdown(paymentData.breakdown);
+            navigation.navigate("PaymentMethod", {
+              roomId: selectedRoom.id || selectedRoom._id,
+              roomName: selectedRoom.name,
+              amount: paymentData.amount,
+              billType: paymentData.billTypes[0] || "total",
+              billTypes: paymentData.billTypes,
+              billingCycleId: activeCycle?.id || activeCycle?._id,
+              breakdown: paymentData.breakdown,
+            });
+          }
+        }}
+        billShare={billShare}
+        roomName={selectedRoom?.name || "Room"}
+        paymentStatus={getUserPaymentStatus()}
+      />
 
       {/* ─── RECEIPT MODAL ─── */}
       <Modal
@@ -3051,7 +3244,7 @@ const BillsScreen = ({ navigation, route }) => {
           <View style={{ width: 28 }} />
         </View>
         {receiptData && (
-          <ScrollView
+          <ScrollViewWithDetection
             style={styles.receiptContainer}
             contentContainerStyle={{
               paddingBottom: Math.max(insets.bottom, 16) + 16,
@@ -3300,7 +3493,7 @@ const BillsScreen = ({ navigation, route }) => {
                 Take a screenshot or use device print function to save as PDF
               </Text>
             </View>
-          </ScrollView>
+          </ScrollViewWithDetection>
         )}
       </Modal>
 
@@ -3324,7 +3517,7 @@ const BillsScreen = ({ navigation, route }) => {
                 <Ionicons name="close" size={28} color={colors.text} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.presenceModalContent}>
+            <ScrollViewWithDetection style={styles.presenceModalContent}>
               <View style={styles.presenceCalendarHeader}>
                 <TouchableOpacity
                   disabled={!canGoToPreviousMonth()}
@@ -3413,7 +3606,7 @@ const BillsScreen = ({ navigation, route }) => {
                   </Text>
                 </View>
               </View>
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>
@@ -3457,7 +3650,7 @@ const BillsScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
         {paymentReceiptData && (
-          <ScrollView
+          <ScrollViewWithDetection
             style={styles.receiptContainer}
             contentContainerStyle={{
               paddingBottom: Math.max(insets.bottom, 16) + 16,
@@ -3897,7 +4090,7 @@ const BillsScreen = ({ navigation, route }) => {
                 www.apartmentbilltracker.com
               </Text>
             </View>
-          </ScrollView>
+          </ScrollViewWithDetection>
         )}
       </Modal>
 

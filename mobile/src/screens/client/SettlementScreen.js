@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { apiService } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
+import { FlatListWithDetection } from "../../navigation/ClientNavigator";
 
 const SettlementScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -387,7 +388,7 @@ const SettlementScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
+        <FlatListWithDetection
           data={settlements}
           renderItem={renderSettlement}
           keyExtractor={(item, i) => item.id || item._id || String(i)}

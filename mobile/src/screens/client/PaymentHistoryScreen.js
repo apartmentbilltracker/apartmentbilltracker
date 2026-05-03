@@ -17,6 +17,10 @@ import {
   billingCycleService,
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../navigation/ClientNavigator";
 import { useContext } from "react";
 import { AuthContext } from "../../context/AuthContext";
 
@@ -282,6 +286,46 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
     .filter((p) => p.status === "pending" || p.status === "submitted")
     .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
 
+  /* ─── Helper to get correct payment amount ─── */
+  const getPaymentAmount = (payment) => {
+    // If there's a breakdown with the fair split amount, use that
+    if (
+      payment.billBreakdown &&
+      payment.billType &&
+      payment.billType !== "total"
+    ) {
+      const billTypeMap = {
+        rent: "rent",
+        electricity: "electricity",
+        internet: "internet",
+        water: "water",
+        custom_charges: "customCharges",
+      };
+      const key = billTypeMap[payment.billType];
+
+      // Check if this key exists in breakdown (even if 0 or false, as long as key exists)
+      if (key && key in payment.billBreakdown) {
+        const breakdownValue = payment.billBreakdown[key];
+        // If it's a number or truthy value, parse it
+        if (breakdownValue && typeof breakdownValue !== "boolean") {
+          return parseFloat(breakdownValue) || 0;
+        }
+        // If it's true (boolean), return the total split fairly
+        if (breakdownValue === true) {
+          // Count how many bills are being paid
+          const billsBeingPaid = Object.values(payment.billBreakdown).filter(
+            (v) => v === true || (typeof v === "number" && v > 0),
+          ).length;
+          if (billsBeingPaid > 0) {
+            return parseFloat(payment.amount) / billsBeingPaid || 0;
+          }
+        }
+      }
+    }
+    // Fallback to total amount
+    return parseFloat(payment.amount) || 0;
+  };
+
   /* ─── Reference helper ─── */
   const getReference = (payment) => {
     return (
@@ -394,7 +438,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
           </View>
           <View style={styles.amountWrap}>
             <Text style={styles.amount}>
-              ₱{(parseFloat(payment.amount) || 0).toFixed(2)}
+              ₱{getPaymentAmount(payment).toFixed(2)}
             </Text>
             <View style={[styles.statusPill, { backgroundColor: sc.bg }]}>
               <Ionicons name={sc.icon} size={11} color={sc.color} />
@@ -496,6 +540,45 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
         0,
     };
 
+    // Determine which bills were paid in this transaction
+    const shouldShowBill = (billKey) => {
+      // If breakdown exists, use it to determine which bills to show
+      if (payment.billBreakdown) {
+        return payment.billBreakdown[billKey] === true;
+      }
+
+      // If no breakdown but billType specified, only show that bill type
+      if (payment.billType && payment.billType !== "total") {
+        const billTypeMap = {
+          rent: "rent",
+          electricity: "electricity",
+          internet: "internet",
+          water: "water",
+          custom_charges: "customCharges",
+          customCharges: "customCharges",
+        };
+        return billTypeMap[payment.billType] === billKey;
+      }
+
+      // Default: show all bills (for backward compatibility)
+      return true;
+    };
+
+    // Calculate total based only on bills that were paid
+    const calculatePaidTotal = () => {
+      let total = 0;
+      if (shouldShowBill("rent")) total += billAmounts.rent || 0;
+      if (shouldShowBill("electricity")) total += billAmounts.electricity || 0;
+      if (shouldShowBill("internet")) total += billAmounts.internet || 0;
+      if (shouldShowBill("water")) total += billAmounts.water || 0;
+      if (shouldShowBill("customCharges"))
+        total += billAmounts.customCharges || 0;
+      return total;
+    };
+
+    // Update billAmounts.total to reflect only paid bills
+    billAmounts.total = calculatePaidTotal() || parseFloat(payment.amount) || 0;
+
     // Generate a deterministic numeric-only barcode from payment ID
     // Match the numeric-only format used in BillsScreen for consistency
     let barcodeNumber = "000000000000";
@@ -522,7 +605,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
               <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
 
-            <ScrollView
+            <ScrollViewWithDetection
               style={styles.receiptScroll}
               showsVerticalScrollIndicator={false}
             >
@@ -595,43 +678,52 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
 
                 {/* Cost Breakdown */}
                 <View style={styles.costBreakdown}>
-                  <View style={styles.costRow}>
-                    <Text style={styles.costLabel}>Rent</Text>
-                    <Text style={styles.costDots}>
-                      {Array(26).fill(".").join("")}
-                    </Text>
-                    <Text style={styles.costAmount}>
-                      ₱{(billAmounts.rent || 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={styles.costRow}>
-                    <Text style={styles.costLabel}>Electricity</Text>
-                    <Text style={styles.costDots}>
-                      {Array(26).fill(".").join("")}
-                    </Text>
-                    <Text style={styles.costAmount}>
-                      ₱{(billAmounts.electricity || 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={styles.costRow}>
-                    <Text style={styles.costLabel}>Internet</Text>
-                    <Text style={styles.costDots}>
-                      {Array(26).fill(".").join("")}
-                    </Text>
-                    <Text style={styles.costAmount}>
-                      ₱{(billAmounts.internet || 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={styles.costRow}>
-                    <Text style={styles.costLabel}>Water</Text>
-                    <Text style={styles.costDots}>
-                      {Array(26).fill(".").join("")}
-                    </Text>
-                    <Text style={styles.costAmount}>
-                      ₱{(billAmounts.water || 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  {receiptBillingData?.customCharges &&
+                  {shouldShowBill("rent") && (
+                    <View style={styles.costRow}>
+                      <Text style={styles.costLabel}>Rent</Text>
+                      <Text style={styles.costDots}>
+                        {Array(26).fill(".").join("")}
+                      </Text>
+                      <Text style={styles.costAmount}>
+                        ₱{(billAmounts.rent || 0).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  {shouldShowBill("electricity") && (
+                    <View style={styles.costRow}>
+                      <Text style={styles.costLabel}>Electricity</Text>
+                      <Text style={styles.costDots}>
+                        {Array(26).fill(".").join("")}
+                      </Text>
+                      <Text style={styles.costAmount}>
+                        ₱{(billAmounts.electricity || 0).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  {shouldShowBill("internet") && (
+                    <View style={styles.costRow}>
+                      <Text style={styles.costLabel}>Internet</Text>
+                      <Text style={styles.costDots}>
+                        {Array(26).fill(".").join("")}
+                      </Text>
+                      <Text style={styles.costAmount}>
+                        ₱{(billAmounts.internet || 0).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  {shouldShowBill("water") && (
+                    <View style={styles.costRow}>
+                      <Text style={styles.costLabel}>Water</Text>
+                      <Text style={styles.costDots}>
+                        {Array(26).fill(".").join("")}
+                      </Text>
+                      <Text style={styles.costAmount}>
+                        ₱{(billAmounts.water || 0).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  {shouldShowBill("customCharges") &&
+                    receiptBillingData?.customCharges &&
                     receiptBillingData.customCharges.length > 0 &&
                     receiptBillingData.customCharges.map((charge, idx) => {
                       const totalCustomCharges =
@@ -730,7 +822,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
                   www.apartmentbilltracker-ph.onrender.com
                 </Text>
               </View>
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>
@@ -822,7 +914,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
         ) : (
-          <FlatList
+          <FlatListWithDetection
             data={payments}
             renderItem={renderPayment}
             keyExtractor={(item, i) => item.id || item._id || String(i)}

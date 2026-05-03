@@ -24,6 +24,7 @@ import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../../context/AuthContext";
 import { adsService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -491,7 +492,7 @@ const AdminAdsScreen = ({ navigation }) => {
       </View>
 
       {/* Ads List */}
-      <FlatList
+      <FlatListWithDetection
         data={ads}
         renderItem={renderAdCard}
         keyExtractor={(item) => item.id}
@@ -560,7 +561,7 @@ const AdminAdsScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <ScrollViewWithDetection
               style={styles.formScroll}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -918,7 +919,7 @@ const AdminAdsScreen = ({ navigation }) => {
 
                 <View style={{ height: insets.bottom + 8 }} />
               </View>
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </KeyboardAvoidingView>
 
@@ -976,7 +977,7 @@ const AdminAdsScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <ScrollViewWithDetection
               style={styles.formScroll}
               showsVerticalScrollIndicator={false}
             >
@@ -1027,7 +1028,7 @@ const AdminAdsScreen = ({ navigation }) => {
 
                 <View style={{ height: insets.bottom + 8 }} />
               </View>
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </KeyboardAvoidingView>
       </Modal>

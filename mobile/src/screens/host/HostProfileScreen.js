@@ -20,6 +20,7 @@ import Constants from "expo-constants";
 import * as Application from "expo-application";
 import { AuthContext } from "../../context/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/HostNavigator";
 import { getAPIBaseURL } from "../../config/config";
 import { biometricAuth } from "../../utils/biometricAuth";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
@@ -287,7 +288,7 @@ const HostProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollViewWithDetection style={styles.container}>
       {/* Profile Header Card */}
       <View style={styles.profileCard}>
         <View style={styles.avatarContainer}>
@@ -722,7 +723,7 @@ const HostProfileScreen = ({ navigation }) => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

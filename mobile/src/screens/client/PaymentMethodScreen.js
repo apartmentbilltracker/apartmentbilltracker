@@ -14,13 +14,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { settingsService } from "../../services/apiService";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const PaymentMethodScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
 
-  const { roomId, roomName, amount, billType, billingCycleId } = route.params;
+  const {
+    roomId,
+    roomName,
+    amount,
+    billType,
+    billTypes,
+    billingCycleId,
+    breakdown,
+  } = route.params;
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [methodStatus, setMethodStatus] = useState(null); // null = loading
@@ -80,6 +89,37 @@ const PaymentMethodScreen = ({ navigation, route }) => {
     if (!methodStatus) return "";
     const entry = methodStatus[methodId];
     return entry?.maintenanceMessage || "";
+  };
+
+  // Generate bill title based on breakdown or billType
+  const getBillTitle = () => {
+    if (!breakdown) {
+      // No breakdown provided, use billType format
+      return billType === "total"
+        ? "All Bills"
+        : billType.charAt(0).toUpperCase() + billType.slice(1);
+    }
+
+    // Breakdown provided, map selected bills
+    const billNames = {
+      rent: "Rent",
+      electricity: "Electricity",
+      water: "Water",
+      internet: "Internet",
+      custom_charges: "Additional Charges",
+    };
+
+    const selectedBills = Object.entries(breakdown)
+      .filter(([_, isSelected]) => isSelected)
+      .map(([billType, _]) => billNames[billType] || billType);
+
+    // If all bills selected, return "All Bills"
+    if (selectedBills.length === 5) {
+      return "All Bills";
+    }
+
+    // Otherwise return selected bills joined with "/"
+    return selectedBills.join(" / ");
   };
 
   const paymentMethods = [
@@ -153,8 +193,10 @@ const PaymentMethodScreen = ({ navigation, route }) => {
         roomId,
         roomName,
         amount,
-        billType,
+        billType: billType || "total",
+        billTypes: billTypes || [billType || "total"],
         billingCycleId,
+        breakdown,
       });
     } else if (selectedMethod.id === "bank_transfer") {
       // Guard: only block when settings loaded successfully but no accounts configured
@@ -183,16 +225,20 @@ const PaymentMethodScreen = ({ navigation, route }) => {
         roomId,
         roomName,
         amount,
-        billType,
+        billType: billType || "total",
+        billTypes: billTypes || [billType || "total"],
         billingCycleId,
+        breakdown,
       });
     } else if (selectedMethod.id === "cash") {
       navigation.navigate("CashPayment", {
         roomId,
         roomName,
         amount,
-        billType,
+        billType: billType || "total",
+        billTypes: billTypes || [billType || "total"],
         billingCycleId,
+        breakdown,
       });
     }
     setShowConfirm(false);
@@ -219,13 +265,11 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       <View style={styles.amountCard}>
         <Text style={styles.amountLabel}>Amount to Pay</Text>
         <Text style={styles.amountValue}>₱{amount.toFixed(2)}</Text>
-        <Text style={styles.billTypeText}>
-          {billType.charAt(0).toUpperCase() + billType.slice(1)} Bill
-        </Text>
+        <Text style={styles.billTypeText}>{getBillTitle()}</Text>
       </View>
 
       {/* Payment Methods */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollViewWithDetection style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>Select Payment Method</Text>
 
         {methodLoading && (
@@ -309,7 +353,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
         </View>
 
         <View style={{ height: 24 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* Confirmation Modal */}
       <Modal

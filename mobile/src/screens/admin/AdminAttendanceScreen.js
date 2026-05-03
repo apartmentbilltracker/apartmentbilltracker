@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 
 const AdminAttendanceScreen = () => {
   const { colors } = useTheme();
@@ -118,11 +119,11 @@ const AdminAttendanceScreen = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollViewWithDetection style={styles.container}>
       {/* Room Selector */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Select Room</Text>
-        <FlatList
+        <FlatListWithDetection
           data={rooms}
           keyExtractor={(item) => item.id || item._id}
           scrollEnabled={false}
@@ -173,7 +174,7 @@ const AdminAttendanceScreen = () => {
           ) : (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Attendance Summary</Text>
-              <FlatList
+              <FlatListWithDetection
                 data={members}
                 keyExtractor={(item) => item.id || item._id}
                 scrollEnabled={false}
@@ -278,7 +279,7 @@ const AdminAttendanceScreen = () => {
           )}
         </>
       )}
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

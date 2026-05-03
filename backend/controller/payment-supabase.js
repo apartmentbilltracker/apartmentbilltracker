@@ -137,6 +137,30 @@ router.post("/mark-bill-paid", isAuthenticated, async (req, res, next) => {
       );
     }
 
+    // Normalize billType to snake_case format (database constraint requirement)
+    let normalizedBillType = String(billType).trim().toLowerCase();
+    if (normalizedBillType === "customcharges") {
+      normalizedBillType = "custom_charges";
+    }
+
+    // Validate against allowed bill types
+    const VALID_BILL_TYPES = [
+      "rent",
+      "electricity",
+      "water",
+      "internet",
+      "custom_charges",
+      "total",
+    ];
+    if (!VALID_BILL_TYPES.includes(normalizedBillType)) {
+      return next(
+        new ErrorHandler(
+          `Invalid bill type: ${billType}. Must be one of: ${VALID_BILL_TYPES.join(", ")}`,
+          400,
+        ),
+      );
+    }
+
     const room = await SupabaseService.findRoomById(roomId);
     if (!room) {
       return next(new ErrorHandler("Room not found", 404));
@@ -149,7 +173,7 @@ router.post("/mark-bill-paid", isAuthenticated, async (req, res, next) => {
       amount,
       billing_cycle_start: room.start,
       billing_cycle_end: room.end,
-      bill_type: billType,
+      bill_type: normalizedBillType,
       payment_method: paymentMethod || "cash",
       reference,
       status: "completed",
@@ -168,6 +192,96 @@ router.post("/mark-bill-paid", isAuthenticated, async (req, res, next) => {
     next(new ErrorHandler(error.message, 500));
   }
 });
+
+// ============================================================
+// 1B. MARK MULTIPLE BILLS AS PAID (Batch Payment)
+// ============================================================
+router.post(
+  "/mark-bills-paid-batch",
+  isAuthenticated,
+  async (req, res, next) => {
+    try {
+      const { roomId, memberId, billTypes, amount, paymentMethod, reference } =
+        req.body;
+
+      if (
+        !roomId ||
+        !memberId ||
+        !billTypes ||
+        !Array.isArray(billTypes) ||
+        billTypes.length === 0 ||
+        !amount
+      ) {
+        return next(
+          new ErrorHandler(
+            "Room ID, Member ID, Bill Types array, and Amount are required",
+            400,
+          ),
+        );
+      }
+
+      const room = await SupabaseService.findRoomById(roomId);
+      if (!room) {
+        return next(new ErrorHandler("Room not found", 404));
+      }
+
+      // Create one payment record per bill type
+      const payments = [];
+      for (const billType of billTypes) {
+        // Normalize billType to snake_case format (database constraint requirement)
+        let normalizedBillType = String(billType).trim().toLowerCase();
+        if (normalizedBillType === "customcharges") {
+          normalizedBillType = "custom_charges";
+        }
+
+        // Validate against allowed bill types
+        const VALID_BILL_TYPES = [
+          "rent",
+          "electricity",
+          "water",
+          "internet",
+          "custom_charges",
+          "total",
+        ];
+        if (!VALID_BILL_TYPES.includes(normalizedBillType)) {
+          return next(
+            new ErrorHandler(
+              `Invalid bill type: ${billType}. Must be one of: ${VALID_BILL_TYPES.join(", ")}`,
+              400,
+            ),
+          );
+        }
+
+        const payment = await SupabaseService.createPayment({
+          room_id: roomId,
+          paid_by: memberId,
+          amount, // Full amount paid in one transaction for all bills
+          billing_cycle_start: room.start,
+          billing_cycle_end: room.end,
+          bill_type: normalizedBillType,
+          payment_method: paymentMethod || "cash",
+          reference,
+          status: "completed",
+          is_batch_payment: true, // Flag for batch
+          batch_reference: reference || `batch_${Date.now()}`, // Track related payments
+        });
+        payments.push(payment);
+      }
+
+      // Auto-close cycle if all payors have paid
+      const autoClose = await checkAndAutoCloseCycle(roomId);
+
+      res.status(200).json({
+        success: true,
+        message: `${billTypes.length} bill(s) marked as paid successfully`,
+        cycleClosed: autoClose.closed,
+        payments,
+      });
+    } catch (error) {
+      next(new ErrorHandler(error.message, 500));
+    }
+  },
+);
 
 // ============================================================
 // 2. GET PAYMENT HISTORY FOR A ROOM

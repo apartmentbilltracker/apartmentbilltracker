@@ -22,6 +22,7 @@ import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -622,7 +623,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
       </View>
 
       {/* Rooms List */}
-      <ScrollView
+      <ScrollViewWithDetection
         style={styles.listWrap}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -664,7 +665,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
           </>
         )}
         <View style={{ height: 24 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* Create/Edit Modal */}
       <Modal
@@ -708,7 +709,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
             </View>
 
             {/* Form Fields */}
-            <ScrollView
+            <ScrollViewWithDetection
               style={{ maxHeight: 420 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -759,7 +760,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
                   <Text style={styles.fieldLabel}>
                     Photos ({roomPhotos.length}/5)
                   </Text>
-                  <ScrollView
+                  <ScrollViewWithDetection
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.photoScrollRow}
@@ -789,7 +790,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
                         <Text style={styles.photoAddText}>Add Photo</Text>
                       </TouchableOpacity>
                     )}
-                  </ScrollView>
+                  </ScrollViewWithDetection>
                 </View>
 
                 <View style={styles.fieldGroup}>
@@ -1036,7 +1037,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
                   </View>
                 </View>
               </View>
-            </ScrollView>
+            </ScrollViewWithDetection>
 
             {/* Form Buttons */}
             <View style={styles.modalButtons}>

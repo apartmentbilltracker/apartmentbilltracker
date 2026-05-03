@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { announcementService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/ClientNavigator";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const REACTION_TYPES = [
@@ -326,7 +327,7 @@ const AnnouncementsScreen = ({ navigation }) => {
   // ── Main ──
   return (
     <View style={styles.container}>
-      <FlatList
+      <FlatListWithDetection
         data={announcements}
         keyExtractor={(item) => item.id || item._id}
         renderItem={({ item }) => {
@@ -697,7 +698,7 @@ const AnnouncementsScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollViewWithDetection style={styles.modalBody}>
               <Text style={styles.inputLabel}>Title</Text>
               <TextInput
                 style={styles.input}
@@ -731,7 +732,7 @@ const AnnouncementsScreen = ({ navigation }) => {
                 <Text style={styles.submitBtnText}>Post Announcement</Text>
               </TouchableOpacity>
               <ModalBottomSpacer />
-            </ScrollView>
+            </ScrollViewWithDetection>
           </View>
         </View>
       </Modal>

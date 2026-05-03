@@ -1,10 +1,19 @@
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import React, { useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  useColorScheme,
+  ScrollView,
+  FlatList,
+} from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { CommonActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as NavigationBar from "expo-navigation-bar";
 import ClientHomeScreen from "../screens/client/ClientHomeScreen";
 import PresenceScreen from "../screens/client/PresenceScreen";
 import BillingScreen from "../screens/client/BillingScreen";
@@ -31,6 +40,61 @@ import {
   roomService,
   badgeService,
 } from "../services/apiService";
+
+// Context for tracking scroll position
+const ScrollContext = React.createContext({
+  isScrolledToBottom: true,
+  setIsScrolledToBottom: () => {},
+});
+
+// Hook for screens to use to track scroll position
+export const useScrollToBottom = () => {
+  const context = React.useContext(ScrollContext);
+  if (!context) {
+    console.warn(
+      "useScrollToBottom must be used within ScrollContext.Provider",
+    );
+    return { isScrolledToBottom: true, setIsScrolledToBottom: () => {} };
+  }
+  return context;
+};
+
+// Wrapper component for ScrollView to automatically track scroll position
+export const ScrollViewWithDetection = ({ children, ...props }) => {
+  const context = useScrollToBottom();
+
+  const handleScroll = (event) => {
+    if (!event?.nativeEvent) return;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const isAtBottom =
+      contentOffset.y + layoutMeasurement.height >= contentSize.height - 50; // 50px tolerance
+    context.setIsScrolledToBottom(isAtBottom);
+  };
+
+  return (
+    <ScrollView {...props} onScroll={handleScroll} scrollEventThrottle={16}>
+      {children}
+    </ScrollView>
+  );
+};
+
+// Wrapper component for FlatList to automatically track scroll position
+export const FlatListWithDetection = (props) => {
+  const context = useScrollToBottom();
+
+  const handleScroll = (event) => {
+    if (!event?.nativeEvent) return;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const isAtBottom =
+      contentOffset.y + layoutMeasurement.height >= contentSize.height - 50;
+    context.setIsScrolledToBottom(isAtBottom);
+  };
+
+  return (
+    <FlatList {...props} onScroll={handleScroll} scrollEventThrottle={16} />
+  );
+};
+
 import { useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
@@ -241,10 +305,12 @@ const NotificationsStack = ({ onNotificationsStatusChange }) => {
 const ClientTabNavigator = () => {
   const { state } = useContext(AuthContext);
   const { colors } = useTheme();
+  const colorScheme = useColorScheme();
   const tabInsets = useSafeAreaInsets();
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [announcementCount, setAnnouncementCount] = React.useState(0);
   const [unreadSupportCount, setUnreadSupportCount] = React.useState(0);
+  const [isScrolledToBottom, setIsScrolledToBottom] = React.useState(false);
   const userId = state?.user?.id || state?.user?._id;
   const notificationRefreshRef = React.useRef(null);
   const announcementRefreshRef = React.useRef(null);
@@ -273,6 +339,19 @@ const ClientTabNavigator = () => {
   const fetchAnnouncementCount = () => fetchAllBadges(true);
   const fetchUnreadSupportCount = () => fetchAllBadges(true);
 
+  // Configure immersive/fullscreen experience on Android - Hide navigation bar
+  useEffect(() => {
+    const hideNavBar = async () => {
+      try {
+        // Hide the Android navigation bar for full-screen immersive experience
+        await NavigationBar.setVisibilityAsync("hidden");
+      } catch (e) {
+        console.log("Navigation bar customization not available:", e);
+      }
+    };
+    hideNavBar();
+  }, []);
+
   React.useEffect(() => {
     // Fetch all badge counts once on mount
     fetchAllBadges(true);
@@ -293,218 +372,247 @@ const ClientTabNavigator = () => {
   );
 
   return (
-    <View style={{ flex: 1 }}>
-      <Tab.Navigator
-        sceneContainerStyle={{ backgroundColor: colors.background }}
-        safeAreaInsets={{ bottom: 0 }}
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName;
-            if (route.name === "HomeStack") {
-              iconName = focused ? "home" : "home-outline";
-            } else if (route.name === "PresenceStack") {
-              iconName = focused ? "checkbox" : "checkbox-outline";
-            } else if (route.name === "BillsStack") {
-              iconName = focused ? "document-text" : "document-text-outline";
-            } else if (route.name === "AnnouncementsStack") {
-              iconName = focused ? "megaphone" : "megaphone-outline";
-            } else if (route.name === "NotificationsStack") {
-              iconName = focused ? "notifications" : "notifications-outline";
-            } else if (route.name === "ProfileStack") {
-              iconName = focused ? "person" : "person-outline";
-            }
-            return (
-              <View style={{ alignItems: "center", justifyContent: "center" }}>
-                {focused && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -4,
-                      width: 48,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: colors.accentLight,
-                    }}
-                  />
-                )}
-                <Ionicons name={iconName} size={22} color={color} />
-              </View>
-            );
-          },
-          tabBarActiveTintColor: colors.tabBarActive,
-          tabBarInactiveTintColor: colors.tabBarInactive,
-          tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: "600",
-            marginTop: 0,
-          },
-          tabBarStyle: {
-            backgroundColor: colors.tabBarBg,
-            borderTopWidth: 0,
-            elevation: 12,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: -3 },
-            shadowOpacity: 0.08,
-            shadowRadius: 8,
-            paddingTop: 4,
-            paddingBottom: tabInsets.bottom + 10,
-            height: 56 + tabInsets.bottom + 10,
-          },
-          tabBarBadgeStyle: {
-            backgroundColor: "#e74c3c",
-            fontSize: 10,
-            fontWeight: "700",
-            minWidth: 18,
-            height: 18,
-            borderRadius: 9,
-            lineHeight: 17,
-            top: -2,
-          },
-        })}
+    <View
+      style={{
+        flex: 1,
+        overflow: "visible",
+      }}
+    >
+      <ScrollContext.Provider
+        value={{ isScrolledToBottom, setIsScrolledToBottom }}
       >
-        <Tab.Screen
-          name="HomeStack"
-          component={ClientHomeStack}
-          options={{ title: "Home" }}
-          listeners={({ navigation }) => ({
-            tabPress: () =>
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "HomeStack",
-                      state: { routes: [{ name: "ClientHome" }] },
-                    },
-                  ],
-                }),
-              ),
-          })}
-        />
-        <Tab.Screen
-          name="PresenceStack"
-          component={PresenceStack}
-          options={{ title: "Presence" }}
-          listeners={({ navigation }) => ({
-            tabPress: () =>
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "PresenceStack",
-                      state: { routes: [{ name: "PresenceMain" }] },
-                    },
-                  ],
-                }),
-              ),
-          })}
-        />
-        <Tab.Screen
-          name="BillsStack"
-          component={BillsStack}
-          options={{ title: "Bills" }}
-          listeners={({ navigation }) => ({
-            tabPress: () =>
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "BillsStack",
-                      state: { routes: [{ name: "BillsMain" }] },
-                    },
-                  ],
-                }),
-              ),
-          })}
-        />
-        <Tab.Screen
-          name="AnnouncementsStack"
-          component={AnnouncementsStack}
-          options={{
-            title: "News",
-            tabBarBadge: announcementCount > 0 ? announcementCount : null,
+        <Tab.Navigator
+          sceneContainerStyle={{
+            overflow: "visible",
+            backgroundColor: colors.background,
+            paddingBottom: isScrolledToBottom ? 60 : 0,
           }}
-          listeners={({ navigation }) => ({
-            tabPress: () => {
-              setAnnouncementCount(0); // optimistic clear — markAsRead will confirm
-              fetchAnnouncementCount();
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "AnnouncementsStack",
-                      state: { routes: [{ name: "AnnouncementsMain" }] },
-                    },
-                  ],
-                }),
+          safeAreaInsets={{ bottom: 0 }}
+          screenOptions={({ route }) => ({
+            headerShown: false,
+            tabBarShowLabel: false,
+            tabBarIcon: ({ focused, color, size }) => {
+              let iconName;
+              if (route.name === "HomeStack") {
+                iconName = focused ? "home" : "home-outline";
+              } else if (route.name === "PresenceStack") {
+                iconName = focused ? "checkbox" : "checkbox-outline";
+              } else if (route.name === "BillsStack") {
+                iconName = focused ? "document-text" : "document-text-outline";
+              } else if (route.name === "AnnouncementsStack") {
+                iconName = focused ? "megaphone" : "megaphone-outline";
+              } else if (route.name === "NotificationsStack") {
+                iconName = focused ? "notifications" : "notifications-outline";
+              } else if (route.name === "ProfileStack") {
+                iconName = focused ? "person" : "person-outline";
+              }
+              return (
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 10,
+                    paddingVertical: 10,
+                    borderRadius: 50,
+                    backgroundColor: focused ? colors.accent : "transparent",
+                  }}
+                >
+                  <Ionicons
+                    name={iconName}
+                    size={22}
+                    color={focused ? "white" : color}
+                  />
+                </View>
               );
             },
-          })}
-        />
-        <Tab.Screen
-          name="NotificationsStack"
-          component={NotificationsStackWrapper}
-          options={{
-            title: "Alerts",
-            tabBarBadge: unreadCount > 0 ? unreadCount : null,
-          }}
-          listeners={({ navigation }) => ({
-            tabPress: () => {
-              fetchUnreadCount();
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "NotificationsStack",
-                      state: { routes: [{ name: "NotificationsInbox" }] },
-                    },
-                  ],
-                }),
-              );
+            tabBarActiveTintColor: colors.tabBarActive,
+            tabBarInactiveTintColor: colors.tabBarInactive,
+            tabBarStyle: {
+              position: "absolute",
+              bottom: 20,
+              left: 20,
+              right: 20,
+              backgroundColor: colors.tabBarBg,
+              borderRadius: 50,
+              elevation: 30,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: -10 },
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+              paddingVertical: 4,
+              paddingBottom: 4,
+              paddingHorizontal: 4,
+              height: 60,
             },
-            blur: () => {
-              fetchUnreadCount();
-            },
-          })}
-        />
-        <Tab.Screen
-          name="ProfileStack"
-          component={ProfileStack}
-          options={{
-            title: "Profile",
-            tabBarBadge: unreadSupportCount > 0 ? "" : null,
             tabBarBadgeStyle: {
               backgroundColor: "#e74c3c",
-              minWidth: 8,
-              height: 8,
-              borderRadius: 4,
-              top: 0,
-              right: 2,
-            },
-          }}
-          listeners={({ navigation }) => ({
-            tabPress: () => {
-              fetchUnreadSupportCount();
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "ProfileStack",
-                      state: { routes: [{ name: "Profile" }] },
-                    },
-                  ],
-                }),
-              );
+              fontSize: 10,
+              fontWeight: "700",
+              minWidth: 18,
+              height: 18,
+              borderRadius: 9,
+              lineHeight: 17,
+              top: 6,
             },
           })}
-        />
-      </Tab.Navigator>
+        >
+          <Tab.Screen
+            name="HomeStack"
+            component={ClientHomeStack}
+            options={{ title: "Home" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "HomeStack",
+                        state: { routes: [{ name: "ClientHome" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+          <Tab.Screen
+            name="PresenceStack"
+            component={PresenceStack}
+            options={{ title: "Presence" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "PresenceStack",
+                        state: { routes: [{ name: "PresenceMain" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+          <Tab.Screen
+            name="BillsStack"
+            component={BillsStack}
+            options={{ title: "Bills" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "BillsStack",
+                        state: { routes: [{ name: "BillsMain" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+          <Tab.Screen
+            name="AnnouncementsStack"
+            component={AnnouncementsStack}
+            options={{
+              title: "News",
+              tabBarBadge: announcementCount > 0 ? announcementCount : null,
+            }}
+            listeners={({ navigation }) => ({
+              tabPress: () => {
+                setAnnouncementCount(0); // optimistic clear — markAsRead will confirm
+                fetchAnnouncementCount();
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "AnnouncementsStack",
+                        state: { routes: [{ name: "AnnouncementsMain" }] },
+                      },
+                    ],
+                  }),
+                );
+              },
+            })}
+          />
+          <Tab.Screen
+            name="NotificationsStack"
+            component={NotificationsStackWrapper}
+            options={{
+              title: "Alerts",
+              tabBarBadge: unreadCount > 0 ? unreadCount : null,
+            }}
+            listeners={({ navigation }) => ({
+              tabPress: () => {
+                fetchUnreadCount();
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "NotificationsStack",
+                        state: { routes: [{ name: "NotificationsInbox" }] },
+                      },
+                    ],
+                  }),
+                );
+              },
+              blur: () => {
+                fetchUnreadCount();
+              },
+            })}
+          />
+          <Tab.Screen
+            name="ProfileStack"
+            component={ProfileStack}
+            options={{
+              title: "Profile",
+              tabBarBadge: unreadSupportCount > 0 ? "" : null,
+              tabBarBadgeStyle: {
+                backgroundColor: "#e74c3c",
+                minWidth: 8,
+                height: 8,
+                borderRadius: 4,
+                top: 0,
+                right: 2,
+              },
+            }}
+            listeners={({ navigation }) => ({
+              tabPress: () => {
+                fetchUnreadSupportCount();
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "ProfileStack",
+                        state: { routes: [{ name: "Profile" }] },
+                      },
+                    ],
+                  }),
+                );
+              },
+            })}
+          />
+        </Tab.Navigator>
+      </ScrollContext.Provider>
+
+      <View
+        style={{
+          position: "absolute",
+          bottom: 20,
+          left: 20,
+          right: 20,
+          height: 60,
+          borderRadius: 50,
+          borderColor: colorScheme === "dark" ? "#666666" : "#E0E0E0",
+          borderWidth: 0.3,
+          pointerEvents: "none",
+        }}
+      />
     </View>
   );
 };
@@ -519,4 +627,5 @@ const ClientNavigator = () => (
   </Stack.Navigator>
 );
 
+export { ScrollContext };
 export default ClientNavigator;

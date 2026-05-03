@@ -22,6 +22,7 @@ import apiService, {
 import { settingsService } from "../../services/apiService";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
 import { AuthContext } from "../../context/AuthContext";
 
 const GCashPaymentScreen = ({ navigation, route }) => {
@@ -31,7 +32,8 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const user = authContext?.state?.user;
   const userId = user?.id || user?._id;
 
-  const { roomId, roomName, amount, billType, billingCycleId } = route.params;
+  const { roomId, roomName, amount, billType, billTypes, billingCycleId } =
+    route.params;
   const [loading, setLoading] = useState(true);
   const [qrData, setQrData] = useState(null);
   const [hostQrUri, setHostQrUri] = useState(null); // host-uploaded QR image
@@ -299,18 +301,95 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const initiateGCashPayment = async () => {
     try {
       setLoading(true);
-      const response = await apiService.initiateGCash({
-        roomId,
-        amount,
-        billType,
-        billingCycleId,
-      });
 
-      if (response.success) {
-        setQrData(response.qrData);
-        setReferenceNumber(response.transaction.referenceNumber);
-        setTransactionId(response.transaction.id || response.transaction._id);
-        setStep("qr");
+      // Check if this is a batch payment (multiple bills selected)
+      // Ensure billTypes is an array and normalize values
+      let selectedBillTypes = Array.isArray(billTypes) ? billTypes : [billType];
+
+      // Sanitize: ensure all values are valid snake_case bill types
+      selectedBillTypes = selectedBillTypes
+        .map((bt) => {
+          if (typeof bt !== "string") return null;
+          const normalized = bt.trim().toLowerCase();
+          if (
+            [
+              "rent",
+              "electricity",
+              "water",
+              "internet",
+              "custom_charges",
+            ].includes(normalized)
+          ) {
+            return normalized;
+          }
+          if (normalized === "customcharges") return "custom_charges";
+          return null;
+        })
+        .filter((bt) => bt !== null);
+
+      if (selectedBillTypes.length === 0) {
+        Alert.alert("Error", "Invalid bill types selected. Please try again.");
+        navigation.goBack();
+        return;
+      }
+
+      const isBatch = selectedBillTypes.length > 1;
+
+      if (isBatch) {
+        // For batch payments, initiate separate transactions for each bill type
+        const amountPerBill = amount / selectedBillTypes.length;
+        const responses = [];
+        const transactionIds = [];
+
+        for (let i = 0; i < selectedBillTypes.length; i++) {
+          const billTypeItem = selectedBillTypes[i];
+          const billAmount =
+            i === selectedBillTypes.length - 1
+              ? amount - amountPerBill * (selectedBillTypes.length - 1)
+              : amountPerBill;
+
+          const response = await apiService.initiateGCash({
+            roomId,
+            amount: billAmount,
+            billType: billTypeItem,
+            billingCycleId,
+          });
+
+          if (response.success) {
+            responses.push(response);
+            transactionIds.push(
+              response.transaction.id || response.transaction._id,
+            );
+          }
+        }
+
+        if (
+          responses.length === selectedBillTypes.length &&
+          responses.every((r) => r.success)
+        ) {
+          setQrData(responses[0].qrData);
+          setReferenceNumber(responses[0].transaction.referenceNumber);
+          // Store all transaction IDs for batch verification
+          setTransactionId(JSON.stringify(transactionIds));
+          setStep("qr");
+        } else {
+          throw new Error("Failed to initiate one or more payments");
+        }
+      } else {
+        // Single bill payment
+        const response = await apiService.initiateGCash({
+          roomId,
+          amount,
+          billType,
+          billingCycleId,
+        });
+
+        if (response.success) {
+          setQrData(response.qrData);
+          setReferenceNumber(response.transaction.referenceNumber);
+          setTransactionId(response.transaction.id || response.transaction._id);
+          setStep("qr");
+        }
       }
     } catch (error) {
       Alert.alert("Error", error.message || "Failed to initiate GCash payment");
@@ -330,14 +409,43 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
     try {
       setVerifyLoading(true);
-      const response = await apiService.verifyGCash({
-        transactionId,
-        mobileNumber,
-      });
 
-      if (response.success) {
-        setStep("success");
-        setPaymentDate(new Date());
+      // Check if this is a batch transaction (multiple IDs stored as JSON)
+      let transactionIdsToVerify = [];
+      try {
+        transactionIdsToVerify = JSON.parse(transactionId);
+      } catch (e) {
+        transactionIdsToVerify = [transactionId];
+      }
+
+      if (transactionIdsToVerify.length > 1) {
+        // Verify all transactions in the batch
+        const responses = [];
+        for (const txnId of transactionIdsToVerify) {
+          const response = await apiService.verifyGCash({
+            transactionId: txnId,
+            mobileNumber,
+          });
+          responses.push(response);
+        }
+
+        if (responses.every((r) => r.success)) {
+          setStep("success");
+          setPaymentDate(new Date());
+        } else {
+          throw new Error("Failed to verify one or more payments");
+        }
+      } else {
+        // Single transaction verification
+        const response = await apiService.verifyGCash({
+          transactionId,
+          mobileNumber,
+        });
+
+        if (response.success) {
+          setStep("success");
+          setPaymentDate(new Date());
+        }
       }
     } catch (error) {
       Alert.alert(
@@ -390,7 +498,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         <View style={styles.backButton} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollViewWithDetection style={styles.content} showsVerticalScrollIndicator={false}>
         {step === "qr" && (
           <>
             {/* Amount Card */}
@@ -898,7 +1006,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         )}
 
         <View style={{ height: 20 }} />
-      </ScrollView>
+      </ScrollViewWithDetection>
     </View>
   );
 };

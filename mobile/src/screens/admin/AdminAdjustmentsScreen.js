@@ -17,6 +17,7 @@ import { useRoute } from "@react-navigation/native";
 import { apiService } from "../../services/apiService";
 import { ActivityIndicator } from "react-native";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
@@ -385,7 +386,7 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
   }
 
   return (
-    <ScrollView
+    <ScrollViewWithDetection
       style={styles.container}
       refreshControl={
         <RefreshControl
@@ -750,7 +751,7 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

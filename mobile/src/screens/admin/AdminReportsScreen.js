@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 
 const WATER_RATE = 5; // ₱5 per day
 
@@ -141,11 +142,11 @@ const AdminReportsScreen = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollViewWithDetection style={styles.container}>
       {/* Room Selector */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Select Room</Text>
-        <FlatList
+        <FlatListWithDetection
           data={rooms}
           keyExtractor={(item) => item.id || item._id}
           scrollEnabled={false}
@@ -226,7 +227,7 @@ const AdminReportsScreen = () => {
             {members.length === 0 ? (
               <Text style={styles.noDataText}>No members in this room</Text>
             ) : (
-              <FlatList
+              <FlatListWithDetection
                 data={members}
                 keyExtractor={(item) => item.id || item._id}
                 scrollEnabled={false}
@@ -278,7 +279,7 @@ const AdminReportsScreen = () => {
           </View>
         </>
       )}
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

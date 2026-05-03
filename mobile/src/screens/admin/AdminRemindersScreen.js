@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRoute } from "@react-navigation/native";
 import { apiService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
@@ -300,7 +301,7 @@ const AdminRemindersScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <ScrollView
+      <ScrollViewWithDetection
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: hasSelection ? 80 : 24 }}
         showsVerticalScrollIndicator={false}
@@ -375,7 +376,7 @@ const AdminRemindersScreen = ({ navigation }) => {
             ))}
           </View>
         )}
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* Bulk action bar */}
       {hasSelection && (

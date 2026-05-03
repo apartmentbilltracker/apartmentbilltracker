@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
 
 const GOLD = "#b38604";
 const AdminSupportTicketsScreen = ({ navigation }) => {
@@ -222,7 +223,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
       </View>
 
       {/* Filter Tabs */}
-      <ScrollView
+      <ScrollViewWithDetection
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
@@ -254,10 +255,10 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* Tickets List */}
-      <FlatList
+      <FlatListWithDetection
         data={filteredTickets}
         keyExtractor={(item) => item.id || item._id}
         contentContainerStyle={{ paddingBottom: 20 }}
@@ -351,7 +352,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
             </View>
 
             {selectedTicket && (
-              <ScrollView
+              <ScrollViewWithDetection
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 30 }}
@@ -536,7 +537,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                     )}
                   </TouchableOpacity>
                 </View>
-              </ScrollView>
+              </ScrollViewWithDetection>
             )}
           </View>
         </View>

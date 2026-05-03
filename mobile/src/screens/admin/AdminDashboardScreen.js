@@ -40,6 +40,7 @@ import chatReadTracker from "../../services/chatReadTracker";
 import { screenCache } from "../../hooks/useScreenCache";
 import AnimatedAmount from "../../components/AnimatedAmount";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/HostNavigator";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -534,7 +535,7 @@ const AdminDashboardScreen = ({ navigation }) => {
   ];
 
   return (
-    <ScrollView
+    <ScrollViewWithDetection
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
@@ -1238,7 +1239,7 @@ const AdminDashboardScreen = ({ navigation }) => {
       </View>
 
       <View style={{ height: 32 }} />
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

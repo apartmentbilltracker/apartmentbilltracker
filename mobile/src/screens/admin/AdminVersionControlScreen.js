@@ -17,6 +17,7 @@ import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import { settingsService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
 
 const AdminVersionControlScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -174,7 +175,7 @@ const AdminVersionControlScreen = ({ navigation }) => {
   }
 
   return (
-    <ScrollView
+    <ScrollViewWithDetection
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
@@ -432,7 +433,7 @@ ADD COLUMN IF NOT EXISTS update_message TEXT DEFAULT '';`}
       </View>
 
       <View style={{ height: 40 }} />
-    </ScrollView>
+    </ScrollViewWithDetection>
   );
 };
 

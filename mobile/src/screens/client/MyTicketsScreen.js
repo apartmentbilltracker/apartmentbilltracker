@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/ClientNavigator";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const MyTicketsScreen = ({ navigation }) => {
@@ -290,7 +291,7 @@ const MyTicketsScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       {/* Filter Tabs */}
-      <ScrollView
+      <ScrollViewWithDetection
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterBar}
@@ -334,11 +335,11 @@ const MyTicketsScreen = ({ navigation }) => {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </ScrollViewWithDetection>
 
       {/* Empty */}
       {tickets.length === 0 ? (
-        <ScrollView
+        <ScrollViewWithDetection
           contentContainerStyle={styles.emptyWrap}
           refreshControl={
             <RefreshControl
@@ -364,9 +365,9 @@ const MyTicketsScreen = ({ navigation }) => {
             <Ionicons name="refresh-outline" size={16} color={colors.accent} />
             <Text style={styles.emptyRefreshText}>Refresh</Text>
           </TouchableOpacity>
-        </ScrollView>
+        </ScrollViewWithDetection>
       ) : (
-        <FlatList
+        <FlatListWithDetection
           data={getFilteredTickets()}
           renderItem={renderTicket}
           keyExtractor={(item) => item.id || item._id}
@@ -414,7 +415,7 @@ const MyTicketsScreen = ({ navigation }) => {
             </View>
 
             {selectedTicket && (
-              <ScrollView
+              <ScrollViewWithDetection
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 4 }}
@@ -600,7 +601,7 @@ const MyTicketsScreen = ({ navigation }) => {
                   </View>
                 )}
                 <ModalBottomSpacer />
-              </ScrollView>
+              </ScrollViewWithDetection>
             )}
           </View>
         </TouchableOpacity>
