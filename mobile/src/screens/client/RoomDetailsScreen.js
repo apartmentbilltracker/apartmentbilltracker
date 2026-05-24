@@ -1168,7 +1168,8 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     header: {
       backgroundColor: colors.card,
       paddingHorizontal: 20,
-      paddingTop: insets.top + 18,
+      // paddingTop: insets.top + 18,
+      paddingTop: 20,
       paddingBottom: 22,
       borderBottomLeftRadius: 28,
       borderBottomRightRadius: 28,
