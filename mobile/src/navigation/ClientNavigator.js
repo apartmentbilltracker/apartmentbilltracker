@@ -452,7 +452,7 @@ const ClientTabNavigator = () => {
         <NotchBackground
           color={colors.tabBarBg || "#ffffff"}
           height={TAB_BAR_HEIGHT + tabInsets.bottom}
-          borderColor={colorScheme === "dark" ? "#333333" : "#e0e0e0"}
+          borderColor={"#e0e0e0"}
         />
 
         {/* Tab row — matches HTML's flex justify-between with w-1/3 groups */}

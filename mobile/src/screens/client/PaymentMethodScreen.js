@@ -307,7 +307,11 @@ const PaymentMethodScreen = ({ navigation, route }) => {
           </View>
           {settingsFailed ? (
             <View style={styles.offlinePill}>
-              <Ionicons name="cloud-offline-outline" size={13} color="#92400e" />
+              <Ionicons
+                name="cloud-offline-outline"
+                size={13}
+                color="#92400e"
+              />
               <Text style={styles.offlinePillText}>Using fallback</Text>
             </View>
           ) : null}
@@ -546,6 +550,7 @@ const createStyles = (colors) => {
       backgroundColor: colors.background,
       paddingHorizontal: 18,
       paddingVertical: 12,
+      paddingTop: 0,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },

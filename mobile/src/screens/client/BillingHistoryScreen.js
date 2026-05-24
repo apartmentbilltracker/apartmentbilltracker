@@ -216,16 +216,16 @@ const BillingHistoryScreen = ({ route, navigation }) => {
     (sum, cycle) => sum + getCycleTotal(cycle),
     0,
   );
-  const activeCyclesCount = cycles.filter((cycle) => cycle.status === "active")
-    .length;
+  const activeCyclesCount = cycles.filter(
+    (cycle) => cycle.status === "active",
+  ).length;
   const completedCyclesCount = cycles.filter(
     (cycle) => cycle.status === "completed",
   ).length;
   const selectedCycleCustomCharges = getCustomCharges(selectedCycle);
   const selectedCycleTotal = selectedCycle ? getCycleTotal(selectedCycle) : 0;
-  const selectedCycleMemberCharges = selectedCycle?.memberCharges?.filter(
-    (member) => member.isPayer,
-  ) || [];
+  const selectedCycleMemberCharges =
+    selectedCycle?.memberCharges?.filter((member) => member.isPayer) || [];
   const selectedCycleBreakdown = selectedCycle
     ? [
         { type: "rent", label: "Rent", value: selectedCycle.rent },
@@ -292,10 +292,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                   .toUpperCase()}
               </Text>
               <View
-                style={[
-                  styles.statusPill,
-                  { backgroundColor: statusSurface },
-                ]}
+                style={[styles.statusPill, { backgroundColor: statusSurface }]}
               >
                 <View
                   style={[styles.statusDot, { backgroundColor: statusColor }]}
@@ -327,8 +324,8 @@ const BillingHistoryScreen = ({ route, navigation }) => {
             {
               label: "Payors",
               value:
-                cycle.memberCharges?.filter((member) => member.isPayer).length ||
-                0,
+                cycle.memberCharges?.filter((member) => member.isPayer)
+                  .length || 0,
             },
             { label: "Extras", value: customCharges.length },
           ].map((item) => (
@@ -395,7 +392,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={20} color={colors.text} />
+            <Ionicons name="arrow-back" size={20} color={colors.headerText} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>Billing History</Text>
