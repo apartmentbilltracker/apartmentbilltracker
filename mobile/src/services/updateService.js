@@ -77,10 +77,14 @@ const compareVersions = (v1, v2) => {
 /**
  * Show update required alert
  */
-export const showUpdateAlert = (isForced = false, updateUrl = "", updateMessage = "") => {
+export const showUpdateAlert = (
+  isForced = false,
+  updateUrl = "",
+  updateMessage = "",
+) => {
   const defaultMsg = isForced
     ? "A critical update is available. You must update the app to continue."
-    : "A new version of Apartment Bill Tracker is available. Update now for the best experience.";
+    : "A new version of PropFlow is available. Update now for the best experience.";
 
   const buttons = [
     {

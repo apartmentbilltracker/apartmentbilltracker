@@ -24,7 +24,10 @@ import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../../context/AuthContext";
 import { adsService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 

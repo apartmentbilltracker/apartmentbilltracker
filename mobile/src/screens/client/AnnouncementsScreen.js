@@ -19,7 +19,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../../context/AuthContext";
 import { announcementService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/ClientNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const REACTION_TYPES = [

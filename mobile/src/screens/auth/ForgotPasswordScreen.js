@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -101,6 +101,14 @@ const ForgotPasswordScreen = ({ navigation }) => {
               color={colors.accent}
             />
           </View>
+          <View style={styles.brandPill}>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={14}
+              color={colors.accent}
+            />
+            <Text style={styles.brandPillText}>Account recovery</Text>
+          </View>
           <Text style={styles.title}>Reset Password</Text>
           <Text style={styles.subtitle}>
             Enter your email and we'll send you a 6-digit code to reset your
@@ -118,6 +126,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
         {/* ─── Form ─── */}
         <View style={styles.form}>
+          <Text style={styles.formEyebrow}>Reset Access</Text>
+          <Text style={styles.formTitle}>Where should we send the code?</Text>
           <View style={styles.inputWrap}>
             <Ionicons
               name="mail-outline"
@@ -190,8 +200,28 @@ const ForgotPasswordScreen = ({ navigation }) => {
 };
 
 /* ═══════════════════════ STYLES ═══════════════════════ */
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const glassPanel = isDarkMode
+    ? "rgba(10,66,64,0.46)"
+    : "rgba(196,232,226,0.92)";
+  const glassPanelStrong = isDarkMode
+    ? "rgba(10,66,64,0.56)"
+    : "rgba(184,224,218,0.95)";
+  const glassInput = isDarkMode
+    ? "rgba(255,255,255,0.07)"
+    : "rgba(219,242,238,0.94)";
+  const glassBorder = isDarkMode
+    ? "rgba(158,208,205,0.20)"
+    : "rgba(3,109,65,0.16)";
+  const glassBorderSoft = isDarkMode
+    ? "rgba(158,208,205,0.13)"
+    : "rgba(3,109,65,0.11)";
+  const glassAccentSurface = isDarkMode
+    ? "rgba(129,216,163,0.14)"
+    : "rgba(202,238,232,0.96)";
+
+  return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     scrollContent: {
       flexGrow: 1,
@@ -203,38 +233,59 @@ const createStyles = (colors) =>
     backBtn: {
       width: 40,
       height: 40,
-      borderRadius: 12,
-      backgroundColor: colors.card,
+      borderRadius: 14,
+      backgroundColor: glassPanel,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 20,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.06,
-      shadowRadius: 4,
-      elevation: 1,
+      borderWidth: 1,
+      borderColor: glassBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.1,
+      shadowRadius: 14,
+      elevation: 3,
     },
 
     header: { alignItems: "center", marginBottom: 28 },
+    brandPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.accentLight,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      marginBottom: 14,
+    },
+    brandPillText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+      textTransform: "uppercase",
+    },
     iconGlow: {
-      width: 88,
-      height: 88,
-      borderRadius: 24,
-      backgroundColor: colors.card,
+      width: 96,
+      height: 96,
+      borderRadius: 30,
+      backgroundColor: glassPanelStrong,
       justifyContent: "center",
       alignItems: "center",
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 4 },
+      borderWidth: 1,
+      borderColor: glassBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.12,
-      shadowRadius: 12,
-      elevation: 4,
+      shadowRadius: 18,
+      elevation: 5,
       marginBottom: 18,
     },
     title: {
-      fontSize: 22,
-      fontWeight: "800",
+      fontSize: 26,
+      fontWeight: "900",
       color: colors.text,
-      letterSpacing: 0.2,
       marginBottom: 8,
     },
     subtitle: {
@@ -263,37 +314,57 @@ const createStyles = (colors) =>
       fontWeight: "500",
     },
 
-    form: { marginBottom: 28 },
+    form: {
+      marginBottom: 28,
+      backgroundColor: glassPanel,
+      borderWidth: 1,
+      borderColor: glassBorder,
+      borderRadius: 22,
+      padding: 16,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.13,
+      shadowRadius: 24,
+      elevation: 5,
+    },
+    formEyebrow: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      marginBottom: 4,
+    },
+    formTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 14,
+    },
     inputWrap: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.card,
+      backgroundColor: glassInput,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 14,
+      borderColor: glassBorderSoft,
+      borderRadius: 16,
       marginBottom: 16,
       paddingHorizontal: 14,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 4,
-      elevation: 1,
     },
     inputIcon: { marginRight: 10 },
     input: { flex: 1, paddingVertical: 14, fontSize: 15, color: colors.text },
     primaryBtn: {
       flexDirection: "row",
       backgroundColor: colors.accent,
-      borderRadius: 14,
-      paddingVertical: 15,
+      borderRadius: 16,
+      paddingVertical: 16,
       justifyContent: "center",
       alignItems: "center",
       gap: 8,
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.25,
-      shadowRadius: 6,
-      elevation: 3,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 4,
     },
     primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 
@@ -309,13 +380,21 @@ const createStyles = (colors) =>
     tipBox: {
       flexDirection: "row",
       alignItems: "flex-start",
-      backgroundColor: colors.warningBg,
-      borderRadius: 12,
+      backgroundColor: glassAccentSurface,
+      borderRadius: 16,
       paddingHorizontal: 14,
       paddingVertical: 12,
       gap: 10,
+      borderWidth: 1,
+      borderColor: glassBorderSoft,
     },
-    tipText: { flex: 1, fontSize: 12, color: colors.warning, lineHeight: 18 },
+    tipText: {
+      flex: 1,
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
   });
+};
 
 export default ForgotPasswordScreen;

@@ -93,7 +93,7 @@ function MobilePayModal({ onClose }) {
           <p className="text-sm text-gray-500 dark:text-white/50">
             Payments must be made through the{" "}
             <span className="font-semibold text-gray-700 dark:text-white/80">
-              Apartment Bill Tracker
+              PropFlow
             </span>{" "}
             mobile app.
           </p>

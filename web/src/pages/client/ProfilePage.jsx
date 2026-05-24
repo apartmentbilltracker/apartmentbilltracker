@@ -345,7 +345,7 @@ export default function ProfilePage() {
 
       {/* App version */}
       <p className="text-center text-xs text-gray-300 dark:text-white/20 pb-2">
-        Apartment Bill Tracker · v{appVersion} (build 1)
+        PropFlow · v{appVersion} (build 1)
       </p>
 
       {/* Logout */}

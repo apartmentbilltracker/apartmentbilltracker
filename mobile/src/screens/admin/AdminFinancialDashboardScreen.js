@@ -20,7 +20,7 @@ import { useRoute, useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { apiService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },

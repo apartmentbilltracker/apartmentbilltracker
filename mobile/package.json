@@ -1,7 +1,7 @@
 {
-  "name": "apartment-bill-tracker-mobile",
+  "name": "property-flow-mobile",
   "version": "1.0.0",
-  "description": "Mobile app for apartment bill tracking",
+  "description": "Mobile app for property flow",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -37,6 +37,8 @@
     "expo-sharing": "~14.0.8",
     "expo-status-bar": "~3.0.9",
     "expo-web-browser": "~15.0.11",
+    "lucide-react": "^1.14.0",
+    "lucide-react-native": "^1.14.0",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",

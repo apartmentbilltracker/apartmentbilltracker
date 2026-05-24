@@ -17,7 +17,7 @@ import { useRoute } from "@react-navigation/native";
 import { apiService } from "../../services/apiService";
 import { ActivityIndicator } from "react-native";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },

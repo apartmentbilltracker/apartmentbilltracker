@@ -18,7 +18,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { roomService, memberService } from "../../services/apiService";
 import { AuthContext } from "../../context/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../components/ScrollDetectionWrappers";
 
 const AdminMembersScreen = ({ navigation, route }) => {
   const { colors } = useTheme();

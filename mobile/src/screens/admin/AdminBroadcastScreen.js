@@ -14,7 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { apiService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 
 const AdminBroadcastScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -306,7 +306,10 @@ const AdminBroadcastScreen = ({ navigation }) => {
               {rooms.length === 0 ? (
                 <Text style={styles.noRoomsText}>No rooms found</Text>
               ) : (
-                <ScrollViewWithDetection horizontal showsHorizontalScrollIndicator={false}>
+                <ScrollViewWithDetection
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                >
                   {rooms.map((room) => {
                     const id = room.id || room._id;
                     const active = selectedRoomId === id;

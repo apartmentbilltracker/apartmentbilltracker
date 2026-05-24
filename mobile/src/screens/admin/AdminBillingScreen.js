@@ -23,7 +23,7 @@ import {
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import AnimatedAmount from "../../components/AnimatedAmount";
 
 const WATER_RATE = 5; // ₱5 per day

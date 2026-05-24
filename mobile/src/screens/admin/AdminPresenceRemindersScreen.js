@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo} from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,10 @@ import { useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { apiService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../components/ScrollDetectionWrappers";
 
 const AdminPresenceRemindersScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -158,7 +161,11 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
                 style={[styles.checkbox, isSelected && styles.checkboxSelected]}
               >
                 {isSelected && (
-                  <Ionicons name="checkmark" size={13} color={colors.textOnAccent} />
+                  <Ionicons
+                    name="checkmark"
+                    size={13}
+                    color={colors.textOnAccent}
+                  />
                 )}
               </View>
             )}
@@ -236,7 +243,12 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
     <View style={styles.container}>
       {/* Summary strip */}
       <View style={styles.summaryStrip}>
-        <View style={[styles.stripIconWrap, { backgroundColor: colors.accentSurface }]}>
+        <View
+          style={[
+            styles.stripIconWrap,
+            { backgroundColor: colors.accentSurface },
+          ]}
+        >
           <Ionicons name="hand-left" size={18} color={colors.accent} />
         </View>
         <View style={{ flex: 1 }}>
@@ -258,7 +270,11 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
       {membersWithoutPresence.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIconWrap}>
-            <Ionicons name="checkmark-done-circle" size={36} color={colors.success} />
+            <Ionicons
+              name="checkmark-done-circle"
+              size={36}
+              color={colors.success}
+            />
           </View>
           <Text style={styles.emptyTitle}>All Present!</Text>
           <Text style={styles.emptySubtitle}>
@@ -349,7 +365,11 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
                 activeOpacity={0.7}
                 onPress={() => setSelectedMembers(new Set())}
               >
-                <Ionicons name="close-circle-outline" size={16} color={colors.textSecondary} />
+                <Ionicons
+                  name="close-circle-outline"
+                  size={16}
+                  color={colors.textSecondary}
+                />
                 <Text style={styles.bulkCancelText}>Clear</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -362,7 +382,11 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
                   <ActivityIndicator size="small" color={colors.textOnAccent} />
                 ) : (
                   <>
-                    <Ionicons name="send" size={14} color={colors.textOnAccent} />
+                    <Ionicons
+                      name="send"
+                      size={14}
+                      color={colors.textOnAccent}
+                    />
                     <Text style={styles.bulkSendText}>
                       Send to {selectedMembers.size}
                     </Text>
@@ -386,7 +410,10 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
             <View style={styles.modalHeaderRow}>
               <View style={styles.modalHeaderLeft}>
                 <View
-                  style={[styles.modalIconWrap, { backgroundColor: colors.accentSurface }]}
+                  style={[
+                    styles.modalIconWrap,
+                    { backgroundColor: colors.accentSurface },
+                  ]}
                 >
                   <Ionicons name="hand-left" size={18} color={colors.accent} />
                 </View>
@@ -453,7 +480,7 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
                 <Text style={styles.previewText}>
                   Dear [Member Name],{"\n\n"}We hope you are doing well. This is
                   a friendly reminder to please mark your daily presence for
-                  today, {today}, in the Apartment Bill Tracker application.
+                  today, {today}, in the PropFlow application.
                   {"\n\n"}Room: {room?.name || "[Room Name]"}
                   {"\n\n"}Accurate attendance records are essential for
                   computing fair and transparent billing among all room
@@ -502,7 +529,11 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
                   <ActivityIndicator size="small" color={colors.textOnAccent} />
                 ) : (
                   <>
-                    <Ionicons name="send" size={14} color={colors.textOnAccent} />
+                    <Ionicons
+                      name="send"
+                      size={14}
+                      color={colors.textOnAccent}
+                    />
                     <Text style={styles.confirmBtnText}>Send</Text>
                   </>
                 )}
@@ -515,361 +546,374 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
-  /* ── Layout ── */
-  container: { flex: 1, backgroundColor: colors.background },
-  centerWrap: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: colors.background,
-  },
-  loadingLabel: { fontSize: 13, color: colors.textTertiary, marginTop: 10 },
+const createStyles = (colors) =>
+  StyleSheet.create({
+    /* ── Layout ── */
+    container: { flex: 1, backgroundColor: colors.background },
+    centerWrap: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+    },
+    loadingLabel: { fontSize: 13, color: colors.textTertiary, marginTop: 10 },
 
-  /* ── Summary Strip ── */
-  summaryStrip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.card,
-    marginHorizontal: 14,
-    marginTop: 14,
-    borderRadius: 14,
-    padding: 14,
-    gap: 10,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.06,
-        shadowRadius: 6,
-        shadowOffset: { width: 0, height: 2 },
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  stripIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  stripTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
-  stripSubtitle: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
-  countBadge: {
-    backgroundColor: "#e53935",
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  countBadgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
+    /* ── Summary Strip ── */
+    summaryStrip: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      marginHorizontal: 14,
+      marginTop: 14,
+      borderRadius: 14,
+      padding: 14,
+      gap: 10,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: 2 },
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    stripIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    stripTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+    stripSubtitle: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
+    countBadge: {
+      backgroundColor: "#e53935",
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    countBadgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
 
-  /* ── Empty State ── */
-  emptyCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    marginHorizontal: 14,
-    marginTop: 24,
-    padding: 32,
-    alignItems: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 1 },
-      },
-      android: { elevation: 1 },
-    }),
-  },
-  emptyIconWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.successBg,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 4,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    textAlign: "center",
-    lineHeight: 18,
-  },
+    /* ── Empty State ── */
+    emptyCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      marginHorizontal: 14,
+      marginTop: 24,
+      padding: 32,
+      alignItems: "center",
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 1 },
+        },
+        android: { elevation: 1 },
+      }),
+    },
+    emptyIconWrap: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.successBg,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 14,
+    },
+    emptyTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    emptySubtitle: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      textAlign: "center",
+      lineHeight: 18,
+    },
 
-  /* ── Mode Toggle ── */
-  modeBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginHorizontal: 14,
-    marginTop: 14,
-    marginBottom: 4,
-  },
-  modeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  modeBtnActive: {
-    backgroundColor: colors.accent,
-    borderColor: "#b38604",
-  },
-  modeBtnText: { fontSize: 13, fontWeight: "600", color: colors.textTertiary },
-  modeBtnTextActive: { color: "#fff" },
-  selectionChip: {
-    backgroundColor: colors.accentSurface,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginLeft: "auto",
-  },
-  selectionChipText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.accent,
-  },
+    /* ── Mode Toggle ── */
+    modeBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginHorizontal: 14,
+      marginTop: 14,
+      marginBottom: 4,
+    },
+    modeBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    modeBtnActive: {
+      backgroundColor: colors.accent,
+      borderColor: "#b38604",
+    },
+    modeBtnText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+    modeBtnTextActive: { color: "#fff" },
+    selectionChip: {
+      backgroundColor: colors.accentSurface,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      marginLeft: "auto",
+    },
+    selectionChipText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+    },
 
-  /* ── Member Card ── */
-  memberCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 1 },
-      },
-      android: { elevation: 1 },
-    }),
-  },
-  memberCardSelected: {
-    borderWidth: 1.5,
-    borderColor: "#b38604",
-    backgroundColor: colors.warningBg,
-  },
-  cardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  cardTopLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    gap: 10,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: colors.cardAlt,
-  },
-  checkboxSelected: {
-    backgroundColor: colors.accent,
-    borderColor: "#b38604",
-  },
-  memberAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarText: { fontSize: 13, fontWeight: "700" },
-  memberName: { fontSize: 14, fontWeight: "600", color: colors.text },
-  memberEmail: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
-  statusRow: {
-    flexDirection: "row",
-    marginTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-    paddingTop: 10,
-  },
-  statusChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.errorBg,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  statusChipText: { fontSize: 11, fontWeight: "600", color: "#e53935" },
-  sendCardBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: colors.accent,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-  },
-  sendCardText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+    /* ── Member Card ── */
+    memberCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 10,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 1 },
+        },
+        android: { elevation: 1 },
+      }),
+    },
+    memberCardSelected: {
+      borderWidth: 1.5,
+      borderColor: "#b38604",
+      backgroundColor: colors.warningBg,
+    },
+    cardTop: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    cardTopLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+      gap: 10,
+    },
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.cardAlt,
+    },
+    checkboxSelected: {
+      backgroundColor: colors.accent,
+      borderColor: "#b38604",
+    },
+    memberAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    avatarText: { fontSize: 13, fontWeight: "700" },
+    memberName: { fontSize: 14, fontWeight: "600", color: colors.text },
+    memberEmail: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
+    statusRow: {
+      flexDirection: "row",
+      marginTop: 10,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.divider,
+      paddingTop: 10,
+    },
+    statusChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: colors.errorBg,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    statusChipText: { fontSize: 11, fontWeight: "600", color: "#e53935" },
+    sendCardBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: colors.accent,
+      borderRadius: 10,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+    },
+    sendCardText: { fontSize: 12, fontWeight: "700", color: "#fff" },
 
-  /* ── Bulk Bar ── */
-  bulkBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: colors.card,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
-        shadowOffset: { width: 0, height: -2 },
-      },
-      android: { elevation: 6 },
-    }),
-  },
-  bulkCancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: colors.background,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-  },
-  bulkCancelText: { color: colors.textSecondary, fontWeight: "600", fontSize: 13 },
-  bulkSendBtn: {
-    flex: 1.4,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: colors.accent,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-  },
-  bulkSendText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
+    /* ── Bulk Bar ── */
+    bulkBar: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      backgroundColor: colors.card,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.08,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: -2 },
+        },
+        android: { elevation: 6 },
+      }),
+    },
+    bulkCancelBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.background,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 6,
+    },
+    bulkCancelText: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+      fontSize: 13,
+    },
+    bulkSendBtn: {
+      flex: 1.4,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.accent,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 6,
+    },
+    bulkSendText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
 
-  /* ── Modal ── */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    padding: 22,
-    width: "90%",
-    maxHeight: "85%",
-  },
-  modalHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  modalHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  modalIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
-  modalSubtitle: { fontSize: 13, color: colors.textTertiary, marginTop: 1 },
-  form: { maxHeight: 420 },
-  formLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.text,
-    backgroundColor: colors.cardAlt,
-    marginBottom: 8,
-  },
-  textArea: { textAlignVertical: "top", minHeight: 80 },
-  hintRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 14,
-  },
-  formHint: { fontSize: 11, color: colors.textTertiary, fontStyle: "italic" },
-  previewBox: {
-    backgroundColor: colors.cardAlt,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  previewHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
-  },
-  previewLabel: { fontSize: 11, fontWeight: "700", color: colors.accent },
-  previewText: { fontSize: 11, color: colors.textSecondary, lineHeight: 17 },
-  modalButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 16,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cancelBtnText: { color: colors.textSecondary, fontWeight: "600", fontSize: 14 },
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: colors.accent,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-  },
-  confirmBtnText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
-});
+    /* ── Modal ── */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      padding: 22,
+      width: "90%",
+      maxHeight: "85%",
+    },
+    modalHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    modalHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+    modalIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
+    modalSubtitle: { fontSize: 13, color: colors.textTertiary, marginTop: 1 },
+    form: { maxHeight: 420 },
+    formLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginBottom: 8,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: colors.text,
+      backgroundColor: colors.cardAlt,
+      marginBottom: 8,
+    },
+    textArea: { textAlignVertical: "top", minHeight: 80 },
+    hintRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      marginBottom: 14,
+    },
+    formHint: { fontSize: 11, color: colors.textTertiary, fontStyle: "italic" },
+    previewBox: {
+      backgroundColor: colors.cardAlt,
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    previewHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 8,
+    },
+    previewLabel: { fontSize: 11, fontWeight: "700", color: colors.accent },
+    previewText: { fontSize: 11, color: colors.textSecondary, lineHeight: 17 },
+    modalButtons: {
+      flexDirection: "row",
+      gap: 12,
+      marginTop: 16,
+    },
+    cancelBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    cancelBtnText: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+      fontSize: 14,
+    },
+    confirmBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: colors.accent,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 6,
+    },
+    confirmBtnText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
+  });
 
 export default AdminPresenceRemindersScreen;

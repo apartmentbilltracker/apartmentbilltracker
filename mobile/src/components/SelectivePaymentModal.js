@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -6,12 +6,22 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../theme/ThemeContext";
 import ModalBottomSpacer from "./ModalBottomSpacer";
+
+const BILL_TYPES = ["rent", "electricity", "water", "internet", "custom_charges"];
+
+const EMPTY_SELECTION = {
+  rent: false,
+  electricity: false,
+  water: false,
+  internet: false,
+  custom_charges: false,
+};
 
 const SelectivePaymentModal = ({
   visible,
@@ -22,154 +32,133 @@ const SelectivePaymentModal = ({
   paymentStatus,
 }) => {
   const { colors } = useTheme();
-  // Initialize selectedBills based on available (unpaid) bills only
-  const getInitialSelectedBills = () => ({
-    rent: billShare?.rent > 0 && paymentStatus?.rentStatus !== "paid",
-    electricity:
-      billShare?.electricity > 0 && paymentStatus?.electricityStatus !== "paid",
-    water: billShare?.water > 0 && paymentStatus?.waterStatus !== "paid",
-    internet:
-      billShare?.internet > 0 && paymentStatus?.internetStatus !== "paid",
-    custom_charges:
-      billShare?.customCharges > 0 &&
-      paymentStatus?.customChargesStatus !== "paid",
-  });
-
-  const [selectedBills, setSelectedBills] = useState(getInitialSelectedBills());
+  const styles = createStyles(colors);
 
   const billOptions = useMemo(
     () => [
       {
         id: "rent",
         label: "Rent",
-        icon: "home",
+        description: "Monthly room charge",
+        icon: "home-outline",
         amount: billShare?.rent || 0,
-        available:
-          (billShare?.rent || 0) > 0 && paymentStatus?.rentStatus !== "paid",
-        isPaid: paymentStatus?.rentStatus === "paid",
+        status: paymentStatus?.rentStatus,
       },
       {
         id: "electricity",
         label: "Electricity",
-        icon: "flash",
+        description: "Shared electric bill",
+        icon: "flash-outline",
         amount: billShare?.electricity || 0,
-        available:
-          (billShare?.electricity || 0) > 0 &&
-          paymentStatus?.electricityStatus !== "paid",
-        isPaid: paymentStatus?.electricityStatus === "paid",
+        status: paymentStatus?.electricityStatus,
       },
       {
         id: "water",
         label: "Water",
-        icon: "water",
+        description: "Shared water bill",
+        icon: "water-outline",
         amount: billShare?.water || 0,
-        available:
-          (billShare?.water || 0) > 0 && paymentStatus?.waterStatus !== "paid",
-        isPaid: paymentStatus?.waterStatus === "paid",
+        status: paymentStatus?.waterStatus,
       },
       {
         id: "internet",
         label: "Internet",
-        icon: "wifi",
+        description: "Shared internet bill",
+        icon: "wifi-outline",
         amount: billShare?.internet || 0,
-        available:
-          (billShare?.internet || 0) > 0 &&
-          paymentStatus?.internetStatus !== "paid",
-        isPaid: paymentStatus?.internetStatus === "paid",
+        status: paymentStatus?.internetStatus,
       },
       {
         id: "custom_charges",
         label: "Additional Charges",
-        icon: "pricetag",
+        description: "Other room charges",
+        icon: "pricetag-outline",
         amount: billShare?.customCharges || 0,
-        available:
-          (billShare?.customCharges || 0) > 0 &&
-          paymentStatus?.customChargesStatus !== "paid",
-        isPaid: paymentStatus?.customChargesStatus === "paid",
+        status: paymentStatus?.customChargesStatus,
       },
-    ],
+    ].map((bill) => ({
+      ...bill,
+      available: bill.amount > 0 && bill.status !== "paid",
+      isPaid: bill.status === "paid",
+    })),
     [billShare, paymentStatus],
   );
 
-  // Format currency
-  const fmt = (num) => {
-    if (!num) return "₱0.00";
-    return (
-      "₱" +
-      Number(num).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
+  const buildInitialSelection = () =>
+    billOptions.reduce(
+      (selection, bill) => ({
+        ...selection,
+        [bill.id]: bill.available,
+      }),
+      { ...EMPTY_SELECTION },
     );
-  };
 
-  // Calculate total selected
-  const totalSelected = useMemo(() => {
-    return billOptions.reduce((sum, bill) => {
-      return selectedBills[bill.id] ? sum + bill.amount : sum;
-    }, 0);
-  }, [selectedBills, billOptions]);
+  const [selectedBills, setSelectedBills] = useState(buildInitialSelection);
 
-  // Toggle bill selection
+  useEffect(() => {
+    if (visible) {
+      setSelectedBills(buildInitialSelection());
+    }
+  }, [visible, billOptions]);
+
+  const fmt = (num) =>
+    `PHP ${Number(num || 0).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
+  const availableBills = useMemo(
+    () => billOptions.filter((bill) => bill.available),
+    [billOptions],
+  );
+
+  const paidCount = useMemo(
+    () => billOptions.filter((bill) => bill.isPaid).length,
+    [billOptions],
+  );
+
+  const selectedCount = useMemo(
+    () => billOptions.filter((bill) => selectedBills[bill.id]).length,
+    [billOptions, selectedBills],
+  );
+
+  const totalSelected = useMemo(
+    () =>
+      billOptions.reduce(
+        (sum, bill) =>
+          selectedBills[bill.id] && bill.available ? sum + bill.amount : sum,
+        0,
+      ),
+    [selectedBills, billOptions],
+  );
+
   const toggleBill = (billId) => {
+    const bill = billOptions.find((item) => item.id === billId);
+    if (!bill?.available) return;
+
     setSelectedBills((prev) => ({
       ...prev,
       [billId]: !prev[billId],
     }));
   };
 
-  // Select all available
-  const selectAll = () => {
-    const newSelection = {};
-    billOptions.forEach((bill) => {
-      if (bill.available) {
-        newSelection[bill.id] = true;
-      }
-    });
-    setSelectedBills(newSelection);
-  };
+  const selectAll = () => setSelectedBills(buildInitialSelection());
+  const clearAll = () => setSelectedBills({ ...EMPTY_SELECTION });
 
-  // Clear all
-  const clearAll = () => {
-    setSelectedBills({
-      rent: false,
-      electricity: false,
-      water: false,
-      internet: false,
-      custom_charges: false,
-    });
-  };
-
-  // Proceed with payment
   const handleProceed = () => {
     const selectedBillTypes = billOptions
-      .filter((bill) => selectedBills[bill.id])
+      .filter((bill) => selectedBills[bill.id] && bill.available)
       .map((bill) => bill.id)
-      // Double-check: ensure all bill types are valid snake_case
-      .map((bt) => {
-        const normalized = String(bt).trim().toLowerCase();
-        if (
-          [
-            "rent",
-            "electricity",
-            "water",
-            "internet",
-            "custom_charges",
-          ].includes(normalized)
-        ) {
-          return normalized;
-        }
-        // Fallback conversion for customcharges
-        if (normalized === "customcharges") return "custom_charges";
-        return null;
-      })
-      .filter((bt) => bt !== null);
+      .filter((type) => BILL_TYPES.includes(type));
+    const billAmounts = billOptions.reduce((amounts, bill) => {
+      if (selectedBills[bill.id] && bill.available) {
+        amounts[bill.id] = Number(bill.amount) || 0;
+      }
+      return amounts;
+    }, {});
 
     if (selectedBillTypes.length === 0) {
-      Alert.alert(
-        "No Bills Selected",
-        "Please select at least one bill to pay",
-      );
+      Alert.alert("No Bills Selected", "Please select at least one bill to pay.");
       return;
     }
 
@@ -177,10 +166,9 @@ const SelectivePaymentModal = ({
       billTypes: selectedBillTypes,
       amount: totalSelected,
       breakdown: selectedBills,
+      billAmounts,
     });
   };
-
-  const styles = createStyles(colors);
 
   return (
     <Modal
@@ -189,144 +177,194 @@ const SelectivePaymentModal = ({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
-        {/* Header */}
+      <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={colors.text} />
+          <View style={styles.headerIcon}>
+            <Ionicons name="receipt-outline" size={20} color={colors.accent} />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.title}>Select Bills</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {roomName || "Your room"}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeButton}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="close" size={22} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Select Bills to Pay</Text>
-          <View style={{ width: 24 }} />
         </View>
 
         <ScrollView
           style={styles.content}
           contentContainerStyle={styles.contentInner}
+          showsVerticalScrollIndicator={false}
         >
-          {/* Room Info */}
-          <View style={styles.roomInfo}>
-            <Ionicons name="home" size={20} color={colors.accent} />
-            <Text style={styles.roomName}>{roomName}</Text>
+          <View style={styles.summaryCard}>
+            <View>
+              <Text style={styles.summaryLabel}>Amount selected</Text>
+              <Text style={styles.summaryAmount}>{fmt(totalSelected)}</Text>
+            </View>
+            <View style={styles.summaryMeta}>
+              <Text style={styles.summaryMetaValue}>
+                {selectedCount}/{availableBills.length}
+              </Text>
+              <Text style={styles.summaryMetaLabel}>Selected</Text>
+            </View>
           </View>
 
-          {/* Bills List */}
-          <View style={styles.billsList}>
-            <Text style={styles.sectionLabel}>Available Bills</Text>
-
-            {billOptions.map((bill) => (
-              <View key={bill.id}>
-                <TouchableOpacity
-                  style={[
-                    styles.billItem,
-                    !bill.available && styles.billItemDisabled,
-                  ]}
-                  onPress={() => bill.available && toggleBill(bill.id)}
-                  disabled={!bill.available}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.billCheckbox}>
-                    {selectedBills[bill.id] && bill.available ? (
-                      <Ionicons
-                        name="checkmark"
-                        size={18}
-                        color={colors.textOnAccent}
-                      />
-                    ) : (
-                      <View style={styles.checkboxEmpty} />
-                    )}
-                  </View>
-
-                  <View style={styles.billInfo}>
-                    <View style={styles.billHeader}>
-                      <Ionicons
-                        name={bill.icon}
-                        size={18}
-                        color={
-                          bill.available ? colors.accent : colors.textTertiary
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.billLabel,
-                          !bill.available && styles.billLabelDisabled,
-                        ]}
-                      >
-                        {bill.label}
-                      </Text>
-                      {bill.isPaid && (
-                        <View
-                          style={{
-                            marginLeft: 8,
-                            backgroundColor: colors.success,
-                            borderRadius: 12,
-                            paddingHorizontal: 8,
-                            paddingVertical: 2,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: colors.textOnAccent,
-                              fontSize: 11,
-                              fontWeight: "600",
-                            }}
-                          >
-                            ✓ Paid
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-
-                  <Text
-                    style={[
-                      styles.billAmount,
-                      !bill.available && styles.billAmountDisabled,
-                    ]}
-                  >
-                    {fmt(bill.amount)}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-            <View style={styles.divider} />
-          </View>
-
-          {/* Quick Actions */}
           <View style={styles.quickActions}>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={selectAll}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
+              disabled={availableBills.length === 0}
             >
               <Ionicons name="checkmark-done" size={16} color={colors.accent} />
-              <Text style={styles.actionButtonText}>Select All</Text>
+              <Text style={styles.actionButtonText}>All</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.actionButton}
               onPress={clearAll}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
+              disabled={selectedCount === 0}
             >
-              <Ionicons name="close" size={16} color={colors.accent} />
-              <Text style={styles.actionButtonText}>Clear All</Text>
+              <Ionicons name="remove-circle-outline" size={16} color={colors.accent} />
+              <Text style={styles.actionButtonText}>Clear</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>Available Bills</Text>
+            <Text style={styles.sectionHint}>
+              {paidCount > 0 ? `${paidCount} paid` : "Tap to include"}
+            </Text>
+          </View>
+
+          {availableBills.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons
+                name="checkmark-done-circle-outline"
+                size={36}
+                color={colors.success || colors.accent}
+              />
+              <Text style={styles.emptyTitle}>No unpaid bills</Text>
+              <Text style={styles.emptyText}>
+                Everything listed here is already paid or has no amount due.
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.billsList}>
+            {billOptions.map((bill) => {
+              const selected = selectedBills[bill.id] && bill.available;
+
+              return (
+                <TouchableOpacity
+                  key={bill.id}
+                  style={[
+                    styles.billItem,
+                    selected && styles.billItemSelected,
+                    !bill.available && styles.billItemDisabled,
+                  ]}
+                  onPress={() => toggleBill(bill.id)}
+                  disabled={!bill.available}
+                  activeOpacity={0.78}
+                >
+                  <View
+                    style={[
+                      styles.billIcon,
+                      selected && styles.billIconSelected,
+                      !bill.available && styles.billIconDisabled,
+                    ]}
+                  >
+                    <Ionicons
+                      name={bill.icon}
+                      size={20}
+                      color={
+                        selected
+                          ? colors.textOnAccent
+                          : bill.available
+                            ? colors.accent
+                            : colors.textTertiary
+                      }
+                    />
+                  </View>
+
+                  <View style={styles.billInfo}>
+                    <View style={styles.billTitleRow}>
+                      <Text
+                        style={[
+                          styles.billLabel,
+                          !bill.available && styles.billLabelDisabled,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {bill.label}
+                      </Text>
+                      {bill.isPaid ? (
+                        <View style={styles.paidPill}>
+                          <Ionicons name="checkmark" size={11} color="#fff" />
+                          <Text style={styles.paidPillText}>Paid</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text
+                      style={[
+                        styles.billDescription,
+                        !bill.available && styles.billDescriptionDisabled,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {bill.isPaid ? "Already settled" : bill.description}
+                    </Text>
+                  </View>
+
+                  <View style={styles.billRight}>
+                    <Text
+                      style={[
+                        styles.billAmount,
+                        !bill.available && styles.billAmountDisabled,
+                      ]}
+                    >
+                      {fmt(bill.amount)}
+                    </Text>
+                    <View
+                      style={[
+                        styles.checkbox,
+                        selected && styles.checkboxSelected,
+                        !bill.available && styles.checkboxDisabled,
+                      ]}
+                    >
+                      {selected ? (
+                        <Ionicons
+                          name="checkmark"
+                          size={15}
+                          color={colors.textOnAccent}
+                        />
+                      ) : null}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </ScrollView>
 
-        {/* Footer */}
         <View style={styles.footer}>
-          {/* Total Summary */}
-          <View style={styles.totalBox}>
-            <Text style={styles.totalLabel}>Amount to Pay:</Text>
-            <Text style={styles.totalAmount}>{fmt(totalSelected)}</Text>
+          <View style={styles.footerSummary}>
+            <Text style={styles.footerLabel}>Total to pay</Text>
+            <Text style={styles.footerAmount}>{fmt(totalSelected)}</Text>
           </View>
 
-          {/* Action Buttons */}
           <View style={styles.buttonRow}>
             <TouchableOpacity
               style={[styles.button, styles.cancelButton]}
               onPress={onClose}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
@@ -339,196 +377,333 @@ const SelectivePaymentModal = ({
               ]}
               onPress={handleProceed}
               disabled={totalSelected === 0}
-              activeOpacity={0.7}
+              activeOpacity={0.85}
             >
-              <Ionicons
-                name="card"
-                size={18}
-                color={colors.textOnAccent}
-                style={{ marginRight: 8 }}
-              />
+              <Ionicons name="card-outline" size={18} color={colors.textOnAccent} />
               <Text style={styles.proceedButtonText}>Pay Now</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <ModalBottomSpacer />
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 };
 
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const softSurface = isDarkMode
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(3,109,65,0.055)";
+  const selectedSurface = isDarkMode
+    ? "rgba(129,216,163,0.12)"
+    : "rgba(202,238,232,0.72)";
+  const softBorder = isDarkMode
+    ? "rgba(158,208,205,0.16)"
+    : "rgba(3,109,65,0.12)";
+
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
     },
     header: {
       flexDirection: "row",
-      justifyContent: "space-between",
       alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
+      gap: 12,
+      paddingHorizontal: 18,
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    headerIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerTextWrap: {
+      flex: 1,
     },
     closeButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.border,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
     title: {
-      fontSize: 18,
-      fontWeight: "700",
+      fontSize: 20,
+      fontWeight: "800",
       color: colors.text,
+    },
+    subtitle: {
+      marginTop: 2,
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.textSecondary,
     },
     content: {
       flex: 1,
     },
     contentInner: {
-      paddingHorizontal: 16,
-      paddingVertical: 16,
+      paddingHorizontal: 18,
+      paddingTop: 16,
+      paddingBottom: 20,
     },
-    roomInfo: {
+    summaryCard: {
       flexDirection: "row",
+      justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 24,
-      paddingHorizontal: 12,
-      paddingVertical: 14,
       backgroundColor: colors.card,
-      borderRadius: 10,
+      borderRadius: 18,
+      padding: 16,
+      marginBottom: 12,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: softBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+      elevation: 3,
     },
-    roomName: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.text,
-      marginLeft: 10,
-      flex: 1,
-    },
-    sectionLabel: {
+    summaryLabel: {
       fontSize: 12,
       fontWeight: "700",
-      color: colors.textSecondary,
-      textTransform: "uppercase",
-      marginBottom: 12,
-      letterSpacing: 0.5,
-    },
-    billsList: {
-      marginBottom: 12,
-    },
-    billItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingVertical: 14,
-      paddingHorizontal: 10,
-      backgroundColor: colors.card,
-      borderRadius: 10,
-      marginBottom: 8,
-    },
-    billItemDisabled: {
-      opacity: 0.5,
-    },
-    billCheckbox: {
-      width: 28,
-      height: 28,
-      borderRadius: 6,
-      backgroundColor: colors.accent,
-      justifyContent: "center",
-      alignItems: "center",
-      marginRight: 12,
-    },
-    checkboxEmpty: {
-      width: 18,
-      height: 18,
-      borderRadius: 4,
-      borderWidth: 2,
-      borderColor: colors.border,
-    },
-    billInfo: {
-      flex: 1,
-    },
-    billHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    billLabel: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.text,
-    },
-    billLabelDisabled: {
       color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+      marginBottom: 4,
     },
-    billAmount: {
-      fontSize: 14,
-      fontWeight: "700",
+    summaryAmount: {
+      fontSize: 26,
+      fontWeight: "900",
       color: colors.accent,
     },
-    billAmountDisabled: {
-      color: colors.textTertiary,
+    summaryMeta: {
+      minWidth: 72,
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 14,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
     },
-    divider: {
-      height: 1,
-      backgroundColor: colors.border,
-      marginTop: 6,
+    summaryMetaValue: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    summaryMetaLabel: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textTertiary,
+      marginTop: 1,
     },
     quickActions: {
       flexDirection: "row",
       gap: 10,
-      marginBottom: 24,
+      marginBottom: 18,
     },
     actionButton: {
       flex: 1,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      paddingVertical: 14,
+      paddingVertical: 12,
       paddingHorizontal: 12,
-      backgroundColor: colors.card,
-      borderRadius: 8,
+      backgroundColor: softSurface,
+      borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.accent,
+      borderColor: softBorder,
       gap: 6,
     },
     actionButtonText: {
-      fontSize: 12,
-      fontWeight: "600",
+      fontSize: 13,
+      fontWeight: "700",
       color: colors.accent,
     },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 10,
+    },
+    sectionLabel: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+    },
+    sectionHint: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+    billsList: {
+      gap: 10,
+    },
+    billItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    billItemSelected: {
+      backgroundColor: selectedSurface,
+      borderColor: colors.accent,
+    },
+    billItemDisabled: {
+      opacity: 0.58,
+    },
+    billIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: softSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: softBorder,
+    },
+    billIconSelected: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    billIconDisabled: {
+      backgroundColor: "transparent",
+    },
+    billInfo: {
+      flex: 1,
+      minWidth: 0,
+    },
+    billTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    billLabel: {
+      flexShrink: 1,
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    billLabelDisabled: {
+      color: colors.textTertiary,
+    },
+    billDescription: {
+      marginTop: 3,
+      fontSize: 12,
+      fontWeight: "500",
+      color: colors.textSecondary,
+    },
+    billDescriptionDisabled: {
+      color: colors.textTertiary,
+    },
+    billRight: {
+      alignItems: "flex-end",
+      gap: 8,
+    },
+    billAmount: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.accent,
+    },
+    billAmountDisabled: {
+      color: colors.textTertiary,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+    },
+    checkboxSelected: {
+      borderColor: colors.accent,
+      backgroundColor: colors.accent,
+    },
+    checkboxDisabled: {
+      backgroundColor: softSurface,
+    },
+    paidPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      backgroundColor: colors.success || "#22c55e",
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+    },
+    paidPillText: {
+      color: "#fff",
+      fontSize: 11,
+      fontWeight: "800",
+    },
+    emptyState: {
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingVertical: 26,
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: softBorder,
+      marginBottom: 12,
+    },
+    emptyTitle: {
+      marginTop: 10,
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    emptyText: {
+      marginTop: 4,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textSecondary,
+      textAlign: "center",
+    },
     footer: {
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderTopWidth: 1,
+      paddingHorizontal: 18,
+      paddingTop: 12,
+      paddingBottom: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
       backgroundColor: colors.background,
     },
-    totalBox: {
+    footerSummary: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      paddingHorizontal: 12,
-      paddingVertical: 14,
-      backgroundColor: colors.card,
-      borderRadius: 10,
       marginBottom: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
     },
-    totalLabel: {
-      fontSize: 14,
-      fontWeight: "600",
+    footerLabel: {
+      fontSize: 13,
+      fontWeight: "700",
       color: colors.textSecondary,
     },
-    totalAmount: {
-      fontSize: 18,
-      fontWeight: "700",
+    footerAmount: {
+      fontSize: 20,
+      fontWeight: "900",
       color: colors.accent,
     },
     buttonRow: {
@@ -537,11 +712,12 @@ const createStyles = (colors) =>
     },
     button: {
       flex: 1,
-      paddingVertical: 14,
-      borderRadius: 10,
+      minHeight: 50,
+      borderRadius: 16,
       justifyContent: "center",
       alignItems: "center",
       flexDirection: "row",
+      gap: 8,
     },
     cancelButton: {
       backgroundColor: colors.card,
@@ -550,20 +726,26 @@ const createStyles = (colors) =>
     },
     cancelButtonText: {
       fontSize: 14,
-      fontWeight: "600",
+      fontWeight: "800",
       color: colors.text,
     },
     proceedButton: {
       backgroundColor: colors.accent,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.16,
+      shadowRadius: 12,
+      elevation: 4,
     },
     proceedButtonDisabled: {
       opacity: 0.5,
     },
     proceedButtonText: {
       fontSize: 14,
-      fontWeight: "600",
+      fontWeight: "800",
       color: colors.textOnAccent,
     },
   });
+};
 
 export default SelectivePaymentModal;

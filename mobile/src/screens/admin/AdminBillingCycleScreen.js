@@ -17,7 +17,7 @@ import {
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { apiService, announcementService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 

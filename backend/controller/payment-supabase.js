@@ -37,7 +37,7 @@ const buildPaymentEmail = ({
         <p style="font-size:16px;">Hi <strong>${userName}</strong>,</p>
         <p style="font-size:15px;line-height:1.6;">${bodyText}</p>
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;"/>
-        <p style="color:#888;font-size:13px;">Apartment Bill Tracker</p>
+        <p style="color:#888;font-size:13px;">Sent by PropFlow</p>
       </div>
     </div>
   `;

@@ -15,7 +15,7 @@ const buildBroadcastEmail = ({ title, message, senderName }) => {
   return `
     <div style="max-width: 600px; margin: auto; font-family: Arial, sans-serif; color: #333;">
       <div style="text-align: center; padding: 20px 0; font-size: 12px; color: #888;">
-        Notification from Apartment Bill Tracker
+        Notification from PropFlow
       </div>
       <div style="background-color: #b38604; padding: 30px 0; text-align: center;">
         <h2 style="color: white; margin: 0;">📢 ${title}</h2>
@@ -24,11 +24,11 @@ const buildBroadcastEmail = ({ title, message, senderName }) => {
         <div style="white-space: pre-wrap; line-height: 1.6; color: #333; font-size: 15px;">${message}</div>
         <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
         <p style="color: #888; font-size: 13px;">
-          Sent by <strong>${senderName}</strong> via Apartment Bill Tracker
+          Sent by <strong>${senderName}</strong> via PropFlow
         </p>
       </div>
       <div style="text-align: center; padding: 16px; font-size: 11px; color: #aaa;">
-        You received this because you have an account on Apartment Bill Tracker.
+        You received this because you have an account on PropFlow.
       </div>
     </div>
   `;

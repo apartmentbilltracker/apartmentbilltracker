@@ -1,4 +1,4 @@
-import React, { useContext, useState, useMemo } from "react";
+import React, { useContext, useState } from "react";
 import {
   View,
   Text,
@@ -10,14 +10,17 @@ import {
   Alert,
   Platform,
   Image,
+  KeyboardAvoidingView,
 } from "react-native";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import Constants from "expo-constants";
 import * as Application from "expo-application";
 import { AuthContext } from "../../context/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AuthBubbles from "../../components/AuthBubbles";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -25,6 +28,7 @@ WebBrowser.maybeCompleteAuthSession();
 const RegisterScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -116,23 +120,54 @@ const RegisterScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.content}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
+    >
+      <AuthBubbles />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: Math.max(insets.top + 22, 40) },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
-          {/* <MaterialIcons name="apartment" size={48} color={colors.accent} /> */}
-          <Image
-            source={require("../../assets/icon.png")}
-            style={styles.icon}
-          />
-          <Text style={styles.title}>Apartment Bill Tracker</Text>
+          <View style={styles.iconGlow}>
+            <Image
+              source={require("../../assets/icon.png")}
+              style={styles.icon}
+            />
+          </View>
+          <View style={styles.brandPill}>
+            <Ionicons name="sparkles-outline" size={14} color={colors.accent} />
+            <Text style={styles.brandPillText}>Start your account</Text>
+          </View>
+          <Text style={styles.title}>PropFlow</Text>
           <Text style={styles.subtitle}>Create Account</Text>
+          <Text style={styles.headerCaption}>
+            Set up your space to manage rooms, bills, payments, and updates in
+            one place.
+          </Text>
         </View>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle" size={16} color={colors.error} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
         {/* Email & Password Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Sign Up with Email</Text>
+          <Text style={styles.sectionEyebrow}>Email Registration</Text>
+          <Text style={styles.sectionTitle}>Create your login details</Text>
+          <Text style={styles.sectionHint}>
+            Use an email address you can access for future sign-ins and account
+            recovery.
+          </Text>
 
           <TextInput
             style={styles.input}
@@ -267,69 +302,148 @@ const RegisterScreen = ({ navigation }) => {
             {Application.nativeBuildVersion || "1"})
           </Text>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const glassPanel = isDarkMode
+    ? "rgba(10,66,64,0.46)"
+    : "rgba(196,232,226,0.92)";
+  const glassInput = isDarkMode
+    ? "rgba(255,255,255,0.07)"
+    : "rgba(219,242,238,0.94)";
+  const glassBorder = isDarkMode
+    ? "rgba(158,208,205,0.20)"
+    : "rgba(3,109,65,0.16)";
+  const glassBorderSoft = isDarkMode
+    ? "rgba(158,208,205,0.13)"
+    : "rgba(3,109,65,0.11)";
+
+  return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.card,
+      backgroundColor: colors.background,
     },
     content: {
-      padding: 20,
-      paddingTop: 40,
+      paddingHorizontal: 24,
       paddingBottom: 40,
     },
     header: {
       alignItems: "center",
       marginBottom: 32,
     },
-    title: {
-      fontSize: 28,
+    brandPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.accentLight,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      marginBottom: 14,
+    },
+    brandPillText: {
+      fontSize: 11,
       fontWeight: "700",
+      color: colors.accent,
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+    },
+    iconGlow: {
+      width: 108,
+      height: 108,
+      borderRadius: 32,
+      backgroundColor: glassPanel,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: glassBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 18,
+      elevation: 5,
+      marginBottom: 18,
+    },
+    title: {
+      fontSize: 26,
+      fontWeight: "900",
       color: colors.text,
-      marginTop: 12,
       marginBottom: 4,
     },
     subtitle: {
       fontSize: 16,
       color: colors.textSecondary,
-      fontWeight: "500",
+      fontWeight: "700",
+    },
+    headerCaption: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 8,
+      textAlign: "center",
+      lineHeight: 19,
+      maxWidth: 290,
     },
     section: {
       marginBottom: 24,
+      backgroundColor: glassPanel,
+      borderWidth: 1,
+      borderColor: glassBorder,
+      borderRadius: 22,
+      padding: 16,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.13,
+      shadowRadius: 24,
+      elevation: 5,
+    },
+    sectionEyebrow: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+      marginBottom: 4,
     },
     sectionTitle: {
-      fontSize: 14,
-      fontWeight: "600",
+      fontSize: 18,
+      fontWeight: "800",
       color: colors.text,
-      marginBottom: 12,
+      marginBottom: 6,
+    },
+    sectionHint: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 18,
+      marginBottom: 14,
     },
     input: {
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 8,
-      padding: 12,
+      borderColor: glassBorderSoft,
+      borderRadius: 16,
+      padding: 14,
       marginBottom: 12,
       fontSize: 15,
-      backgroundColor: colors.inputBg,
+      backgroundColor: glassInput,
       color: colors.text,
     },
     passwordContainer: {
       flexDirection: "row",
       alignItems: "center",
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 8,
+      borderColor: glassBorderSoft,
+      borderRadius: 16,
       marginBottom: 12,
-      backgroundColor: colors.inputBg,
+      backgroundColor: glassInput,
     },
     passwordInput: {
       flex: 1,
-      padding: 12,
+      padding: 14,
       fontSize: 15,
       color: colors.text,
     },
@@ -339,15 +453,20 @@ const createStyles = (colors) =>
       alignItems: "center",
     },
     button: {
-      borderRadius: 8,
-      padding: 14,
+      borderRadius: 16,
+      padding: 16,
       alignItems: "center",
       justifyContent: "center",
-      minHeight: 48,
+      minHeight: 52,
     },
     primaryButton: {
       backgroundColor: colors.accent,
       marginTop: 6,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 4,
     },
     buttonDisabled: {
       opacity: 0.5,
@@ -357,15 +476,23 @@ const createStyles = (colors) =>
       fontSize: 16,
       fontWeight: "600",
     },
-    errorText: {
-      color: colors.error,
-      fontSize: 14,
-      marginBottom: 16,
-      textAlign: "center",
-      paddingHorizontal: 10,
-      paddingVertical: 10,
+    errorBox: {
+      flexDirection: "row",
+      alignItems: "center",
       backgroundColor: colors.errorBg,
-      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: colors.error,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      marginBottom: 16,
+      gap: 8,
+    },
+    errorText: {
+      flex: 1,
+      color: colors.error,
+      fontSize: 13,
+      fontWeight: "500",
     },
     dividerSection: {
       flexDirection: "row",
@@ -381,7 +508,7 @@ const createStyles = (colors) =>
       fontSize: 13,
       color: colors.textSecondary,
       marginHorizontal: 12,
-      fontWeight: "500",
+      fontWeight: "600",
     },
     socialSection: {
       flexDirection: "row",
@@ -394,10 +521,15 @@ const createStyles = (colors) =>
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 8,
-      padding: 12,
-      backgroundColor: colors.inputBg,
+      borderColor: glassBorderSoft,
+      borderRadius: 16,
+      padding: 14,
+      backgroundColor: glassPanel,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      elevation: 3,
     },
     socialButtonText: {
       marginLeft: 8,
@@ -409,6 +541,7 @@ const createStyles = (colors) =>
       flexDirection: "row",
       justifyContent: "center",
       alignItems: "center",
+      marginBottom: 4,
     },
     footerText: {
       fontSize: 14,
@@ -422,7 +555,7 @@ const createStyles = (colors) =>
     developerFooter: {
       marginTop: 32,
       paddingTop: 16,
-      borderTopWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
       alignItems: "center",
     },
@@ -432,10 +565,11 @@ const createStyles = (colors) =>
       fontStyle: "italic",
     },
     icon: {
-      width: 90,
-      height: 90,
+      width: 76,
+      height: 76,
       resizeMode: "contain",
     },
   });
+};
 
 export default RegisterScreen;

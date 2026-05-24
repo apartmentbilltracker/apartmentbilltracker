@@ -30,7 +30,7 @@ if (!fs.existsSync(sourceImage)) {
   process.exit(1);
 }
 
-console.log("🎨 Apartment Bill Tracker - Icon Generator");
+console.log("🎨 PropFlow - Icon Generator");
 console.log("==========================================");
 console.log(`📁 Source: ${sourceImage}`);
 console.log("");
@@ -66,7 +66,7 @@ async function generateIcons() {
 
     // Create a summary file
     const summaryPath = path.join(outputDir, "README.md");
-    const summary = `# Apartment Bill Tracker - App Icons
+    const summary = `# PropFlow - App Icons
 
 Generated: ${new Date().toISOString()}
 

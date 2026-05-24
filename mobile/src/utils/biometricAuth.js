@@ -247,7 +247,7 @@ export const biometricAuth = {
       // Prompt user for biometric authentication
       const result = await LocalAuthentication.authenticateAsync({
         disableDeviceFallback: false, // Allow fallback to device passcode/PIN
-        reason: "Authenticate to access your apartment bill tracker",
+        reason: "Authenticate to access your property flow",
       });
 
       if (!result.success) {

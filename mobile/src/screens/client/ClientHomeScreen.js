@@ -20,6 +20,7 @@ import {
   Dimensions,
   Platform,
   Linking,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -39,14 +40,18 @@ import {
   chatService,
   announcementService,
   paymentService,
+  badgeService,
 } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { getAPIBaseURL } from "../../config/config";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
+import Feather from "@expo/vector-icons/Feather";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const ACTION_CARD_WIDTH = (SCREEN_WIDTH - 44) / 2;
 
 // Same amenity map used by host — maps key to icon+label
 const AMENITY_MAP = {
@@ -89,6 +94,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
   const [statusChangeNotifications, setStatusChangeNotifications] = useState(
     [],
   );
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [previewRoom, setPreviewRoom] = useState(null);
   const [fullMapRoom, setFullMapRoom] = useState(null);
   const [photoViewData, setPhotoViewData] = useState(null);
@@ -651,8 +657,17 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
   const fetchStatusChangeNotifications = async () => {
     try {
-      const response = await apiService.get("/api/v2/notifications");
+      const [response, counts] = await Promise.all([
+        apiService.get("/api/v2/notifications"),
+        badgeService.getCounts().catch(() => null),
+      ]);
       const allNotifications = response.notifications || [];
+      const fallbackUnreadCount = allNotifications.filter(
+        (notif) => !notif.isRead,
+      ).length;
+      setUnreadNotificationCount(
+        counts?.unreadNotifications ?? fallbackUnreadCount,
+      );
       // Filter for only unread member status change notifications
       const statusChanges = allNotifications.filter(
         (notif) =>
@@ -661,6 +676,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
       setStatusChangeNotifications(statusChanges);
     } catch (error) {
       console.error("Error fetching status notifications:", error);
+      setUnreadNotificationCount(0);
     }
   };
 
@@ -832,6 +848,8 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
       // Start lightweight status polling (no DB egress)
       const roomId = userJoinedRoom?.id || userJoinedRoom?._id;
+      fetchStatusChangeNotifications();
+      if (roomId) fetchChatBadge(roomId);
       const interval = roomId
         ? setInterval(() => pollMemberStatus(roomId), 30000)
         : null;
@@ -1791,6 +1809,41 @@ const ClientHomeScreen = ({ navigation, route }) => {
   const formatShortDate = (d) =>
     new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
+  // ─── NEW USERS FEATURE CARDS ───
+  const FeatureCard = ({ icon, title, description, bgColor }) => (
+    <View style={[styles.featureCard, { backgroundColor: bgColor }]}>
+      <View style={styles.featureCardTop}>
+        <Ionicons
+          name={icon}
+          size={28}
+          color="#fff"
+          style={styles.featureCardIcon}
+        />
+        <Text style={styles.featureCardTitle}>{title}</Text>
+      </View>
+      <Text style={styles.featureCardDesc}>{description}</Text>
+    </View>
+  );
+
+  const NewUsersSection = () => (
+    <View style={styles.newUsersSection}>
+      <View style={styles.newUsersFlex}>
+        <FeatureCard
+          icon="shield-checkmark"
+          title="Secure Payments"
+          description="All transactions are encrypted and monitored for your safety."
+          bgColor="#1B5E5B"
+        />
+        <FeatureCard
+          icon="flash"
+          title="Instant Approval"
+          description="Get verified and move in within 24 hours of selection."
+          bgColor="#9E5E00"
+        />
+      </View>
+    </View>
+  );
+
   return (
     <>
       <StatusModal />
@@ -1857,228 +1910,361 @@ const ClientHomeScreen = ({ navigation, route }) => {
         </View>
       </Modal>
       <View style={styles.container}>
-        {/* ─── HEADER ─── */}
-        <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.greeting}>{getTimeBasedGreeting()},</Text>
-              <Text style={styles.userName}>{userName}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.headerIconBg}
-              onPress={() =>
-                navigation.navigate("ProfileStack", { screen: "Profile" })
-              }
-              activeOpacity={0.7}
-            >
-              <Image
-                source={getAvatarSource()}
-                style={styles.headerAvatar}
-                defaultSource={require("../../assets/default-avatar.png")}
-                onError={() => setAvatarError(true)}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ─── HOST BANNER ─── */}
-        {announcementBanner && (
-          <View style={styles.hostBanner}>
-            <Ionicons
-              name="bookmark"
-              size={16}
-              color={colors.accent}
-              style={{ marginTop: 1 }}
-            />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.hostBannerTitle} numberOfLines={1}>
-                {announcementBanner.title}
-              </Text>
-              <Text style={styles.hostBannerBody} numberOfLines={2}>
-                {announcementBanner.content}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={dismissBanner}
-              style={styles.hostBannerClose}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="close" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ─── NOTIFICATION BANNER ─── */}
-        {statusChangeNotifications.length > 0 && (
-          <TouchableOpacity
-            style={styles.notifBanner}
-            onPress={() => navigation.navigate("ProfileStack")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.notifDot} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.notifTitle}>Status Update</Text>
-              <Text style={styles.notifMessage} numberOfLines={1}>
-                {statusChangeNotifications[0].message}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#e65100" />
-          </TouchableOpacity>
-        )}
-
-        {/* ─── ADS CAROUSEL ─── */}
-        <AdsCarousel screen="home" navigation={navigation} />
-
-        {loading ? (
+        {/* ─── FULL-SCREEN LOADER OVERLAY ─── */}
+        {loading && (
           <View style={styles.centerLoader}>
             <ActivityIndicator size="large" color={colors.accent} />
           </View>
-        ) : (
-          <ScrollViewWithDetection
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: 30 }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={["#b38604"]}
-              />
-            }
-          >
-            {userJoinedRoom ? (
-              <>
-                {/* ─── MY ROOM CARD ─── */}
-                <View style={styles.myRoomCard}>
-                  <View style={styles.myRoomHeader}>
-                    <View style={styles.roomIconBg}>
-                      <Ionicons name="home" size={22} color={colors.accent} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.myRoomName}>
-                        {userJoinedRoom.name}
-                      </Text>
-                      <Text style={styles.myRoomSub}>
-                        {userJoinedRoom.members?.length || 0} member
-                        {(userJoinedRoom.members?.length || 0) !== 1 ? "s" : ""}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.detailsChip}
-                      onPress={() =>
-                        navigation.navigate("HomeStack", {
-                          screen: "RoomDetails",
-                          params: {
-                            roomId: userJoinedRoom.id || userJoinedRoom._id,
-                          },
-                        })
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.detailsChipText}>Details</Text>
-                      <Ionicons
-                        name="chevron-forward"
-                        size={14}
-                        color={colors.accent}
-                      />
-                    </TouchableOpacity>
+        )}
+
+        <ScrollViewWithDetection
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 30 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#b38604"]}
+            />
+          }
+        >
+          {/* ─── HEADER ─── */}
+          <View style={styles.header}>
+            <View style={styles.headerRow}>
+              <TouchableOpacity
+                style={styles.headerMenuBtn}
+                onPress={() =>
+                  navigation.navigate("ProfileStack", {
+                    screen: "Profile",
+                  })
+                }
+                activeOpacity={0.7}
+              >
+                <Image
+                  source={getAvatarSource()}
+                  style={styles.headerAvatar}
+                  defaultSource={require("../../assets/default-avatar.png")}
+                  onError={() => setAvatarError(true)}
+                />
+              </TouchableOpacity>
+              <View style={styles.headerNotifContainer}>
+                <TouchableOpacity
+                  style={styles.headerNotifBtn}
+                  onPress={() => navigation.navigate("NotificationsInbox")}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="notifications-outline"
+                    size={26}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+                {(unreadNotificationCount > 0 || unreadChatCount > 0) && (
+                  <View style={styles.headerNotifBadge}>
+                    <Text style={styles.headerNotifBadgeText}>
+                      {unreadNotificationCount + unreadChatCount > 99
+                        ? "99+"
+                        : unreadNotificationCount + unreadChatCount}
+                    </Text>
                   </View>
-
-                  {/* Billing Period Strip */}
-                  {userJoinedRoom.billing && (
-                    <View style={styles.periodStrip}>
-                      <Ionicons
-                        name="calendar-outline"
-                        size={14}
-                        color={colors.textSecondary}
-                      />
-                      <Text style={styles.periodText}>
-                        {formatShortDate(userJoinedRoom.billing.start)}{" "}
-                        {"\u2014"} {formatShortDate(userJoinedRoom.billing.end)}
-                      </Text>
-                      {userJoinedRoom?.cycleStatus === "completed" ? (
-                        <View
-                          style={{
-                            backgroundColor: "#e8f5e9",
-                            borderRadius: 6,
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            marginLeft: 8,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 9,
-                              fontWeight: "700",
-                              color: "#27ae60",
-                            }}
-                          >
-                            COMPLETED
-                          </Text>
-                        </View>
-                      ) : userJoinedRoom?.cycleStatus === "cycle_closed" ? (
-                        <View
-                          style={{
-                            backgroundColor: "#fff3e0",
-                            borderRadius: 6,
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            marginLeft: 8,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 9,
-                              fontWeight: "700",
-                              color: "#e65100",
-                            }}
-                          >
-                            CLOSED
-                          </Text>
-                        </View>
-                      ) : userJoinedRoom?.cycleStatus === "active" ? (
-                        <View
-                          style={{
-                            backgroundColor: "#fff3e0",
-                            borderRadius: 6,
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            marginLeft: 8,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 9,
-                              fontWeight: "700",
-                              color: "#e65100",
-                            }}
-                          >
-                            ACTIVE
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  )}
+                )}
+              </View>
+            </View>
+            <View style={styles.headerTitleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.headerEyebrow}>
+                  {userJoinedRoom ? "Your propflow hub" : "Find your next stay"}
+                </Text>
+                <Text style={styles.headerTitle}>Dashboard</Text>
+              </View>
+              <View style={styles.headerTopPill}>
+                <Ionicons
+                  name={userJoinedRoom ? "home-outline" : "compass-outline"}
+                  size={14}
+                  color="#fff"
+                />
+                <Text style={styles.headerTopPillText}>
+                  {userJoinedRoom ? "Joined Room" : "Explore"}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.headerGreetRow}>
+              <Text style={styles.greeting}>
+                {getTimeBasedGreeting()}, {userName}
+              </Text>
+              <Text style={styles.headerSubtitle}>
+                {userJoinedRoom
+                  ? `Here's what's happening in ${userJoinedRoom.name}.`
+                  : "Find a space that fits your lifestyle perfectly."}
+              </Text>
+              <View style={styles.headerStatusRow}>
+                <View style={styles.headerStatusChip}>
+                  <Ionicons
+                    name={userJoinedRoom ? "people-outline" : "bed-outline"}
+                    size={13}
+                    color="#d8efe8"
+                  />
+                  <Text style={styles.headerStatusChipText}>
+                    {userJoinedRoom
+                      ? `${userJoinedRoom.members?.length || 0} members`
+                      : `${unjoinedRooms.length} rooms open`}
+                  </Text>
                 </View>
+                <View style={styles.headerStatusChip}>
+                  <Ionicons
+                    name={
+                      unreadChatCount > 0
+                        ? "chatbubble-ellipses-outline"
+                        : "sparkles-outline"
+                    }
+                    size={13}
+                    color="#d8efe8"
+                  />
+                  <Text style={styles.headerStatusChipText}>
+                    {unreadChatCount > 0
+                      ? `${unreadChatCount} unread chats`
+                      : statusChangeNotifications.length > 0
+                        ? "New updates waiting"
+                        : "Everything synced"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
 
-                {/* ─── BILLING OVERVIEW (payors only) ─── */}
-                {(() => {
-                  const breakdownDaysRemaining = activeCycle
-                    ? Math.max(
-                        0,
-                        Math.ceil(
-                          (new Date(
-                            activeCycle.end_date || activeCycle.endDate,
-                          ).getTime() -
-                            Date.now()) /
-                            (1000 * 60 * 60 * 24),
-                        ),
-                      )
-                    : 0;
+          {/* ─── BALANCE CARD (overlaps header) ─── */}
+          {userJoinedRoom && isCurrentUserPayor() ? (
+            (() => {
+              const breakdown = getExpenseBreakdown();
+              const remaining = getRemainingDue();
+              const totalBills = breakdown?.perPayor || 0;
+              const pendingCount = getPaymentStatus()?.pendingCount || 0;
+              const memberCount = userJoinedRoom.members?.length || 0;
+              const cycleDaysRemaining = activeCycle
+                ? Math.max(
+                    0,
+                    Math.ceil(
+                      (new Date(
+                        activeCycle.end_date || activeCycle.endDate,
+                      ).getTime() -
+                        Date.now()) /
+                        (1000 * 60 * 60 * 24),
+                    ),
+                  )
+                : null;
+              return (
+                <View style={styles.balanceCardWrap}>
+                  <View style={styles.balanceCard}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.balanceLabel}>Total Balance</Text>
+                      <AnimatedAmount
+                        value={remaining}
+                        formatter={(val) => `PHP ${val.toFixed(2)}`}
+                        style={styles.balanceAmount}
+                      />
+                      <Text style={styles.balanceSubLabel}>
+                        You owe this cycle
+                      </Text>
+                      <View style={styles.balanceMetaRow}>
+                        <View style={styles.balanceMetaChip}>
+                          <Ionicons
+                            name="document-text-outline"
+                            size={13}
+                            color="#0c7364"
+                          />
+                          <Text style={styles.balanceMetaChipText}>
+                            {pendingCount} pending
+                          </Text>
+                        </View>
+                        <View style={styles.balanceMetaChip}>
+                          <Ionicons
+                            name="time-outline"
+                            size={13}
+                            color="#0c7364"
+                          />
+                          <Text style={styles.balanceMetaChipText}>
+                            {cycleDaysRemaining != null
+                              ? `${cycleDaysRemaining} days left`
+                              : "Current cycle"}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.balanceIconWrap}>
+                      <View style={styles.balanceIconInner}>
+                        <Ionicons
+                          name="wallet-outline"
+                          size={30}
+                          color="#00847B"
+                        />
+                      </View>
+                      <Text style={styles.balanceIconCaption}>This month</Text>
+                    </View>
+                  </View>
+                  {/* Quick Stats Row */}
+                  <View style={styles.quickStatsRow}>
+                    <View style={styles.quickStatCell}>
+                      <View
+                        style={[
+                          styles.quickStatIcon,
+                          { backgroundColor: "#e0f7fa" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="document-text-outline"
+                          size={22}
+                          color="#0097a7"
+                        />
+                      </View>
+                      <Text style={styles.quickStatValue}>{pendingCount}</Text>
+                      <Text style={styles.quickStatLabel}>Pending Bills</Text>
+                      <Text style={styles.quickStatHint}>Needs attention</Text>
+                    </View>
+                    <View style={styles.quickStatCell}>
+                      <View
+                        style={[
+                          styles.quickStatIcon,
+                          { backgroundColor: "#e8eaf6" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="cash-outline"
+                          size={22}
+                          color="#3949ab"
+                        />
+                      </View>
+                      <Text style={styles.quickStatValue} numberOfLines={1}>
+                        PHP {totalBills.toFixed(0)}
+                      </Text>
+                      <Text style={styles.quickStatLabel}>Total Bills</Text>
+                      <Text style={styles.quickStatHint}>
+                        Shared this cycle
+                      </Text>
+                    </View>
+                    <View style={styles.quickStatCell}>
+                      <View
+                        style={[
+                          styles.quickStatIcon,
+                          { backgroundColor: "#f3e5f5" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="people-outline"
+                          size={22}
+                          color="#7b1fa2"
+                        />
+                      </View>
+                      <Text style={styles.quickStatValue}>{memberCount}</Text>
+                      <Text style={styles.quickStatLabel}>Members</Text>
+                      <Text style={styles.quickStatHint}>Living together</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })()
+          ) : (
+            // Searchbar
+            <View style={styles.searchBarCardWrap}>
+              <View style={styles.searchIntroCard}>
+                <View style={styles.searchIntroHeader}>
+                  <View>
+                    <Text style={styles.searchIntroLabel}>
+                      Discover available rooms
+                    </Text>
+                    <Text style={styles.searchHelperText}>
+                      Search by room name, code, or owner.
+                    </Text>
+                  </View>
+                  <View style={styles.searchIntroChip}>
+                    <Text style={styles.searchIntroChipText}>Guest View</Text>
+                  </View>
+                </View>
+                <View style={styles.searchBar}>
+                  <Feather name="search" size={22} style={styles.searchIcon} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search rooms, codes, or owners..."
+                    placeholderTextColor={colors.textTertiary}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
 
-                  return (
-                    <>
-                      {userJoinedRoom.billing &&
+          {/* ─── HOST BANNER ─── */}
+          {announcementBanner && (
+            <View style={styles.hostBanner}>
+              <Ionicons
+                name="bookmark"
+                size={16}
+                color={colors.accent}
+                style={{ marginTop: 1 }}
+              />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.hostBannerTitle} numberOfLines={1}>
+                  {announcementBanner.title}
+                </Text>
+                <Text style={styles.hostBannerBody} numberOfLines={2}>
+                  {announcementBanner.content}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={dismissBanner}
+                style={styles.hostBannerClose}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ─── NOTIFICATION BANNER ─── */}
+          {statusChangeNotifications.length > 0 && (
+            <TouchableOpacity
+              style={styles.notifBanner}
+              onPress={() => navigation.navigate("ProfileStack")}
+              activeOpacity={0.7}
+            >
+              <View style={styles.notifDot} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.notifTitle}>Status Update</Text>
+                <Text style={styles.notifMessage} numberOfLines={1}>
+                  {statusChangeNotifications[0].message}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#e65100" />
+            </TouchableOpacity>
+          )}
+
+          {/* ─── ADS CAROUSEL ─── */}
+          <AdsCarousel screen="home" navigation={navigation} />
+
+          {/* ─── NEW USERS FEATURES ─── */}
+          {!userJoinedRoom && <NewUsersSection />}
+
+          {!loading && (
+            <>
+              {userJoinedRoom && (
+                <>
+                  {/* ─── BILLING OVERVIEW (payors only) ─── */}
+                  {(() => {
+                    const breakdownDaysRemaining = activeCycle
+                      ? Math.max(
+                          0,
+                          Math.ceil(
+                            (new Date(
+                              activeCycle.end_date || activeCycle.endDate,
+                            ).getTime() -
+                              Date.now()) /
+                              (1000 * 60 * 60 * 24),
+                          ),
+                        )
+                      : 0;
+
+                    return (
+                      <>
+                        {/* {userJoinedRoom.billing &&
                         isCurrentUserPayor() &&
                         !getPaymentStatus()?.allPaid &&
                         userJoinedRoom.cycleStatus !== "completed" && (
@@ -2094,56 +2280,6 @@ const ClientHomeScreen = ({ navigation, route }) => {
                             }}
                             activeOpacity={0.7}
                           >
-                            <View style={styles.billingCardTop}>
-                              <View>
-                                <Text style={styles.billingCardLabel}>
-                                  {breakdownDaysRemaining === 0
-                                    ? "Total bills to pay"
-                                    : `Total Upcoming Bills`}
-                                </Text>
-                                <AnimatedAmount
-                                  value={getRemainingDue()}
-                                  formatter={fmtShort}
-                                  style={styles.billingCardAmount}
-                                />
-                                {hasPendingPayment &&
-                                !getPaymentStatus()?.allPaid ? (
-                                  <Text
-                                    style={{
-                                      fontSize: 10,
-                                      color: "#f59e0b",
-                                      fontWeight: "600",
-                                      marginTop: 2,
-                                    }}
-                                  >
-                                    ⏳ Awaiting Payment Verification
-                                  </Text>
-                                ) : !hasPendingPayment &&
-                                  getPaymentStatus()?.allPaid ? (
-                                  <Text
-                                    style={{
-                                      fontSize: 10,
-                                      color: "#16a34a",
-                                      fontWeight: "600",
-                                      marginTop: 2,
-                                    }}
-                                  >
-                                    ✓ Payment Verified
-                                  </Text>
-                                ) : null}
-                              </View>
-                              <View style={styles.billingBadge}>
-                                <Text style={styles.billingBadgeText}>
-                                  Tap for details
-                                </Text>
-                                <Ionicons
-                                  name="chevron-forward"
-                                  size={14}
-                                  color={colors.accent}
-                                />
-                              </View>
-                            </View>
-
                             <View style={styles.billingBreakdownRow}>
                               {(() => {
                                 const paymentStatus = getPaymentStatus();
@@ -2269,236 +2405,399 @@ const ClientHomeScreen = ({ navigation, route }) => {
                               })()}
                             </View>
                           </TouchableOpacity>
-                        )}
+                        )} */}
 
-                      {/* ─── ALL BILLS PAID BANNER ─── */}
-                      {isCurrentUserPayor() &&
-                        (getPaymentStatus()?.allPaid ||
-                          userJoinedRoom.cycleStatus === "completed") && (
-                          <View
-                            style={{
-                              marginHorizontal: 16,
-                              marginTop: 12,
-                              paddingHorizontal: 16,
-                              paddingVertical: 16,
-                              backgroundColor: colors.successBg || "#e8f5e9",
-                              borderRadius: 14,
-                              borderWidth: 1,
-                              borderColor: colors.success || "#4caf50",
-                              borderLeftWidth: 4,
-                              alignItems: "center",
-                            }}
-                          >
-                            <Ionicons
-                              name="checkmark-done-circle"
-                              size={36}
-                              color={colors.success || "#4caf50"}
-                            />
-                            <Text
+                        {/* ─── QUICK ACTIONS ─── */}
+                        <View style={styles.actionsSection}>
+                          <View style={styles.sectionHeaderRow}>
+                            <View>
+                              <Text style={styles.sectionTitle}>
+                                Quick Actions
+                              </Text>
+                              <Text style={styles.sectionCaption}>
+                                Jump into the things you use most.
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.actionsRow}>
+                            {isCurrentUserPayor() && (
+                              <TouchableOpacity
+                                style={styles.actionCard}
+                                onPress={() =>
+                                  navigation.navigate("BillsStack", {
+                                    screen: "BillsMain",
+                                    params: {
+                                      roomId:
+                                        userJoinedRoom.id || userJoinedRoom._id,
+                                    },
+                                  })
+                                }
+                                activeOpacity={0.7}
+                              >
+                                <View
+                                  style={[
+                                    styles.actionIconBg,
+                                    { backgroundColor: "#d6ede3" },
+                                  ]}
+                                >
+                                  <Ionicons
+                                    name="card"
+                                    size={20}
+                                    color="#036d41"
+                                  />
+                                </View>
+                                <Text style={styles.actionLabel}>
+                                  Pay Bills
+                                </Text>
+                                <Text style={styles.actionSubLabel}>
+                                  Review dues fast
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+
+                            {userJoinedRoom?.waterBillingMode !==
+                              "fixed_monthly" &&
+                              userJoinedRoom?.water_billing_mode !==
+                                "fixed_monthly" && (
+                                <TouchableOpacity
+                                  style={styles.actionCard}
+                                  onPress={() =>
+                                    navigation.navigate("PresenceStack", {
+                                      screen: "PresenceMain",
+                                      params: {
+                                        roomId:
+                                          userJoinedRoom.id ||
+                                          userJoinedRoom._id,
+                                      },
+                                    })
+                                  }
+                                  activeOpacity={0.7}
+                                >
+                                  <View
+                                    style={[
+                                      styles.actionIconBg,
+                                      { backgroundColor: "#b3dece" },
+                                    ]}
+                                  >
+                                    <Ionicons
+                                      name="calendar"
+                                      size={20}
+                                      color="#025535"
+                                    />
+                                  </View>
+                                  <Text style={styles.actionLabel}>
+                                    Presence
+                                  </Text>
+                                  <Text style={styles.actionSubLabel}>
+                                    Track daily stays
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+
+                            <TouchableOpacity
+                              style={styles.actionCard}
+                              onPress={() =>
+                                navigation.navigate("HomeStack", {
+                                  screen: "RoomDetails",
+                                  params: {
+                                    roomId:
+                                      userJoinedRoom.id || userJoinedRoom._id,
+                                  },
+                                })
+                              }
+                              activeOpacity={0.7}
+                            >
+                              <View
+                                style={[
+                                  styles.actionIconBg,
+                                  { backgroundColor: "#e8f5ef" },
+                                ]}
+                              >
+                                <Ionicons
+                                  name="information-circle"
+                                  size={20}
+                                  color="#036d41"
+                                />
+                              </View>
+                              <Text style={styles.actionLabel}>Room Info</Text>
+                              <Text style={styles.actionSubLabel}>
+                                See amenities
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.actionCard}
+                              onPress={() =>
+                                navigation.navigate("ChatRoom", {
+                                  roomId:
+                                    userJoinedRoom.id || userJoinedRoom._id,
+                                  roomName: userJoinedRoom.name,
+                                  isHost: false,
+                                })
+                              }
+                              activeOpacity={0.7}
+                            >
+                              <View
+                                style={[
+                                  styles.actionIconBg,
+                                  { backgroundColor: "#c8e8d8" },
+                                ]}
+                              >
+                                <Ionicons
+                                  name="chatbubble-ellipses"
+                                  size={20}
+                                  color="#036d41"
+                                />
+                                {unreadChatCount > 0 && (
+                                  <View style={styles.chatBadge}>
+                                    <Text style={styles.chatBadgeText}>
+                                      {unreadChatCount > 99
+                                        ? "99+"
+                                        : unreadChatCount}
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={styles.actionLabel}>Chat</Text>
+                              <Text style={styles.actionSubLabel}>
+                                Message housemates
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* ─── ALL BILLS PAID BANNER ─── */}
+                        {isCurrentUserPayor() &&
+                          (getPaymentStatus()?.allPaid ||
+                            userJoinedRoom.cycleStatus === "completed") && (
+                            <View
                               style={{
-                                color: colors.success || "#2e7d32",
-                                fontWeight: "700",
-                                fontSize: 15,
-                                marginTop: 8,
-                                textAlign: "center",
+                                marginHorizontal: 16,
+                                marginTop: 12,
+                                paddingHorizontal: 16,
+                                paddingVertical: 16,
+                                backgroundColor: colors.successBg || "#e8f5e9",
+                                borderRadius: 14,
+                                borderWidth: 1,
+                                borderColor: colors.success || "#4caf50",
+                                borderLeftWidth: 4,
+                                alignItems: "center",
                               }}
                             >
-                              All bills paid!
-                            </Text>
-                            <Text
+                              <Ionicons
+                                name="checkmark-done-circle"
+                                size={36}
+                                color={colors.success || "#4caf50"}
+                              />
+                              <Text
+                                style={{
+                                  color: colors.success || "#2e7d32",
+                                  fontWeight: "700",
+                                  fontSize: 15,
+                                  marginTop: 8,
+                                  textAlign: "center",
+                                }}
+                              >
+                                All bills paid!
+                              </Text>
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
+                                  marginTop: 4,
+                                  textAlign: "center",
+                                  lineHeight: 18,
+                                }}
+                              >
+                                Please wait for the host to create a new billing
+                                cycle. You can review your payments in the Bills
+                                screen.
+                              </Text>
+                              <TouchableOpacity
+                                style={{
+                                  marginTop: 10,
+                                  paddingHorizontal: 16,
+                                  paddingVertical: 8,
+                                  backgroundColor: colors.success || "#4caf50",
+                                  borderRadius: 8,
+                                }}
+                                onPress={() =>
+                                  navigation.navigate("BillsStack", {
+                                    screen: "BillsMain",
+                                  })
+                                }
+                                activeOpacity={0.7}
+                              >
+                                <Text
+                                  style={{
+                                    color: "#fff",
+                                    fontWeight: "600",
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  View Payment History
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+
+                        {/* ─── NON-PAYER: ALL PAYORS PAID BANNER ─── */}
+                        {!isCurrentUserPayor() &&
+                          userJoinedRoom?.billing &&
+                          (() => {
+                            const payors = getPayorsPaymentStatus();
+                            return (
+                              payors.length > 0 &&
+                              payors.every((p) => p.allPaid)
+                            );
+                          })() && (
+                            <View
                               style={{
-                                color: colors.textSecondary,
-                                fontSize: 12,
-                                marginTop: 4,
-                                textAlign: "center",
-                                lineHeight: 18,
+                                marginHorizontal: 16,
+                                marginTop: 12,
+                                paddingHorizontal: 16,
+                                paddingVertical: 16,
+                                backgroundColor: colors.successBg || "#e8f5e9",
+                                borderRadius: 14,
+                                borderWidth: 1,
+                                borderColor: colors.success || "#4caf50",
+                                borderLeftWidth: 4,
+                                alignItems: "center",
                               }}
                             >
-                              Please wait for the host to create a new billing
-                              cycle. You can review your payments in the Bills
-                              screen.
-                            </Text>
+                              <Ionicons
+                                name="checkmark-done-circle"
+                                size={36}
+                                color={colors.success || "#4caf50"}
+                              />
+                              <Text
+                                style={{
+                                  color: colors.success || "#2e7d32",
+                                  fontWeight: "700",
+                                  fontSize: 15,
+                                  marginTop: 8,
+                                  textAlign: "center",
+                                }}
+                              >
+                                Billing cycle complete!
+                              </Text>
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
+                                  marginTop: 4,
+                                  textAlign: "center",
+                                  lineHeight: 18,
+                                }}
+                              >
+                                All payors in your room have settled their bills
+                                for this cycle. Please wait for the host to
+                                start a new billing period.
+                              </Text>
+                            </View>
+                          )}
+
+                        {/* ─── OUTSTANDING BALANCE BANNER ─── */}
+                        {isCurrentUserPayor() &&
+                          outstandingBalance.totalOutstanding > 0 && (
                             <TouchableOpacity
                               style={{
-                                marginTop: 10,
-                                paddingHorizontal: 16,
-                                paddingVertical: 8,
-                                backgroundColor: colors.success || "#4caf50",
-                                borderRadius: 8,
+                                flexDirection: "row",
+                                alignItems: "center",
+                                marginHorizontal: 16,
+                                marginTop: 12,
+                                paddingHorizontal: 14,
+                                paddingVertical: 13,
+                                backgroundColor: "#fdecea",
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: "#ef9a9a",
+                                borderLeftWidth: 4,
+                                borderLeftColor: "#c62828",
                               }}
                               onPress={() =>
                                 navigation.navigate("BillsStack", {
                                   screen: "BillsMain",
                                 })
                               }
-                              activeOpacity={0.7}
+                              activeOpacity={0.8}
                             >
-                              <Text
-                                style={{
-                                  color: "#fff",
-                                  fontWeight: "600",
-                                  fontSize: 13,
-                                }}
-                              >
-                                View Payment History
-                              </Text>
+                              <MaterialIcons
+                                name="error"
+                                size={22}
+                                color="#c62828"
+                                style={{ marginRight: 12 }}
+                              />
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={{
+                                    color: "#b71c1c",
+                                    fontWeight: "700",
+                                    fontSize: 14,
+                                  }}
+                                >
+                                  Outstanding Balance
+                                </Text>
+                                <Text
+                                  style={{
+                                    color: "#c62828",
+                                    fontWeight: "800",
+                                    fontSize: 16,
+                                    marginTop: 1,
+                                  }}
+                                >
+                                  ₱
+                                  {outstandingBalance.totalOutstanding.toFixed(
+                                    2,
+                                  )}
+                                </Text>
+                                <Text
+                                  style={{
+                                    color: "#b71c1c",
+                                    fontSize: 12,
+                                    marginTop: 3,
+                                    opacity: 0.85,
+                                  }}
+                                >
+                                  {outstandingBalance.unpaidCycles.length}{" "}
+                                  unpaid closed cycle
+                                  {outstandingBalance.unpaidCycles.length !== 1
+                                    ? "s"
+                                    : ""}
+                                  {" · "}Tap to settle
+                                </Text>
+                              </View>
+                              <MaterialIcons
+                                name="chevron-right"
+                                size={20}
+                                color="#c62828"
+                              />
                             </TouchableOpacity>
-                          </View>
-                        )}
+                          )}
 
-                      {/* ─── NON-PAYER: ALL PAYORS PAID BANNER ─── */}
-                      {!isCurrentUserPayor() &&
-                        userJoinedRoom?.billing &&
-                        (() => {
-                          const payors = getPayorsPaymentStatus();
-                          return (
-                            payors.length > 0 && payors.every((p) => p.allPaid)
-                          );
-                        })() && (
-                          <View
-                            style={{
-                              marginHorizontal: 16,
-                              marginTop: 12,
-                              paddingHorizontal: 16,
-                              paddingVertical: 16,
-                              backgroundColor: colors.successBg || "#e8f5e9",
-                              borderRadius: 14,
-                              borderWidth: 1,
-                              borderColor: colors.success || "#4caf50",
-                              borderLeftWidth: 4,
-                              alignItems: "center",
-                            }}
-                          >
-                            <Ionicons
-                              name="checkmark-done-circle"
-                              size={36}
-                              color={colors.success || "#4caf50"}
-                            />
-                            <Text
-                              style={{
-                                color: colors.success || "#2e7d32",
-                                fontWeight: "700",
-                                fontSize: 15,
-                                marginTop: 8,
-                                textAlign: "center",
-                              }}
-                            >
-                              Billing cycle complete!
-                            </Text>
-                            <Text
-                              style={{
-                                color: colors.textSecondary,
-                                fontSize: 12,
-                                marginTop: 4,
-                                textAlign: "center",
-                                lineHeight: 18,
-                              }}
-                            >
-                              All payors in your room have settled their bills
-                              for this cycle. Please wait for the host to start
-                              a new billing period.
-                            </Text>
-                          </View>
-                        )}
-
-                      {/* ─── OUTSTANDING BALANCE BANNER ─── */}
-                      {isCurrentUserPayor() &&
-                        outstandingBalance.totalOutstanding > 0 && (
-                          <TouchableOpacity
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              marginHorizontal: 16,
-                              marginTop: 12,
-                              paddingHorizontal: 14,
-                              paddingVertical: 13,
-                              backgroundColor: "#fdecea",
-                              borderRadius: 12,
-                              borderWidth: 1,
-                              borderColor: "#ef9a9a",
-                              borderLeftWidth: 4,
-                              borderLeftColor: "#c62828",
-                            }}
-                            onPress={() =>
-                              navigation.navigate("BillsStack", {
-                                screen: "BillsMain",
-                              })
-                            }
-                            activeOpacity={0.8}
-                          >
-                            <MaterialIcons
-                              name="error"
-                              size={22}
-                              color="#c62828"
-                              style={{ marginRight: 12 }}
-                            />
-                            <View style={{ flex: 1 }}>
-                              <Text
-                                style={{
-                                  color: "#b71c1c",
-                                  fontWeight: "700",
-                                  fontSize: 14,
-                                }}
-                              >
-                                Outstanding Balance
+                        {/* BILL BREAKDOWN - INDIVIDUAL BILLS */}
+                        {isCurrentUserPayor() && activeCycle && (
+                          <View style={styles.upcomingBillsSection}>
+                            {/* Section Header */}
+                            <View style={styles.upcomingBillsHeader}>
+                              <Text style={styles.upcomingBillsTitle}>
+                                {breakdownDaysRemaining === 0
+                                  ? "Due Today"
+                                  : breakdownDaysRemaining === 1
+                                    ? "Due Tomorrow"
+                                    : "Upcoming Bills"}
                               </Text>
-                              <Text
-                                style={{
-                                  color: "#c62828",
-                                  fontWeight: "800",
-                                  fontSize: 16,
-                                  marginTop: 1,
-                                }}
+                              <TouchableOpacity
+                                onPress={() => setShowExpenseModal(true)}
+                                activeOpacity={0.7}
                               >
-                                ₱
-                                {outstandingBalance.totalOutstanding.toFixed(2)}
-                              </Text>
-                              <Text
-                                style={{
-                                  color: "#b71c1c",
-                                  fontSize: 12,
-                                  marginTop: 3,
-                                  opacity: 0.85,
-                                }}
-                              >
-                                {outstandingBalance.unpaidCycles.length} unpaid
-                                closed cycle
-                                {outstandingBalance.unpaidCycles.length !== 1
-                                  ? "s"
-                                  : ""}
-                                {" · "}Tap to settle
-                              </Text>
+                                <Text style={styles.upcomingBillsViewAll}>
+                                  View all
+                                </Text>
+                              </TouchableOpacity>
                             </View>
-                            <MaterialIcons
-                              name="chevron-right"
-                              size={20}
-                              color="#c62828"
-                            />
-                          </TouchableOpacity>
-                        )}
 
-                      {/* BILL BREAKDOWN - INDIVIDUAL BILLS */}
-                      {isCurrentUserPayor() && activeCycle && (
-                        <View style={styles.breakdownCard}>
-                          <View style={styles.breakdownHeader}>
-                            <Text style={styles.breakdownTitle}>
-                              {breakdownDaysRemaining === 0
-                                ? "Due Today"
-                                : breakdownDaysRemaining === 1
-                                  ? "Due Tomorrow"
-                                  : `Upcoming Bills`}
-                            </Text>
-                            <TouchableOpacity
-                              onPress={() => setShowExpenseModal(true)}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.breakdownViewAllText}>
-                                View All
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          <View>
+                            {/* Individual Bill Cards */}
                             {(() => {
                               const breakdown = getExpenseBreakdown();
                               const paymentStatus = getPaymentStatus();
@@ -2508,6 +2807,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                                   name: "Rent",
                                   icon: "home",
                                   color: "#e65100",
+                                  iconBg: "#fff3e0",
                                   amount: breakdown?.rent?.amount || 0,
                                   status:
                                     paymentStatus?.status?.rentStatus ||
@@ -2517,6 +2817,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                                   name: "Electricity",
                                   icon: "flash",
                                   color: colors.electricityColor,
+                                  iconBg: "#fffde7",
                                   amount: breakdown?.electricity?.amount || 0,
                                   status:
                                     paymentStatus?.status?.electricityStatus ||
@@ -2526,6 +2827,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                                   name: "Water",
                                   icon: "water",
                                   color: colors.waterColor,
+                                  iconBg: "#e3f2fd",
                                   amount: breakdown?.water?.amount || 0,
                                   status:
                                     paymentStatus?.status?.waterStatus ||
@@ -2535,7 +2837,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                                   name: "Internet",
                                   icon: "wifi",
                                   color: colors.internetColor,
-
+                                  iconBg: "#f3e5f5",
                                   amount: breakdown?.internet?.amount || 0,
                                   status:
                                     paymentStatus?.status?.internetStatus ||
@@ -2547,6 +2849,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                                       name: charge.name || "Charge",
                                       icon: "pricetag",
                                       color: colors.accent,
+                                      iconBg: colors.accentSurface,
                                       amount: charge.amount || 0,
                                       status:
                                         paymentStatus?.status
@@ -2556,1010 +2859,533 @@ const ClientHomeScreen = ({ navigation, route }) => {
                               ].filter((bill) => bill.amount > 0);
 
                               return bills.map((bill, idx) => (
-                                <View key={idx}>
-                                  <View style={styles.breakdownRow}>
-                                    <View style={styles.breakdownBillIconWrap}>
-                                      <View
-                                        style={[styles.breakdownBillIconBg]}
-                                      >
-                                        <Ionicons
-                                          name={bill.icon}
-                                          size={14}
-                                          color={bill.color}
-                                        />
-                                      </View>
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                      <View style={styles.billBreakdownInfoRow}>
-                                        <Text
-                                          style={styles.billBreakdownName}
-                                          numberOfLines={1}
-                                        >
-                                          {bill.name}
-                                        </Text>
-                                      </View>
-                                      <View style={styles.billBreakdownDueRow}>
-                                        {bill.status === "paid" ? (
-                                          <Text
-                                            style={{
-                                              fontSize: 10,
-                                              fontWeight: "600",
-                                              color: "#22c55e",
-                                              backgroundColor:
-                                                "rgba(34, 197, 94, 0.15)",
-                                              paddingHorizontal: 5,
-                                              paddingVertical: 1,
-                                              borderRadius: 10,
-                                            }}
-                                          >
-                                            ✓ Paid
-                                          </Text>
-                                        ) : (
-                                          <Text
-                                            style={styles.billBreakdownDueText}
-                                          >
-                                            {breakdownDaysRemaining === 0
-                                              ? "Due Today"
-                                              : breakdownDaysRemaining === 1
-                                                ? "Due Tomorrow"
-                                                : `Due in ${breakdownDaysRemaining} days`}
-                                          </Text>
-                                        )}
-                                      </View>
-                                    </View>
-                                    <View style={styles.billBreakdownAmoutRow}>
-                                      <Text
-                                        style={styles.billBreakdownAmoutText}
-                                      >
-                                        {fmt(bill.amount)}
-                                      </Text>
-                                      <Ionicons
-                                        name="chevron-forward"
-                                        size={16}
-                                        color={colors.accent}
-                                      />
-                                    </View>
+                                <TouchableOpacity
+                                  key={idx}
+                                  style={styles.upcomingBillCard}
+                                  onPress={() => setShowExpenseModal(true)}
+                                  activeOpacity={0.7}
+                                >
+                                  {/* Icon */}
+                                  <View
+                                    style={[
+                                      styles.upcomingBillIconWrap,
+                                      { backgroundColor: bill.iconBg },
+                                    ]}
+                                  >
+                                    <Ionicons
+                                      name={bill.icon}
+                                      size={22}
+                                      color={bill.color}
+                                    />
                                   </View>
-                                  {idx < bills.length - 1 && (
-                                    <View style={styles.activityDivider} />
-                                  )}
-                                </View>
+
+                                  {/* Name + Due date */}
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.upcomingBillName}>
+                                      {bill.name}
+                                    </Text>
+                                    <Text style={styles.upcomingBillDue}>
+                                      {bill.status === "paid"
+                                        ? "Paid this cycle"
+                                        : breakdownDaysRemaining === 0
+                                          ? "Due Today"
+                                          : breakdownDaysRemaining === 1
+                                            ? "Due Tomorrow"
+                                            : `Due in ${breakdownDaysRemaining} day${breakdownDaysRemaining !== 1 ? "s" : ""}`}
+                                    </Text>
+                                  </View>
+
+                                  {/* Amount + badge */}
+                                  <View style={styles.upcomingBillRight}>
+                                    <Text style={styles.upcomingBillAmount}>
+                                      {fmt(bill.amount)}
+                                    </Text>
+                                    {bill.status === "paid" ? (
+                                      <Text
+                                        style={styles.upcomingBillPaidBadge}
+                                      >
+                                        ✓ Paid
+                                      </Text>
+                                    ) : breakdownDaysRemaining <= 5 ? (
+                                      <Text
+                                        style={styles.upcomingBillDueSoonBadge}
+                                      >
+                                        Due Soon
+                                      </Text>
+                                    ) : null}
+                                  </View>
+                                </TouchableOpacity>
                               ));
                             })()}
                           </View>
-                        </View>
-                      )}
-                    </>
-                  );
-                })()}
+                        )}
+                      </>
+                    );
+                  })()}
+                </>
+              )}
 
-                {/* ─── PAYMENT STATUS ─── */}
-                {/* {isCurrentUserPayor() &&
-                  (getPaymentStatus() ||
-                    userJoinedRoom?.cycleStatus === "completed" ||
-                    userJoinedRoom?.cycleStatus === "cycle_closed") && (
-                    <TouchableOpacity
-                      style={[
-                        styles.paymentCard,
-                        {
-                          borderLeftColor:
-                            getPaymentStatus()?.allPaid ||
-                            userJoinedRoom?.cycleStatus === "completed"
-                              ? colors.success
-                              : "#e65100",
-                        },
-                      ]}
-                      onPress={() => setShowStatusModal(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={
-                          getPaymentStatus()?.allPaid ||
-                          userJoinedRoom?.cycleStatus === "completed"
-                            ? "checkmark-circle"
-                            : "time"
-                        }
-                        size={22}
-                        color={
-                          getPaymentStatus()?.allPaid ||
-                          userJoinedRoom?.cycleStatus === "completed"
-                            ? colors.success
-                            : "#e65100"
-                        }
-                      />
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text
-                          style={[
-                            styles.paymentTitle,
-                            {
-                              color:
-                                getPaymentStatus()?.allPaid ||
-                                userJoinedRoom?.cycleStatus === "completed"
-                                  ? colors.success
-                                  : "#e65100",
-                            },
-                          ]}
-                        >
-                          {userJoinedRoom?.cycleStatus === "completed"
-                            ? "Billing Cycle Complete"
-                            : userJoinedRoom?.cycleStatus === "cycle_closed"
-                              ? "Billing Cycle Closed"
-                              : getPaymentStatus()?.allPaid
-                                ? "All Bills Paid"
-                                : "Payment Pending"}
-                        </Text>
-                        {userJoinedRoom?.cycleStatus === "completed" ? (
-                          <Text
-                            style={[
-                              styles.paymentSub,
-                              { color: colors.success },
-                            ]}
-                          >
-                            All paid! Waiting for new billing cycle.
-                          </Text>
-                        ) : userJoinedRoom?.cycleStatus === "cycle_closed" ? (
-                          <Text style={styles.paymentSub}>
-                            {getPaymentStatus()?.allPaid
-                              ? "You’re all settled up."
-                              : "Cycle closed. Please settle your outstanding payment."}
-                          </Text>
-                        ) : !getPaymentStatus()?.allPaid &&
-                          getPaymentStatus()?.pendingCount > 0 ? (
-                          <Text style={styles.paymentSub}>
-                            {getPaymentStatus().pendingCount} bill
-                            {getPaymentStatus().pendingCount !== 1
-                              ? "s"
-                              : ""}{" "}
-                            awaiting payment
-                          </Text>
-                        ) : null}
-                      </View>
-                      <Ionicons
-                        name="chevron-forward"
-                        size={18}
-                        color={colors.textSecondary}
-                      />
-                    </TouchableOpacity>
-                  )} */}
-
-                {/* ─── BILLING COUNTDOWN ─── */}
-                {/* {getBillingCountdown() &&
-                  isCurrentUserPayor() &&
-                  !getPaymentStatus()?.allPaid &&
-                  userJoinedRoom.cycleStatus !== "completed" && (
-                    <TouchableOpacity
-                      style={styles.countdownCard}
-                      onPress={() => {
-                        if (userJoinedRoom?.id || userJoinedRoom?._id) {
-                          fetchActiveBillingCycle(
-                            userJoinedRoom.id || userJoinedRoom._id,
-                          );
-                        }
-                        setShowExpenseModal(true);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.countdownRow}>
-                        <Ionicons
-                          name="timer-outline"
-                          size={18}
-                          color={colors.accent}
-                        />
-                        <Text style={styles.countdownText}>
-                          {getBillingCountdown().daysRemaining === 0
-                            ? "Bills due today"
-                            : getBillingCountdown().daysRemaining > 0
-                              ? `${getBillingCountdown().daysRemaining} day${getBillingCountdown().daysRemaining !== 1 ? "s" : ""} remaining`
-                              : "Cycle overdue"}
-                        </Text>
-                        <Text style={styles.countdownPct}>
-                          {getBillingCountdown().percentage.toFixed(0)}%
-                        </Text>
-                      </View>
-                      <View style={styles.countdownBarBg}>
-                        <View
-                          style={[
-                            styles.countdownBarFill,
-                            {
-                              width: `${getBillingCountdown().percentage}%`,
-                              backgroundColor:
-                                getBillingCountdown().daysRemaining <= 3
-                                  ? "#ef5350"
-                                  : getBillingCountdown().daysRemaining <= 7
-                                    ? "#ff9800"
-                                    : colors.success,
-                            },
-                          ]}
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  )} */}
-
-                {/* ─── QUICK ACTIONS ─── */}
-                <View style={styles.actionsRow}>
-                  {isCurrentUserPayor() && (
-                    <TouchableOpacity
-                      style={styles.actionCard}
-                      onPress={() =>
-                        navigation.navigate("BillsStack", {
-                          screen: "BillsMain",
-                          params: {
-                            roomId: userJoinedRoom.id || userJoinedRoom._id,
-                          },
-                        })
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <View
-                        style={[
-                          styles.actionIconBg,
-                          { backgroundColor: colors.warningBg },
-                        ]}
-                      >
-                        <Ionicons name="card" size={20} color={colors.accent} />
-                      </View>
-                      <Text style={styles.actionLabel}>Pay Bills</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {userJoinedRoom?.waterBillingMode !== "fixed_monthly" &&
-                    userJoinedRoom?.water_billing_mode !== "fixed_monthly" && (
-                      <TouchableOpacity
-                        style={styles.actionCard}
-                        onPress={() =>
-                          navigation.navigate("PresenceStack", {
-                            screen: "PresenceMain",
-                            params: {
-                              roomId: userJoinedRoom.id || userJoinedRoom._id,
-                            },
-                          })
-                        }
-                        activeOpacity={0.7}
-                      >
-                        <View
-                          style={[
-                            styles.actionIconBg,
-                            { backgroundColor: colors.successBg },
-                          ]}
-                        >
-                          <Ionicons
-                            name="calendar"
-                            size={20}
-                            color={colors.success}
-                          />
-                        </View>
-                        <Text style={styles.actionLabel}>Presence</Text>
-                      </TouchableOpacity>
-                    )}
-
-                  <TouchableOpacity
-                    style={styles.actionCard}
-                    onPress={() =>
-                      navigation.navigate("HomeStack", {
-                        screen: "RoomDetails",
-                        params: {
-                          roomId: userJoinedRoom.id || userJoinedRoom._id,
-                        },
-                      })
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={[
-                        styles.actionIconBg,
-                        { backgroundColor: colors.infoBg },
-                      ]}
-                    >
-                      <Ionicons
-                        name="information-circle"
-                        size={20}
-                        color={colors.info}
-                      />
-                    </View>
-                    <Text style={styles.actionLabel}>Room Info</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.actionCard}
-                    onPress={() =>
-                      navigation.navigate("ChatRoom", {
-                        roomId: userJoinedRoom.id || userJoinedRoom._id,
-                        roomName: userJoinedRoom.name,
-                        isHost: false,
-                      })
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={[
-                        styles.actionIconBg,
-                        { backgroundColor: "#e3f2fd" },
-                      ]}
-                    >
-                      <Ionicons
-                        name="chatbubble-ellipses"
-                        size={20}
-                        color="#1976d2"
-                      />
-                      {unreadChatCount > 0 && (
-                        <View style={styles.chatBadge}>
-                          <Text style={styles.chatBadgeText}>
-                            {unreadChatCount > 99 ? "99+" : unreadChatCount}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={styles.actionLabel}>Chat</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* ─── PAYORS PAYMENT STATUS ─── */}
-                {getPayorsPaymentStatus().length > 0 && (
-                  <View style={styles.payorsCard}>
-                    <View style={styles.payorsHeader}>
-                      <Ionicons name="people" size={18} color={colors.accent} />
-                      <Text style={styles.payorsTitle}>
-                        Payors Payment Status
+              {/* ─── AVAILABLE ROOMS CAROUSEL ─── */}
+              {unjoinedRooms.length > 0 && (
+                <View style={styles.availSection}>
+                  {/* Section header — stays outside the scroll */}
+                  <View style={styles.availSectionHeader}>
+                    <View>
+                      <Text style={styles.sectionLabel}>Stays You'll Love</Text>
+                      <Text style={styles.sectionDescription}>
+                        Handpicked rentals matched to your style and needs.
                       </Text>
                     </View>
+                    <TouchableOpacity>
+                      <Text style={styles.viewAllText}>View All</Text>
+                    </TouchableOpacity>
+                  </View>
 
-                    {userJoinedRoom?.billing?.start &&
-                      userJoinedRoom?.billing?.end && (
-                        <View style={styles.payorsPeriod}>
-                          <Ionicons
-                            name="calendar-outline"
-                            size={13}
-                            color={colors.info}
-                          />
-                          <Text style={styles.payorsPeriodText}>
-                            {formatShortDate(userJoinedRoom.billing.start)}{" "}
-                            {"\u2014"}{" "}
-                            {formatShortDate(userJoinedRoom.billing.end)}
-                          </Text>
-                        </View>
-                      )}
+                  {/* Horizontal carousel */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.availCarouselContent}
+                    decelerationRate="fast"
+                    snapToInterval={styles.availCarouselCard.width + 12}
+                    snapToAlignment="start"
+                  >
+                    {unjoinedRooms.map((room, index) => {
+                      const roomId = room.id || room._id;
+                      const isPending = pendingRoomIds.includes(roomId);
+                      const hasLoc =
+                        room.latitude != null && room.longitude != null;
+                      const roomPhotos = Array.isArray(room.photos)
+                        ? room.photos
+                        : [];
+                      const memberCount =
+                        room.memberCount ?? room.members?.length ?? 0;
 
-                    {getPayorsPaymentStatus().map((payor, index) => (
-                      <View key={payor.userId}>
-                        <View style={styles.payorRow}>
-                          {payor.avatar ? (
-                            <Image
-                              source={{ uri: payor.avatar }}
-                              style={styles.payorAvatarImg}
-                              onError={() => {
-                                // Avatar failed to load, fallback will be shown
-                              }}
-                            />
-                          ) : (
-                            <View style={styles.payorAvatar}>
-                              <Text style={styles.payorAvatarText}>
-                                {(payor.name || "?").charAt(0).toUpperCase()}
-                              </Text>
-                            </View>
-                          )}
-                          <View style={{ flex: 1 }}>
-                            <View style={styles.payorNameRow}>
-                              <Text style={styles.payorName}>{payor.name}</Text>
-                              {payor.allPaid && (
-                                <View style={styles.paidChip}>
+                      return (
+                        <TouchableOpacity
+                          key={roomId}
+                          style={[
+                            styles.availCarouselCard,
+                            index === unjoinedRooms.length - 1 &&
+                              styles.availCarouselCardLast,
+                          ]}
+                          activeOpacity={0.85}
+                          onPress={() => setPreviewRoom(room)}
+                        >
+                          {/* ── Photo / placeholder banner ── */}
+                          <View style={styles.availCarouselPhotoWrap}>
+                            {roomPhotos.length > 0 ? (
+                              <Image
+                                source={{ uri: roomPhotos[0] }}
+                                style={styles.availCarouselPhoto}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View
+                                style={styles.availCarouselPhotoPlaceholder}
+                              >
+                                <Ionicons
+                                  name="home-outline"
+                                  size={36}
+                                  color={colors.accent}
+                                />
+                              </View>
+                            )}
+
+                            {/* Top-left badges: Verified + photo count */}
+                            <View style={styles.availCarouselTopBadges}>
+                              <View style={styles.availCarouselBadge}>
+                                <Ionicons
+                                  name="shield-checkmark-outline"
+                                  size={11}
+                                  color="#fff"
+                                />
+                                <Text style={styles.availCarouselBadgeText}>
+                                  Verified
+                                </Text>
+                              </View>
+                              {roomPhotos.length > 1 && (
+                                <View style={styles.availCarouselBadge}>
                                   <Ionicons
-                                    name="checkmark"
-                                    size={10}
-                                    color={colors.textOnAccent}
+                                    name="images-outline"
+                                    size={11}
+                                    color="#fff"
                                   />
-                                  <Text style={styles.paidChipText}>Paid</Text>
+                                  <Text style={styles.availCarouselBadgeText}>
+                                    {roomPhotos.length} photos
+                                  </Text>
                                 </View>
                               )}
                             </View>
-                            <View style={styles.payorBillsRow}>
-                              {[
-                                { key: "R", status: payor.payment.rent },
-                                { key: "E", status: payor.payment.electricity },
-                                { key: "W", status: payor.payment.water },
-                                ...(userJoinedRoom.billing?.internet
-                                  ? [
-                                      {
-                                        key: "I",
-                                        status: payor.payment.internet,
-                                      },
-                                    ]
-                                  : []),
-                              ].map((bill, bi) => (
-                                <View
-                                  key={bi}
-                                  style={[
-                                    styles.payorBillChip,
-                                    {
-                                      backgroundColor:
-                                        bill.status === "paid"
-                                          ? colors.successBg
-                                          : "#fbe9e7",
-                                    },
-                                  ]}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.payorBillChipText,
-                                      {
-                                        color:
-                                          bill.status === "paid"
-                                            ? colors.success
-                                            : "#c62828",
-                                      },
-                                    ]}
-                                  >
-                                    {bill.key}
-                                  </Text>
-                                  <Ionicons
-                                    name={
-                                      bill.status === "paid"
-                                        ? "checkmark"
-                                        : "close"
-                                    }
-                                    size={10}
-                                    color={
-                                      bill.status === "paid"
-                                        ? colors.success
-                                        : "#c62828"
-                                    }
-                                  />
-                                </View>
-                              ))}
-                            </View>
-                          </View>
-                        </View>
-                        {index < getPayorsPaymentStatus().length - 1 && (
-                          <View style={styles.payorDivider} />
-                        )}
-                      </View>
-                    ))}
 
-                    <View style={styles.legendRow}>
-                      <Text style={styles.legendText}>
-                        R = Rent {"\u2022"} E = Electricity {"\u2022"} W = Water
-                        {userJoinedRoom.billing?.internet
-                          ? " \u2022 I = Internet"
-                          : ""}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* ─── MEMBER ACTIVITY & CONTRIBUTIONS ─── */}
-                {memberActivity.length > 0 && (
-                  <View style={styles.activityCard}>
-                    <View style={styles.activityHeader}>
-                      <Ionicons name="pulse" size={18} color={colors.accent} />
-                      <Text style={styles.activityTitle}>Members Activity</Text>
-                      <View style={styles.onlineCountChip}>
-                        <View style={styles.onlineDotSmall} />
-                        <Text style={styles.onlineCountText}>
-                          {memberActivity.filter((m) => m.isOnline).length}{" "}
-                          online
-                        </Text>
-                      </View>
-                    </View>
-
-                    {memberActivity.map((member, index) => (
-                      <View key={member.userId}>
-                        <View style={styles.activityRow}>
-                          <View style={styles.activityAvatarWrap}>
-                            {member.avatar?.url ? (
-                              <Image
-                                source={{ uri: member.avatar.url }}
-                                style={styles.activityAvatarImg}
+                            {/* Bottom-left: member count pill */}
+                            <View style={styles.availCarouselMemberPill}>
+                              <Ionicons
+                                name="people-outline"
+                                size={11}
+                                color="#fff"
                               />
-                            ) : (
-                              <View style={styles.activityAvatar}>
-                                <Text style={styles.activityAvatarText}>
-                                  {(member.name || "?").charAt(0).toUpperCase()}
+                              <Text style={styles.availCarouselMemberText}>
+                                {memberCount}
+                              </Text>
+                            </View>
+
+                            {/* Bottom-right: expand photo */}
+                            {roomPhotos.length > 0 && (
+                              <TouchableOpacity
+                                style={styles.availCarouselExpandBtn}
+                                onPress={(e) => {
+                                  e.stopPropagation?.();
+                                  setPhotoViewIdx(0);
+                                  setPhotoViewData({
+                                    name: room.name,
+                                    photos: roomPhotos,
+                                  });
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <Ionicons
+                                  name="scan-outline"
+                                  size={16}
+                                  color="#fff"
+                                />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+
+                          {/* ── Card body ── */}
+                          <View style={styles.availCarouselBody}>
+                            {/* Room name */}
+                            <Text
+                              style={styles.availCarouselName}
+                              numberOfLines={2}
+                            >
+                              {room.name}
+                            </Text>
+
+                            {/* Location */}
+                            {(hasLoc || room.address) && (
+                              <View style={styles.availCarouselLocRow}>
+                                <Ionicons
+                                  name="location-outline"
+                                  size={11}
+                                  color={colors.textTertiary}
+                                />
+                                <Text
+                                  style={styles.availCarouselLocText}
+                                  numberOfLines={1}
+                                >
+                                  {room.address
+                                    ? room.address
+                                        .split(",")
+                                        .slice(0, 2)
+                                        .join(", ")
+                                    : "Location pinned"}
                                 </Text>
                               </View>
                             )}
-                            <View
-                              style={[
-                                styles.statusDot,
-                                {
-                                  backgroundColor: member.isOnline
-                                    ? "#4caf50"
-                                    : member.isRecentlyActive
-                                      ? "#ff9800"
-                                      : "#bdbdbd",
-                                },
-                              ]}
-                            />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <View style={styles.activityNameRow}>
-                              <Text
-                                style={styles.activityName}
-                                numberOfLines={1}
-                              >
-                                {member.name}
-                                {String(member.userId) === String(userId)
-                                  ? " (You)"
-                                  : ""}
-                              </Text>
-                              <TouchableOpacity
-                                onPress={() => viewUserProfile(member.userId)}
-                                style={{ marginLeft: 4 }}
-                              >
+
+                            {/* Room type / description tag */}
+                            {room.description && (
+                              <View style={styles.availCarouselTypeRow}>
                                 <Ionicons
-                                  name="information-circle-outline"
-                                  size={16}
-                                  color={colors.accent}
+                                  name="bed-outline"
+                                  size={11}
+                                  color={colors.textTertiary}
                                 />
-                              </TouchableOpacity>
-                              {member.isOnline && (
-                                <View style={styles.onlineChip}>
-                                  <Text style={styles.onlineChipText}>
-                                    Online
-                                  </Text>
-                                </View>
-                              )}
-                              {!member.isOnline && member.isRecentlyActive && (
-                                <View style={styles.recentChip}>
-                                  <Text style={styles.recentChipText}>
-                                    {formatLastActive(member.lastActiveAt)}
-                                  </Text>
-                                </View>
-                              )}
-                              {!member.isOnline && !member.isRecentlyActive && (
-                                <Text style={styles.offlineText}>
-                                  {member.lastActiveAt
-                                    ? formatLastActive(member.lastActiveAt)
-                                    : "Offline"}
+                                <Text
+                                  style={styles.availCarouselTypeText}
+                                  numberOfLines={1}
+                                >
+                                  {room.description}
                                 </Text>
-                              )}
-                            </View>
-                            <View style={styles.contributionRow}>
-                              <Ionicons
-                                name="wallet-outline"
-                                size={12}
-                                color={colors.textTertiary}
-                              />
-                              <Text style={styles.contributionText}>
-                                {"\u20B1"}
-                                {(member.totalContributions || 0)
-                                  .toFixed(2)
-                                  .replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                              </Text>
-                              <Text style={styles.contributionLabel}>
-                                total contributions
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={styles.rankBadge}>
-                            <Text style={styles.rankText}>#{index + 1}</Text>
-                          </View>
-                        </View>
-                        {index < memberActivity.length - 1 && (
-                          <View style={styles.activityDivider} />
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </>
-            ) : (
-              /* ─── NO ROOM JOINED ─── */
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIconCircle}>
-                  <Ionicons
-                    name="home-outline"
-                    size={40}
-                    color={colors.textSecondary}
-                  />
-                </View>
-                <Text style={styles.emptyTitle}>No Room Joined Yet</Text>
-                <Text style={styles.emptySubtext}>
-                  Browse available rooms below to join one
-                </Text>
-              </View>
-            )}
-
-            {/* ─── AVAILABLE ROOMS ─── */}
-            {unjoinedRooms.length > 0 && (
-              <View style={styles.availSection}>
-                <Text style={styles.sectionLabel}>
-                  AVAILABLE ROOMS FOR RENT
-                </Text>
-                {unjoinedRooms.map((room) => {
-                  const roomId = room.id || room._id;
-                  const isPending = pendingRoomIds.includes(roomId);
-                  const hasLoc =
-                    room.latitude != null && room.longitude != null;
-                  const roomPhotos = Array.isArray(room.photos)
-                    ? room.photos
-                    : [];
-                  return (
-                    <TouchableOpacity
-                      key={roomId}
-                      style={styles.availCard}
-                      activeOpacity={0.7}
-                      onPress={() => setPreviewRoom(room)}
-                    >
-                      {/* Room Photo Banner */}
-                      {roomPhotos.length > 0 && (
-                        <View style={{ position: "relative" }}>
-                          <Image
-                            source={{ uri: roomPhotos[0] }}
-                            style={styles.availPhotoBanner}
-                            resizeMode="cover"
-                          />
-                          <View style={styles.photoOverlay}>
-                            <View style={styles.photoCountBadge}>
-                              <Ionicons name="images" size={12} color="#fff" />
-                              <Text style={styles.photoCountText}>
-                                {roomPhotos.length}
-                              </Text>
-                            </View>
-                            <TouchableOpacity
-                              style={styles.photoFullViewBtn}
-                              onPress={(e) => {
-                                e.stopPropagation?.();
-                                setPhotoViewIdx(0);
-                                setPhotoViewData({
-                                  name: room.name,
-                                  photos: roomPhotos,
-                                });
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <Ionicons
-                                name="expand-outline"
-                                size={13}
-                                color="#fff"
-                              />
-                              <Text style={styles.photoFullViewText}>View</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      )}
-                      <View style={styles.availHeader}>
-                        <View style={styles.availIconBg}>
-                          <Ionicons
-                            name="home-outline"
-                            size={18}
-                            color={colors.accent}
-                          />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.availName}>{room.name}</Text>
-                          <Text style={styles.availMembers}>
-                            {room.memberCount ?? room.members?.length ?? 0}{" "}
-                            member
-                            {(room.memberCount ?? room.members?.length ?? 0) !==
-                            1
-                              ? "s"
-                              : ""}
-                          </Text>
-                        </View>
-                        {isPending ? (
-                          <View style={styles.pendingChip}>
-                            <Ionicons
-                              name="time-outline"
-                              size={13}
-                              color="#e67e22"
-                            />
-                            <Text style={styles.pendingChipText}>Pending</Text>
-                          </View>
-                        ) : (
-                          <TouchableOpacity
-                            style={styles.joinBtn}
-                            onPress={(e) => {
-                              e.stopPropagation?.();
-                              handleJoinRoom(roomId);
-                            }}
-                            disabled={joiningRoomId === roomId}
-                            activeOpacity={0.7}
-                          >
-                            {joiningRoomId === roomId ? (
-                              <ActivityIndicator
-                                color={colors.textOnAccent}
-                                size="small"
-                              />
-                            ) : (
-                              <>
-                                <Ionicons
-                                  name="add"
-                                  size={16}
-                                  color={colors.textOnAccent}
-                                />
-                                <Text style={styles.joinBtnText}>Join</Text>
-                              </>
+                              </View>
                             )}
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                      {/* Location row — below header so it won't overlap Join */}
-                      {hasLoc && (
-                        <View style={styles.availLocRow}>
-                          <Ionicons
-                            name="location"
-                            size={13}
-                            color={colors.accent}
-                          />
-                          <Text
-                            style={styles.availLocFullText}
-                            numberOfLines={1}
-                          >
-                            {room.address
-                              ? room.address.split(",").slice(0, 2).join(", ")
-                              : "Location pinned"}
-                          </Text>
-                        </View>
-                      )}
-                      {room.description && (
-                        <Text style={styles.availDesc} numberOfLines={2}>
-                          {room.description}
-                        </Text>
-                      )}
-                      {/* Amenity preview chips */}
-                      {Array.isArray(room.amenities) &&
-                        room.amenities.length > 0 && (
-                          <View style={styles.availAmenityRow}>
-                            {room.amenities.slice(0, 4).map((key, idx) => {
-                              const a = AMENITY_MAP[key];
-                              if (!a) return null;
-                              return (
-                                <View key={idx} style={styles.availAmenityChip}>
+
+                            {/* Divider */}
+                            <View style={styles.availCarouselDivider} />
+
+                            {/* Price row + join/pending */}
+                            <View style={styles.availCarouselFooter}>
+                              <View>
+                                <Text style={styles.availCarouselPriceLabel}>
+                                  Starts at
+                                </Text>
+                                <Text style={styles.availCarouselPrice}>
+                                  {room.billing?.rent
+                                    ? `₱${Number(
+                                        room.billing.rent,
+                                      ).toLocaleString()}`
+                                    : "Ask for price"}
+                                </Text>
+                              </View>
+
+                              {isPending ? (
+                                <View style={styles.pendingChip}>
                                   <Ionicons
-                                    name={a.icon}
+                                    name="time-outline"
                                     size={11}
-                                    color={a.color}
+                                    color="#e67e22"
                                   />
-                                  <Text style={styles.availAmenityText}>
-                                    {a.label}
+                                  <Text style={styles.pendingChipText}>
+                                    Pending
                                   </Text>
                                 </View>
-                              );
-                            })}
-                            {room.amenities.length > 4 && (
-                              <Text style={styles.availAmenityMore}>
-                                +{room.amenities.length - 4}
-                              </Text>
-                            )}
+                              ) : (
+                                <TouchableOpacity
+                                  style={styles.availCarouselJoinBtn}
+                                  onPress={(e) => {
+                                    e.stopPropagation?.();
+                                    handleJoinRoom(roomId);
+                                  }}
+                                  disabled={joiningRoomId === roomId}
+                                  activeOpacity={0.7}
+                                >
+                                  {joiningRoomId === roomId ? (
+                                    <ActivityIndicator
+                                      color={colors.textOnAccent}
+                                      size="small"
+                                    />
+                                  ) : (
+                                    <Text style={styles.joinBtnText}>
+                                      Request
+                                    </Text>
+                                  )}
+                                </TouchableOpacity>
+                              )}
+                            </View>
                           </View>
-                        )}
-                      {/* Tap to view info hint */}
-                      <View style={styles.availInfoHint}>
-                        <Ionicons
-                          name="eye-outline"
-                          size={12}
-                          color={colors.accent}
-                        />
-                        <Text style={styles.availInfoHintText}>
-                          Tap to view details
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
 
-            {/* All rooms joined */}
-            {unjoinedRooms.length === 0 && userJoinedRoom && (
-              <View style={styles.allJoinedCard}>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={24}
-                  color={colors.success}
-                />
-                <Text style={styles.allJoinedText}>
-                  You've joined all available rooms
-                </Text>
-              </View>
-            )}
-          </ScrollViewWithDetection>
-        )}
-
-        {/* ─── USER PROFILE MODAL ─── */}
-        <Modal
-          visible={profileModalVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setProfileModalVisible(false)}
-        >
-          <View style={styles.profileModalBackground}>
-            <View style={styles.profileModalContent}>
-              {/* Modal Header */}
-              <View style={styles.profileModalHeader}>
-                <Text style={styles.profileModalTitle}>User Profile</Text>
-                <TouchableOpacity onPress={() => setProfileModalVisible(false)}>
-                  <Ionicons name="close" size={24} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              {selectedUserProfile ? (
-                <ScrollViewWithDetection style={styles.profileModalBody}>
-                  {/* Avatar */}
-                  {selectedUserProfile.avatar?.url ? (
-                    <Image
-                      source={{ uri: selectedUserProfile.avatar.url }}
-                      style={styles.profileLargeAvatar}
-                    />
-                  ) : (
-                    <View style={styles.profileLargeAvatarPlaceholder}>
-                      <Text style={styles.profileLargeAvatarText}>
-                        {(selectedUserProfile.name || "?")
-                          .charAt(0)
-                          .toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Name */}
-                  <Text style={styles.profileName}>
-                    {selectedUserProfile.name}
-                  </Text>
-
-                  {/* Username */}
-                  {selectedUserProfile.username && (
-                    <Text style={styles.profileUsername}>
-                      @{selectedUserProfile.username}
-                    </Text>
-                  )}
-
-                  {/* Role Badge */}
-                  <View style={styles.profileRoleBadge}>
-                    <Text style={styles.profileRoleText}>
-                      {selectedUserProfile.is_admin
-                        ? "Administrator"
-                        : selectedUserProfile.role === "host"
-                          ? "Host"
-                          : "Member"}
-                    </Text>
-                  </View>
-
-                  {/* Info Grid */}
-                  <View style={styles.profileInfoGrid}>
-                    {selectedUserProfile.gender && (
-                      <View style={styles.profileInfoItem}>
-                        <Ionicons
-                          name="person-outline"
-                          size={16}
-                          color={colors.accent}
-                        />
-                        <View>
-                          <Text style={styles.profileInfoLabel}>Gender</Text>
-                          <Text style={styles.profileInfoValue}>
-                            {selectedUserProfile.gender}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-
-                    {selectedUserProfile.date_of_birth && (
-                      <View style={styles.profileInfoItem}>
-                        <Ionicons
-                          name="calendar-outline"
-                          size={16}
-                          color={colors.accent}
-                        />
-                        <View>
-                          <Text style={styles.profileInfoLabel}>
-                            Date of Birth
-                          </Text>
-                          <Text style={styles.profileInfoValue}>
-                            {new Date(
-                              selectedUserProfile.date_of_birth,
-                            ).toLocaleDateString()}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-
-                    {selectedUserProfile.created_at && (
-                      <View style={styles.profileInfoItem}>
-                        <Ionicons
-                          name="calendar"
-                          size={16}
-                          color={colors.accent}
-                        />
-                        <View>
-                          <Text style={styles.profileInfoLabel}>
-                            Member Since
-                          </Text>
-                          <Text style={styles.profileInfoValue}>
-                            {new Date(
-                              selectedUserProfile.created_at,
-                            ).toLocaleDateString("en-US", {
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-
-                    {selectedUserProfile.totalContributions !== undefined && (
-                      <View style={styles.profileInfoItem}>
-                        <Ionicons
-                          name="wallet"
-                          size={16}
-                          color={colors.accent}
-                        />
-                        <View>
-                          <Text style={styles.profileInfoLabel}>
-                            Total Contributions
-                          </Text>
-                          <Text style={styles.profileInfoValue}>
-                            ₱
-                            {selectedUserProfile.totalContributions.toLocaleString(
-                              "en-US",
-                              {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              },
-                            )}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-
-                    {selectedUserProfile.roomCount !== undefined && (
-                      <View style={styles.profileInfoItem}>
-                        <Ionicons
-                          name="home-outline"
-                          size={16}
-                          color={colors.accent}
-                        />
-                        <View>
-                          <Text style={styles.profileInfoLabel}>Rooms</Text>
-                          <Text style={styles.profileInfoValue}>
-                            {selectedUserProfile.roomCount}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-
-                    {selectedUserProfile.isOnline !== undefined && (
-                      <View
-                        style={[styles.profileInfoItem, { marginBottom: 45 }]}
-                      >
-                        <Ionicons
-                          name="ellipse"
-                          size={12}
-                          color={
-                            selectedUserProfile.isOnline
-                              ? "#4CAF50"
-                              : selectedUserProfile.isRecentlyActive
-                                ? "#FFC107"
-                                : "#999"
-                          }
-                          style={{ marginTop: 2 }}
-                        />
-                        <View>
-                          <Text style={styles.profileInfoLabel}>Status</Text>
-                          <Text style={styles.profileInfoValue}>
-                            {selectedUserProfile.isOnline
-                              ? "Online"
-                              : selectedUserProfile.isRecentlyActive
-                                ? "Recently Active"
-                                : selectedUserProfile.lastActiveAt
-                                  ? `Active ${formatLastActive(
-                                      selectedUserProfile.lastActiveAt,
-                                    )}`
-                                  : "Offline"}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                </ScrollViewWithDetection>
-              ) : (
-                <View style={styles.profileModalLoading}>
-                  <ActivityIndicator size="large" color={colors.accent} />
-                  <Text style={styles.profileLoadingText}>
-                    Loading profile...
+              {/* All rooms joined */}
+              {unjoinedRooms.length === 0 && userJoinedRoom && (
+                <View style={styles.allJoinedCard}>
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={24}
+                    color={colors.success}
+                  />
+                  <Text style={styles.allJoinedText}>
+                    You've joined all available rooms
                   </Text>
                 </View>
               )}
+            </>
+          )}
+
+          {/* ─── USER PROFILE MODAL ─── */}
+          <Modal
+            visible={profileModalVisible}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setProfileModalVisible(false)}
+          >
+            <View style={styles.profileModalBackground}>
+              <View style={styles.profileModalContent}>
+                {/* Modal Header */}
+                <View style={styles.profileModalHeader}>
+                  <Text style={styles.profileModalTitle}>User Profile</Text>
+                  <TouchableOpacity
+                    onPress={() => setProfileModalVisible(false)}
+                  >
+                    <Ionicons name="close" size={24} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {selectedUserProfile ? (
+                  <ScrollViewWithDetection style={styles.profileModalBody}>
+                    {/* Avatar */}
+                    {selectedUserProfile.avatar?.url ? (
+                      <Image
+                        source={{ uri: selectedUserProfile.avatar.url }}
+                        style={styles.profileLargeAvatar}
+                      />
+                    ) : (
+                      <View style={styles.profileLargeAvatarPlaceholder}>
+                        <Text style={styles.profileLargeAvatarText}>
+                          {(selectedUserProfile.name || "?")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Name */}
+                    <Text style={styles.profileName}>
+                      {selectedUserProfile.name}
+                    </Text>
+
+                    {/* Username */}
+                    {selectedUserProfile.username && (
+                      <Text style={styles.profileUsername}>
+                        @{selectedUserProfile.username}
+                      </Text>
+                    )}
+
+                    {/* Role Badge */}
+                    <View style={styles.profileRoleBadge}>
+                      <Text style={styles.profileRoleText}>
+                        {selectedUserProfile.is_admin
+                          ? "Administrator"
+                          : selectedUserProfile.role === "host"
+                            ? "Host"
+                            : "Member"}
+                      </Text>
+                    </View>
+
+                    {/* Info Grid */}
+                    <View style={styles.profileInfoGrid}>
+                      {selectedUserProfile.gender && (
+                        <View style={styles.profileInfoItem}>
+                          <Ionicons
+                            name="person-outline"
+                            size={16}
+                            color={colors.accent}
+                          />
+                          <View>
+                            <Text style={styles.profileInfoLabel}>Gender</Text>
+                            <Text style={styles.profileInfoValue}>
+                              {selectedUserProfile.gender}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+
+                      {selectedUserProfile.date_of_birth && (
+                        <View style={styles.profileInfoItem}>
+                          <Ionicons
+                            name="calendar-outline"
+                            size={16}
+                            color={colors.accent}
+                          />
+                          <View>
+                            <Text style={styles.profileInfoLabel}>
+                              Date of Birth
+                            </Text>
+                            <Text style={styles.profileInfoValue}>
+                              {new Date(
+                                selectedUserProfile.date_of_birth,
+                              ).toLocaleDateString()}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+
+                      {selectedUserProfile.created_at && (
+                        <View style={styles.profileInfoItem}>
+                          <Ionicons
+                            name="calendar"
+                            size={16}
+                            color={colors.accent}
+                          />
+                          <View>
+                            <Text style={styles.profileInfoLabel}>
+                              Member Since
+                            </Text>
+                            <Text style={styles.profileInfoValue}>
+                              {new Date(
+                                selectedUserProfile.created_at,
+                              ).toLocaleDateString("en-US", {
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+
+                      {selectedUserProfile.totalContributions !== undefined && (
+                        <View style={styles.profileInfoItem}>
+                          <Ionicons
+                            name="wallet"
+                            size={16}
+                            color={colors.accent}
+                          />
+                          <View>
+                            <Text style={styles.profileInfoLabel}>
+                              Total Contributions
+                            </Text>
+                            <Text style={styles.profileInfoValue}>
+                              ₱
+                              {selectedUserProfile.totalContributions.toLocaleString(
+                                "en-US",
+                                {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                },
+                              )}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+
+                      {selectedUserProfile.roomCount !== undefined && (
+                        <View style={styles.profileInfoItem}>
+                          <Ionicons
+                            name="home-outline"
+                            size={16}
+                            color={colors.accent}
+                          />
+                          <View>
+                            <Text style={styles.profileInfoLabel}>Rooms</Text>
+                            <Text style={styles.profileInfoValue}>
+                              {selectedUserProfile.roomCount}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+
+                      {selectedUserProfile.isOnline !== undefined && (
+                        <View
+                          style={[styles.profileInfoItem, { marginBottom: 45 }]}
+                        >
+                          <Ionicons
+                            name="ellipse"
+                            size={12}
+                            color={
+                              selectedUserProfile.isOnline
+                                ? "#4CAF50"
+                                : selectedUserProfile.isRecentlyActive
+                                  ? "#FFC107"
+                                  : "#999"
+                            }
+                            style={{ marginTop: 2 }}
+                          />
+                          <View>
+                            <Text style={styles.profileInfoLabel}>Status</Text>
+                            <Text style={styles.profileInfoValue}>
+                              {selectedUserProfile.isOnline
+                                ? "Online"
+                                : selectedUserProfile.isRecentlyActive
+                                  ? "Recently Active"
+                                  : selectedUserProfile.lastActiveAt
+                                    ? `Active ${formatLastActive(
+                                        selectedUserProfile.lastActiveAt,
+                                      )}`
+                                    : "Offline"}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </ScrollViewWithDetection>
+                ) : (
+                  <View style={styles.profileModalLoading}>
+                    <ActivityIndicator size="large" color={colors.accent} />
+                    <Text style={styles.profileLoadingText}>
+                      Loading profile...
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
-        </Modal>
+          </Modal>
+        </ScrollViewWithDetection>
       </View>
     </>
   );
@@ -3569,19 +3395,150 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
   StyleSheet.create({
     // ─── LAYOUT ───
     container: { flex: 1, backgroundColor: colors.background },
-    centerLoader: { flex: 1, justifyContent: "center", alignItems: "center" },
+    centerLoader: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+      zIndex: 999,
+    },
 
     // ─── HEADER ───
     header: {
       paddingHorizontal: 20,
-      paddingTop: 18,
-      paddingBottom: 16,
-      backgroundColor: colors.card,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      paddingTop: insets.top + 14,
+      paddingBottom: 88,
+      backgroundColor: "#063F39",
+      borderBottomLeftRadius: 32,
+      borderBottomRightRadius: 32,
     },
-    headerRow: { flexDirection: "row", alignItems: "center" },
-    greeting: { fontSize: 13, color: colors.textTertiary, fontWeight: "500" },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 18,
+    },
+    headerTitleRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      marginBottom: 14,
+    },
+    headerEyebrow: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "rgba(255,255,255,0.7)",
+      textTransform: "uppercase",
+      letterSpacing: 1.2,
+      marginBottom: 6,
+    },
+    headerTitle: {
+      fontSize: 30,
+      fontWeight: "900",
+      color: "#fff",
+      letterSpacing: -0.8,
+    },
+    headerTopPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.14)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+    },
+    headerTopPillText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    headerMenuBtn: {
+      padding: 3,
+      borderRadius: 24,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+    },
+    headerNotifContainer: {
+      position: "relative",
+      width: 50,
+      height: 50,
+    },
+    headerNotifBtn: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+    },
+    headerNotifBadge: {
+      position: "absolute",
+      top: -2,
+      right: -2,
+      minWidth: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: "#ef4444",
+      borderWidth: 2,
+      borderColor: "#fff",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 4,
+      zIndex: 999,
+    },
+    headerNotifBadgeText: {
+      color: "#fff",
+      fontSize: 11,
+      fontWeight: "700",
+      textAlign: "center",
+    },
+    headerGreetRow: {
+      padding: 16,
+      borderRadius: 22,
+      backgroundColor: "rgba(255,255,255,0.08)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.08)",
+    },
+    greeting: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: "#ffffff",
+    },
+    headerSubtitle: {
+      fontSize: 13,
+      color: "rgba(255,255,255,0.75)",
+      marginTop: 4,
+      lineHeight: 19,
+    },
+    headerStatusRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 14,
+    },
+    headerStatusChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.1)",
+    },
+    headerStatusChipText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: "#effaf7",
+    },
     userName: {
       fontSize: 22,
       fontWeight: "800",
@@ -3599,11 +3556,247 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       overflow: "hidden",
     },
     headerAvatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      borderWidth: 1.5,
+      borderColor: "rgba(255,255,255,0.3)",
+    },
+
+    // ─── BALANCE CARD ───
+    balanceCardWrap: {
+      marginHorizontal: 16,
+      marginTop: -58,
+      zIndex: 10,
+    },
+    balanceCard: {
+      backgroundColor: colors.card,
+      borderRadius: 24,
+      paddingHorizontal: 20,
+      paddingVertical: 20,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      borderWidth: 1,
+      borderColor: "rgba(6,109,65,0.08)",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 12,
+      elevation: 6,
+    },
+    balanceLabel: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+    balanceAmount: {
+      fontSize: 28,
+      fontWeight: "900",
+      color: colors.text,
+      marginTop: 4,
+    },
+    balanceSubLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 4,
+    },
+    balanceMetaRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 14,
+    },
+    balanceMetaChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: "#edf8f5",
+    },
+    balanceMetaChipText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#0c7364",
+    },
+    balanceIconWrap: {
+      alignItems: "center",
+      marginLeft: 16,
+      gap: 8,
+    },
+    balanceIconInner: {
+      width: 62,
+      height: 62,
+      borderRadius: 18,
+      backgroundColor: "#e6f4f3",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    balanceIconCaption: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+
+    // Searchbar
+    searchBarCardWrap: {
+      marginHorizontal: 16,
+      marginTop: -52,
+      zIndex: 10,
+    },
+    searchIntroCard: {
+      backgroundColor: colors.card,
+      borderRadius: 24,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      elevation: 6,
+    },
+    searchIntroHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      gap: 12,
+      marginBottom: 14,
+    },
+    searchIntroLabel: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    searchHelperText: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 4,
+    },
+    searchIntroChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: colors.accentSurface,
+      borderWidth: 1,
+      borderColor: "#f0e6c8",
+    },
+    searchIntroChipText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    searchIcon: {
+      color: colors.textTertiary,
+      paddingRight: 10,
+    },
+    searchBar: {
+      backgroundColor: colors.inputBg,
+      borderRadius: 18,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: "500",
+    },
+
+    // ─── NEW USERS FEATURE SECTION ───
+    newUsersSection: {
+      marginHorizontal: 16,
+      marginTop: 16,
+      marginBottom: 12,
+    },
+    newUsersFlex: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    featureCard: {
+      flex: 1,
+      borderRadius: 20,
+      padding: 16,
+      minHeight: 180,
+      justifyContent: "space-between",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    featureCardTop: {
+      gap: 8,
+    },
+    featureCardIcon: {
+      marginBottom: 4,
+    },
+    featureCardTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: "#fff",
+      lineHeight: 22,
+    },
+    featureCardDesc: {
+      fontSize: 13,
+      color: "rgba(255,255,255,0.85)",
+      lineHeight: 18,
+      fontWeight: "500",
+    },
+
+    // ─── QUICK STATS ROW ───
+    quickStatsRow: {
+      flexDirection: "row",
+      gap: 12,
+      marginTop: 14,
+    },
+    quickStatCell: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      paddingVertical: 16,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      shadowColor: "#555",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    quickStatIcon: {
       width: 42,
       height: 42,
-      borderRadius: 21,
-      borderWidth: 1,
-      borderColor: colors.accent,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    quickStatValue: {
+      fontSize: 19,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    quickStatLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      marginTop: 4,
+      textAlign: "center",
+    },
+    quickStatHint: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      marginTop: 4,
+      textAlign: "center",
     },
 
     // ─── HOST ANNOUNCEMENT BANNER ───
@@ -3662,7 +3855,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     // ─── MY ROOM CARD ───
     myRoomCard: {
       marginHorizontal: 16,
-      marginTop: 14,
+      marginTop: 16,
       backgroundColor: colors.card,
       borderRadius: 14,
       borderWidth: 1,
@@ -3769,105 +3962,89 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     billingMiniAmount: { fontSize: 12, fontWeight: "700", color: colors.text },
 
     // BILL BREAKDOWN
-    breakdownCard: {
+    // ─── UPCOMING BILLS SECTION ───
+    upcomingBillsSection: {
       marginHorizontal: 16,
       marginTop: 14,
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: colors.border,
-      overflow: "hidden",
     },
-    breakdownHeader: {
+    upcomingBillsHeader: {
       flexDirection: "row",
+      justifyContent: "space-between",
       alignItems: "center",
-      gap: 8,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.borderLight,
+      marginBottom: 12,
     },
-    breakdownTitle: {
-      fontSize: 14,
+    upcomingBillsTitle: {
+      fontSize: 16,
       fontWeight: "700",
       color: colors.text,
-      flex: 1,
     },
-    breakdownViewAllText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: colors.accent,
-    },
-    breakdownRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-    },
-    breakdownBillIconWrap: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-    },
-    breakdownBillIconBg: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      backgroundColor: colors.accentSurface,
-      justifyContent: "center",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: "#f0e6c8",
-    },
-    breakdownAvatarText: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: colors.accent,
-    },
-    billStatusBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 6,
-    },
-    billStatusText: {
-      fontSize: 11,
-      fontWeight: "600",
-    },
-    billBreakdownInfoRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      marginBottom: 3,
-    },
-    billBreakdownName: {
+    upcomingBillsViewAll: {
       fontSize: 13,
       fontWeight: "600",
-      color: colors.text,
-      flexShrink: 1,
+      color: "#00847B",
     },
-    billBreakdownDueRow: {
+    upcomingBillCard: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      marginBottom: 10,
       flexDirection: "row",
       alignItems: "center",
-      gap: 4,
+      gap: 14,
+      shadowColor: "#555",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+      elevation: 2,
     },
-    billBreakdownDueText: {
-      fontSize: 10,
-      color: colors.accent,
-      marginLeft: 2,
-    },
-    billBreakdownAmoutRow: {
-      flexDirection: "row",
+    upcomingBillIconWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
       justifyContent: "center",
       alignItems: "center",
-      gap: 8,
     },
-    billBreakdownAmoutText: {
+    upcomingBillName: {
       fontSize: 14,
       fontWeight: "700",
-      color: colors.accent,
+      color: colors.text,
+      marginBottom: 3,
+    },
+    upcomingBillDue: {
+      fontSize: 11,
+      color: colors.textTertiary,
+    },
+    upcomingBillRight: {
+      alignItems: "flex-end",
+      gap: 4,
+    },
+    upcomingBillAmount: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    upcomingBillPaidBadge: {
+      fontSize: 9,
+      fontWeight: "700",
+      color: "#22c55e",
+      backgroundColor: "rgba(34,197,94,0.12)",
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 10,
+      overflow: "hidden",
+      textTransform: "uppercase",
+    },
+    upcomingBillDueSoonBadge: {
+      fontSize: 9,
+      fontWeight: "700",
+      color: "#ef4444",
+      backgroundColor: "#fee2e2",
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 10,
+      overflow: "hidden",
+      textTransform: "uppercase",
     },
 
     // ─── PAYMENT STATUS ───
@@ -3924,20 +4101,43 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     countdownBarFill: { height: "100%", borderRadius: 3 },
 
     // ─── QUICK ACTIONS ───
-    actionsRow: {
-      flexDirection: "row",
-      gap: 10,
-      marginHorizontal: 16,
+    actionsSection: {
       marginTop: 14,
     },
+    sectionHeaderRow: {
+      marginHorizontal: 16,
+    },
+    sectionTitle: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    sectionCaption: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 3,
+    },
+    actionsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 12,
+      marginHorizontal: 16,
+      marginTop: 12,
+    },
     actionCard: {
-      flex: 1,
+      width: ACTION_CARD_WIDTH,
       backgroundColor: colors.card,
-      borderRadius: 12,
-      paddingVertical: 16,
-      alignItems: "center",
+      borderRadius: 18,
+      padding: 16,
+      alignItems: "flex-start",
+      minHeight: 122,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight || colors.border,
+      shadowColor: "#555",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
     },
     actionIconBg: {
       width: 40,
@@ -3945,12 +4145,17 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       borderRadius: 10,
       justifyContent: "center",
       alignItems: "center",
-      marginBottom: 8,
+      marginBottom: 12,
     },
     actionLabel: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: colors.textSecondary,
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    actionSubLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 4,
     },
     chatBadge: {
       position: "absolute",
@@ -3992,7 +4197,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       borderBottomWidth: 1,
       borderBottomColor: colors.borderLight,
     },
-    payorsTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
+    payorsTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
     payorsPeriod: {
       flexDirection: "row",
       alignItems: "center",
@@ -4100,7 +4305,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       borderBottomColor: colors.borderLight,
     },
     activityTitle: {
-      fontSize: 14,
+      fontSize: 16,
       fontWeight: "700",
       color: colors.text,
       flex: 1,
@@ -4220,7 +4425,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       marginHorizontal: 16,
     },
 
-    // ─── EMPTY STATE ───
+    // ─── new users ───
     emptyState: { alignItems: "center", paddingVertical: 50 },
     emptyIconCircle: {
       width: 72,
@@ -4241,14 +4446,188 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     },
 
     // ─── AVAILABLE ROOMS ───
-    availSection: { marginHorizontal: 16, marginTop: 18 },
-    sectionLabel: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: colors.textTertiary,
-      letterSpacing: 0.5,
-      marginBottom: 10,
+    availSection: { marginTop: 18 },
+    availSectionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+      marginHorizontal: 16,
     },
+    sectionLabel: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+      letterSpacing: 0.5,
+    },
+    sectionDescription: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    viewAllText: { fontSize: 13, fontWeight: "600", color: colors.accent },
+
+    // ─── CAROUSEL LAYOUT ───
+    availCarouselContent: {
+      paddingLeft: 16,
+      paddingRight: 8,
+      paddingBottom: 4,
+    },
+    availCarouselCard: {
+      width: SCREEN_WIDTH * 0.66,
+      backgroundColor: colors.card,
+      borderRadius: 22,
+      marginRight: 12,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      elevation: 4,
+    },
+    availCarouselCardLast: {
+      marginRight: 16,
+    },
+
+    // ── Photo area ──
+    availCarouselPhotoWrap: {
+      width: "100%",
+      height: 164,
+      position: "relative",
+      backgroundColor: colors.inputBg,
+    },
+    availCarouselPhoto: {
+      width: "100%",
+      height: "100%",
+    },
+    availCarouselPhotoPlaceholder: {
+      width: "100%",
+      height: "100%",
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.accentSurface,
+    },
+
+    // ── Overlay badges (top-left) ──
+    availCarouselTopBadges: {
+      position: "absolute",
+      top: 8,
+      left: 8,
+      flexDirection: "row",
+      gap: 5,
+    },
+    availCarouselBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      backgroundColor: "rgba(6,63,57,0.72)",
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 20,
+    },
+    availCarouselBadgeText: {
+      fontSize: 10,
+      fontWeight: "600",
+      color: "#fff",
+    },
+
+    // ── Member count pill (bottom-left) ──
+    availCarouselMemberPill: {
+      position: "absolute",
+      bottom: 8,
+      left: 8,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: "rgba(6,63,57,0.72)",
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      borderRadius: 20,
+    },
+    availCarouselMemberText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: "#fff",
+    },
+
+    // ── Heart / expand button (bottom-right) ──
+    availCarouselExpandBtn: {
+      position: "absolute",
+      bottom: 8,
+      right: 8,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: "rgba(6,63,57,0.58)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    // ── Card body ──
+    availCarouselBody: {
+      padding: 14,
+    },
+    availCarouselName: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.text,
+      lineHeight: 20,
+      marginBottom: 7,
+    },
+    availCarouselLocRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      marginBottom: 3,
+    },
+    availCarouselLocText: {
+      flex: 1,
+      fontSize: 10,
+      color: colors.textTertiary,
+    },
+    availCarouselTypeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      marginBottom: 2,
+    },
+    availCarouselTypeText: {
+      flex: 1,
+      fontSize: 10,
+      color: colors.textTertiary,
+    },
+    availCarouselDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: 8,
+    },
+    availCarouselFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    availCarouselPriceLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      color: colors.textTertiary,
+      marginBottom: 3,
+    },
+    availCarouselPrice: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.accent,
+    },
+    availCarouselJoinBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 12,
+      backgroundColor: colors.accent,
+    },
+
     availCard: {
       backgroundColor: colors.card,
       borderRadius: 12,
@@ -4272,7 +4651,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 1,
-      borderColor: "#f0e6c8",
+      borderColor: colors.stayIconBorder,
     },
     availName: { fontSize: 14, fontWeight: "600", color: colors.text },
     availMembers: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
@@ -4288,8 +4667,8 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       alignItems: "center",
       gap: 4,
       paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 14,
+      paddingVertical: 8,
+      borderRadius: 999,
       backgroundColor: colors.warningBg,
       borderWidth: 1,
       borderColor: "#ffe0b2",
@@ -4304,7 +4683,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       borderRadius: 10,
       backgroundColor: colors.accent,
     },
-    joinBtnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+    joinBtnText: { fontSize: 12, fontWeight: "800", color: "#fff" },
     allJoinedCard: {
       flexDirection: "row",
       alignItems: "center",
@@ -4312,13 +4691,13 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       gap: 8,
       marginHorizontal: 16,
       marginTop: 18,
-      paddingVertical: 16,
-      borderRadius: 12,
+      paddingVertical: 18,
+      borderRadius: 18,
       backgroundColor: colors.successBg,
       borderWidth: 1,
       borderColor: "#d4edd4",
     },
-    allJoinedText: { fontSize: 13, fontWeight: "600", color: colors.success },
+    allJoinedText: { fontSize: 14, fontWeight: "700", color: colors.success },
 
     // ─── AVAILABLE ROOM EXTRAS ───
     availLocRow: {

@@ -19,7 +19,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRoute } from "@react-navigation/native";
 import { apiService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../components/ScrollDetectionWrappers";
 
 const getBillColors = (c) => ({
   electricity: { bg: c.accentSurface, text: c.electricityColor, icon: "flash" },

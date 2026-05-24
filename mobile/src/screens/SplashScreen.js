@@ -316,7 +316,7 @@ const SplashScreen = () => {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      <View
+      {/* <View
         style={[
           styles.bgCircle,
           styles.bgCircle1,
@@ -329,20 +329,20 @@ const SplashScreen = () => {
           styles.bgCircle2,
           { backgroundColor: circleBg },
         ]}
-      />
-      <View
+      /> */}
+      {/* <View
         style={[
           styles.bgCircle,
           styles.bgCircle3,
           { backgroundColor: circleBg },
         ]}
-      />
+      /> */}
 
       <View style={styles.container}>
         {/* Logo with golden ring */}
         <View style={styles.logoSection}>
           {/* Ripple 1 — first sonar ring */}
-          <Animated.View
+          {/* <Animated.View
             style={[
               styles.rippleRing,
               {
@@ -351,9 +351,9 @@ const SplashScreen = () => {
                 opacity: ripple1Opacity,
               },
             ]}
-          />
+          /> */}
           {/* Ripple 2 — staggered second ring */}
-          <Animated.View
+          {/* <Animated.View
             style={[
               styles.rippleRing,
               {
@@ -362,9 +362,9 @@ const SplashScreen = () => {
                 opacity: ripple2Opacity,
               },
             ]}
-          />
+          /> */}
           {/* Soft glow disc behind the logo */}
-          <Animated.View
+          {/* <Animated.View
             style={[
               styles.logoGlow,
               {
@@ -373,9 +373,9 @@ const SplashScreen = () => {
                 opacity: glowOpacity,
               },
             ]}
-          />
+          /> */}
           {/* Outer ring — breathes gently */}
-          <Animated.View
+          {/* <Animated.View
             style={[
               styles.ring,
               {
@@ -384,9 +384,9 @@ const SplashScreen = () => {
                 opacity: ringOpacity,
               },
             ]}
-          />
+          /> */}
           {/* Logo circle */}
-          <Animated.View
+          {/* <Animated.View
             style={[
               styles.logoContainer,
               {
@@ -396,9 +396,12 @@ const SplashScreen = () => {
                 opacity: logoOpacity,
               },
             ]}
-          >
-            <Image source={require("../assets/icon.png")} style={styles.logo} />
-          </Animated.View>
+          > */}
+          <Image
+            source={require("../assets/propflowwithtext.png")}
+            style={styles.logo}
+          />
+          {/* </Animated.View> */}
         </View>
 
         {/* Error Message */}
@@ -427,7 +430,7 @@ const SplashScreen = () => {
           style={[styles.versionDivider, { backgroundColor: versionDivC }]}
         />
         <Text style={[styles.versionText, { color: versionC }]}>
-          ApartmentBillTracker
+          Property Flow
         </Text>
       </Animated.View>
     </LinearGradient>
@@ -491,7 +494,7 @@ const styles = StyleSheet.create({
     elevation: 10,
     overflow: "hidden",
   },
-  logo: { width: 100, height: 100, resizeMode: "contain" },
+  logo: { width: 200, height: 200, resizeMode: "contain" },
   title: {
     fontSize: 28,
     fontWeight: "700",

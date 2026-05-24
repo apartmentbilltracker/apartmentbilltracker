@@ -22,8 +22,14 @@ import apiService, {
 import { settingsService } from "../../services/apiService";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { AuthContext } from "../../context/AuthContext";
+import {
+  buildBillSharesFromCharge,
+  findUserCharge,
+  getExactBillAmount,
+  getSelectedPaymentBillTypes,
+} from "../../utils/paymentAmounts";
 
 const GCashPaymentScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -32,8 +38,16 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const user = authContext?.state?.user;
   const userId = user?.id || user?._id;
 
-  const { roomId, roomName, amount, billType, billTypes, billingCycleId } =
-    route.params;
+  const {
+    roomId,
+    roomName,
+    amount,
+    billType,
+    billTypes,
+    billingCycleId,
+    breakdown,
+    billAmounts,
+  } = route.params;
   const [loading, setLoading] = useState(true);
   const [qrData, setQrData] = useState(null);
   const [hostQrUri, setHostQrUri] = useState(null); // host-uploaded QR image
@@ -77,6 +91,24 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   };
   const [mobileNumberFocused, setMobileNumberFocused] = useState(false);
   const [mobileNumberError, setMobileNumberError] = useState(false);
+
+  const getSelectedBillAmount = (type, index, selectedTypes) => {
+    const exactAmount = getExactBillAmount(type, {
+      billAmounts,
+      billShares,
+      totalAmount: amount,
+    });
+
+    if (exactAmount !== null) return exactAmount;
+    if (selectedTypes?.length === 1 && type === "total") {
+      const totalAmount = Number(amount);
+      return Number.isFinite(totalAmount) && totalAmount > 0
+        ? totalAmount
+        : null;
+    }
+
+    return null;
+  };
 
   // Use refs for cleanup to avoid stale closures
   const stepRef = React.useRef(step);
@@ -150,21 +182,12 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
           // Calculate bill shares if target cycle exists and has member charges
           if (targetCycle?.memberCharges?.length > 0) {
-            const userCharge = targetCycle.memberCharges.find(
-              (c) => String(c.userId) === String(userId),
+            const userCharge = findUserCharge(
+              targetCycle.memberCharges,
+              userId,
             );
             if (userCharge) {
-              setBillShares({
-                rent: userCharge.rentShare || 0,
-                electricity: userCharge.electricityShare || 0,
-                internet: userCharge.internetShare || 0,
-                water:
-                  userCharge.isPayer !== false
-                    ? userCharge.waterBillShare || 0
-                    : userCharge.waterOwn || 0,
-                customCharges: userCharge.custom_charges_share || 0,
-                total: userCharge.totalDue || 0,
-              });
+              setBillShares(buildBillSharesFromCharge(userCharge));
             }
           }
         }
@@ -303,29 +326,14 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       setLoading(true);
 
       // Check if this is a batch payment (multiple bills selected)
-      // Ensure billTypes is an array and normalize values
-      let selectedBillTypes = Array.isArray(billTypes) ? billTypes : [billType];
-
-      // Sanitize: ensure all values are valid snake_case bill types
-      selectedBillTypes = selectedBillTypes
-        .map((bt) => {
-          if (typeof bt !== "string") return null;
-          const normalized = bt.trim().toLowerCase();
-          if (
-            [
-              "rent",
-              "electricity",
-              "water",
-              "internet",
-              "custom_charges",
-            ].includes(normalized)
-          ) {
-            return normalized;
-          }
-          if (normalized === "customcharges") return "custom_charges";
-          return null;
-        })
-        .filter((bt) => bt !== null);
+      let selectedBillTypes = getSelectedPaymentBillTypes({
+        breakdown,
+        billTypes,
+        billType,
+        billAmounts,
+        billShares,
+        totalAmount: amount,
+      });
 
       if (selectedBillTypes.length === 0) {
         Alert.alert("Error", "Invalid bill types selected. Please try again.");
@@ -334,25 +342,37 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       }
 
       const isBatch = selectedBillTypes.length > 1;
+      const missingAmountType = selectedBillTypes.find(
+        (type, index) =>
+          getSelectedBillAmount(type, index, selectedBillTypes) === null,
+      );
+
+      if (missingAmountType) {
+        throw new Error(
+          "Exact bill amounts are still loading. Please try again in a moment.",
+        );
+      }
 
       if (isBatch) {
         // For batch payments, initiate separate transactions for each bill type
-        const amountPerBill = amount / selectedBillTypes.length;
         const responses = [];
         const transactionIds = [];
+        const paymentBatchId = `gcash-${Date.now()}`;
 
         for (let i = 0; i < selectedBillTypes.length; i++) {
           const billTypeItem = selectedBillTypes[i];
-          const billAmount =
-            i === selectedBillTypes.length - 1
-              ? amount - amountPerBill * (selectedBillTypes.length - 1)
-              : amountPerBill;
+          const billAmount = getSelectedBillAmount(
+            billTypeItem,
+            i,
+            selectedBillTypes,
+          );
 
           const response = await apiService.initiateGCash({
             roomId,
             amount: billAmount,
             billType: billTypeItem,
             billingCycleId,
+            paymentBatchId,
           });
 
           if (response.success) {
@@ -376,11 +396,15 @@ const GCashPaymentScreen = ({ navigation, route }) => {
           throw new Error("Failed to initiate one or more payments");
         }
       } else {
+        const singleBillType = selectedBillTypes[0] || billType;
+        const singleAmount =
+          getSelectedBillAmount(singleBillType, 0, selectedBillTypes) ??
+          Number(amount || 0);
         // Single bill payment
         const response = await apiService.initiateGCash({
           roomId,
-          amount,
-          billType,
+          amount: singleAmount,
+          billType: singleBillType,
           billingCycleId,
         });
 
@@ -498,7 +522,10 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         <View style={styles.backButton} />
       </View>
 
-      <ScrollViewWithDetection style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollViewWithDetection
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {step === "qr" && (
           <>
             {/* Amount Card */}
@@ -721,9 +748,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                 {/* Title */}
                 <View style={styles.titleRow}>
                   <Text style={styles.receiptTitle}>GCASH RECEIPT</Text>
-                  <Text style={styles.titleSubtitle}>
-                    Apartment Bill Tracker
-                  </Text>
+                  <Text style={styles.titleSubtitle}>PropFlow</Text>
                 </View>
 
                 {/* Dashed Line */}
@@ -769,7 +794,9 @@ const GCashPaymentScreen = ({ navigation, route }) => {
                 </Text>
 
                 {/* Client Section */}
-                <Text style={styles.sectionTitle}>Client Information</Text>
+                <Text style={styles.receiptSectionTitle}>
+                  Client Information
+                </Text>
                 <View style={styles.clientInfo}>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Name</Text>
@@ -1011,8 +1038,20 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   );
 };
 
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const elevatedCard = isDarkMode ? colors.card : "#ffffff";
+  const softSurface = isDarkMode
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(3,109,65,0.055)";
+  const accentSurface = isDarkMode
+    ? "rgba(129,216,163,0.15)"
+    : "rgba(202,238,232,0.78)";
+  const softBorder = isDarkMode
+    ? "rgba(158,208,205,0.16)"
+    : "rgba(3,109,65,0.12)";
+
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -1021,17 +1060,24 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      backgroundColor: colors.card,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.divider,
+      backgroundColor: elevatedCard,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: softBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.06,
+      shadowRadius: 10,
+      elevation: 2,
     },
     backButton: {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: colors.background,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1040,8 +1086,8 @@ const createStyles = (colors) =>
       alignItems: "center",
     },
     title: {
-      fontSize: 17,
-      fontWeight: "700",
+      fontSize: 18,
+      fontWeight: "800",
       color: colors.text,
     },
     subtitle: {
@@ -1051,35 +1097,35 @@ const createStyles = (colors) =>
     },
     content: {
       flex: 1,
-      padding: 14,
+      padding: 16,
     },
 
     /* Amount Card */
     amountCard: {
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      paddingVertical: 22,
+      backgroundColor: accentSurface,
+      borderRadius: 24,
+      paddingVertical: 24,
       paddingHorizontal: 20,
-      marginBottom: 14,
+      marginBottom: 16,
       alignItems: "center",
-      borderWidth: 1.5,
-      borderColor: "#b38604",
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 3,
+      borderWidth: 1,
+      borderColor: softBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.13,
+      shadowRadius: 22,
+      elevation: 5,
     },
     amountLabel: {
       fontSize: 11,
-      color: colors.textTertiary,
-      fontWeight: "600",
+      color: colors.textSecondary,
+      fontWeight: "800",
       textTransform: "uppercase",
       letterSpacing: 0.5,
     },
     amountValue: {
-      fontSize: 34,
-      fontWeight: "800",
+      fontSize: 38,
+      fontWeight: "900",
       color: colors.accent,
       marginTop: 6,
     },
@@ -1087,17 +1133,19 @@ const createStyles = (colors) =>
       fontSize: 12,
       color: colors.textSecondary,
       marginTop: 6,
-      fontWeight: "500",
+      fontWeight: "700",
     },
 
     /* Step Badge */
     stepBadge: {
       alignSelf: "flex-start",
-      backgroundColor: colors.warningBg,
-      borderRadius: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      marginBottom: 8,
+      backgroundColor: accentSurface,
+      borderRadius: 999,
+      paddingHorizontal: 11,
+      paddingVertical: 5,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     stepBadgeText: {
       fontSize: 11,
@@ -1109,46 +1157,50 @@ const createStyles = (colors) =>
 
     /* Cards */
     card: {
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 16,
-      marginBottom: 14,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 6,
-      elevation: 2,
+      backgroundColor: elevatedCard,
+      borderRadius: 20,
+      padding: 18,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: softBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+      elevation: 3,
     },
     sectionTitle: {
-      fontSize: 15,
-      fontWeight: "700",
+      fontSize: 18,
+      fontWeight: "800",
       color: colors.text,
-      marginBottom: 12,
+      marginBottom: 14,
     },
 
     /* QR Section */
     qrCard: {
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 16,
-      marginBottom: 14,
+      backgroundColor: elevatedCard,
+      borderRadius: 22,
+      padding: 18,
+      marginBottom: 16,
       alignItems: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 6,
-      elevation: 2,
+      borderWidth: 1,
+      borderColor: softBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+      elevation: 3,
     },
     qrContainer: {
       width: 200,
       height: 200,
-      borderWidth: 1.5,
-      borderColor: colors.divider,
-      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: softBorder,
+      borderRadius: 20,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 12,
-      backgroundColor: colors.cardAlt,
+      backgroundColor: "#ffffff",
       overflow: "hidden",
     },
     qrImage: {
@@ -1168,7 +1220,7 @@ const createStyles = (colors) =>
       backgroundColor: colors.accent,
       paddingVertical: 10,
       paddingHorizontal: 20,
-      borderRadius: 10,
+      borderRadius: 14,
       marginBottom: 12,
       gap: 8,
     },
@@ -1185,10 +1237,12 @@ const createStyles = (colors) =>
 
     /* Reference */
     referenceBox: {
-      backgroundColor: colors.background,
-      borderRadius: 12,
+      backgroundColor: softSurface,
+      borderRadius: 16,
       padding: 14,
       marginBottom: 8,
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     referenceLabel: {
       fontSize: 11,
@@ -1214,8 +1268,10 @@ const createStyles = (colors) =>
     copyButton: {
       width: 34,
       height: 34,
-      borderRadius: 10,
-      backgroundColor: colors.warningBg,
+      borderRadius: 12,
+      backgroundColor: accentSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1226,21 +1282,23 @@ const createStyles = (colors) =>
 
     /* Instructions */
     instructionsCard: {
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 16,
-      marginBottom: 14,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 6,
-      elevation: 2,
+      backgroundColor: elevatedCard,
+      borderRadius: 20,
+      padding: 18,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: softBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+      elevation: 3,
     },
     instructionsHeader: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
-      marginBottom: 14,
+      gap: 8,
+      marginBottom: 16,
     },
     instructionsTitle: {
       fontSize: 14,
@@ -1256,13 +1314,15 @@ const createStyles = (colors) =>
       width: 26,
       height: 26,
       borderRadius: 13,
-      backgroundColor: colors.accent,
+      backgroundColor: accentSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
       marginRight: 12,
     },
     instructionNumber: {
-      color: "#fff",
+      color: colors.accent,
       fontSize: 12,
       fontWeight: "700",
     },
@@ -1288,13 +1348,13 @@ const createStyles = (colors) =>
     },
     input: {
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
+      borderColor: softBorder,
+      borderRadius: 16,
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 14,
       color: colors.text,
-      backgroundColor: colors.cardAlt,
+      backgroundColor: softSurface,
     },
     inputFocused: {
       borderColor: colors.accent,
@@ -1308,11 +1368,16 @@ const createStyles = (colors) =>
     verifyButton: {
       flexDirection: "row",
       backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderRadius: 18,
+      paddingVertical: 16,
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 8,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.16,
+      shadowRadius: 14,
+      elevation: 4,
     },
     verifyButtonText: {
       color: "#fff",
@@ -1338,7 +1403,9 @@ const createStyles = (colors) =>
       width: 80,
       height: 80,
       borderRadius: 40,
-      backgroundColor: colors.successBg,
+      backgroundColor: accentSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 16,
@@ -1356,15 +1423,17 @@ const createStyles = (colors) =>
     },
     successCard: {
       width: "100%",
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 16,
+      backgroundColor: elevatedCard,
+      borderRadius: 20,
+      padding: 18,
       marginBottom: 24,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 6,
-      elevation: 2,
+      borderWidth: 1,
+      borderColor: softBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+      elevation: 3,
     },
     successRow: {
       flexDirection: "row",
@@ -1538,9 +1607,10 @@ const createStyles = (colors) =>
       justifyContent: "center",
       borderWidth: 1.5,
       borderColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 13,
+      borderRadius: 18,
+      paddingVertical: 14,
       gap: 6,
+      backgroundColor: softSurface,
     },
     downloadReceiptText: {
       fontSize: 14,
@@ -1552,10 +1622,11 @@ const createStyles = (colors) =>
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      paddingVertical: 13,
+      borderColor: softBorder,
+      borderRadius: 18,
+      paddingVertical: 14,
       gap: 6,
+      backgroundColor: elevatedCard,
     },
     historyButtonText: {
       fontSize: 14,
@@ -1567,9 +1638,14 @@ const createStyles = (colors) =>
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 13,
+      borderRadius: 18,
+      paddingVertical: 14,
       gap: 6,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.16,
+      shadowRadius: 14,
+      elevation: 4,
     },
     billsButtonText: {
       fontSize: 14,
@@ -1635,7 +1711,7 @@ const createStyles = (colors) =>
       color: "#333",
       textAlign: "right",
     },
-    sectionTitle: {
+    receiptSectionTitle: {
       fontSize: 9,
       fontWeight: "600",
       marginBottom: 4,
@@ -1772,5 +1848,6 @@ const createStyles = (colors) =>
       marginTop: 2,
     },
   });
+};
 
 export default GCashPaymentScreen;

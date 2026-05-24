@@ -5,34 +5,33 @@ import React, {
   useEffect,
   useMemo,
 } from "react";
-import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { lightColors, darkColors } from "./colors";
+import { lightColors } from "./colors";
 
 const THEME_KEY = "@app_theme"; // "light" | "dark" | "system"
+const LIGHT_MODE_ONLY = true;
 
 const ThemeContext = createContext(null);
 
 export const ThemeProvider = ({ children }) => {
-  const [preference, setPreference] = useState("system"); // "light" | "dark" | "system"
+  const [preference, setPreference] = useState("light"); // "light" | "dark" | "system"
   const [loaded, setLoaded] = useState(false);
-  const systemScheme = useColorScheme(); // "light" | "dark" | null
 
   // Resolve the actual mode from preference + system
-  const resolvedMode =
-    preference === "system"
-      ? systemScheme === "light"
-        ? "light"
-        : "dark" // fallback dark if system is null
-      : preference;
+  const resolvedMode = "light";
 
   // Load persisted theme on mount
   useEffect(() => {
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem(THEME_KEY);
-        if (saved === "light" || saved === "dark" || saved === "system")
-          setPreference(saved);
+        if (LIGHT_MODE_ONLY) {
+          setPreference("light");
+          await AsyncStorage.setItem(THEME_KEY, "light");
+        } else {
+          const saved = await AsyncStorage.getItem(THEME_KEY);
+          if (saved === "light" || saved === "dark" || saved === "system")
+            setPreference(saved);
+        }
       } catch {
         // ignore
       } finally {
@@ -42,6 +41,8 @@ export const ThemeProvider = ({ children }) => {
   }, []);
 
   const toggleTheme = async () => {
+    if (LIGHT_MODE_ONLY) return;
+
     const next = resolvedMode === "dark" ? "light" : "dark";
     setPreference(next);
     try {
@@ -52,6 +53,16 @@ export const ThemeProvider = ({ children }) => {
   };
 
   const setTheme = async (theme) => {
+    if (LIGHT_MODE_ONLY) {
+      setPreference("light");
+      try {
+        await AsyncStorage.setItem(THEME_KEY, "light");
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
     if (theme !== "light" && theme !== "dark" && theme !== "system") return;
     setPreference(theme);
     try {
@@ -65,8 +76,8 @@ export const ThemeProvider = ({ children }) => {
     () => ({
       preference, // raw user choice: "light" | "dark" | "system"
       mode: resolvedMode, // resolved: "light" | "dark"
-      isDark: resolvedMode === "dark",
-      colors: resolvedMode === "dark" ? darkColors : lightColors,
+      isDark: false,
+      colors: lightColors,
       toggleTheme,
       setTheme,
       loaded,
@@ -87,10 +98,10 @@ export const useTheme = () => {
   if (!ctx) {
     // Fallback when used outside provider (shouldn't happen)
     return {
-      preference: "dark",
-      mode: "dark",
-      isDark: true,
-      colors: darkColors,
+      preference: "light",
+      mode: "light",
+      isDark: false,
+      colors: lightColors,
       toggleTheme: () => {},
       setTheme: () => {},
       loaded: true,

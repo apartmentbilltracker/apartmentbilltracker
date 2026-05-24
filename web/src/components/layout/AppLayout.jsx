@@ -185,9 +185,7 @@ export default function AppLayout() {
               alt="logo"
               className="w-5 h-5 rounded-md object-cover opacity-60"
             />
-            <span>
-              Apartment Bill Tracker &copy; {new Date().getFullYear()}
-            </span>
+            <span>PropFlow &copy; {new Date().getFullYear()}</span>
             <span className="hidden sm:inline text-gray-200 dark:text-white/10">
               ·
             </span>

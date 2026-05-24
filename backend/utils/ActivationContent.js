@@ -2,7 +2,7 @@ const ActivationContent = ({ userName, activationCode }) => {
   return `
       <div style="max-width: 600px; margin: auto; font-family: Arial, sans-serif; color: #333;">
         <div style="background-color: #ffffff; padding: 30px; border-radius: 8px;">
-            <h2 style="color: #b38604; margin-top: 0;">Apartment Bill Tracker</h2>
+            <h2 style="color: #b38604; margin-top: 0;">PropFlow</h2>
             <p>Hi ${userName},</p>
             <p>Your verification code is:</p>
             
@@ -12,7 +12,7 @@ const ActivationContent = ({ userName, activationCode }) => {
             
             <p>This code expires in 15 minutes.</p>
             <p>If you did not create an account, please ignore this email.</p>
-            <p>Best regards,<br>Apartment Bill Tracker</p>
+            <p>Best regards,<br>PropFlow</p>
         </div>
       </div>
     `;

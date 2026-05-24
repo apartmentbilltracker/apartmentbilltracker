@@ -16,7 +16,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../components/ScrollDetectionWrappers";
 
 const GOLD = "#b38604";
 const AdminBugReportsScreen = ({ navigation }) => {
@@ -339,7 +342,11 @@ const AdminBugReportsScreen = ({ navigation }) => {
                       {item.title}
                     </Text>
                     <View style={styles.reporterRow}>
-                      <Ionicons name="person-outline" size={12} color={colors.textSecondary} />
+                      <Ionicons
+                        name="person-outline"
+                        size={12}
+                        color={colors.textSecondary}
+                      />
                       <Text style={styles.bugReporter}>{item.userName}</Text>
                     </View>
                   </View>
@@ -387,7 +394,11 @@ const AdminBugReportsScreen = ({ navigation }) => {
 
                 <View style={styles.cardMetaRow}>
                   <View style={styles.metaChip}>
-                    <Ionicons name="cube-outline" size={12} color={colors.textSecondary} />
+                    <Ionicons
+                      name="cube-outline"
+                      size={12}
+                      color={colors.textSecondary}
+                    />
                     <Text style={styles.metaText}>{item.module}</Text>
                   </View>
                   <View style={styles.metaChip}>
@@ -835,7 +846,11 @@ const createStyles = (colors) =>
       borderColor: colors.border,
     },
     filterChipActive: { backgroundColor: GOLD, borderColor: GOLD },
-    filterChipText: { fontSize: 12, color: colors.textSecondary, fontWeight: "600" },
+    filterChipText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
     filterChipTextActive: { color: "#fff" },
 
     /* Bug Cards */
@@ -859,7 +874,12 @@ const createStyles = (colors) =>
     cardAccent: { width: 4 },
     cardBody: { flex: 1, paddingHorizontal: 14, paddingVertical: 12 },
     cardTopRow: { flexDirection: "row", alignItems: "flex-start" },
-    bugTitle: { fontSize: 15, fontWeight: "700", color: colors.text, marginBottom: 4 },
+    bugTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 4,
+    },
     reporterRow: { flexDirection: "row", alignItems: "center", gap: 4 },
     bugReporter: { fontSize: 12, color: colors.textSecondary },
     badgeColumn: { alignItems: "flex-end", gap: 4 },
@@ -948,7 +968,12 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginRight: 10,
     },
-    modalTitle: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.text },
+    modalTitle: {
+      flex: 1,
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
     modalClose: {
       width: 34,
       height: 34,
@@ -988,7 +1013,11 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginBottom: 6,
     },
-    infoCellLabel: { fontSize: 11, color: colors.textSecondary, fontWeight: "600" },
+    infoCellLabel: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
     infoCellValue: {
       fontSize: 12,
       color: colors.text,
@@ -1036,7 +1065,11 @@ const createStyles = (colors) =>
       justifyContent: "center",
       gap: 4,
     },
-    statusOptionText: { fontSize: 11, fontWeight: "700", color: colors.textSecondary },
+    statusOptionText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textSecondary,
+    },
 
     /* Timeline */
     timelineItem: { flexDirection: "row", marginBottom: 16 },
