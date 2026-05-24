@@ -21,7 +21,6 @@ import {
   Platform,
   Linking,
   TextInput,
-  StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -1911,11 +1910,6 @@ const ClientHomeScreen = ({ navigation, route }) => {
         </View>
       </Modal>
       <View style={styles.container}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="#063F39"
-          translucent={false}
-        />
         {/* ─── FULL-SCREEN LOADER OVERLAY ─── */}
         {loading && (
           <View style={styles.centerLoader}>
