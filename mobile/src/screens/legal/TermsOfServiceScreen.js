@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/HostNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import AuthBubbles from "../../components/AuthBubbles";
 
 const TermsOfServiceScreen = ({ navigation }) => {
@@ -19,12 +19,12 @@ const TermsOfServiceScreen = ({ navigation }) => {
     {
       title: "1. Acceptance of Terms",
       content:
-        "By downloading, installing, or using the Apartment Bill Tracker application, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the application.",
+        "By downloading, installing, or using the PropFlow application, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the application.",
     },
     {
       title: "2. Description of Service",
       content:
-        'Apartment Bill Tracker is a mobile application designed to help apartment residents and administrators manage shared utility bills, track payments, and split costs fairly among roommates. The app provides features including bill tracking, presence-based water billing, payment management, and billing cycle administration ("the Service").',
+        'PropFlow is a mobile application designed to help apartment residents and administrators manage shared utility bills, track payments, and split costs fairly among roommates. The app provides features including bill tracking, presence-based water billing, payment management, and billing cycle administration ("the Service").',
     },
     {
       title: "3. User Accounts",
@@ -50,7 +50,7 @@ const TermsOfServiceScreen = ({ navigation }) => {
     {
       title: "6. Billing & Payments",
       content:
-        "The app facilitates tracking of shared bills and payments between roommates. Apartment Bill Tracker is not a payment processor — it tracks and records payments made through external methods (cash, bank transfer, GCash, etc.). We are not responsible for disputes between users regarding payments made outside the app.",
+        "The app facilitates tracking of shared bills and payments between roommates. PropFlow is not a payment processor — it tracks and records payments made through external methods (cash, bank transfer, GCash, etc.). We are not responsible for disputes between users regarding payments made outside the app.",
     },
     {
       title: "7. Data Accuracy",

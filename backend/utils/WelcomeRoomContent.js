@@ -6,7 +6,7 @@ const WelcomeRoomContent = ({ userName, roomName, roomCode }) => {
             Welcome to ${roomName}!
         </div>
         <div style="background-color: #b38604; padding: 30px 0; text-align: center;">
-            <h2 style="color: white; margin: 0;">Apartment Bill Tracker</h2>
+            <h2 style="color: white; margin: 0;">PropFlow</h2>
         </div>
   
         <!-- Main Content -->
@@ -54,21 +54,21 @@ const WelcomeRoomContent = ({ userName, roomName, roomCode }) => {
                 </table>
             </div>
 
-            <p style="text-align: left; color: #333;">Open the Apartment Bill Tracker app to get started and explore your new room.</p>
-            <p style="text-align: left; color: #333; font-weight: bold;">Best regards,<br>Apartment Bill Tracker Team</p>
+            <p style="text-align: left; color: #333;">Open the PropFlow app to get started and explore your new room.</p>
+            <p style="text-align: left; color: #333; font-weight: bold;">Best regards,<br>PropFlow Team</p>
         </div>
   
         <!-- Help Section -->
         <div style="background-color: #f0f0f0; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
             <h3 style="color: #333;">Need help?</h3>
-            <p>If you have any questions about your room or billing, contact your room admin or <a href="mailto:support@apartmentbilltracker.com" style="color: #b38604; text-decoration: underline;">reach out to our support team</a>.</p>
+            <p>If you have any questions about your room or billing, contact your room admin or <a href="mailto:support@propflow.com" style="color: #b38604; text-decoration: underline;">reach out to our support team</a>.</p>
         </div>
   
         <!-- Footer -->
         <div style="font-size: 12px; text-align: left; color: #888; padding: 20px;">
-            <p style="color: #888;">Apartment Bill Tracker - Making shared billing simple and transparent</p>
+            <p style="color: #888;">PropFlow - Making shared billing simple and transparent</p>
             <p style="color: #888;">You received this email because your room join request was approved. If this wasn't you, please contact support.</p>
-            <p style="color: #888;">© 2026 Apartment Bill Tracker. All rights reserved.</p>
+            <p style="color: #888;">© 2026 PropFlow. All rights reserved.</p>
         </div>
       </div>
     `;

@@ -20,7 +20,7 @@ import { AuthContext } from "../../context/AuthContext";
 import SafeMapView from "../../components/SafeMapView";
 import { roomService, billingCycleService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -75,6 +75,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
   const [showFullMap, setShowFullMap] = useState(false);
   const [photoViewVisible, setPhotoViewVisible] = useState(false);
   const [photoViewIdx, setPhotoViewIdx] = useState(0);
+  const [userJoinedRoom, setUserJoinedRoom] = useState(null);
 
   const openInMaps = (r) => {
     const lat = r.latitude;
@@ -113,12 +114,39 @@ const RoomDetailsScreen = ({ route, navigation }) => {
   const fetchRoomDetails = async () => {
     try {
       setLoading(true);
-      const roomResponse = await roomService.getRoomById(roomId);
+      const [roomResponse, clientRoomsResponse] = await Promise.all([
+        roomService.getRoomById(roomId),
+        roomService.getClientRooms().catch((error) => {
+          console.error("Error fetching client rooms:", error.message);
+          return null;
+        }),
+      ]);
       const roomData = roomResponse.data || roomResponse;
 
       // Extract the room object (it might be wrapped)
-      const room = roomData.room || roomData;
-      setRoom(room);
+      const detailedRoom = roomData.room || roomData;
+      setRoom(detailedRoom);
+
+      const clientRoomsData = clientRoomsResponse?.data || clientRoomsResponse;
+      const clientRooms = clientRoomsData?.rooms || clientRoomsData || [];
+      const joinedRoomMatch =
+        clientRooms.find(
+          (clientRoom) =>
+            String(clientRoom.id || clientRoom._id) === String(roomId),
+        ) || null;
+
+      setUserJoinedRoom(
+        joinedRoomMatch
+          ? {
+              ...detailedRoom,
+              ...joinedRoomMatch,
+              members: joinedRoomMatch.members || detailedRoom.members,
+              billing: joinedRoomMatch.billing || detailedRoom.billing,
+              memberPayments:
+                joinedRoomMatch.memberPayments || detailedRoom.memberPayments,
+            }
+          : detailedRoom,
+      );
 
       // Fetch active billing cycle for custom charges
       try {
@@ -129,6 +157,16 @@ const RoomDetailsScreen = ({ route, navigation }) => {
           const cycle = activeCycleData.billingCycle || activeCycleData;
           if (cycle) {
             setActiveCycle(cycle);
+            if (Array.isArray(cycle.memberPayments)) {
+              setUserJoinedRoom((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      memberPayments: cycle.memberPayments,
+                    }
+                  : prev,
+              );
+            }
           }
         }
       } catch (cycleError) {
@@ -164,6 +202,21 @@ const RoomDetailsScreen = ({ route, navigation }) => {
     if (!date) return "N/A";
     return new Date(date).toLocaleDateString();
   };
+
+  const formatShortDate = (date) => {
+    if (!date) return "N/A";
+    return new Date(date).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const formatCurrency = (value) =>
+    "\u20B1" +
+    Number(value || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
   const calculateTotalWaterBill = () => {
     if (!room) return 0;
@@ -207,6 +260,58 @@ const RoomDetailsScreen = ({ route, navigation }) => {
     return totalDays * WATER_BILL_PER_DAY;
   };
 
+  const payorsPaymentStatus = useMemo(() => {
+    if (!userJoinedRoom?.members || !userJoinedRoom?.billing) return [];
+
+    const payors = userJoinedRoom.members.filter((m) => m.isPayer);
+
+    return payors.map((payor) => {
+      const payment = userJoinedRoom.memberPayments?.find(
+        (mp) =>
+          String(mp.member?.id || mp.member?._id || mp.member) ===
+          String(payor.user?.id || payor.user?._id || payor.user),
+      );
+
+      // Extract avatar URL - handle both string and object formats
+      let avatarUrl = null;
+      if (payor.user?.avatar) {
+        if (typeof payor.user.avatar === "string") {
+          avatarUrl = payor.user.avatar;
+        } else if (
+          typeof payor.user.avatar === "object" &&
+          payor.user.avatar.url
+        ) {
+          avatarUrl = payor.user.avatar.url;
+        }
+      }
+
+      const paymentData = payment || {
+        rentStatus: "unpaid",
+        electricityStatus: "unpaid",
+        waterStatus: "unpaid",
+        internetStatus: "unpaid",
+      };
+
+      return {
+        name: payor.user?.name || "Unknown",
+        userId: String(payor.user?.id || payor.user?._id || payor.user),
+        avatar: avatarUrl,
+        payment: {
+          rent: paymentData.rentStatus || "unpaid",
+          electricity: paymentData.electricityStatus || "unpaid",
+          water: paymentData.waterStatus || "unpaid",
+          internet: paymentData.internetStatus || "unpaid",
+        },
+        allPaid:
+          paymentData.rentStatus === "paid" &&
+          paymentData.electricityStatus === "paid" &&
+          paymentData.waterStatus === "paid" &&
+          (paymentData.internetStatus === "paid" ||
+            !userJoinedRoom.billing?.internet),
+      };
+    });
+  }, [userJoinedRoom]);
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -232,11 +337,31 @@ const RoomDetailsScreen = ({ route, navigation }) => {
     billing: room.billing,
     members: room.members,
   };
+  const members = Array.isArray(room.members) ? room.members : [];
+  const photos = Array.isArray(room.photos) ? room.photos : [];
+  const amenities = Array.isArray(room.amenities) ? room.amenities : [];
+  const payorCount = members.filter((member) => member.isPayer).length;
+  const waterTotal = calculateTotalWaterBill();
+  const customChargesTotal =
+    activeCycle?.customCharges?.reduce(
+      (sum, charge) => sum + parseFloat(charge.amount || 0),
+      0,
+    ) || 0;
+  const billingTotal =
+    parseFloat(billing.billing?.rent || 0) +
+    parseFloat(billing.billing?.electricity || 0) +
+    waterTotal +
+    parseFloat(billing.billing?.internet || 0) +
+    customChargesTotal;
+  const hasBillingCycle = Boolean(
+    billing?.billing?.start && billing?.billing?.end,
+  );
 
   return (
     <>
       <ScrollViewWithDetection
         style={styles.container}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -248,14 +373,76 @@ const RoomDetailsScreen = ({ route, navigation }) => {
             <View style={styles.headerIcon}>
               <Ionicons name="home" size={22} color={colors.accent} />
             </View>
-            <TouchableOpacity style={styles.shareBtn} onPress={handleShareRoom}>
+            <TouchableOpacity
+              style={styles.shareBtn}
+              onPress={handleShareRoom}
+              activeOpacity={0.75}
+            >
               <Ionicons name="share-outline" size={18} color={colors.accent} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.roomName}>{room.name}</Text>
-          <View style={styles.codePill}>
-            <Ionicons name="key-outline" size={13} color={colors.accent} />
-            <Text style={styles.codeText}>Code: {room.code}</Text>
+          <Text style={styles.roomName} numberOfLines={2}>
+            {room.name}
+          </Text>
+          {room.address ? (
+            <View style={styles.headerAddressRow}>
+              <Ionicons
+                name="location-outline"
+                size={14}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.headerAddressText} numberOfLines={2}>
+                {room.address}
+              </Text>
+            </View>
+          ) : null}
+          <View style={styles.headerMetaRow}>
+            <View style={styles.codePill}>
+              <Ionicons name="key-outline" size={13} color={colors.accent} />
+              <Text style={styles.codeText}>Code: {room.code || "N/A"}</Text>
+            </View>
+            <View style={styles.statusPill}>
+              <Ionicons
+                name={hasBillingCycle ? "pulse-outline" : "time-outline"}
+                size={13}
+                color={hasBillingCycle ? colors.success : colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.statusPillText,
+                  hasBillingCycle && { color: colors.success },
+                ]}
+              >
+                {hasBillingCycle ? "Active cycle" : "No cycle"}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.heroStatsRow}>
+            {[
+              {
+                label: "Members",
+                value: members.length || 0,
+                icon: "people-outline",
+              },
+              {
+                label: "Payors",
+                value: payorCount || 0,
+                icon: "checkmark-circle-outline",
+              },
+              {
+                label: "Total",
+                value: hasBillingCycle ? formatCurrency(billingTotal) : "--",
+                icon: "receipt-outline",
+              },
+            ].map((stat) => (
+              <View key={stat.label} style={styles.heroStatCard}>
+                <Ionicons name={stat.icon} size={15} color={colors.accent} />
+                <Text style={styles.heroStatValue} numberOfLines={1}>
+                  {stat.value}
+                </Text>
+                <Text style={styles.heroStatLabel}>{stat.label}</Text>
+              </View>
+            ))}
           </View>
         </View>
 
@@ -276,7 +463,6 @@ const RoomDetailsScreen = ({ route, navigation }) => {
 
         {/* ─── PHOTO GALLERY ─── */}
         {(() => {
-          const photos = Array.isArray(room.photos) ? room.photos : [];
           if (photos.length === 0) return null;
           const galWidth = SCREEN_WIDTH - 32;
           return (
@@ -389,7 +575,6 @@ const RoomDetailsScreen = ({ route, navigation }) => {
 
         {/* ─── AMENITIES ─── */}
         {(() => {
-          const amenities = Array.isArray(room.amenities) ? room.amenities : [];
           if (amenities.length === 0) return null;
           return (
             <View style={styles.card}>
@@ -496,7 +681,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
                 label: "Water",
                 icon: "water",
                 color: colors.waterColor,
-                value: calculateTotalWaterBill(),
+                value: waterTotal,
               },
               {
                 label: "Internet",
@@ -680,6 +865,133 @@ const RoomDetailsScreen = ({ route, navigation }) => {
           )}
         </View>
 
+        {/* ─── PAYORS PAYMENT STATUS ─── */}
+        {payorsPaymentStatus.length > 0 && (
+          <View style={styles.payorsCard}>
+            <View style={styles.payorsHeader}>
+              <Ionicons name="people" size={18} color={colors.accent} />
+              <Text style={styles.payorsTitle}>Payors Payment Status</Text>
+            </View>
+
+            {userJoinedRoom?.billing?.start && userJoinedRoom?.billing?.end && (
+              <View style={styles.payorsPeriod}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={13}
+                  color={colors.info}
+                />
+                <Text style={styles.payorsPeriodText}>
+                  {formatShortDate(userJoinedRoom.billing.start)} {"\u2014"}{" "}
+                  {formatShortDate(userJoinedRoom.billing.end)}
+                </Text>
+              </View>
+            )}
+
+            {payorsPaymentStatus.map((payor, index) => (
+              <View key={payor.userId}>
+                <View style={styles.payorRow}>
+                  {payor.avatar ? (
+                    <Image
+                      source={{ uri: payor.avatar }}
+                      style={styles.payorAvatarImg}
+                      onError={() => {
+                        // Avatar failed to load, fallback will be shown
+                      }}
+                    />
+                  ) : (
+                    <View style={styles.payorAvatar}>
+                      <Text style={styles.payorAvatarText}>
+                        {(payor.name || "?").charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.payorNameRow}>
+                      <Text style={styles.payorName}>{payor.name}</Text>
+                      {payor.allPaid && (
+                        <View style={styles.paidChip}>
+                          <Ionicons
+                            name="checkmark"
+                            size={10}
+                            color={colors.textOnAccent}
+                          />
+                          <Text style={styles.paidChipText}>Paid</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.payorBillsRow}>
+                      {[
+                        { key: "R", status: payor.payment.rent },
+                        {
+                          key: "E",
+                          status: payor.payment.electricity,
+                        },
+                        { key: "W", status: payor.payment.water },
+                        ...(userJoinedRoom.billing?.internet
+                          ? [
+                              {
+                                key: "I",
+                                status: payor.payment.internet,
+                              },
+                            ]
+                          : []),
+                      ].map((bill, bi) => (
+                        <View
+                          key={bi}
+                          style={[
+                            styles.payorBillChip,
+                            {
+                              backgroundColor:
+                                bill.status === "paid"
+                                  ? colors.successBg
+                                  : "#fbe9e7",
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.payorBillChipText,
+                              {
+                                color:
+                                  bill.status === "paid"
+                                    ? colors.success
+                                    : "#c62828",
+                              },
+                            ]}
+                          >
+                            {bill.key}
+                          </Text>
+                          <Ionicons
+                            name={
+                              bill.status === "paid" ? "checkmark" : "close"
+                            }
+                            size={10}
+                            color={
+                              bill.status === "paid"
+                                ? colors.success
+                                : "#c62828"
+                            }
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+                {index < payorsPaymentStatus.length - 1 && (
+                  <View style={styles.payorDivider} />
+                )}
+              </View>
+            ))}
+
+            <View style={styles.legendRow}>
+              <Text style={styles.legendText}>
+                R = Rent {"\u2022"} E = Electricity {"\u2022"} W = Water
+                {userJoinedRoom.billing?.internet ? " \u2022 I = Internet" : ""}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* ─── QUICK ACTIONS ─── */}
         <View style={styles.actionsRow}>
           <TouchableOpacity
@@ -837,6 +1149,9 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       flex: 1,
       backgroundColor: colors.background,
     },
+    scrollContent: {
+      paddingBottom: Math.max(28, insets.bottom + 24),
+    },
     center: {
       flex: 1,
       justifyContent: "center",
@@ -853,54 +1168,134 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     header: {
       backgroundColor: colors.card,
       paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 20,
-      borderBottomLeftRadius: 20,
-      borderBottomRightRadius: 20,
-      marginBottom: 6,
+      paddingTop: insets.top + 18,
+      paddingBottom: 22,
+      borderBottomLeftRadius: 28,
+      borderBottomRightRadius: 28,
+      marginBottom: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight || colors.border,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow || "#000",
+          shadowOpacity: 0.08,
+          shadowOffset: { width: 0, height: 8 },
+          shadowRadius: 18,
+        },
+        android: { elevation: 4 },
+      }),
     },
     headerTop: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 14,
+      marginBottom: 16,
     },
     headerIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: 14,
+      width: 46,
+      height: 46,
+      borderRadius: 16,
       backgroundColor: colors.accentSurface,
       justifyContent: "center",
       alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
     },
     shareBtn: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
       backgroundColor: colors.accentSurface,
       justifyContent: "center",
       alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
     },
     roomName: {
-      fontSize: 24,
-      fontWeight: "700",
+      fontSize: 27,
+      fontWeight: "800",
       color: colors.text,
       marginBottom: 8,
+      lineHeight: 33,
+    },
+    headerAddressRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 6,
+      marginBottom: 12,
+      paddingRight: 10,
+    },
+    headerAddressText: {
+      flex: 1,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textSecondary,
+      fontWeight: "500",
+    },
+    headerMetaRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 16,
     },
     codePill: {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
-      alignSelf: "flex-start",
       paddingHorizontal: 12,
-      paddingVertical: 5,
-      borderRadius: 14,
+      paddingVertical: 7,
+      borderRadius: 16,
       backgroundColor: colors.accentSurface,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
     },
     codeText: {
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: "600",
       color: colors.accent,
+    },
+    statusPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 16,
+      backgroundColor: colors.cardAlt,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    statusPillText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.textSecondary,
+    },
+    heroStatsRow: {
+      flexDirection: "row",
+      gap: 10,
+    },
+    heroStatCard: {
+      flex: 1,
+      minHeight: 86,
+      borderRadius: 18,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      backgroundColor: colors.cardAlt,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      justifyContent: "space-between",
+    },
+    heroStatValue: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.text,
+      marginTop: 8,
+    },
+    heroStatLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
     },
 
     /* ─── Cards ─── */
@@ -908,8 +1303,19 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       marginHorizontal: 16,
       marginTop: 14,
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 18,
       padding: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow || "#000",
+          shadowOpacity: 0.06,
+          shadowOffset: { width: 0, height: 6 },
+          shadowRadius: 14,
+        },
+        android: { elevation: 2 },
+      }),
     },
     cardTitleRow: {
       flexDirection: "row",
@@ -939,7 +1345,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       paddingHorizontal: 12,
       paddingVertical: 7,
       backgroundColor: colors.cardAlt,
-      borderRadius: 8,
+      borderRadius: 12,
       marginBottom: 12,
     },
     periodText: {
@@ -1000,8 +1406,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       gap: 6,
       paddingVertical: 11,
       backgroundColor: colors.accentSurface,
-      borderRadius: 10,
+      borderRadius: 14,
       marginTop: 10,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
     },
     detailsBtnText: {
       fontSize: 13,
@@ -1056,6 +1464,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontSize: 14,
       fontWeight: "600",
       color: colors.text,
+      flexShrink: 1,
     },
     rolePill: {
       flexDirection: "row",
@@ -1081,7 +1490,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       gap: 10,
     },
     amenityItem: {
-      width: "30%",
+      width: "31%",
       alignItems: "center",
       marginBottom: 4,
     },
@@ -1129,6 +1538,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       gap: 10,
       marginHorizontal: 16,
       marginTop: 14,
+      marginBottom: Math.max(10, insets.bottom + 4),
     },
     actionPrimary: {
       flex: 1,
@@ -1137,7 +1547,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       justifyContent: "center",
       gap: 8,
       backgroundColor: colors.accent,
-      borderRadius: 12,
+      borderRadius: 16,
       paddingVertical: 14,
     },
     actionPrimaryText: {
@@ -1152,10 +1562,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       justifyContent: "center",
       gap: 8,
       backgroundColor: colors.card,
-      borderRadius: 12,
+      borderRadius: 16,
       paddingVertical: 14,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight || colors.border,
     },
     actionOutlineText: {
       color: colors.accent,
@@ -1187,15 +1597,146 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       marginTop: 8,
     },
 
+    /* ─── Payors Status ─── */
+    payorsCard: {
+      marginHorizontal: 16,
+      marginTop: 14,
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      overflow: "hidden",
+    },
+    payorsHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    payorsTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    payorsPeriod: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginHorizontal: 16,
+      marginTop: 10,
+      marginBottom: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 8,
+    },
+    payorsPeriodText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    payorRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    payorAvatar: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    payorAvatarImg: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    payorAvatarText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    payorNameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 4,
+    },
+    payorName: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    paidChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 2,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 8,
+      backgroundColor: colors.success,
+    },
+    paidChipText: {
+      fontSize: 9,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    payorBillsRow: {
+      flexDirection: "row",
+      gap: 6,
+    },
+    payorBillChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 6,
+    },
+    payorBillChipText: {
+      fontSize: 10,
+      fontWeight: "700",
+    },
+    payorDivider: {
+      height: 1,
+      backgroundColor: colors.inputBg,
+      marginHorizontal: 16,
+    },
+    legendRow: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      alignItems: "center",
+    },
+    legendText: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      fontStyle: "italic",
+    },
+
     /* ─── Map ─── */
     mapPreviewWrap: {
-      borderRadius: 12,
+      borderRadius: 16,
       overflow: "hidden",
       marginTop: 10,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
     },
     mapPreview: {
       width: "100%",
-      height: 160,
+      height: 190,
     },
     mapAddressRow: {
       flexDirection: "row",
@@ -1303,12 +1844,12 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
 
     /* ─── Photo Gallery ─── */
     galScroll: {
-      borderRadius: 10,
+      borderRadius: 16,
       overflow: "hidden",
     },
     galPhoto: {
-      height: 200,
-      borderRadius: 10,
+      height: 220,
+      borderRadius: 16,
     },
     galOverlay: {
       position: "absolute",

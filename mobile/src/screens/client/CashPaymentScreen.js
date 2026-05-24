@@ -18,9 +18,16 @@ import apiService, {
   billingCycleService,
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { AuthContext } from "../../context/AuthContext";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
+import {
+  buildBillSharesFromCharge,
+  findUserCharge,
+  getExactBillAmount,
+  getSelectedPaymentBillTypes,
+  normalizePaymentBillType,
+} from "../../utils/paymentAmounts";
 
 const CashPaymentScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -37,6 +44,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
     billTypes,
     billingCycleId,
     breakdown,
+    billAmounts,
   } = route.params;
   const [step, setStep] = useState("form"); // form, success
   const [receiptNumber, setReceiptNumber] = useState("");
@@ -56,6 +64,62 @@ const CashPaymentScreen = ({ navigation, route }) => {
     Math.random().toString().slice(2, 14).padEnd(12, "0"),
   );
   const receiptRef = React.useRef(null);
+
+  const billNameMap = {
+    rent: "Rent",
+    electricity: "Electricity",
+    water: "Water",
+    internet: "Internet",
+    custom_charges: "Additional Charges",
+    customCharges: "Additional Charges",
+    total: "All Bills",
+  };
+
+  const selectedBillTypesForDisplay = useMemo(
+    () =>
+      getSelectedPaymentBillTypes({
+        breakdown,
+        billTypes,
+        billType,
+        billAmounts,
+        billShares,
+        totalAmount: amount,
+      }),
+    [breakdown, billTypes, billType, billAmounts, billShares, amount],
+  );
+
+  const billTitle = useMemo(() => {
+    const labels = selectedBillTypesForDisplay
+      .map((type) => billNameMap[type] || type)
+      .filter(Boolean);
+
+    if (labels.length >= 5 || labels.includes("All Bills")) return "All Bills";
+    return labels.join(" / ") || "Selected Bills";
+  }, [selectedBillTypesForDisplay]);
+
+  const amountDisplay = `PHP ${Number(amount || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+  const getSelectedBillAmount = (type, index, selectedTypes) => {
+    const normalizedType = normalizePaymentBillType(type);
+    const exactAmount = getExactBillAmount(normalizedType, {
+      billAmounts,
+      billShares,
+      totalAmount: amount,
+    });
+
+    if (exactAmount !== null) return exactAmount;
+    if (selectedTypes?.length === 1 && normalizedType === "total") {
+      const totalAmount = Number(amount);
+      return Number.isFinite(totalAmount) && totalAmount > 0
+        ? totalAmount
+        : null;
+    }
+
+    return null;
+  };
 
   // Fetch room and billing data on mount
   useEffect(() => {
@@ -103,22 +167,10 @@ const CashPaymentScreen = ({ navigation, route }) => {
 
         // Calculate bill shares if target cycle exists and has member charges
         if (targetCycle?.memberCharges?.length > 0) {
-          const userCharge = targetCycle.memberCharges.find(
-            (c) => String(c.userId) === String(userId),
-          );
+          const userCharge = findUserCharge(targetCycle.memberCharges, userId);
           if (userCharge) {
             setUserChargeData(userCharge);
-            setBillShares({
-              rent: userCharge.rentShare || 0,
-              electricity: userCharge.electricityShare || 0,
-              internet: userCharge.internetShare || 0,
-              water:
-                userCharge.isPayer !== false
-                  ? userCharge.waterBillShare || 0
-                  : userCharge.waterOwn || 0,
-              customCharges: userCharge.custom_charges_share || 0,
-              total: userCharge.totalDue || 0,
-            });
+            setBillShares(buildBillSharesFromCharge(userCharge));
           }
         }
       } catch (error) {
@@ -157,21 +209,35 @@ const CashPaymentScreen = ({ navigation, route }) => {
 
   // Helper function to get amount for a specific bill from breakdown
   const getDisplayedAmount = (billKey) => {
-    if (!billShares || !breakdown) return 0;
-
-    // Map breakdown keys to billShares keys
-    const keyMap = {
-      rent: "rent",
-      electricity: "electricity",
-      internet: "internet",
-      water: "water",
-      custom_charges: "customCharges",
-      customCharges: "customCharges",
-    };
-
-    const shareKey = keyMap[billKey];
-    return shareKey && breakdown[billKey] ? billShares[shareKey] || 0 : 0;
+    return (
+      getExactBillAmount(billKey, {
+        billAmounts,
+        billShares,
+        totalAmount: amount,
+      }) || 0
+    );
   };
+
+  const receiptLineItems = useMemo(
+    () =>
+      selectedBillTypesForDisplay
+        .filter((type) => type !== "total")
+        .map((type) => ({
+          type,
+          label: billNameMap[type] || type,
+          amount: getSelectedBillAmount(type, 0, selectedBillTypesForDisplay),
+        }))
+        .filter((item) => Number(item.amount) > 0),
+    [selectedBillTypesForDisplay, billAmounts, billShares, amount],
+  );
+
+  const receiptTotal = useMemo(() => {
+    const lineTotal = receiptLineItems.reduce(
+      (sum, item) => sum + Number(item.amount || 0),
+      0,
+    );
+    return lineTotal > 0 ? lineTotal : Number(amount || 0);
+  }, [receiptLineItems, amount]);
 
   const handleRecordCash = async () => {
     if (!receiptNumber.trim()) {
@@ -199,29 +265,10 @@ const CashPaymentScreen = ({ navigation, route }) => {
 
       // Check if this is a batch payment (multiple bills selected)
       // Ensure billTypes is an array and normalize values
-      let selectedBillTypes = Array.isArray(billTypes) ? billTypes : [billType];
+      let selectedBillTypes = selectedBillTypesForDisplay;
 
-      // Sanitize: ensure all values are valid snake_case bill types
       selectedBillTypes = selectedBillTypes
-        .map((bt) => {
-          if (typeof bt !== "string") return null;
-          const normalized = bt.trim().toLowerCase();
-          // Valid: rent, electricity, water, internet, custom_charges
-          if (
-            [
-              "rent",
-              "electricity",
-              "water",
-              "internet",
-              "custom_charges",
-            ].includes(normalized)
-          ) {
-            return normalized;
-          }
-          // Handle camelCase -> snake_case conversion
-          if (normalized === "customcharges") return "custom_charges";
-          return null;
-        })
+        .map(normalizePaymentBillType)
         .filter((bt) => bt !== null);
 
       if (selectedBillTypes.length === 0) {
@@ -230,20 +277,32 @@ const CashPaymentScreen = ({ navigation, route }) => {
       }
 
       const isBatch = selectedBillTypes.length > 1;
+      const missingAmountType = selectedBillTypes.find(
+        (type, index) =>
+          getSelectedBillAmount(type, index, selectedBillTypes) === null,
+      );
+
+      if (missingAmountType) {
+        Alert.alert(
+          "Bill amounts not ready",
+          "Please wait a moment for the exact bill amounts to load, then try again.",
+        );
+        return;
+      }
 
       let response;
       if (isBatch) {
         // For batch payments, call recordCash for each bill type
-        // Split the total amount equally across selected bills
-        const amountPerBill = amount / selectedBillTypes.length;
         const responses = [];
+        const paymentBatchId = `cash-${Date.now()}`;
 
         for (let i = 0; i < selectedBillTypes.length; i++) {
           const billTypeItem = selectedBillTypes[i];
-          const billAmount =
-            i === selectedBillTypes.length - 1
-              ? amount - amountPerBill * (selectedBillTypes.length - 1)
-              : amountPerBill;
+          const billAmount = getSelectedBillAmount(
+            billTypeItem,
+            i,
+            selectedBillTypes,
+          );
 
           const res = await apiService.recordCash({
             roomId,
@@ -256,6 +315,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
               ? `${notes} (Part ${i + 1}/${selectedBillTypes.length})`
               : `(Part ${i + 1}/${selectedBillTypes.length})`,
             billingCycleId,
+            paymentBatchId,
           });
           responses.push(res);
         }
@@ -267,10 +327,13 @@ const CashPaymentScreen = ({ navigation, route }) => {
           transactions: responses.map((r) => r.transaction),
         };
       } else {
+        const singleBillAmount =
+          getSelectedBillAmount(selectedBillTypes[0], 0, selectedBillTypes) ??
+          Number(amount || 0);
         // Use single bill endpoint for single bill
         response = await apiService.recordCash({
           roomId,
-          amount,
+          amount: singleBillAmount,
           billType: selectedBillTypes[0],
           receiptNumber,
           receivedBy,
@@ -337,7 +400,10 @@ const CashPaymentScreen = ({ navigation, route }) => {
   const getMemberStatus = () => {
     // Use userCharge.isPayer for accurate status from billing cycle data
     if (userChargeData) {
-      return userChargeData.isPayer !== false ? "Payor" : "Non-Payor";
+      return userChargeData.isPayer !== false &&
+        userChargeData.is_payer !== false
+        ? "Payor"
+        : "Non-Payor";
     }
     return memberInfo?.isPayer ? "Payor" : "Non-Payor";
   };
@@ -349,37 +415,65 @@ const CashPaymentScreen = ({ navigation, route }) => {
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
+          activeOpacity={0.75}
         >
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.title}>Cash Payment</Text>
-          <Text style={styles.subtitle}>{roomName}</Text>
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {roomName}
+          </Text>
         </View>
-        <View style={styles.backButton} />
+        <View style={styles.headerMethodBadge}>
+          <Ionicons name="cash-outline" size={17} color={colors.accent} />
+        </View>
       </View>
 
       <ScrollViewWithDetection
         style={styles.content}
+        contentContainerStyle={styles.contentInner}
         showsVerticalScrollIndicator={false}
       >
         {step === "form" && (
           <>
             {/* Amount Card */}
             <View style={styles.amountCard}>
-              <Text style={styles.amountLabel}>Amount to Pay</Text>
-              <Text style={styles.amountValue}>₱{amount.toFixed(2)}</Text>
-              <Text style={styles.billTypeText}>
-                {billType.charAt(0).toUpperCase() + billType.slice(1)} Bill
-              </Text>
+              <View style={styles.amountTopRow}>
+                <View style={styles.amountIcon}>
+                  <Ionicons
+                    name="receipt-outline"
+                    size={20}
+                    color={colors.accent}
+                  />
+                </View>
+                <Text style={styles.amountLabel}>Cash amount to record</Text>
+              </View>
+              <Text style={styles.amountValue}>{amountDisplay}</Text>
+              <View style={styles.billPill}>
+                <Ionicons
+                  name="document-text-outline"
+                  size={13}
+                  color={colors.accent}
+                />
+                <Text style={styles.billTypeText} numberOfLines={1}>
+                  {billTitle}
+                </Text>
+              </View>
             </View>
 
             {/* Form */}
             <View style={styles.card}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>Payment Details</Text>
+              <View style={styles.formHeader}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>Payment Details</Text>
+                </View>
+                <Text style={styles.formSectionTitle}>Record Information</Text>
+                <Text style={styles.formSectionSubtitle}>
+                  Fill in the receipt details before confirming the cash
+                  payment.
+                </Text>
               </View>
-              <Text style={styles.sectionTitle}>Record Information</Text>
 
               {/* Receipt Number */}
               <View style={styles.formGroup}>
@@ -402,6 +496,9 @@ const CashPaymentScreen = ({ navigation, route }) => {
                     placeholderTextColor={colors.textTertiary}
                   />
                 </View>
+                <Text style={styles.inputHint}>
+                  Use the receipt or acknowledgement number from your host
+                </Text>
               </View>
 
               {/* Received By */}
@@ -476,15 +573,16 @@ const CashPaymentScreen = ({ navigation, route }) => {
             <View style={styles.infoCard}>
               <View style={styles.infoIconCircle}>
                 <Ionicons
-                  name="information-circle-outline"
+                  name="shield-checkmark-outline"
                   size={18}
                   color={colors.accent}
                 />
               </View>
               <View style={styles.infoContent}>
-                <Text style={styles.infoTitle}>Payment Receipt</Text>
+                <Text style={styles.infoTitle}>Before You Record</Text>
                 <Text style={styles.infoText}>
-                  Make sure to keep a copy of the receipt for your records
+                  Confirm the cash was received by your host or authorized
+                  collector. A receipt image can be saved after recording.
                 </Text>
               </View>
             </View>
@@ -525,9 +623,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
                 {/* Title */}
                 <View style={styles.titleRow}>
                   <Text style={styles.receiptTitle}>CASH RECEIPT</Text>
-                  <Text style={styles.titleSubtitle}>
-                    Apartment Bill Tracker
-                  </Text>
+                  <Text style={styles.titleSubtitle}>PropFlow</Text>
                 </View>
 
                 {/* Dashed Line */}
@@ -603,7 +699,8 @@ const CashPaymentScreen = ({ navigation, route }) => {
                   {breakdown ? (
                     <>
                       {/* Rent */}
-                      {breakdown.rent && (
+                      {(breakdown.rent ||
+                        selectedBillTypesForDisplay.includes("rent")) && (
                         <View style={styles.costRow}>
                           <Text style={styles.costLabel}>Rent</Text>
                           <Text style={styles.costDots}>
@@ -615,7 +712,10 @@ const CashPaymentScreen = ({ navigation, route }) => {
                         </View>
                       )}
                       {/* Electricity */}
-                      {breakdown.electricity && (
+                      {(breakdown.electricity ||
+                        selectedBillTypesForDisplay.includes(
+                          "electricity",
+                        )) && (
                         <View style={styles.costRow}>
                           <Text style={styles.costLabel}>Electricity</Text>
                           <Text style={styles.costDots}>
@@ -630,7 +730,8 @@ const CashPaymentScreen = ({ navigation, route }) => {
                         </View>
                       )}
                       {/* Internet */}
-                      {breakdown.internet && (
+                      {(breakdown.internet ||
+                        selectedBillTypesForDisplay.includes("internet")) && (
                         <View style={styles.costRow}>
                           <Text style={styles.costLabel}>Internet</Text>
                           <Text style={styles.costDots}>
@@ -642,7 +743,8 @@ const CashPaymentScreen = ({ navigation, route }) => {
                         </View>
                       )}
                       {/* Water */}
-                      {breakdown.water && (
+                      {(breakdown.water ||
+                        selectedBillTypesForDisplay.includes("water")) && (
                         <View style={styles.costRow}>
                           <Text style={styles.costLabel}>Water</Text>
                           <Text style={styles.costDots}>
@@ -795,7 +897,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
                       {Array(26).fill(".").join("")}
                     </Text>
                     <Text style={styles.totalAmount}>
-                      ₱{(amount || 0).toFixed(2)}
+                      ₱{Number(receiptTotal || 0).toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -911,10 +1013,16 @@ const CashPaymentScreen = ({ navigation, route }) => {
           <View style={styles.modalContent}>
             <View style={styles.modalDragHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Confirm Payment</Text>
+              <View>
+                <Text style={styles.modalTitle}>Confirm Cash Payment</Text>
+                <Text style={styles.modalSubtitle}>
+                  Review the receipt details before recording.
+                </Text>
+              </View>
               <TouchableOpacity
                 onPress={() => setShowConfirm(false)}
                 style={styles.modalCloseButton}
+                activeOpacity={0.75}
               >
                 <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -922,7 +1030,10 @@ const CashPaymentScreen = ({ navigation, route }) => {
 
             <View style={styles.modalAmountRow}>
               <Text style={styles.modalAmountLabel}>Total Amount</Text>
-              <Text style={styles.modalAmountValue}>₱{amount.toFixed(2)}</Text>
+              <Text style={styles.modalAmountValue}>{amountDisplay}</Text>
+              <Text style={styles.modalBillTitle} numberOfLines={1}>
+                {billTitle}
+              </Text>
             </View>
 
             <View style={styles.confirmationDetails}>
@@ -943,10 +1054,21 @@ const CashPaymentScreen = ({ navigation, route }) => {
               <View style={styles.confirmDivider} />
               <View style={styles.confirmRow}>
                 <Text style={styles.confirmLabel}>Bill Type</Text>
-                <Text style={styles.confirmValue}>
-                  {billType.charAt(0).toUpperCase() + billType.slice(1)}
+                <Text style={styles.confirmValue} numberOfLines={2}>
+                  {billTitle}
                 </Text>
               </View>
+              {notes.trim() ? (
+                <>
+                  <View style={styles.confirmDivider} />
+                  <View style={styles.confirmRow}>
+                    <Text style={styles.confirmLabel}>Notes</Text>
+                    <Text style={styles.confirmValue} numberOfLines={3}>
+                      {notes.trim()}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
             </View>
 
             <View style={styles.modalButtons}>
@@ -979,8 +1101,19 @@ const CashPaymentScreen = ({ navigation, route }) => {
   );
 };
 
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const softSurface = isDarkMode
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(3,109,65,0.055)";
+  const softBorder = isDarkMode
+    ? "rgba(158,208,205,0.16)"
+    : "rgba(3,109,65,0.12)";
+  const selectedSurface = isDarkMode
+    ? "rgba(129,216,163,0.12)"
+    : "rgba(202,238,232,0.72)";
+
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -988,104 +1121,166 @@ const createStyles = (colors) =>
     header: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
-      backgroundColor: colors.card,
-      paddingHorizontal: 14,
+      gap: 12,
+      backgroundColor: colors.background,
+      paddingHorizontal: 18,
       paddingVertical: 12,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.divider,
+      borderBottomColor: colors.border,
     },
     backButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.background,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
     headerContent: {
       flex: 1,
-      alignItems: "center",
+      minWidth: 0,
     },
     title: {
-      fontSize: 17,
-      fontWeight: "700",
+      fontSize: 19,
+      fontWeight: "800",
       color: colors.text,
     },
     subtitle: {
-      fontSize: 11,
-      color: colors.textTertiary,
+      fontSize: 12,
+      color: colors.textSecondary,
       marginTop: 2,
+      fontWeight: "600",
+    },
+    headerMethodBadge: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
+      justifyContent: "center",
+      alignItems: "center",
     },
     content: {
       flex: 1,
-      padding: 14,
+    },
+    contentInner: {
+      padding: 18,
+      paddingBottom: 54,
     },
 
     /* Amount Card */
     amountCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
-      paddingVertical: 22,
-      paddingHorizontal: 20,
-      marginBottom: 14,
+      borderRadius: 20,
+      paddingVertical: 18,
+      paddingHorizontal: 18,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: softBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.1,
+      shadowRadius: 18,
+      elevation: 4,
+    },
+    amountTopRow: {
+      flexDirection: "row",
       alignItems: "center",
-      borderWidth: 1.5,
-      borderColor: "#b38604",
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 3,
+      gap: 9,
+      marginBottom: 10,
+    },
+    amountIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     amountLabel: {
-      fontSize: 11,
+      fontSize: 12,
       color: colors.textTertiary,
-      fontWeight: "600",
+      fontWeight: "800",
       textTransform: "uppercase",
-      letterSpacing: 0.5,
+      letterSpacing: 0.7,
     },
     amountValue: {
       fontSize: 34,
-      fontWeight: "800",
+      fontWeight: "900",
       color: colors.accent,
-      marginTop: 6,
+      marginBottom: 12,
+    },
+    billPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: 6,
+      maxWidth: "100%",
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     billTypeText: {
+      flexShrink: 1,
       fontSize: 12,
-      color: colors.textSecondary,
-      marginTop: 6,
-      fontWeight: "500",
+      color: colors.accent,
+      fontWeight: "800",
     },
 
     /* Step Badge */
     stepBadge: {
       alignSelf: "flex-start",
-      backgroundColor: colors.warningBg,
-      borderRadius: 8,
+      backgroundColor: softSurface,
+      borderRadius: 999,
       paddingHorizontal: 10,
-      paddingVertical: 4,
-      marginBottom: 8,
+      paddingVertical: 6,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     stepBadgeText: {
       fontSize: 11,
       fontWeight: "700",
       color: colors.accent,
       textTransform: "uppercase",
-      letterSpacing: 0.5,
+      letterSpacing: 0.7,
+    },
+    formHeader: {
+      marginBottom: 16,
+    },
+    formSectionTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    formSectionSubtitle: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 18,
+      marginTop: 4,
     },
 
     /* Cards */
     card: {
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 20,
       padding: 16,
       marginBottom: 14,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 6,
-      elevation: 2,
+      borderWidth: 1,
+      borderColor: softBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.07,
+      shadowRadius: 14,
+      elevation: 3,
     },
     sectionTitle: {
       fontSize: 15,
@@ -1113,9 +1308,9 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      backgroundColor: colors.cardAlt,
+      borderColor: softBorder,
+      borderRadius: 16,
+      backgroundColor: softSurface,
       paddingHorizontal: 12,
     },
     inputIcon: {
@@ -1129,13 +1324,13 @@ const createStyles = (colors) =>
     },
     input: {
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
+      borderColor: softBorder,
+      borderRadius: 16,
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 14,
       color: colors.text,
-      backgroundColor: colors.cardAlt,
+      backgroundColor: softSurface,
     },
     multilineInput: {
       textAlignVertical: "top",
@@ -1151,18 +1346,20 @@ const createStyles = (colors) =>
     /* Info Card */
     infoCard: {
       flexDirection: "row",
-      backgroundColor: colors.warningBg,
-      borderRadius: 14,
+      backgroundColor: softSurface,
+      borderRadius: 18,
       padding: 14,
       marginBottom: 14,
       gap: 12,
       alignItems: "flex-start",
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     infoIconCircle: {
       width: 32,
       height: 32,
-      borderRadius: 10,
-      backgroundColor: colors.accentSurface,
+      borderRadius: 12,
+      backgroundColor: colors.accentSurface || selectedSurface,
       justifyContent: "center",
       alignItems: "center",
       marginTop: 1,
@@ -1177,20 +1374,26 @@ const createStyles = (colors) =>
     },
     infoText: {
       fontSize: 12,
-      color: colors.accent,
+      color: colors.textSecondary,
       marginTop: 3,
       lineHeight: 17,
+      fontWeight: "500",
     },
 
     /* Submit Button */
     submitButton: {
       flexDirection: "row",
       backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderRadius: 16,
+      paddingVertical: 16,
       alignItems: "center",
       justifyContent: "center",
       marginBottom: 30,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.16,
+      shadowRadius: 12,
+      elevation: 4,
     },
     submitButtonText: {
       color: "#fff",
@@ -1322,14 +1525,14 @@ const createStyles = (colors) =>
     /* Modal */
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0, 0, 0, 0.4)",
+      backgroundColor: "rgba(0, 0, 0, 0.45)",
       justifyContent: "flex-end",
     },
     modalContent: {
       backgroundColor: colors.card,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      paddingHorizontal: 20,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 18,
       paddingBottom: 8,
       maxHeight: "80%",
     },
@@ -1337,30 +1540,39 @@ const createStyles = (colors) =>
       width: 36,
       height: 4,
       borderRadius: 2,
-      backgroundColor: colors.skeleton,
+      backgroundColor: colors.skeleton || colors.border,
       alignSelf: "center",
       marginTop: 10,
-      marginBottom: 6,
+      marginBottom: 10,
     },
     modalHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "center",
-      paddingVertical: 12,
+      alignItems: "flex-start",
+      gap: 12,
+      paddingBottom: 14,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.divider,
+      borderBottomColor: colors.border,
       marginBottom: 16,
     },
     modalTitle: {
-      fontSize: 17,
-      fontWeight: "700",
+      fontSize: 19,
+      fontWeight: "800",
       color: colors.text,
     },
+    modalSubtitle: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginTop: 3,
+    },
     modalCloseButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: colors.background,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1381,16 +1593,26 @@ const createStyles = (colors) =>
       color: colors.accent,
       marginTop: 4,
     },
+    modalBillTitle: {
+      marginTop: 6,
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.textSecondary,
+      textAlign: "center",
+    },
     confirmationDetails: {
       backgroundColor: colors.background,
-      borderRadius: 14,
+      borderRadius: 18,
       padding: 16,
       marginBottom: 20,
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     confirmRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "center",
+      alignItems: "flex-start",
+      gap: 16,
       paddingVertical: 8,
     },
     confirmLabel: {
@@ -1398,9 +1620,11 @@ const createStyles = (colors) =>
       color: colors.textTertiary,
     },
     confirmValue: {
+      flex: 1,
       fontSize: 14,
       color: colors.text,
-      fontWeight: "700",
+      fontWeight: "800",
+      textAlign: "right",
     },
     confirmDivider: {
       height: StyleSheet.hairlineWidth,
@@ -1413,8 +1637,8 @@ const createStyles = (colors) =>
     },
     modalCancelButton: {
       flex: 1,
-      paddingVertical: 13,
-      borderRadius: 12,
+      minHeight: 50,
+      borderRadius: 16,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.card,
@@ -1429,11 +1653,12 @@ const createStyles = (colors) =>
     modalConfirmButton: {
       flex: 1,
       flexDirection: "row",
-      paddingVertical: 13,
-      borderRadius: 12,
+      minHeight: 50,
+      borderRadius: 16,
       backgroundColor: colors.accent,
       alignItems: "center",
       justifyContent: "center",
+      gap: 6,
     },
     modalConfirmButtonText: {
       fontSize: 14,
@@ -1619,5 +1844,6 @@ const createStyles = (colors) =>
       marginTop: 2,
     },
   });
+};
 
 export default CashPaymentScreen;

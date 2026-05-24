@@ -18,7 +18,7 @@ import { roundTo2 as r2 } from "../../utils/helpers";
 import { screenCache } from "../../hooks/useScreenCache";
 import AnimatedAmount from "../../components/AnimatedAmount";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 
 const WATER_BILL_PER_DAY = 5;
 

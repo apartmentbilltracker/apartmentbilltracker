@@ -1,4 +1,4 @@
-import React, { useState, useContext, useMemo } from "react";
+import React, { useState, useContext } from "react";
 import {
   View,
   Text,
@@ -132,8 +132,19 @@ const RegisterStep3Screen = ({ navigation, route }) => {
               style={styles.icon}
             />
           </View>
-          <Text style={styles.appName}>Apartment Bill Tracker</Text>
+          <View style={styles.brandPill}>
+            <Ionicons
+              name="lock-closed-outline"
+              size={14}
+              color={colors.accent}
+            />
+            <Text style={styles.brandPillText}>Step 3 of 3</Text>
+          </View>
+          <Text style={styles.appName}>PropFlow</Text>
           <Text style={styles.subtitle}>Set Your Password</Text>
+          <Text style={styles.headerCaption}>
+            Finish with a secure password for future sign-ins.
+          </Text>
         </View>
 
         {/* ─── Progress ─── */}
@@ -154,6 +165,8 @@ const RegisterStep3Screen = ({ navigation, route }) => {
 
         {/* ─── Form ─── */}
         <View style={styles.form}>
+          <Text style={styles.formEyebrow}>Security Setup</Text>
+          <Text style={styles.formTitle}>Create a strong password</Text>
           {/* Password */}
           <View style={styles.inputWrap}>
             <Ionicons
@@ -351,8 +364,22 @@ const RegisterStep3Screen = ({ navigation, route }) => {
 };
 
 /* ═══════════════════════ STYLES ═══════════════════════ */
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const glassPanel = isDarkMode
+    ? "rgba(10,66,64,0.46)"
+    : "rgba(196,232,226,0.92)";
+  const glassInput = isDarkMode
+    ? "rgba(255,255,255,0.07)"
+    : "rgba(219,242,238,0.94)";
+  const glassBorder = isDarkMode
+    ? "rgba(158,208,205,0.20)"
+    : "rgba(3,109,65,0.16)";
+  const glassBorderSoft = isDarkMode
+    ? "rgba(158,208,205,0.13)"
+    : "rgba(3,109,65,0.11)";
+
+  return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     scrollContent: {
       flexGrow: 1,
@@ -362,37 +389,72 @@ const createStyles = (colors) =>
     },
 
     /* Header */
-    header: { alignItems: "center", marginBottom: 24 },
+    header: { alignItems: "center", marginBottom: 26 },
+    brandPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.accentLight,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      marginBottom: 14,
+    },
+    brandPillText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+      textTransform: "uppercase",
+    },
     iconGlow: {
-      width: 100,
-      height: 100,
-      borderRadius: 28,
-      backgroundColor: colors.card,
+      width: 108,
+      height: 108,
+      borderRadius: 32,
+      backgroundColor: glassPanel,
       justifyContent: "center",
       alignItems: "center",
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 4 },
+      borderWidth: 1,
+      borderColor: glassBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.12,
-      shadowRadius: 12,
-      elevation: 4,
-      marginBottom: 16,
+      shadowRadius: 18,
+      elevation: 5,
+      marginBottom: 18,
     },
     icon: { width: 72, height: 72, resizeMode: "contain" },
     appName: {
-      fontSize: 22,
-      fontWeight: "800",
+      fontSize: 26,
+      fontWeight: "900",
       color: colors.text,
-      letterSpacing: 0.2,
     },
     subtitle: {
-      fontSize: 14,
+      fontSize: 16,
       color: colors.textTertiary,
-      marginTop: 4,
-      fontWeight: "500",
+      marginTop: 6,
+      fontWeight: "700",
+    },
+    headerCaption: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 8,
+      textAlign: "center",
+      lineHeight: 19,
+      maxWidth: 290,
     },
 
     /* Progress */
-    progressRow: { marginBottom: 20, gap: 6 },
+    progressRow: {
+      marginBottom: 18,
+      gap: 8,
+      backgroundColor: glassPanel,
+      borderRadius: 18,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: glassBorder,
+    },
     progressTrack: {
       height: 4,
       borderRadius: 2,
@@ -427,21 +489,41 @@ const createStyles = (colors) =>
     },
 
     /* Form */
-    form: { marginBottom: 28 },
+    form: {
+      marginBottom: 28,
+      backgroundColor: glassPanel,
+      borderWidth: 1,
+      borderColor: glassBorder,
+      borderRadius: 22,
+      padding: 16,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.13,
+      shadowRadius: 24,
+      elevation: 5,
+    },
+    formEyebrow: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      marginBottom: 4,
+    },
+    formTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 14,
+    },
     inputWrap: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.card,
+      backgroundColor: glassInput,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 14,
+      borderColor: glassBorderSoft,
+      borderRadius: 16,
       marginBottom: 12,
       paddingHorizontal: 14,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 4,
-      elevation: 1,
     },
     inputIcon: { marginRight: 10 },
     input: { flex: 1, paddingVertical: 14, fontSize: 15, color: colors.text },
@@ -460,10 +542,10 @@ const createStyles = (colors) =>
 
     /* Requirements */
     reqBox: {
-      backgroundColor: colors.card,
+      backgroundColor: glassInput,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
+      borderColor: glassBorderSoft,
+      borderRadius: 16,
       paddingHorizontal: 14,
       paddingVertical: 12,
       marginBottom: 14,
@@ -496,17 +578,17 @@ const createStyles = (colors) =>
     primaryBtn: {
       flexDirection: "row",
       backgroundColor: colors.accent,
-      borderRadius: 14,
-      paddingVertical: 15,
+      borderRadius: 16,
+      paddingVertical: 16,
       justifyContent: "center",
       alignItems: "center",
       gap: 8,
       marginTop: 4,
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.25,
-      shadowRadius: 6,
-      elevation: 3,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 4,
     },
     primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 
@@ -546,5 +628,6 @@ const createStyles = (colors) =>
       fontStyle: "italic",
     },
   });
+};
 
 export default RegisterStep3Screen;

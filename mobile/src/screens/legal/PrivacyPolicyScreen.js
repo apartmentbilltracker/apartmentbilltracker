@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/HostNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import AuthBubbles from "../../components/AuthBubbles";
 
 const PrivacyPolicyScreen = ({ navigation }) => {
@@ -160,8 +160,7 @@ const PrivacyPolicyScreen = ({ navigation }) => {
 
         <Text style={styles.intro}>
           Your privacy is important to us. This Privacy Policy explains how
-          Apartment Bill Tracker collects, uses, and protects your personal
-          information.
+          PropFlow collects, uses, and protects your personal information.
         </Text>
 
         {sections.map((section, index) => (

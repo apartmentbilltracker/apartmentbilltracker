@@ -92,7 +92,7 @@ router.post(
       // Send activation email
       await sendMail({
         email,
-        subject: "Verify Your Apartment Bill Tracker Account",
+        subject: "Verify Your ProFlow Account",
         message: ActivationContent({
           userName: name,
           activationCode,
@@ -201,7 +201,7 @@ router.post(
       // Send email
       await sendMail({
         email,
-        subject: "Your New Verification Code - Apartment Bill Tracker",
+        subject: "Your New Verification Code - ProFlow",
         message: ActivationContent({
           userName: pending.name,
           activationCode: newCode,
@@ -877,7 +877,7 @@ router.post(
       // Send reset email with 6-digit code
       await sendMail({
         email: user.email,
-        subject: "Password Reset Code - Apartment Bill Tracker",
+        subject: "Password Reset Code - PropFlow",
         message: ResetPasswordEmail({
           userName: user.name,
           activationCode: resetCode,

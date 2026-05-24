@@ -29,7 +29,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { chatService } from "../../services/apiService";
 import chatReadTracker from "../../services/chatReadTracker";
 import { useTheme } from "../../theme/ThemeContext";
-import { FlatListWithDetection } from "../../navigation/HostNavigator";
+import { FlatListWithDetection } from "../../components/ScrollDetectionWrappers";
 
 const POLL_INTERVAL = 30000; // 30 seconds (was 15s — halved to save Supabase egress)
 

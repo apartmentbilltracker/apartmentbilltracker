@@ -14,7 +14,7 @@ const sendMail = async (options) => {
     });
 
     const mailOptions = {
-      from: `"Apartment Bill Tracker" <${process.env.SMPT_MAIL}>`,
+      from: `"PropFlow" <${process.env.SMPT_MAIL}>`,
       to: options.email,
       subject: options.subject,
       html: options.message,

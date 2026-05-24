@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   Alert,
   Modal,
   Image,
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { settingsService } from "../../services/apiService";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const PaymentMethodScreen = ({ navigation, route }) => {
@@ -24,15 +24,17 @@ const PaymentMethodScreen = ({ navigation, route }) => {
   const {
     roomId,
     roomName,
-    amount,
+    amount = 0,
     billType,
     billTypes,
     billingCycleId,
     breakdown,
+    billAmounts,
   } = route.params;
+
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [methodStatus, setMethodStatus] = useState(null); // null = loading
+  const [methodStatus, setMethodStatus] = useState(null);
   const [settingsFailed, setSettingsFailed] = useState(false);
   const [methodLoading, setMethodLoading] = useState(true);
 
@@ -49,13 +51,12 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       setSettingsFailed(false);
       return { methods, failed: false };
     } catch {
-      // On error, mark as failed — do NOT block payments
-      setSettingsFailed(true);
       const fallback = {
         gcash: { enabled: true, maintenanceMessage: "" },
         bank_transfer: { enabled: true, maintenanceMessage: "" },
         cash: { enabled: true, maintenanceMessage: "" },
       };
+      setSettingsFailed(true);
       setMethodStatus(fallback);
       return { methods: fallback, failed: true };
     } finally {
@@ -63,8 +64,6 @@ const PaymentMethodScreen = ({ navigation, route }) => {
     }
   };
 
-  // Silently fetch the latest settings without touching loading state.
-  // Used inside handleProceed to guard against stale initial-load data.
   const fetchFreshStatus = async () => {
     try {
       const response = await settingsService.getPaymentMethods(roomId);
@@ -79,77 +78,86 @@ const PaymentMethodScreen = ({ navigation, route }) => {
     }
   };
 
-  const isMethodDisabled = (methodId) => {
-    if (!methodStatus) return false; // still loading — allow
-    const entry = methodStatus[methodId];
-    return entry ? entry.enabled === false : false;
-  };
+  const paymentMethods = useMemo(
+    () => [
+      {
+        id: "gcash",
+        name: "GCash",
+        description: "Mobile wallet payment",
+        image: require("../../assets/gcash-icon.png"),
+        color: "#0066FF",
+        details: "Upload a receipt after sending payment.",
+      },
+      {
+        id: "bank_transfer",
+        name: "Bank Transfer",
+        description: "BDO, BPI, Metrobank, and more",
+        icon: "business-outline",
+        color: "#1e88e5",
+        details: "Use one of your host's bank accounts.",
+      },
+      {
+        id: "cash",
+        name: "Cash",
+        description: "Pay your host in person",
+        icon: "cash-outline",
+        color: "#43a047",
+        details: "Record the cash payment for tracking.",
+      },
+    ],
+    [],
+  );
 
-  const getMaintenanceMessage = (methodId) => {
-    if (!methodStatus) return "";
-    const entry = methodStatus[methodId];
-    return entry?.maintenanceMessage || "";
-  };
-
-  // Generate bill title based on breakdown or billType
   const getBillTitle = () => {
-    if (!breakdown) {
-      // No breakdown provided, use billType format
-      return billType === "total"
-        ? "All Bills"
-        : billType.charAt(0).toUpperCase() + billType.slice(1);
-    }
-
-    // Breakdown provided, map selected bills
     const billNames = {
       rent: "Rent",
       electricity: "Electricity",
       water: "Water",
       internet: "Internet",
       custom_charges: "Additional Charges",
+      total: "All Bills",
     };
 
-    const selectedBills = Object.entries(breakdown)
-      .filter(([_, isSelected]) => isSelected)
-      .map(([billType, _]) => billNames[billType] || billType);
-
-    // If all bills selected, return "All Bills"
-    if (selectedBills.length === 5) {
-      return "All Bills";
+    if (breakdown) {
+      const selectedBills = Object.entries(breakdown)
+        .filter(([, isSelected]) => isSelected)
+        .map(([type]) => billNames[type] || type);
+      return selectedBills.length >= 5
+        ? "All Bills"
+        : selectedBills.join(" / ") || "Selected Bills";
     }
 
-    // Otherwise return selected bills joined with "/"
-    return selectedBills.join(" / ");
+    if (Array.isArray(billTypes) && billTypes.length > 0) {
+      return billTypes.map((type) => billNames[type] || type).join(" / ");
+    }
+
+    return billNames[billType] || "Selected Bills";
   };
 
-  const paymentMethods = [
-    {
-      id: "gcash",
-      name: "GCash",
-      description: "Send via GCash App",
-      image: require("../../assets/gcash-icon.png"),
-      color: "#0066FF",
-      details: "Quick and secure mobile payment",
-    },
-    {
-      id: "bank_transfer",
-      name: "Bank Transfer",
-      description: "BDO, BPI, Metrobank, etc.",
-      icon: "business-outline",
-      color: "#1e88e5",
-      details: "Direct bank-to-bank transfer",
-    },
-    {
-      id: "cash",
-      name: "Cash",
-      description: "Pay in person",
-      icon: "cash-outline",
-      color: "#43a047",
-      details: "Hand-to-hand cash payment",
-    },
-  ];
+  const billTitle = getBillTitle();
+  const amountDisplay = `PHP ${Number(amount || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+  const isMethodDisabled = (methodId) => {
+    if (!methodStatus) return false;
+    const entry = methodStatus[methodId];
+    return entry ? entry.enabled === false : false;
+  };
+
+  const getMaintenanceMessage = (methodId) => {
+    if (!methodStatus) return "";
+    return methodStatus[methodId]?.maintenanceMessage || "";
+  };
+
+  const configuredMethodCount = paymentMethods.filter(
+    (method) => !isMethodDisabled(method.id),
+  ).length;
 
   const handleSelectMethod = (method) => {
+    if (methodLoading) return;
+
     if (isMethodDisabled(method.id)) {
       const customMsg = getMaintenanceMessage(method.id);
       Alert.alert(
@@ -159,22 +167,34 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       );
       return;
     }
+
     setSelectedMethod(method);
     setShowConfirm(true);
   };
 
+  const navigateToPaymentScreen = (screenName) => {
+    navigation.navigate(screenName, {
+      roomId,
+      roomName,
+      amount,
+      billType: billType || "total",
+      billTypes: billTypes || [billType || "total"],
+      billingCycleId,
+      breakdown,
+      billAmounts,
+    });
+  };
+
   const handleProceed = async () => {
     const pmtKey = "pmt_methods_" + roomId;
+
     if (selectedMethod.id === "gcash") {
-      // Guard: only block when settings loaded successfully but host hasn't configured
-      // Do NOT block on network/fetch errors (settingsFailed) — let the screen handle it
       if (
         !settingsFailed &&
         !methodLoading &&
         methodStatus &&
         !methodStatus?.gcash?.qrUrl
       ) {
-        // Silently re-fetch in case the initial load was stale
         const { methods: fresh, failed } = await fetchFreshStatus();
         if (!failed && fresh && !fresh?.gcash?.qrUrl) {
           setShowConfirm(false);
@@ -185,27 +205,15 @@ const PaymentMethodScreen = ({ navigation, route }) => {
           );
           return;
         }
-        // Fresh data has qrUrl — proceed
       }
-      // Flush stale cache so GCashPaymentScreen fetches fresh host QR
       screenCache.clear(pmtKey);
-      navigation.navigate("GCashPayment", {
-        roomId,
-        roomName,
-        amount,
-        billType: billType || "total",
-        billTypes: billTypes || [billType || "total"],
-        billingCycleId,
-        breakdown,
-      });
+      navigateToPaymentScreen("GCashPayment");
     } else if (selectedMethod.id === "bank_transfer") {
-      // Guard: only block when settings loaded successfully but no accounts configured
       const accounts =
         methodStatus && !settingsFailed && !methodLoading
           ? methodStatus?.bank_transfer?.accounts || []
           : null;
       if (accounts !== null && accounts.length === 0) {
-        // Silently re-fetch in case the initial load was stale
         const { methods: fresh, failed } = await fetchFreshStatus();
         const freshAccounts = fresh?.bank_transfer?.accounts;
         if (!failed && (!freshAccounts || freshAccounts.length === 0)) {
@@ -217,123 +225,176 @@ const PaymentMethodScreen = ({ navigation, route }) => {
           );
           return;
         }
-        // Fresh data has accounts — proceed
       }
-      // Flush stale cache so BankTransferPaymentScreen fetches fresh account list
       screenCache.clear(pmtKey);
-      navigation.navigate("BankTransferPayment", {
-        roomId,
-        roomName,
-        amount,
-        billType: billType || "total",
-        billTypes: billTypes || [billType || "total"],
-        billingCycleId,
-        breakdown,
-      });
+      navigateToPaymentScreen("BankTransferPayment");
     } else if (selectedMethod.id === "cash") {
-      navigation.navigate("CashPayment", {
-        roomId,
-        roomName,
-        amount,
-        billType: billType || "total",
-        billTypes: billTypes || [billType || "total"],
-        billingCycleId,
-        breakdown,
-      });
+      navigateToPaymentScreen("CashPayment");
     }
+
     setShowConfirm(false);
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={styles.backButton}
+          style={styles.iconButton}
+          activeOpacity={0.75}
         >
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
+
         <View style={styles.headerContent}>
           <Text style={styles.title}>Payment Method</Text>
-          <Text style={styles.subtitle}>{roomName}</Text>
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {roomName || "Your room"}
+          </Text>
         </View>
-        <View style={styles.backButton} />
-      </View>
 
-      {/* Amount Display */}
-      <View style={styles.amountCard}>
-        <Text style={styles.amountLabel}>Amount to Pay</Text>
-        <Text style={styles.amountValue}>₱{amount.toFixed(2)}</Text>
-        <Text style={styles.billTypeText}>{getBillTitle()}</Text>
-      </View>
-
-      {/* Payment Methods */}
-      <ScrollViewWithDetection style={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Select Payment Method</Text>
-
-        {methodLoading && (
-          <View style={styles.loadingRow}>
+        <TouchableOpacity
+          onPress={fetchMethodStatus}
+          style={styles.iconButton}
+          activeOpacity={0.75}
+          disabled={methodLoading}
+        >
+          {methodLoading ? (
             <ActivityIndicator size="small" color={colors.accent} />
-            <Text style={styles.loadingText}>Checking payment settings…</Text>
+          ) : (
+            <Ionicons name="refresh" size={20} color={colors.text} />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <ScrollViewWithDetection
+        style={styles.content}
+        contentContainerStyle={styles.contentInner}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.amountCard}>
+          <View style={styles.amountTopRow}>
+            <View style={styles.amountIcon}>
+              <Ionicons
+                name="receipt-outline"
+                size={20}
+                color={colors.accent}
+              />
+            </View>
+            <Text style={styles.amountLabel}>Amount to pay</Text>
           </View>
-        )}
+          <Text style={styles.amountValue}>{amountDisplay}</Text>
+          <View style={styles.billPill}>
+            <Ionicons
+              name="document-text-outline"
+              size={13}
+              color={colors.accent}
+            />
+            <Text style={styles.billTypeText} numberOfLines={1}>
+              {billTitle}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Choose a method</Text>
+            <Text style={styles.sectionSubtitle}>
+              {methodLoading
+                ? "Checking host settings"
+                : `${configuredMethodCount} method${configuredMethodCount === 1 ? "" : "s"} available`}
+            </Text>
+          </View>
+          {settingsFailed ? (
+            <View style={styles.offlinePill}>
+              <Ionicons name="cloud-offline-outline" size={13} color="#92400e" />
+              <Text style={styles.offlinePillText}>Using fallback</Text>
+            </View>
+          ) : null}
+        </View>
 
         {paymentMethods.map((method) => {
           const disabled = isMethodDisabled(method.id);
+          const selected = selectedMethod?.id === method.id && showConfirm;
+          const maintenanceMessage = getMaintenanceMessage(method.id);
+
           return (
             <TouchableOpacity
               key={method.id}
               style={[
                 styles.methodCard,
+                selected && styles.methodCardSelected,
                 disabled && styles.methodCardDisabled,
-                methodLoading && { opacity: 0.6 },
+                methodLoading && styles.methodCardLoading,
               ]}
-              onPress={() => !methodLoading && handleSelectMethod(method)}
-              activeOpacity={disabled || methodLoading ? 0.5 : 0.7}
+              onPress={() => handleSelectMethod(method)}
+              activeOpacity={disabled || methodLoading ? 0.55 : 0.8}
+              disabled={methodLoading}
             >
               <View
                 style={[
                   styles.methodIconContainer,
-                  { backgroundColor: `${method.color}15` },
-                  disabled && { opacity: 0.4 },
+                  { backgroundColor: `${method.color}18` },
+                  disabled && styles.methodIconDisabled,
                 ]}
               >
                 {method.image ? (
                   <Image source={method.image} style={styles.methodImage} />
                 ) : (
-                  <Ionicons name={method.icon} size={26} color={method.color} />
+                  <Ionicons name={method.icon} size={25} color={method.color} />
                 )}
               </View>
 
-              <View
-                style={[styles.methodContent, disabled && { opacity: 0.5 }]}
-              >
-                <Text style={styles.methodName}>{method.name}</Text>
-                <Text style={styles.methodDescription}>
+              <View style={styles.methodContent}>
+                <View style={styles.methodTitleRow}>
+                  <Text
+                    style={[
+                      styles.methodName,
+                      disabled && styles.methodTextDisabled,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {method.name}
+                  </Text>
+                  {disabled ? (
+                    <View style={styles.maintenanceBadge}>
+                      <Ionicons name="construct" size={11} color="#e65100" />
+                      <Text style={styles.maintenanceBadgeText}>Paused</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.availableBadge}>
+                      <Ionicons name="checkmark" size={11} color="#fff" />
+                      <Text style={styles.availableBadgeText}>Available</Text>
+                    </View>
+                  )}
+                </View>
+                <Text
+                  style={[
+                    styles.methodDescription,
+                    disabled && styles.methodTextDisabled,
+                  ]}
+                  numberOfLines={1}
+                >
                   {method.description}
                 </Text>
-                {disabled ? (
-                  <View style={styles.maintenanceBadge}>
-                    <Ionicons name="construct" size={11} color="#e65100" />
-                    <Text style={styles.maintenanceBadgeText}>
-                      Temporarily Unavailable
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={styles.methodDetails}>{method.details}</Text>
-                )}
+                <Text
+                  style={[
+                    styles.methodDetails,
+                    disabled && styles.methodTextDisabled,
+                  ]}
+                  numberOfLines={2}
+                >
+                  {disabled
+                    ? maintenanceMessage || "Temporarily unavailable"
+                    : method.details}
+                </Text>
               </View>
 
-              {disabled ? (
-                <Ionicons name="lock-closed" size={18} color="#bbb" />
-              ) : (
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.accent}
-                />
-              )}
+              <Ionicons
+                name={disabled ? "lock-closed" : "chevron-forward"}
+                size={20}
+                color={disabled ? colors.textTertiary : colors.accent}
+              />
             </TouchableOpacity>
           );
         })}
@@ -341,21 +402,18 @@ const PaymentMethodScreen = ({ navigation, route }) => {
         <View style={styles.infoCard}>
           <View style={styles.infoIconCircle}>
             <Ionicons
-              name="information-circle"
+              name="shield-checkmark-outline"
               size={18}
               color={colors.accent}
             />
           </View>
           <Text style={styles.infoText}>
-            Choose your preferred payment method. Your payment will be recorded
-            and settlements will be updated automatically.
+            Payment details are checked against your host's current settings
+            before you continue.
           </Text>
         </View>
-
-        <View style={{ height: 24 }} />
       </ScrollViewWithDetection>
 
-      {/* Confirmation Modal */}
       <Modal
         visible={showConfirm}
         transparent
@@ -366,78 +424,117 @@ const PaymentMethodScreen = ({ navigation, route }) => {
           <View style={styles.modalContent}>
             <View style={styles.dragHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Confirm Payment Method</Text>
+              <View>
+                <Text style={styles.modalTitle}>Confirm Method</Text>
+                <Text style={styles.modalSubtitle}>
+                  Review where this payment will continue.
+                </Text>
+              </View>
               <TouchableOpacity
                 onPress={() => setShowConfirm(false)}
                 style={styles.modalCloseBtn}
+                activeOpacity={0.75}
               >
                 <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            {selectedMethod && (
-              <View style={styles.confirmationDetails}>
-                <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Method:</Text>
-                  <Text style={styles.confirmValue}>{selectedMethod.name}</Text>
+            {selectedMethod ? (
+              <View style={styles.confirmationCard}>
+                <View style={styles.selectedMethodRow}>
+                  <View
+                    style={[
+                      styles.confirmIcon,
+                      { backgroundColor: `${selectedMethod.color}18` },
+                    ]}
+                  >
+                    {selectedMethod.image ? (
+                      <Image
+                        source={selectedMethod.image}
+                        style={styles.confirmMethodImage}
+                      />
+                    ) : (
+                      <Ionicons
+                        name={selectedMethod.icon}
+                        size={24}
+                        color={selectedMethod.color}
+                      />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.selectedMethodName}>
+                      {selectedMethod.name}
+                    </Text>
+                    <Text style={styles.selectedMethodDesc}>
+                      {selectedMethod.description}
+                    </Text>
+                  </View>
                 </View>
 
-                <View style={styles.divider} />
+                <View style={styles.confirmDivider} />
 
                 <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Amount:</Text>
-                  <Text style={styles.confirmValue}>₱{amount.toFixed(2)}</Text>
+                  <Text style={styles.confirmLabel}>Amount</Text>
+                  <Text style={styles.confirmValue}>{amountDisplay}</Text>
                 </View>
-
-                <View style={styles.divider} />
-
                 <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Bill Type:</Text>
-                  <Text style={styles.confirmValue}>
-                    {billType.charAt(0).toUpperCase() + billType.slice(1)}
+                  <Text style={styles.confirmLabel}>Bills</Text>
+                  <Text style={styles.confirmValue} numberOfLines={2}>
+                    {billTitle}
                   </Text>
                 </View>
-
-                <View style={styles.divider} />
-
                 <View style={styles.confirmRow}>
-                  <Text style={styles.confirmLabel}>Room:</Text>
-                  <Text style={styles.confirmValue}>{roomName}</Text>
+                  <Text style={styles.confirmLabel}>Room</Text>
+                  <Text style={styles.confirmValue} numberOfLines={1}>
+                    {roomName || "Your room"}
+                  </Text>
                 </View>
               </View>
-            )}
+            ) : null}
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => setShowConfirm(false)}
+                activeOpacity={0.75}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.confirmButton}
+                style={[styles.modalButton, styles.confirmButton]}
                 onPress={handleProceed}
+                activeOpacity={0.85}
               >
                 <Ionicons
-                  name="checkmark-circle-outline"
+                  name="arrow-forward-circle-outline"
                   size={18}
                   color={colors.textOnAccent}
-                  style={{ marginRight: 6 }}
                 />
-                <Text style={styles.confirmButtonText}>Proceed</Text>
+                <Text style={styles.confirmButtonText}>Continue</Text>
               </TouchableOpacity>
             </View>
             <ModalBottomSpacer />
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const softSurface = isDarkMode
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(3,109,65,0.055)";
+  const softBorder = isDarkMode
+    ? "rgba(158,208,205,0.16)"
+    : "rgba(3,109,65,0.12)";
+  const selectedSurface = isDarkMode
+    ? "rgba(129,216,163,0.12)"
+    : "rgba(202,238,232,0.72)";
+
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -445,173 +542,259 @@ const createStyles = (colors) =>
     header: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
-      backgroundColor: colors.card,
-      paddingHorizontal: 14,
+      gap: 12,
+      backgroundColor: colors.background,
+      paddingHorizontal: 18,
       paddingVertical: 12,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.divider,
+      borderBottomColor: colors.border,
     },
-    backButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.background,
+    iconButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
     headerContent: {
       flex: 1,
-      alignItems: "center",
+      minWidth: 0,
     },
     title: {
-      fontSize: 17,
-      fontWeight: "700",
+      fontSize: 19,
+      fontWeight: "800",
       color: colors.text,
     },
     subtitle: {
-      fontSize: 11,
-      color: colors.textTertiary,
-      marginTop: 2,
-    },
-    amountCard: {
-      backgroundColor: colors.card,
-      marginHorizontal: 14,
-      marginTop: 14,
-      paddingVertical: 22,
-      paddingHorizontal: 20,
-      borderRadius: 14,
-      alignItems: "center",
-      borderWidth: 1.5,
-      borderColor: "#b38604",
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 3,
-    },
-    amountLabel: {
-      fontSize: 11,
-      color: colors.textTertiary,
-      fontWeight: "600",
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    amountValue: {
-      fontSize: 34,
-      fontWeight: "800",
-      color: colors.accent,
-      marginTop: 6,
-    },
-    billTypeText: {
       fontSize: 12,
       color: colors.textSecondary,
-      marginTop: 6,
-      fontWeight: "500",
+      marginTop: 2,
+      fontWeight: "600",
     },
     content: {
       flex: 1,
-      padding: 14,
+    },
+    contentInner: {
+      paddingHorizontal: 18,
+      paddingTop: 16,
+      paddingBottom: 28,
+    },
+    amountCard: {
+      backgroundColor: colors.card,
+      paddingVertical: 18,
+      paddingHorizontal: 18,
+      borderRadius: 20,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: softBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.1,
+      shadowRadius: 18,
+      elevation: 4,
+    },
+    amountTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
+      marginBottom: 10,
+    },
+    amountIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
+    },
+    amountLabel: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+    },
+    amountValue: {
+      fontSize: 34,
+      fontWeight: "900",
+      color: colors.accent,
+      marginBottom: 12,
+    },
+    billPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: 6,
+      maxWidth: "100%",
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
+    },
+    billTypeText: {
+      flexShrink: 1,
+      fontSize: 12,
+      color: colors.accent,
+      fontWeight: "800",
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
+      gap: 12,
+      marginBottom: 12,
     },
     sectionTitle: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    sectionSubtitle: {
       fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 2,
       fontWeight: "600",
-      color: colors.textTertiary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      marginBottom: 10,
-      marginTop: 4,
+    },
+    offlinePill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: "#fef3c7",
+      borderWidth: 1,
+      borderColor: "#f59e0b",
+    },
+    offlinePillText: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: "#92400e",
     },
     methodCard: {
       flexDirection: "row",
       alignItems: "center",
+      gap: 14,
       backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 14,
-      marginBottom: 10,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
+      borderRadius: 18,
+      padding: 15,
+      marginBottom: 11,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 5 },
       shadowOpacity: 0.06,
-      shadowRadius: 6,
+      shadowRadius: 12,
       elevation: 2,
     },
+    methodCardSelected: {
+      backgroundColor: selectedSurface,
+      borderColor: colors.accent,
+    },
+    methodCardDisabled: {
+      borderStyle: "dashed",
+      opacity: 0.62,
+    },
+    methodCardLoading: {
+      opacity: 0.62,
+    },
     methodIconContainer: {
-      width: 50,
-      height: 50,
-      borderRadius: 14,
+      width: 54,
+      height: 54,
+      borderRadius: 18,
       justifyContent: "center",
       alignItems: "center",
-      marginRight: 14,
+    },
+    methodIconDisabled: {
+      opacity: 0.55,
     },
     methodImage: {
-      width: 34,
-      height: 34,
+      width: 36,
+      height: 36,
       resizeMode: "contain",
     },
     methodContent: {
       flex: 1,
+      minWidth: 0,
+    },
+    methodTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 2,
     },
     methodName: {
-      fontSize: 15,
-      fontWeight: "700",
+      flexShrink: 1,
+      fontSize: 16,
+      fontWeight: "800",
       color: colors.text,
     },
     methodDescription: {
       fontSize: 12,
-      color: colors.textTertiary,
-      marginTop: 3,
+      color: colors.textSecondary,
+      fontWeight: "600",
+      marginTop: 2,
     },
     methodDetails: {
-      fontSize: 11,
+      fontSize: 12,
       color: colors.textTertiary,
-      marginTop: 3,
+      marginTop: 4,
+      lineHeight: 16,
     },
-    methodCardDisabled: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderStyle: "dashed",
+    methodTextDisabled: {
+      color: colors.textTertiary,
+    },
+    availableBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      backgroundColor: colors.success || "#22c55e",
+      borderRadius: 999,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+    },
+    availableBadgeText: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: "#fff",
     },
     maintenanceBadge: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 4,
-      marginTop: 4,
-      paddingHorizontal: 8,
+      gap: 3,
+      paddingHorizontal: 7,
       paddingVertical: 3,
-      backgroundColor: colors.warningBg,
-      borderRadius: 6,
-      alignSelf: "flex-start",
+      backgroundColor: colors.warningBg || "#fef3c7",
+      borderRadius: 999,
     },
     maintenanceBadgeText: {
       fontSize: 10,
-      fontWeight: "600",
-      color: colors.warning,
-    },
-    loadingRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      paddingVertical: 10,
-      paddingHorizontal: 4,
-    },
-    loadingText: {
-      fontSize: 12,
-      color: colors.textTertiary,
+      fontWeight: "800",
+      color: colors.warning || "#e65100",
     },
     infoCard: {
       flexDirection: "row",
-      backgroundColor: colors.warningBg,
-      borderRadius: 12,
+      backgroundColor: softSurface,
+      borderRadius: 16,
       padding: 14,
-      marginTop: 14,
+      marginTop: 10,
       gap: 10,
       alignItems: "flex-start",
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     infoIconCircle: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: colors.accentSurface,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.accentSurface || softSurface,
       justifyContent: "center",
       alignItems: "center",
       marginTop: 1,
@@ -619,8 +802,9 @@ const createStyles = (colors) =>
     infoText: {
       flex: 1,
       fontSize: 12,
-      color: colors.accent,
+      color: colors.textSecondary,
       lineHeight: 18,
+      fontWeight: "500",
     },
     modalOverlay: {
       flex: 1,
@@ -629,102 +813,149 @@ const createStyles = (colors) =>
     },
     modalContent: {
       backgroundColor: colors.card,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
       paddingHorizontal: 18,
       paddingBottom: 8,
-      maxHeight: "80%",
+      maxHeight: "82%",
     },
     dragHandle: {
-      width: 36,
+      width: 38,
       height: 4,
       borderRadius: 2,
-      backgroundColor: colors.skeleton,
+      backgroundColor: colors.skeleton || colors.border,
       alignSelf: "center",
       marginTop: 10,
-      marginBottom: 6,
+      marginBottom: 10,
     },
     modalHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 18,
+      alignItems: "flex-start",
+      gap: 12,
+      marginBottom: 16,
       paddingBottom: 14,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.divider,
+      borderBottomColor: colors.border,
     },
     modalTitle: {
-      fontSize: 17,
-      fontWeight: "700",
+      fontSize: 19,
+      fontWeight: "800",
       color: colors.text,
     },
+    modalSubtitle: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginTop: 3,
+    },
     modalCloseBtn: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: colors.background,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
-    confirmationDetails: {
+    confirmationCard: {
       backgroundColor: colors.background,
-      borderRadius: 12,
+      borderRadius: 18,
       padding: 16,
-      marginBottom: 20,
+      marginBottom: 18,
+      borderWidth: 1,
+      borderColor: softBorder,
+    },
+    selectedMethodRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    confirmIcon: {
+      width: 50,
+      height: 50,
+      borderRadius: 17,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    confirmMethodImage: {
+      width: 34,
+      height: 34,
+      resizeMode: "contain",
+    },
+    selectedMethodName: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    selectedMethodDesc: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    confirmDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginVertical: 14,
     },
     confirmRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "center",
-      paddingVertical: 8,
+      alignItems: "flex-start",
+      gap: 16,
+      paddingVertical: 7,
     },
     confirmLabel: {
       fontSize: 13,
       color: colors.textTertiary,
-      fontWeight: "500",
-    },
-    confirmValue: {
-      fontSize: 14,
-      color: colors.text,
       fontWeight: "700",
     },
-    divider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.badgeBg,
-      marginVertical: 4,
+    confirmValue: {
+      flex: 1,
+      textAlign: "right",
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: "800",
     },
     modalButtons: {
       flexDirection: "row",
       gap: 12,
     },
-    cancelButton: {
+    modalButton: {
       flex: 1,
-      paddingVertical: 13,
-      borderRadius: 12,
+      minHeight: 50,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 7,
+    },
+    cancelButton: {
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.card,
-      alignItems: "center",
     },
     cancelButtonText: {
       fontSize: 14,
-      fontWeight: "600",
+      fontWeight: "800",
       color: colors.textSecondary,
     },
     confirmButton: {
-      flex: 1,
-      flexDirection: "row",
-      paddingVertical: 13,
-      borderRadius: 12,
       backgroundColor: colors.accent,
-      alignItems: "center",
-      justifyContent: "center",
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.16,
+      shadowRadius: 12,
+      elevation: 4,
     },
     confirmButtonText: {
       fontSize: 14,
-      fontWeight: "700",
-      color: "#fff",
+      fontWeight: "800",
+      color: colors.textOnAccent,
     },
   });
+};
 
 export default PaymentMethodScreen;

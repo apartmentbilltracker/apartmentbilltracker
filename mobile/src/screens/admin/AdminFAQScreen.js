@@ -16,7 +16,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../components/ScrollDetectionWrappers";
 
 const GOLD = "#b38604";
 const getCategoryColor = (category) => {
@@ -388,7 +391,11 @@ const AdminFAQScreen = () => {
 
                   <View style={styles.statsRow}>
                     <View style={styles.statItem}>
-                      <Ionicons name="eye-outline" size={13} color={colors.textSecondary} />
+                      <Ionicons
+                        name="eye-outline"
+                        size={13}
+                        color={colors.textSecondary}
+                      />
                       <Text style={styles.statText}>{item.views || 0}</Text>
                     </View>
                     <View style={styles.statItem}>
@@ -766,7 +773,12 @@ const createStyles = (colors) =>
       color: colors.text,
       lineHeight: 20,
     },
-    faqAnswer: { flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
+    faqAnswer: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
     faqActions: {
       position: "absolute",
       top: 8,
@@ -881,7 +893,12 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginRight: 10,
     },
-    modalTitle: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.text },
+    modalTitle: {
+      flex: 1,
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
+    },
     modalClose: {
       width: 34,
       height: 34,
@@ -932,7 +949,11 @@ const createStyles = (colors) =>
       backgroundColor: colors.background,
       gap: 6,
     },
-    categoryPickerText: { fontSize: 12, color: colors.textSecondary, fontWeight: "600" },
+    categoryPickerText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
 
     /* Save Button */
     saveBtn: {

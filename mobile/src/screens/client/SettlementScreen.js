@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { apiService } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
-import { FlatListWithDetection } from "../../navigation/ClientNavigator";
+import { FlatListWithDetection } from "../../components/ScrollDetectionWrappers";
 
 const SettlementScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -191,7 +191,11 @@ const SettlementScreen = ({ navigation, route }) => {
               {debtorName}
             </Text>
             <View style={styles.owesRow}>
-              <Ionicons name="arrow-forward" size={11} color={colors.textSecondary} />
+              <Ionicons
+                name="arrow-forward"
+                size={11}
+                color={colors.textSecondary}
+              />
               <Text style={styles.owesText}>owes {creditorName}</Text>
             </View>
           </View>
@@ -241,7 +245,11 @@ const SettlementScreen = ({ navigation, route }) => {
         {/* Footer */}
         <View style={styles.cardFooter}>
           <View style={styles.dateRow}>
-            <Ionicons name="calendar-outline" size={12} color={colors.textSecondary} />
+            <Ionicons
+              name="calendar-outline"
+              size={12}
+              color={colors.textSecondary}
+            />
             <Text style={styles.dateText}>
               {settlement.createdAt
                 ? new Date(settlement.createdAt).toLocaleDateString("en-PH", {

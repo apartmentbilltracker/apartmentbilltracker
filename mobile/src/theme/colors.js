@@ -1,6 +1,11 @@
 /**
  * Theme color tokens for light and dark mode.
  *
+ * Palette sourced from DESIGN.md — Apartment Bill Tracker Design System.
+ * Primary anchor : Deep Forest Green  #0A4240  (primary-container)
+ * Accent/action  : Emerald Green      #036D41  (secondary)
+ * Success/leaf   : Vibrant Leaf Green #4CAF50  (tertiary-fixed-dim approx.)
+ *
  * Every screen should import `useTheme()` from ThemeContext and call
  *   const { colors } = useTheme();
  * then reference `colors.xxx` in styles.
@@ -8,144 +13,200 @@
 
 export const lightColors = {
   // ── Backgrounds ──
-  background: "#f5f6fa",
-  card: "#ffffff",
-  cardElevated: "#ffffff",
-  cardAlt: "#f8f9fc",
-  modal: "#ffffff",
+  background: "#f8f9ff", // DESIGN: background / surface-bright
+  card: "#ffffff", // DESIGN: surface-container-lowest
+  cardElevated: "#ffffff", // DESIGN: surface-container-lowest
+  cardAlt: "#eff4ff", // DESIGN: surface-container-low
+  modal: "#ffffff", // DESIGN: surface-container-lowest
   overlay: "rgba(0,0,0,0.5)",
 
   // ── Text ──
-  text: "#1a1a2e",
-  textSecondary: "#666666",
-  textTertiary: "#999999",
-  textOnAccent: "#ffffff",
-  textOnCard: "#1a1a2e",
+  text: "#0b1c30", // DESIGN: on-surface
+  textSecondary: "#404848", // DESIGN: on-surface-variant
+  textTertiary: "#707978", // DESIGN: outline
+  textOnAccent: "#ffffff", // DESIGN: on-primary / on-secondary
+  textOnCard: "#0b1c30", // DESIGN: on-surface
 
-  // ── Accent (gold stays the same both themes) ──
-  accent: "#b38604",
-  accentLight: "rgba(179, 134, 4, 0.08)",
-  accentSurface: "#fff8e1",
+  // ── Accent (primary interactive color) ──
+  accent: "#036d41", // DESIGN: secondary (Emerald Green)
+  accentLight: "rgba(3,109,65,0.08)",
+  accentSurface: "#9af2bb", // DESIGN: secondary-container
 
   // ── Borders & Dividers ──
-  border: "#eeeeee",
-  borderLight: "#f0f0f0",
-  divider: "#eeeeee",
+  border: "#c0c8c7", // DESIGN: outline-variant
+  borderLight: "#f1f1f1", // DESIGN: surface-container-high
+  divider: "#c0c8c7", // DESIGN: outline-variant
 
   // ── Inputs ──
-  inputBg: "#f8f8f8",
-  inputBorder: "#e0e0e0",
-  inputText: "#333333",
-  placeholder: "#999999",
+  inputBg: "#eff4ff", // DESIGN: surface-container-low
+  inputBorder: "#c0c8c7", // DESIGN: outline-variant
+  inputText: "#0b1c30", // DESIGN: on-surface
+  placeholder: "#707978", // DESIGN: outline
 
   // ── Status ──
-  success: "#4caf50",
-  successBg: "#e8f5e9",
-  error: "#d32f2f",
-  errorBg: "#ffebee",
-  warning: "#ff9800",
+  success: "#036d41", // DESIGN: secondary (Emerald Green)
+  successBg: "#9af2bb", // DESIGN: secondary-container
+  error: "#ba1a1a", // DESIGN: error
+  errorBg: "#ffdad6", // DESIGN: error-container
+  warning: "#7a5900", // warm amber — not in DESIGN, kept neutral
   warningBg: "#fff3e0",
-  info: "#2196f3",
-  infoBg: "#e3f2fd",
-  purpleBg: "#f3e5f5",
+  info: "#366664", // DESIGN: surface-tint
+  infoBg: "#b9ece9", // DESIGN: primary-fixed
+  purpleBg: "#e5eeff", // DESIGN: surface-container
 
-  // ── Semantic bill-type colours (adapt brightness for dark) ──
-  electricityColor: "#f57f17",
-  waterColor: "#1565c0",
-  internetColor: "#6a1b9a",
+  // ── Semantic bill-type colours ──
+  electricityColor: "#7a5900", // warm amber, contrasts well on light bg
+  waterColor: "#1b4e4c", // DESIGN: on-primary-fixed-variant
+  internetColor: "#005230", // DESIGN: on-secondary-fixed-variant
 
   // ── Badges & Tags ──
-  badgeBg: "#e8e8e8",
-  badgeText: "#666666",
+  badgeBg: "#e5eeff", // DESIGN: surface-container
+  badgeText: "#404848", // DESIGN: on-surface-variant
 
   // ── Shadow ──
-  shadow: "#000000",
+  shadow: "#0a4240", // DESIGN: primary-container (green-tinted shadow)
 
   // ── Navigation ──
-  headerBg: "#ffffff",
-  headerText: "#1a1a2e",
-  tabBarBg: "#ffffff",
-  tabBarBorder: "#eeeeee",
-  tabBarActive: "#b38604",
-  tabBarInactive: "#999999",
+  headerBg: "#002b29", // DESIGN: primary (Deep Forest Green)
+  headerText: "#ffffff", // DESIGN: on-primary
+  tabBarBg: "#ffffff", // DESIGN: surface-container-lowest
+  tabBarBorder: "#c0c8c7", // DESIGN: outline-variant
+  tabBarActive: "#036d41", // DESIGN: secondary
+  tabBarInactive: "#707978", // DESIGN: outline
 
   // ── StatusBar ──
   statusBarStyle: "dark-content",
 
   // ── Misc ──
-  skeleton: "#e0e0e0",
-  ripple: "rgba(0,0,0,0.08)",
-  iconDefault: "#666666",
+  skeleton: "#cbdbf5", // DESIGN: surface-dim
+  ripple: "rgba(3,109,65,0.08)", // secondary at low opacity
+  iconDefault: "#404848", // DESIGN: on-surface-variant
+
+  // ── Quick Action Cards ──
+  actionPayBillsBg: "#d6ede3", // light tint of #036d41
+  actionPayBillsIcon: "#036d41", // Emerald Green — primary accent
+  actionPresenceBg: "#b3dece", // slightly deeper tint for variation
+  actionPresenceIcon: "#025535", // darkened Emerald for contrast
+  actionRoomInfoBg: "#e8f5ef", // lightest tint — subtle
+  actionRoomInfoIcon: "#036d41", // Emerald Green — primary accent
+  actionChatBg: "#c8e8d8", // mid tint
+  actionChatIcon: "#036d41", // Emerald Green — primary accent
+
+  // ── Quick Stats Row ──
+  statPendingBg: "#d6ede3", // same family as action cards
+  statPendingIcon: "#036d41", // Emerald Green
+  statTotalBillsBg: "#b3dece", // step deeper
+  statTotalBillsIcon: "#025535", // darkened Emerald
+  statMembersBg: "#e8f5ef", // lightest — subtle
+  statMembersIcon: "#036d41", // Emerald Green
+
+  // ── Bills Breakdown modal ──
+  breakdownHeaderBg: "#d6ede3", // green tint replaces warningBg
+  breakdownHeaderIcon: "#036d41", // Emerald Green
+  breakdownPaidBadge: "#036d41", // ✓ Paid text
+  breakdownPaidBadgeBg: "rgba(3,109,65,0.12)", // ✓ Paid pill background
+
+  // ── Stays You'll Love ──
+  stayIconBorder: "#c8e8d8", // replaces off-theme golden #f0e6c8
+  stayJoinedBorder: "#b3dece", // allJoinedCard border
 };
 
 export const darkColors = {
   // ── Backgrounds ──
-  background: "#0f0c29",
-  card: "#1a1a2e",
-  cardElevated: "#1e2742",
-  cardAlt: "#16213e",
-  modal: "#1a1a2e",
+  background: "#002b29", // DESIGN: primary (deepest green — dark canvas)
+  card: "#0a4240", // DESIGN: primary-container
+  cardElevated: "#0d7145", // DESIGN: on-secondary-container (elevated layer)
+  cardAlt: "#00201f", // DESIGN: on-primary-fixed (darkest surface)
+  modal: "#0a4240", // DESIGN: primary-container
   overlay: "rgba(0,0,0,0.7)",
 
   // ── Text ──
-  text: "#ffffff",
-  textSecondary: "rgba(255,255,255,0.6)",
-  textTertiary: "rgba(255,255,255,0.35)",
-  textOnAccent: "#ffffff",
-  textOnCard: "#ffffff",
+  text: "#eaf1ff", // DESIGN: inverse-on-surface
+  textSecondary: "#9ed0cd", // DESIGN: inverse-primary
+  textTertiary: "#7daeab", // DESIGN: on-primary-container
+  textOnAccent: "#ffffff", // DESIGN: on-secondary
+  textOnCard: "#eaf1ff", // DESIGN: inverse-on-surface
 
   // ── Accent ──
-  accent: "#d4a017",
-  accentLight: "rgba(179, 134, 4, 0.15)",
-  accentSurface: "rgba(179, 134, 4, 0.08)",
+  accent: "#81d8a3", // DESIGN: secondary-fixed-dim (bright on dark)
+  accentLight: "rgba(129,216,163,0.15)",
+  accentSurface: "rgba(129,216,163,0.10)",
 
   // ── Borders & Dividers ──
-  border: "rgba(255,255,255,0.08)",
-  borderLight: "rgba(255,255,255,0.05)",
-  divider: "rgba(255,255,255,0.08)",
+  border: "rgba(158,208,205,0.15)", // inverse-primary at low opacity
+  borderLight: "rgba(158,208,205,0.08)",
+  divider: "rgba(158,208,205,0.15)",
 
   // ── Inputs ──
   inputBg: "rgba(255,255,255,0.06)",
-  inputBorder: "rgba(255,255,255,0.12)",
-  inputText: "#ffffff",
-  placeholder: "rgba(255,255,255,0.35)",
+  inputBorder: "rgba(158,208,205,0.20)",
+  inputText: "#eaf1ff", // DESIGN: inverse-on-surface
+  placeholder: "#7daeab", // DESIGN: on-primary-container
 
   // ── Status ──
-  success: "#4ade80",
-  successBg: "rgba(74, 222, 128, 0.12)",
-  error: "#ff6b6b",
-  errorBg: "rgba(255, 107, 107, 0.12)",
+  success: "#78dc77", // DESIGN: tertiary-fixed-dim (Vibrant Leaf Green)
+  successBg: "rgba(120,220,119,0.15)",
+  error: "#ffb4ab", // lightened error for dark bg readability
+  errorBg: "rgba(255,180,171,0.12)",
   warning: "#fbbf24",
-  warningBg: "rgba(251, 191, 36, 0.12)",
-  info: "#60a5fa",
-  infoBg: "rgba(96, 165, 250, 0.12)",
-  purpleBg: "rgba(123, 31, 162, 0.12)",
+  warningBg: "rgba(251,191,36,0.12)",
+  info: "#9ed0cd", // DESIGN: inverse-primary
+  infoBg: "rgba(158,208,205,0.12)",
+  purpleBg: "rgba(0,69,14,0.30)", // DESIGN: tertiary-container at low opacity
 
-  // ── Semantic bill-type colours (brighter in dark mode) ──
-  electricityColor: "#ffb74d",
-  waterColor: "#64b5f6",
-  internetColor: "#ce93d8",
+  // ── Semantic bill-type colours (brighter on dark) ──
+  electricityColor: "#ffd54f", // bright amber, legible on dark green
+  waterColor: "#9ed0cd", // DESIGN: inverse-primary (teal)
+  internetColor: "#94f990", // DESIGN: tertiary-fixed (bright leaf green)
 
   // ── Badges & Tags ──
-  badgeBg: "rgba(255,255,255,0.08)",
-  badgeText: "rgba(255,255,255,0.6)",
+  badgeBg: "rgba(158,208,205,0.12)",
+  badgeText: "#9ed0cd", // DESIGN: inverse-primary
 
   // ── Shadow ──
   shadow: "#000000",
 
   // ── Navigation ──
-  headerBg: "#1a1a2e",
-  headerText: "#ffffff",
-  tabBarBg: "#0f0c29",
-  tabBarBorder: "rgba(255,255,255,0.06)",
-  tabBarActive: "#d4a017",
-  tabBarInactive: "rgba(255,255,255,0.35)",
+  headerBg: "#002b29", // DESIGN: primary
+  headerText: "#eaf1ff", // DESIGN: inverse-on-surface
+  tabBarBg: "#002b29", // DESIGN: primary
+  tabBarBorder: "rgba(158,208,205,0.10)",
+  tabBarActive: "#81d8a3", // DESIGN: secondary-fixed-dim
+  tabBarInactive: "rgba(158,208,205,0.40)",
 
   // ── StatusBar ──
   statusBarStyle: "light-content",
 
   // ── Misc ──
-  skeleton: "rgba(255,255,255,0.08)",
-  ripple: "rgba(255,255,255,0.06)",
-  iconDefault: "rgba(255,255,255,0.6)",
+  skeleton: "rgba(158,208,205,0.12)",
+  ripple: "rgba(129,216,163,0.10)",
+  iconDefault: "#9ed0cd", // DESIGN: inverse-primary
+
+  // ── Quick Action Cards ──
+  actionPayBillsBg: "rgba(129,216,163,0.18)", // bright green tint on dark canvas
+  actionPayBillsIcon: "#81d8a3", // secondary-fixed-dim (bright on dark)
+  actionPresenceBg: "rgba(129,216,163,0.12)", // slightly subtler tint
+  actionPresenceIcon: "#9af2bb", // secondary-container (lighter leaf)
+  actionRoomInfoBg: "rgba(158,208,205,0.14)", // teal tint for variation
+  actionRoomInfoIcon: "#81d8a3", // secondary-fixed-dim
+  actionChatBg: "rgba(129,216,163,0.20)", // strongest tint — chat is primary CTA
+  actionChatIcon: "#81d8a3", // secondary-fixed-dim
+
+  // ── Quick Stats Row ──
+  statPendingBg: "rgba(129,216,163,0.18)",
+  statPendingIcon: "#81d8a3",
+  statTotalBillsBg: "rgba(129,216,163,0.12)",
+  statTotalBillsIcon: "#9af2bb",
+  statMembersBg: "rgba(158,208,205,0.14)",
+  statMembersIcon: "#81d8a3",
+
+  // ── Bills Breakdown modal ──
+  breakdownHeaderBg: "rgba(129,216,163,0.18)",
+  breakdownHeaderIcon: "#81d8a3",
+  breakdownPaidBadge: "#81d8a3",
+  breakdownPaidBadgeBg: "rgba(129,216,163,0.15)",
+
+  // ── Stays You'll Love ──
+  stayIconBorder: "rgba(129,216,163,0.30)",
+  stayJoinedBorder: "rgba(129,216,163,0.25)",
 };

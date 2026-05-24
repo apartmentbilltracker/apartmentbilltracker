@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo} from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,10 @@ import {
 } from "react-native";
 import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../components/ScrollDetectionWrappers";
 
 const AdminAttendanceScreen = () => {
   const { colors } = useTheme();
@@ -283,167 +286,168 @@ const AdminAttendanceScreen = () => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  section: {
-    padding: 16,
-    marginBottom: 8,
-    backgroundColor: colors.card,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 12,
-  },
-  roomOption: {
-    padding: 12,
-    borderRadius: 6,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  roomOptionActive: {
-    borderColor: "#b38604",
-    backgroundColor: colors.accentSurface,
-  },
-  roomOptionText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  roomOptionTextActive: {
-    color: colors.accent,
-    fontWeight: "600",
-  },
-  monthSection: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: colors.card,
-    marginBottom: 8,
-  },
-  monthButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.inputBg,
-    borderRadius: 4,
-  },
-  monthButtonText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  monthTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-    textAlign: "center",
-    flex: 1,
-  },
-  memberCard: {
-    marginBottom: 16,
-    borderRadius: 8,
-    backgroundColor: colors.inputBg,
-    borderLeftWidth: 4,
-    borderLeftColor: "#b38604",
-    padding: 12,
-  },
-  memberHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  memberInfo: {
-    flex: 1,
-  },
-  memberName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  memberEmail: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    marginTop: 2,
-  },
-  attendanceBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    minWidth: 60,
-    alignItems: "center",
-  },
-  attendanceGood: {
-    backgroundColor: colors.successBg,
-  },
-  attendanceWarning: {
-    backgroundColor: colors.warningBg,
-  },
-  attendanceText: {
-    fontWeight: "700",
-    fontSize: 12,
-    color: colors.text,
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: colors.infoBg,
-    borderRadius: 6,
-    padding: 8,
-    alignItems: "center",
-  },
-  statLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  statValue: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  daysGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 2,
-  },
-  dayCell: {
-    width: "13.33%", // 7 days per row, minus gap
-    aspectRatio: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 4,
-    marginBottom: 2,
-  },
-  dayPresent: {
-    backgroundColor: colors.success,
-  },
-  dayAbsent: {
-    backgroundColor: colors.skeleton,
-  },
-  dayCellText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: colors.textTertiary,
-  },
-  dayPresentText: {
-    color: "#fff",
-  },
-  noDataText: {
-    fontSize: 14,
-    color: colors.textTertiary,
-    textAlign: "center",
-    paddingVertical: 20,
-  },
-});
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    section: {
+      padding: 16,
+      marginBottom: 8,
+      backgroundColor: colors.card,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 12,
+    },
+    roomOption: {
+      padding: 12,
+      borderRadius: 6,
+      marginBottom: 8,
+      borderWidth: 2,
+      borderColor: colors.border,
+    },
+    roomOptionActive: {
+      borderColor: "#b38604",
+      backgroundColor: colors.accentSurface,
+    },
+    roomOptionText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    roomOptionTextActive: {
+      color: colors.accent,
+      fontWeight: "600",
+    },
+    monthSection: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: 12,
+      backgroundColor: colors.card,
+      marginBottom: 8,
+    },
+    monthButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: colors.inputBg,
+      borderRadius: 4,
+    },
+    monthButtonText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    monthTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+      textAlign: "center",
+      flex: 1,
+    },
+    memberCard: {
+      marginBottom: 16,
+      borderRadius: 8,
+      backgroundColor: colors.inputBg,
+      borderLeftWidth: 4,
+      borderLeftColor: "#b38604",
+      padding: 12,
+    },
+    memberHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    memberInfo: {
+      flex: 1,
+    },
+    memberName: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    memberEmail: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    attendanceBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 12,
+      minWidth: 60,
+      alignItems: "center",
+    },
+    attendanceGood: {
+      backgroundColor: colors.successBg,
+    },
+    attendanceWarning: {
+      backgroundColor: colors.warningBg,
+    },
+    attendanceText: {
+      fontWeight: "700",
+      fontSize: 12,
+      color: colors.text,
+    },
+    statsRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 12,
+    },
+    statBox: {
+      flex: 1,
+      backgroundColor: colors.infoBg,
+      borderRadius: 6,
+      padding: 8,
+      alignItems: "center",
+    },
+    statLabel: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginBottom: 2,
+    },
+    statValue: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    daysGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 2,
+    },
+    dayCell: {
+      width: "13.33%", // 7 days per row, minus gap
+      aspectRatio: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      borderRadius: 4,
+      marginBottom: 2,
+    },
+    dayPresent: {
+      backgroundColor: colors.success,
+    },
+    dayAbsent: {
+      backgroundColor: colors.skeleton,
+    },
+    dayCellText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+    dayPresentText: {
+      color: "#fff",
+    },
+    noDataText: {
+      fontSize: 14,
+      color: colors.textTertiary,
+      textAlign: "center",
+      paddingVertical: 20,
+    },
+  });
 
 export default AdminAttendanceScreen;

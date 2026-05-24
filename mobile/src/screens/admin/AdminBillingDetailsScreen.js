@@ -23,7 +23,10 @@ import { apiService } from "../../services/apiService";
 import * as Sharing from "expo-sharing";
 import * as Print from "expo-print";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../components/ScrollDetectionWrappers";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
@@ -306,7 +309,7 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
 
               <div class="footer">
                 <p>This is an automatically generated billing statement.</p>
-                <p>Apartment Bill Tracker</p>
+                <p>PropFlow</p>
               </div>
             </div>
           </body>

@@ -40,7 +40,7 @@ import chatReadTracker from "../../services/chatReadTracker";
 import { screenCache } from "../../hooks/useScreenCache";
 import AnimatedAmount from "../../components/AnimatedAmount";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/HostNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 

@@ -366,7 +366,8 @@ router.post(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { roomId, amount, billType, billingCycleId } = req.body;
+      const { roomId, amount, billType, billingCycleId, batchId, paymentBatchId } =
+        req.body;
 
       if (!roomId || !amount || !billType) {
         return next(
@@ -433,13 +434,17 @@ router.post(
       }
 
       const referenceNumber = generateReferenceNumber("GC");
+      const batchReference = paymentBatchId || batchId;
+      const fullReference = batchReference
+        ? `${referenceNumber} | Batch:${batchReference}`
+        : referenceNumber;
 
       const payment = await SupabaseService.createPayment({
         room_id: roomId,
         paid_by: req.user.id,
         bill_type: normalizedBillType,
         amount: Number(amount),
-        reference: referenceNumber,
+        reference: fullReference,
         payment_method: "gcash",
         status: "pending",
         payment_date: new Date().toISOString(),
@@ -528,7 +533,8 @@ router.post(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { roomId, amount, billType, billingCycleId } = req.body;
+      const { roomId, amount, billType, billingCycleId, batchId, paymentBatchId } =
+        req.body;
 
       if (!roomId || !amount || !billType) {
         return next(
@@ -595,13 +601,17 @@ router.post(
       }
 
       const referenceNumber = generateReferenceNumber("BT");
+      const batchReference = paymentBatchId || batchId;
+      const fullReference = batchReference
+        ? `${referenceNumber} | Batch:${batchReference}`
+        : referenceNumber;
 
       const payment = await SupabaseService.createPayment({
         room_id: roomId,
         paid_by: req.user.id,
         bill_type: normalizedBillType,
         amount: Number(amount),
-        reference: referenceNumber,
+        reference: fullReference,
         payment_method: "bank_transfer",
         status: "pending",
         payment_date: new Date().toISOString(),
@@ -699,6 +709,8 @@ router.post(
         witnessName,
         notes,
         billingCycleId,
+        batchId,
+        paymentBatchId,
       } = req.body;
 
       if (!roomId || !amount || !billType) {
@@ -755,9 +767,14 @@ router.post(
         .filter(Boolean)
         .join(". ");
 
-      const fullReference = extraInfo
-        ? `${referenceNumber} | ${extraInfo}`
-        : referenceNumber;
+      const batchReference = paymentBatchId || batchId;
+      const fullReference = [
+        referenceNumber,
+        batchReference ? `Batch:${batchReference}` : null,
+        extraInfo || null,
+      ]
+        .filter(Boolean)
+        .join(" | ");
 
       const payment = await SupabaseService.createPayment({
         room_id: roomId,

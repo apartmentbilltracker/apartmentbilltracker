@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Apartment Bill Tracker",
+    "name": "Property Flow",
     "slug": "apartment-bill-tracker",
     "icon": "./src/assets/icon.png",
-    "version": "1.2.6",
+    "version": "1.2.7",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "scheme": "aptbilltracker",
     "splash": {
       "resizeMode": "contain",
@@ -16,7 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.apartmentbilltracker.ios",
       "scheme": "aptbilltracker",
-      "userInterfaceStyle": "automatic",
+      "userInterfaceStyle": "light",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -24,7 +24,7 @@
     "android": {
       "package": "com.apartmentbilltracker",
       "scheme": "aptbilltracker",
-      "userInterfaceStyle": "automatic",
+      "userInterfaceStyle": "light",
       "googleServicesFile": "./google-services.json",
       "softwareKeyboardLayoutMode": "pan",
       "useNextNotificationApi": true,

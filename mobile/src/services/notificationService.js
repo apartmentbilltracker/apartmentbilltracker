@@ -84,7 +84,7 @@ export const scheduleDailyPresenceReminder = async (hour = 9, minute = 0) => {
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: "🗓️ Mark Your Presence",
-        body: "Hello, Ayaw kalimot ug mark sa imo presence para karong adlawa! Apartment Bill Tracker nagpa-remind nimo. Salamat!💗",
+        body: "Hello, Ayaw kalimot ug mark sa imo presence para karong adlawa! PropFlow nagpa-remind nimo. Salamat!💗",
         data: {
           type: "presence_reminder",
           screen: "Bills",

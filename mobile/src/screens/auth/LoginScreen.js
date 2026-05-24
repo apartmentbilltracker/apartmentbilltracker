@@ -417,11 +417,24 @@ const LoginScreen = ({ navigation }) => {
               style={styles.icon}
             />
           </View>
-          <Text style={styles.appName}>Apartment Bill Tracker</Text>
+          <View style={styles.brandPill}>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={14}
+              color={colors.accent}
+            />
+            <Text style={styles.brandPillText}>Secure apartment access</Text>
+          </View>
+          <Text style={styles.appName}>PropFlow</Text>
           <Text style={styles.subtitle}>
             {savedAccounts.length > 0 && !selectedAccount
               ? "Choose an account"
               : "Welcome back"}
+          </Text>
+          <Text style={styles.headerCaption}>
+            {savedAccounts.length > 0 && !selectedAccount
+              ? "Pick a saved profile or continue with another account."
+              : "Sign in to manage bills, rooms, payments, and updates."}
           </Text>
         </View>
 
@@ -436,6 +449,12 @@ const LoginScreen = ({ navigation }) => {
         {/* ─── Saved Accounts (shown when no account is selected) ─── */}
         {savedAccounts.length > 0 && !selectedAccount ? (
           <View style={styles.savedSection}>
+            <View style={styles.sectionLead}>
+              <Text style={styles.sectionEyebrow}>Saved Profiles</Text>
+              <Text style={styles.sectionTitle}>
+                Continue where you left off
+              </Text>
+            </View>
             {savedAccounts.map((account) => (
               <TouchableOpacity
                 key={account.email}
@@ -506,9 +525,9 @@ const LoginScreen = ({ navigation }) => {
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Ionicons
-                    name="close-circle"
-                    size={20}
-                    color={colors.textTertiary}
+                    name="close"
+                    size={18}
+                    color={colors.textSecondary}
                   />
                 </TouchableOpacity>
               </TouchableOpacity>
@@ -799,6 +818,10 @@ const LoginScreen = ({ navigation }) => {
             </View>
 
             {/* ─── Social ─── */}
+            <View style={styles.sectionLead}>
+              <Text style={styles.sectionEyebrow}>Other Options</Text>
+              <Text style={styles.sectionTitle}>Use a connected provider</Text>
+            </View>
             <View style={styles.socialRow}>
               <TouchableOpacity
                 style={[styles.socialBtn, loading && { opacity: 0.5 }]}
@@ -849,8 +872,28 @@ const LoginScreen = ({ navigation }) => {
 };
 
 /* ═══════════════════════ STYLES ═══════════════════════ */
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const glassPanel = isDarkMode
+    ? "rgba(10,66,64,0.46)"
+    : "rgba(196,232,226,0.92)";
+  const glassPanelStrong = isDarkMode
+    ? "rgba(10,66,64,0.56)"
+    : "rgba(184,224,218,0.95)";
+  const glassInput = isDarkMode
+    ? "rgba(255,255,255,0.07)"
+    : "rgba(219,242,238,0.94)";
+  const glassBorder = isDarkMode
+    ? "rgba(158,208,205,0.20)"
+    : "rgba(3,109,65,0.16)";
+  const glassBorderSoft = isDarkMode
+    ? "rgba(158,208,205,0.13)"
+    : "rgba(3,109,65,0.11)";
+  const glassAccentSurface = isDarkMode
+    ? "rgba(129,216,163,0.14)"
+    : "rgba(202,238,232,0.96)";
+
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -867,19 +910,40 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginBottom: 32,
     },
+    brandPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.accentLight,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      marginBottom: 14,
+    },
+    brandPillText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+    },
     iconGlow: {
-      width: 100,
-      height: 100,
-      borderRadius: 28,
-      backgroundColor: colors.card,
+      width: 108,
+      height: 108,
+      borderRadius: 32,
+      backgroundColor: glassPanelStrong,
       justifyContent: "center",
       alignItems: "center",
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 4 },
+      borderWidth: 1,
+      borderColor: glassBorder,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.12,
-      shadowRadius: 12,
-      elevation: 4,
-      marginBottom: 16,
+      shadowRadius: 18,
+      elevation: 5,
+      marginBottom: 18,
     },
     icon: {
       width: 72,
@@ -887,16 +951,24 @@ const createStyles = (colors) =>
       resizeMode: "contain",
     },
     appName: {
-      fontSize: 22,
-      fontWeight: "800",
+      fontSize: 26,
+      fontWeight: "900",
       color: colors.text,
       letterSpacing: 0.2,
     },
     subtitle: {
-      fontSize: 14,
+      fontSize: 16,
       color: colors.textTertiary,
-      marginTop: 4,
-      fontWeight: "500",
+      marginTop: 6,
+      fontWeight: "700",
+    },
+    headerCaption: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 8,
+      textAlign: "center",
+      lineHeight: 19,
+      maxWidth: 280,
     },
 
     /* Error */
@@ -922,21 +994,26 @@ const createStyles = (colors) =>
     /* Form */
     form: {
       marginBottom: 20,
+      backgroundColor: glassPanel,
+      borderWidth: 1,
+      borderColor: glassBorder,
+      borderRadius: 22,
+      padding: 16,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.13,
+      shadowRadius: 24,
+      elevation: 5,
     },
     inputWrap: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.card,
+      backgroundColor: glassInput,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 14,
+      borderColor: glassBorderSoft,
+      borderRadius: 16,
       marginBottom: 12,
       paddingHorizontal: 14,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 4,
-      elevation: 1,
     },
     inputIcon: {
       marginRight: 10,
@@ -963,16 +1040,16 @@ const createStyles = (colors) =>
     primaryBtn: {
       flexDirection: "row",
       backgroundColor: colors.accent,
-      borderRadius: 14,
-      paddingVertical: 15,
+      borderRadius: 16,
+      paddingVertical: 16,
       justifyContent: "center",
       alignItems: "center",
       gap: 8,
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.25,
-      shadowRadius: 6,
-      elevation: 3,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 4,
     },
     primaryBtnText: {
       color: "#fff",
@@ -1043,17 +1120,17 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: colors.card,
+      backgroundColor: glassPanel,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 14,
-      paddingVertical: 13,
+      borderColor: glassBorderSoft,
+      borderRadius: 16,
+      paddingVertical: 14,
       gap: 8,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 4,
-      elevation: 1,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      elevation: 3,
     },
     socialBtnText: {
       fontSize: 14,
@@ -1095,24 +1172,41 @@ const createStyles = (colors) =>
       marginBottom: 20,
       gap: 10,
     },
+    sectionLead: {
+      marginBottom: 6,
+    },
+    sectionEyebrow: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+      marginBottom: 4,
+    },
+    sectionTitle: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+    },
     savedAccountCard: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.card,
+      backgroundColor: glassPanelStrong,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 16,
+      borderColor: glassBorder,
+      borderRadius: 18,
       paddingHorizontal: 14,
       paddingVertical: 14,
       gap: 12,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 6,
-      elevation: 2,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.14,
+      shadowRadius: 22,
+      elevation: 5,
     },
     savedAvatarWrap: {
       position: "relative",
+      backgroundColor: "transparent",
     },
     savedAvatar: {
       width: 48,
@@ -1120,7 +1214,9 @@ const createStyles = (colors) =>
       borderRadius: 24,
     },
     savedAvatarFallback: {
-      backgroundColor: colors.accentLight,
+      backgroundColor: glassAccentSurface,
+      borderWidth: 1,
+      borderColor: glassBorderSoft,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1136,11 +1232,11 @@ const createStyles = (colors) =>
       width: 20,
       height: 20,
       borderRadius: 10,
-      backgroundColor: colors.card,
+      backgroundColor: glassPanelStrong,
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 1.5,
-      borderColor: colors.background,
+      borderColor: glassBorder,
     },
     providerBadgeIcon: {
       width: 12,
@@ -1153,34 +1249,48 @@ const createStyles = (colors) =>
     savedName: {
       fontSize: 15,
       fontWeight: "700",
-      color: colors.text,
+      color:
+        colors.statusBarStyle === "light-content" ? colors.text : "#0b1c30",
       marginBottom: 2,
     },
     savedEmail: {
       fontSize: 13,
-      color: colors.textSecondary,
+      color:
+        colors.statusBarStyle === "light-content"
+          ? colors.textSecondary
+          : "#404848",
     },
     biometricBadge: {
       width: 28,
       height: 28,
       borderRadius: 14,
-      backgroundColor: colors.accentLight,
+      backgroundColor: glassAccentSurface,
+      borderWidth: 1,
+      borderColor: glassBorderSoft,
       justifyContent: "center",
       alignItems: "center",
     },
     savedRemoveBtn: {
-      padding: 4,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: glassAccentSurface,
+      borderWidth: 1,
+      borderColor: glassBorderSoft,
     },
     useAnotherBtn: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: 8,
-      paddingVertical: 14,
+      paddingVertical: 15,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 16,
+      borderColor: glassBorderSoft,
+      borderRadius: 18,
       borderStyle: "dashed",
+      backgroundColor: glassPanel,
     },
     useAnotherText: {
       fontSize: 14,
@@ -1204,18 +1314,18 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      backgroundColor: colors.card,
+      backgroundColor: glassPanelStrong,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 16,
+      borderColor: glassBorder,
+      borderRadius: 18,
       paddingHorizontal: 12,
-      paddingVertical: 8,
-      marginBottom: 10,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 6,
-      elevation: 2,
+      paddingVertical: 10,
+      marginBottom: 12,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.14,
+      shadowRadius: 22,
+      elevation: 5,
     },
     accountCardContent: {
       flex: 1,
@@ -1233,16 +1343,18 @@ const createStyles = (colors) =>
       marginTop: 2,
     },
     biometricSmallBtn: {
-      width: 35,
-      height: 35,
+      width: 40,
+      height: 40,
       borderRadius: 20,
-      backgroundColor: colors.accentLight,
+      backgroundColor: glassAccentSurface,
+      borderWidth: 1,
+      borderColor: glassBorderSoft,
       justifyContent: "center",
       alignItems: "center",
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.12,
+      shadowRadius: 6,
       elevation: 2,
       marginLeft: 8,
     },
@@ -1307,5 +1419,6 @@ const createStyles = (colors) =>
       color: colors.textSecondary,
     },
   });
+};
 
 export default LoginScreen;

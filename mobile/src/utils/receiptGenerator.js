@@ -80,7 +80,7 @@ export const generatePaymentReceipt = (params) => {
       tenantName: tenantName || "Tenant",
       roomName: roomName || "Room",
       roomAddress: roomAddress || "Address",
-      managerInfo: managerInfo || "Apartment Bill Tracker",
+      managerInfo: managerInfo || "PropFlow",
       amountWords: convertNumberToWords(amountPaid),
       lineItems: items,
       cardNumber: `XXXX XXXX XXXX ${String(Date.now()).slice(-4)}`,

@@ -1,0 +1,606 @@
+import React, { useEffect } from "react";
+import { View, Text, StyleSheet, useColorScheme } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { CommonActions } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as NavigationBar from "expo-navigation-bar";
+
+// Import scroll context from dedicated file
+import { ScrollContext, useScrollToBottom } from "../context/ScrollContext";
+
+import ClientHomeScreen from "../screens/client/ClientHomeScreen";
+import PresenceScreen from "../screens/client/PresenceScreen";
+import BillingScreen from "../screens/client/BillingScreen";
+import BillsScreen from "../screens/client/BillsScreen";
+import BillingHistoryScreen from "../screens/client/BillingHistoryScreen";
+import RoomDetailsScreen from "../screens/client/RoomDetailsScreen";
+import ProfileScreen from "../screens/client/ProfileScreen";
+import MyTicketsScreen from "../screens/client/MyTicketsScreen";
+import MyBugReportsScreen from "../screens/client/MyBugReportsScreen";
+import TermsOfServiceScreen from "../screens/legal/TermsOfServiceScreen";
+import PrivacyPolicyScreen from "../screens/legal/PrivacyPolicyScreen";
+import PaymentMethodScreen from "../screens/client/PaymentMethodScreen";
+import GCashPaymentScreen from "../screens/client/GCashPaymentScreen";
+import BankTransferPaymentScreen from "../screens/client/BankTransferPaymentScreen";
+import CashPaymentScreen from "../screens/client/CashPaymentScreen";
+import PaymentHistoryScreen from "../screens/client/PaymentHistoryScreen";
+import SettlementScreen from "../screens/client/SettlementScreen";
+import ChatRoomScreen from "../screens/chat/ChatRoomScreen";
+import NotificationsInboxScreen from "../screens/NotificationsInboxScreen";
+import AnnouncementsScreen from "../screens/client/AnnouncementsScreen";
+import {
+  apiService,
+  announcementService,
+  roomService,
+  badgeService,
+} from "../services/apiService";
+
+// Import wrapper components from separate file to break circular dependency
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../components/ScrollDetectionWrappers";
+
+import { useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
+import { useTheme } from "../theme/ThemeContext";
+
+const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+/** Hook – returns themed stack header options */
+const useHeaderOptions = () => {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  return {
+    headerShown: false,
+    contentStyle: {
+      paddingTop: insets.top,
+      backgroundColor: colors.background,
+    },
+    headerStyle: {
+      backgroundColor: colors.headerBg,
+      elevation: 0,
+      shadowOpacity: 0,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    headerTitleStyle: {
+      fontWeight: "700",
+      fontSize: 17,
+      color: colors.headerText,
+    },
+    headerTintColor: colors.accent,
+    headerBackTitleVisible: false,
+  };
+};
+
+const ClientHomeStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="ClientHome"
+        component={ClientHomeScreen}
+        options={{ title: "Home" }}
+      />
+      <Stack.Screen
+        name="RoomDetails"
+        component={RoomDetailsScreen}
+        options={{ title: "Room Details" }}
+      />
+      <Stack.Screen
+        name="Billing"
+        component={BillingScreen}
+        options={{ title: "Billing Details" }}
+      />
+      <Stack.Screen
+        name="Presence"
+        component={PresenceScreen}
+        options={{ title: "Mark Presence" }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const PresenceStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="PresenceMain"
+        component={PresenceScreen}
+        options={{ title: "Mark Presence" }}
+      />
+      <Stack.Screen
+        name="Billing"
+        component={BillingScreen}
+        options={{ title: "Billing Details" }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const AddStack = () => {
+  const headerOptions = useHeaderOptions();
+  return <View></View>;
+};
+
+const BillsStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="BillsMain"
+        component={BillsScreen}
+        options={{ title: "Bills" }}
+      />
+      <Stack.Screen
+        name="BillingHistory"
+        component={BillingHistoryScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Billing"
+        component={BillingScreen}
+        options={{ title: "Billing Details" }}
+      />
+      <Stack.Screen
+        name="PaymentMethod"
+        component={PaymentMethodScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="GCashPayment"
+        component={GCashPaymentScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="BankTransferPayment"
+        component={BankTransferPaymentScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CashPayment"
+        component={CashPaymentScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PaymentHistory"
+        component={PaymentHistoryScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Settlement"
+        component={SettlementScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const ProfileStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ title: "Profile" }}
+      />
+      <Stack.Screen
+        name="MyTickets"
+        component={MyTicketsScreen}
+        options={{ title: "My Support Tickets" }}
+      />
+      <Stack.Screen
+        name="MyBugReports"
+        component={MyBugReportsScreen}
+        options={{ title: "My Bug Reports" }}
+      />
+      <Stack.Screen
+        name="TermsOfService"
+        component={TermsOfServiceScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PrivacyPolicy"
+        component={PrivacyPolicyScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const AnnouncementsStack = () => {
+  const headerOptions = useHeaderOptions();
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="AnnouncementsMain"
+        component={AnnouncementsScreen}
+        options={{ title: "Announcements" }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const NotificationsStack = ({ onNotificationsStatusChange }) => {
+  const headerOptions = useHeaderOptions();
+  // Use a wrapper to pass the callback as a prop instead of navigation params
+  const InboxScreen = React.useCallback(
+    (props) => (
+      <NotificationsInboxScreen
+        {...props}
+        onBadgeRefresh={onNotificationsStatusChange}
+      />
+    ),
+    [onNotificationsStatusChange],
+  );
+  return (
+    <Stack.Navigator screenOptions={headerOptions}>
+      <Stack.Screen
+        name="NotificationsInbox"
+        component={InboxScreen}
+        options={{ title: "Notifications" }}
+        listeners={() => ({
+          beforeRemove: () => {
+            onNotificationsStatusChange?.();
+          },
+        })}
+      />
+    </Stack.Navigator>
+  );
+};
+
+const ClientTabNavigator = () => {
+  const { state } = useContext(AuthContext);
+  const { colors } = useTheme();
+  const colorScheme = useColorScheme();
+  const tabInsets = useSafeAreaInsets();
+  const [unreadCount, setUnreadCount] = React.useState(0);
+  const [announcementCount, setAnnouncementCount] = React.useState(0);
+  const [unreadSupportCount, setUnreadSupportCount] = React.useState(0);
+  const [isScrolledToBottom, setIsScrolledToBottom] = React.useState(false);
+  const userId = state?.user?.id || state?.user?._id;
+  const notificationRefreshRef = React.useRef(null);
+  const announcementRefreshRef = React.useRef(null);
+  const lastBadgeFetchRef = React.useRef(0);
+
+  // Single consolidated badge fetch — replaces 3-6 separate API calls
+  const fetchAllBadges = async (force = false) => {
+    // Throttle: skip if called within the last 10 seconds (unless forced)
+    const now = Date.now();
+    if (!force && now - lastBadgeFetchRef.current < 10000) return;
+    lastBadgeFetchRef.current = now;
+
+    try {
+      const counts = await badgeService.getCounts();
+      setUnreadCount(counts.unreadNotifications);
+      setAnnouncementCount(counts.unreadAnnouncements);
+      setUnreadSupportCount(counts.unreadSupport > 0 ? 1 : 0);
+    } catch (error) {
+      console.error("Error fetching badge counts:", error);
+    }
+  };
+
+  // Keep individual functions as thin wrappers for backward compatibility
+  // Always force-refresh when called from user actions (mark-as-read etc.)
+  const fetchUnreadCount = () => fetchAllBadges(true);
+  const fetchAnnouncementCount = () => fetchAllBadges(true);
+  const fetchUnreadSupportCount = () => fetchAllBadges(true);
+
+  // Configure immersive/fullscreen experience on Android - Hide navigation bar
+  useEffect(() => {
+    const hideNavBar = async () => {
+      try {
+        // Hide the Android navigation bar for full-screen immersive experience
+        await NavigationBar.setVisibilityAsync("hidden");
+      } catch (e) {
+        console.log("Navigation bar customization not available:", e);
+      }
+    };
+    hideNavBar();
+  }, []);
+
+  React.useEffect(() => {
+    // Fetch all badge counts once on mount
+    fetchAllBadges(true);
+
+    // Store function reference to be called from other components
+    notificationRefreshRef.current = fetchUnreadCount;
+    announcementRefreshRef.current = fetchAnnouncementCount;
+
+    // Poll every 30 seconds so changes made on web (mark-as-read etc.) sync to mobile
+    const pollInterval = setInterval(() => fetchAllBadges(true), 30000);
+    return () => clearInterval(pollInterval);
+  }, [userId]);
+
+  // Wrapper component to avoid inline function issue
+  const NotificationsStackWrapper = React.useCallback(
+    () => <NotificationsStack onNotificationsStatusChange={fetchUnreadCount} />,
+    [],
+  );
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        overflow: "visible",
+      }}
+    >
+      <ScrollContext.Provider
+        value={{ isScrolledToBottom, setIsScrolledToBottom }}
+      >
+        <Tab.Navigator
+          sceneContainerStyle={{
+            overflow: "visible",
+            backgroundColor: colors.background,
+            paddingBottom: isScrolledToBottom ? 60 : 0,
+          }}
+          safeAreaInsets={{ bottom: 0 }}
+          screenOptions={({ route }) => ({
+            headerShown: false,
+            tabBarShowLabel: false,
+            tabBarIcon: ({ focused, color, size }) => {
+              let iconName;
+              if (route.name === "HomeStack") {
+                iconName = focused ? "home" : "home-outline";
+              } else if (route.name === "PresenceStack") {
+                iconName = focused ? "checkbox" : "checkbox-outline";
+              } else if (route.name === "AddStack") {
+                iconName = focused ? "add-circle" : "add-circle-outline";
+              } else if (route.name === "BillsStack") {
+                iconName = focused ? "document-text" : "document-text-outline";
+              } else if (route.name === "AnnouncementsStack") {
+                iconName = focused ? "megaphone" : "megaphone-outline";
+              } else if (route.name === "NotificationsStack") {
+                iconName = focused ? "notifications" : "notifications-outline";
+              } else if (route.name === "ProfileStack") {
+                iconName = focused ? "person" : "person-outline";
+              }
+              return (
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 10,
+                    paddingVertical: 10,
+                    borderRadius: 50,
+                    backgroundColor: focused ? colors.accent : "transparent",
+                  }}
+                >
+                  <Ionicons
+                    name={iconName}
+                    size={22}
+                    color={focused ? "white" : color}
+                  />
+                </View>
+              );
+            },
+            tabBarActiveTintColor: colors.tabBarActive,
+            tabBarInactiveTintColor: colors.tabBarInactive,
+            tabBarStyle: {
+              position: "absolute",
+              bottom: 20,
+              left: 20,
+              right: 20,
+              backgroundColor: colors.tabBarBg,
+              borderRadius: 50,
+              elevation: 30,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: -10 },
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+              paddingVertical: 4,
+              paddingBottom: 4,
+              paddingHorizontal: 4,
+              height: 60,
+            },
+            tabBarBadgeStyle: {
+              backgroundColor: "#e74c3c",
+              fontSize: 10,
+              fontWeight: "700",
+              minWidth: 18,
+              height: 18,
+              borderRadius: 9,
+              lineHeight: 17,
+              top: 6,
+            },
+          })}
+        >
+          <Tab.Screen
+            name="HomeStack"
+            component={ClientHomeStack}
+            options={{ title: "Home" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "HomeStack",
+                        state: { routes: [{ name: "ClientHome" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+          <Tab.Screen
+            name="PresenceStack"
+            component={PresenceStack}
+            options={{ title: "Presence" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "PresenceStack",
+                        state: { routes: [{ name: "PresenceMain" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+          <Tab.Screen
+            name="AddStack"
+            component={AddStack}
+            options={{ title: "Add" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "AddStack",
+                        state: { routes: [{ name: "AddMain" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+          <Tab.Screen
+            name="BillsStack"
+            component={BillsStack}
+            options={{ title: "Bills" }}
+            listeners={({ navigation }) => ({
+              tabPress: () =>
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "BillsStack",
+                        state: { routes: [{ name: "BillsMain" }] },
+                      },
+                    ],
+                  }),
+                ),
+            })}
+          />
+          {/* <Tab.Screen
+            name="AnnouncementsStack"
+            component={AnnouncementsStack}
+            options={{
+              title: "News",
+              tabBarBadge: announcementCount > 0 ? announcementCount : null,
+            }}
+            listeners={({ navigation }) => ({
+              tabPress: () => {
+                setAnnouncementCount(0); // optimistic clear — markAsRead will confirm
+                fetchAnnouncementCount();
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "AnnouncementsStack",
+                        state: { routes: [{ name: "AnnouncementsMain" }] },
+                      },
+                    ],
+                  }),
+                );
+              },
+            })}
+          /> */}
+          {/* <Tab.Screen
+            name="NotificationsStack"
+            component={NotificationsStackWrapper}
+            options={{
+              title: "Alerts",
+              tabBarBadge: unreadCount > 0 ? unreadCount : null,
+            }}
+            listeners={({ navigation }) => ({
+              tabPress: () => {
+                fetchUnreadCount();
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "NotificationsStack",
+                        state: { routes: [{ name: "NotificationsInbox" }] },
+                      },
+                    ],
+                  }),
+                );
+              },
+              blur: () => {
+                fetchUnreadCount();
+              },
+            })}
+          /> */}
+          <Tab.Screen
+            name="ProfileStack"
+            component={ProfileStack}
+            options={{
+              title: "Profile",
+              tabBarBadge: unreadSupportCount > 0 ? "" : null,
+              tabBarBadgeStyle: {
+                backgroundColor: "#e74c3c",
+                minWidth: 8,
+                height: 8,
+                borderRadius: 4,
+                top: 0,
+                right: 2,
+              },
+            }}
+            listeners={({ navigation }) => ({
+              tabPress: () => {
+                fetchUnreadSupportCount();
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: "ProfileStack",
+                        state: { routes: [{ name: "Profile" }] },
+                      },
+                    ],
+                  }),
+                );
+              },
+            })}
+          />
+        </Tab.Navigator>
+      </ScrollContext.Provider>
+
+      <View
+        style={{
+          position: "absolute",
+          bottom: 20,
+          left: 20,
+          right: 20,
+          height: 60,
+          borderRadius: 50,
+          borderColor: colorScheme === "dark" ? "#666666" : "#E0E0E0",
+          borderWidth: 0.3,
+          pointerEvents: "none",
+        }}
+      />
+    </View>
+  );
+};
+
+// Root wrapper — ChatRoom lives here, ABOVE the Tab navigator.
+// This means it has no tab bar in its ancestry at all: no hiding/restoring
+// needed, no double inset padding, no keyboard layout interference.
+const ClientNavigator = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="ClientTabs" component={ClientTabNavigator} />
+    <Stack.Screen name="ChatRoom" component={ChatRoomScreen} />
+  </Stack.Navigator>
+);
+
+export { ScrollContext, ScrollViewWithDetection, FlatListWithDetection };
+export default ClientNavigator;

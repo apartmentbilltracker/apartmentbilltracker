@@ -21,15 +21,13 @@ import * as Application from "expo-application";
 import { AuthContext } from "../../context/AuthContext";
 import { supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/AdminNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { getAPIBaseURL } from "../../config/config";
 import { biometricAuth } from "../../utils/biometricAuth";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const THEME_OPTIONS = [
   { key: "light", label: "Light", icon: "sunny" },
-  { key: "dark", label: "Dark", icon: "moon" },
-  { key: "system", label: "System", icon: "phone-portrait-outline" },
 ];
 
 const AdminProfileScreen = ({ navigation }) => {

@@ -1,28 +1,31 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
   Modal,
-  FlatList,
   RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { apiService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/ClientNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
+
+const WATER_BILL_PER_DAY = 5;
 
 const BillingHistoryScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-
   const { roomId, roomName } = route.params;
+
   const [cycles, setCycles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -32,7 +35,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
   useFocusEffect(
     React.useCallback(() => {
       fetchBillingCycles();
-      return () => {};
+      return undefined;
     }, [roomId]),
   );
 
@@ -64,60 +67,57 @@ const BillingHistoryScreen = ({ route, navigation }) => {
     setShowDetailsModal(true);
   };
 
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString("en-US", {
+  const formatDate = (date) =>
+    new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
     });
-  };
 
-  const formatCurrency = (amount) => {
-    return (
-      "\u20B1" +
-      (parseFloat(amount) || 0).toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    );
+  const formatCurrency = (amount) =>
+    "\u20B1" +
+    (parseFloat(amount) || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const getCustomCharges = (cycle) => {
+    if (!cycle?.customCharges) return [];
+    try {
+      if (Array.isArray(cycle.customCharges)) return cycle.customCharges;
+      if (typeof cycle.customCharges === "string") {
+        return JSON.parse(cycle.customCharges);
+      }
+    } catch (_) {
+      return [];
+    }
+    return [];
   };
 
   const getCycleTotal = (cycle) => {
-    let customChargesTotal = 0;
-    if (cycle.customCharges) {
-      try {
-        const charges = Array.isArray(cycle.customCharges)
-          ? cycle.customCharges
-          : typeof cycle.customCharges === "string"
-            ? JSON.parse(cycle.customCharges)
-            : [];
-        customChargesTotal = charges.reduce(
-          (sum, c) => sum + parseFloat(c.amount || 0),
-          0,
-        );
-      } catch (_) {
-        customChargesTotal = 0;
-      }
-    }
+    const customChargesTotal = getCustomCharges(cycle).reduce(
+      (sum, charge) => sum + parseFloat(charge.amount || 0),
+      0,
+    );
+
     if (
-      cycle.totalBilledAmount !== undefined &&
-      cycle.totalBilledAmount !== null
+      cycle?.totalBilledAmount !== undefined &&
+      cycle?.totalBilledAmount !== null
     ) {
       return parseFloat(cycle.totalBilledAmount) || 0;
     }
+
     return (
-      (parseFloat(cycle.rent) || 0) +
-      (parseFloat(cycle.electricity) || 0) +
-      (parseFloat(cycle.waterBillAmount) || 0) +
-      (parseFloat(cycle.internet) || 0) +
+      (parseFloat(cycle?.rent) || 0) +
+      (parseFloat(cycle?.electricity) || 0) +
+      (parseFloat(cycle?.waterBillAmount) || 0) +
+      (parseFloat(cycle?.internet) || 0) +
       customChargesTotal
     );
   };
 
-  const WATER_BILL_PER_DAY = 5;
-
   const getMemberWaterBreakdown = (member) => {
-    if (!member.isPayer || !member.presenceDays) return null;
+    if (!member?.isPayer || !member?.presenceDays) return null;
     const ownWater = member.presenceDays * WATER_BILL_PER_DAY;
     const waterShare = member.waterBillShare || 0;
     const sharedNonPayorWater = waterShare - ownWater;
@@ -130,11 +130,22 @@ const BillingHistoryScreen = ({ route, navigation }) => {
   const getStatusColor = (status) => {
     switch (status) {
       case "active":
-        return "#22c55e";
+        return colors.success;
       case "completed":
-        return "#f59e0b";
+        return colors.warning;
       default:
-        return "#94a3b8";
+        return colors.textTertiary;
+    }
+  };
+
+  const getStatusSurface = (status) => {
+    switch (status) {
+      case "active":
+        return colors.successBg;
+      case "completed":
+        return colors.warningBg;
+      default:
+        return colors.cardAlt;
     }
   };
 
@@ -160,7 +171,6 @@ const BillingHistoryScreen = ({ route, navigation }) => {
     }
   };
 
-  /* ───── Bill icon helper ───── */
   const getBillIcon = (type) => {
     switch (type) {
       case "rent":
@@ -176,48 +186,105 @@ const BillingHistoryScreen = ({ route, navigation }) => {
     }
   };
 
-  /* ───── Loading ───── */
+  const getBillTypeColors = (type) => {
+    switch (type) {
+      case "rent":
+        return { bg: colors.accentSurface, color: colors.accent };
+      case "electricity":
+        return { bg: colors.warningBg, color: colors.electricityColor };
+      case "water":
+        return { bg: colors.infoBg, color: colors.waterColor };
+      case "internet":
+        return { bg: colors.accentLight, color: colors.internetColor };
+      default:
+        return { bg: colors.cardAlt, color: colors.textSecondary };
+    }
+  };
+
+  const getCycleLengthDays = (cycle) => {
+    if (!cycle?.startDate || !cycle?.endDate) return 0;
+    return Math.max(
+      1,
+      Math.floor(
+        (new Date(cycle.endDate) - new Date(cycle.startDate)) /
+          (1000 * 60 * 60 * 24),
+      ) + 1,
+    );
+  };
+
+  const totalBilledAcrossCycles = cycles.reduce(
+    (sum, cycle) => sum + getCycleTotal(cycle),
+    0,
+  );
+  const activeCyclesCount = cycles.filter((cycle) => cycle.status === "active")
+    .length;
+  const completedCyclesCount = cycles.filter(
+    (cycle) => cycle.status === "completed",
+  ).length;
+  const selectedCycleCustomCharges = getCustomCharges(selectedCycle);
+  const selectedCycleTotal = selectedCycle ? getCycleTotal(selectedCycle) : 0;
+  const selectedCycleMemberCharges = selectedCycle?.memberCharges?.filter(
+    (member) => member.isPayer,
+  ) || [];
+  const selectedCycleBreakdown = selectedCycle
+    ? [
+        { type: "rent", label: "Rent", value: selectedCycle.rent },
+        {
+          type: "electricity",
+          label: "Electricity",
+          value: selectedCycle.electricity,
+        },
+        {
+          type: "water",
+          label: "Water",
+          value: selectedCycle.waterBillAmount,
+        },
+        {
+          type: "internet",
+          label: "Internet",
+          value: selectedCycle.internet,
+        },
+        ...(selectedCycleCustomCharges.length > 0
+          ? [
+              {
+                type: "custom_charges",
+                label: "Additional Charges",
+                value: selectedCycleCustomCharges.reduce(
+                  (sum, charge) => sum + parseFloat(charge.amount || 0),
+                  0,
+                ),
+              },
+            ]
+          : []),
+      ]
+    : [];
+
   if (loading && cycles.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading billing history…</Text>
+        <Text style={styles.loadingText}>Loading billing history...</Text>
       </View>
     );
   }
 
-  /* ───── Cycle Card ───── */
-  const renderCycleCard = ({ item: cycle, index }) => {
+  const renderCycleCard = ({ item: cycle }) => {
     const total = getCycleTotal(cycle);
     const statusColor = getStatusColor(cycle.status);
+    const statusSurface = getStatusSurface(cycle.status);
+    const customCharges = getCustomCharges(cycle);
 
     return (
       <TouchableOpacity
         style={styles.cycleCard}
         onPress={() => handleSelectCycle(cycle)}
-        activeOpacity={0.65}
+        activeOpacity={0.7}
       >
-        {/* Top Row */}
+        <View style={styles.cycleCardAccent} />
+
         <View style={styles.cycleCardTop}>
-          <View style={styles.cycleIconWrap}>
-            <View
-              style={[
-                styles.cycleIconCircle,
-                { backgroundColor: statusColor + "18" },
-              ]}
-            >
-              <Ionicons
-                name={getStatusIcon(cycle.status)}
-                size={20}
-                color={statusColor}
-              />
-            </View>
-          </View>
           <View style={styles.cycleMeta}>
-            <Text style={styles.cyclePeriod}>
-              {formatDate(cycle.startDate)} — {formatDate(cycle.endDate)}
-            </Text>
-            <View style={styles.cycleIdRow}>
+            <View style={styles.cycleEyebrowRow}>
               <Text style={styles.cycleIdLabel}>
                 Cycle #
                 {(cycle.cycleNumber || (cycle.id || "").slice(-4))
@@ -227,7 +294,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
               <View
                 style={[
                   styles.statusPill,
-                  { backgroundColor: statusColor + "18" },
+                  { backgroundColor: statusSurface },
                 ]}
               >
                 <View
@@ -238,80 +305,157 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                 </Text>
               </View>
             </View>
+            <Text style={styles.cyclePeriod}>
+              {formatDate(cycle.startDate)} to {formatDate(cycle.endDate)}
+            </Text>
+            <Text style={styles.cycleSubtext}>
+              Tap to see the full bill mix, payor shares, and readings.
+            </Text>
           </View>
-        </View>
 
-        {/* Separator */}
-        <View style={styles.cycleCardDivider} />
-
-        {/* Bottom Row – amounts */}
-        <View style={styles.cycleCardBottom}>
-          <View style={styles.cycleMiniAmounts}>
-            {[
-              { label: "Rent", value: cycle.rent },
-              { label: "Elec", value: cycle.electricity },
-              { label: "Water", value: cycle.waterBillAmount },
-              { label: "Net", value: cycle.internet },
-            ].map((b, i) => (
-              <View key={i} style={styles.miniAmountItem}>
-                <Text style={styles.miniAmountLabel}>{b.label}</Text>
-                <Text style={styles.miniAmountValue}>
-                  {formatCurrency(b.value)}
-                </Text>
-              </View>
-            ))}
-          </View>
           <View style={styles.cycleTotalWrap}>
-            <Text style={styles.cycleTotalLabel}>Total</Text>
+            <Text style={styles.cycleTotalLabel}>Total billed</Text>
             <Text style={styles.cycleTotalValue}>{formatCurrency(total)}</Text>
           </View>
         </View>
 
-        {/* Chevron indicator */}
-        <View style={styles.chevronHint}>
-          <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+        <View style={styles.cycleCardDivider} />
+
+        <View style={styles.cycleMiniStatsRow}>
+          {[
+            { label: "Days", value: getCycleLengthDays(cycle) || "--" },
+            {
+              label: "Payors",
+              value:
+                cycle.memberCharges?.filter((member) => member.isPayer).length ||
+                0,
+            },
+            { label: "Extras", value: customCharges.length },
+          ].map((item) => (
+            <View key={item.label} style={styles.cycleMiniStat}>
+              <Text style={styles.cycleMiniStatValue}>{item.value}</Text>
+              <Text style={styles.cycleMiniStatLabel}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.cycleCardBottom}>
+          <View style={styles.cycleMiniAmounts}>
+            {[
+              { label: "Rent", value: cycle.rent, type: "rent" },
+              {
+                label: "Elec",
+                value: cycle.electricity,
+                type: "electricity",
+              },
+              { label: "Water", value: cycle.waterBillAmount, type: "water" },
+              { label: "Net", value: cycle.internet, type: "internet" },
+            ].map((bill) => {
+              const billColors = getBillTypeColors(bill.type);
+              return (
+                <View key={bill.label} style={styles.miniAmountItem}>
+                  <View
+                    style={[
+                      styles.miniAmountIconWrap,
+                      { backgroundColor: billColors.bg },
+                    ]}
+                  >
+                    <Ionicons
+                      name={getBillIcon(bill.type)}
+                      size={12}
+                      color={billColors.color}
+                    />
+                  </View>
+                  <Text style={styles.miniAmountLabel}>{bill.label}</Text>
+                  <Text style={styles.miniAmountValue}>
+                    {formatCurrency(bill.value)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+
+          <View style={styles.chevronHint}>
+            <Ionicons
+              name="chevron-forward-circle"
+              size={22}
+              color={colors.accent}
+            />
+          </View>
         </View>
       </TouchableOpacity>
     );
   };
 
-  /* ───── Main Render ───── */
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Billing History</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {roomName}
-          </Text>
+      <View style={styles.headerShell}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.text} />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Billing History</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
+              {roomName}
+            </Text>
+          </View>
+          <View style={styles.headerRight}>
+            <Text style={styles.cycleCount}>
+              {cycles.length} {cycles.length === 1 ? "cycle" : "cycles"}
+            </Text>
+          </View>
         </View>
-        <View style={styles.headerRight}>
-          <Text style={styles.cycleCount}>
-            {cycles.length} {cycles.length === 1 ? "cycle" : "cycles"}
-          </Text>
+
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroCopy}>
+              <Text style={styles.heroEyebrow}>History overview</Text>
+              <Text style={styles.heroTitle}>{roomName}</Text>
+              <Text style={styles.heroSubtitleText}>
+                Review past billing periods and open each cycle for detailed
+                charge information.
+              </Text>
+            </View>
+            <View style={styles.heroTotalCard}>
+              <Text style={styles.heroTotalLabel}>All cycles</Text>
+              <Text style={styles.heroTotalValue}>
+                {formatCurrency(totalBilledAcrossCycles)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.heroStatsRow}>
+            {[
+              { label: "Total cycles", value: cycles.length },
+              { label: "Active", value: activeCyclesCount },
+              { label: "Completed", value: completedCyclesCount },
+            ].map((stat) => (
+              <View key={stat.label} style={styles.heroStatCard}>
+                <Text style={styles.heroStatValue}>{stat.value}</Text>
+                <Text style={styles.heroStatLabel}>{stat.label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </View>
 
-      {/* List */}
       {cycles.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconWrap}>
             <Ionicons
               name="receipt-outline"
-              size={48}
+              size={42}
               color={colors.textSecondary}
             />
           </View>
-          <Text style={styles.emptyTitle}>No Billing Cycles</Text>
+          <Text style={styles.emptyTitle}>No Billing Cycles Yet</Text>
           <Text style={styles.emptyText}>
-            Billing history will appear here once your admin creates a cycle.
+            History will appear here once your admin creates and closes billing
+            periods for this room.
           </Text>
           <TouchableOpacity
             style={styles.emptyRefresh}
@@ -325,21 +469,22 @@ const BillingHistoryScreen = ({ route, navigation }) => {
         <FlatListWithDetection
           data={cycles}
           renderItem={renderCycleCard}
-          keyExtractor={(item) => item.id || item._id}
+          keyExtractor={(item, index) =>
+            String(item.id || item._id || item.cycleNumber || index)
+          }
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#b38604"]}
-              tintcolor={colors.accent}
+              colors={[colors.accent]}
+              tintColor={colors.accent}
             />
           }
         />
       )}
 
-      {/* ───── Details Modal ───── */}
       <Modal
         visible={showDetailsModal}
         transparent
@@ -348,18 +493,16 @@ const BillingHistoryScreen = ({ route, navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
-            {/* Drag handle */}
             <View style={styles.dragHandleWrap}>
               <View style={styles.dragHandle} />
             </View>
 
-            {/* Modal header */}
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Billing Details</Text>
                 {selectedCycle && (
                   <Text style={styles.modalSubtitle}>
-                    {formatDate(selectedCycle.startDate)} —{" "}
+                    {formatDate(selectedCycle.startDate)} to{" "}
                     {formatDate(selectedCycle.endDate)}
                   </Text>
                 )}
@@ -378,14 +521,12 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 4 }}
               >
-                {/* Status Banner */}
                 <View
                   style={[
                     styles.statusBanner,
                     {
-                      backgroundColor:
-                        getStatusColor(selectedCycle.status) + "12",
-                      borderColor: getStatusColor(selectedCycle.status) + "30",
+                      backgroundColor: getStatusSurface(selectedCycle.status),
+                      borderColor: getStatusColor(selectedCycle.status),
                     },
                   ]}
                 >
@@ -404,20 +545,30 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                   </Text>
                   {selectedCycle.closedAt && (
                     <Text style={styles.statusBannerDate}>
-                      · Closed {formatDate(selectedCycle.closedAt)}
+                      Closed {formatDate(selectedCycle.closedAt)}
                     </Text>
                   )}
                 </View>
 
-                {/* Total Card */}
                 <View style={styles.totalCard}>
-                  <Text style={styles.totalCardLabel}>Total Billed</Text>
+                  <Text style={styles.totalCardLabel}>Total billed</Text>
                   <Text style={styles.totalCardAmount}>
-                    {formatCurrency(getCycleTotal(selectedCycle))}
+                    {formatCurrency(selectedCycleTotal)}
                   </Text>
+                  <View style={styles.totalCardMetaRow}>
+                    <View style={styles.totalCardMetaPill}>
+                      <Text style={styles.totalCardMetaText}>
+                        {selectedCycleMemberCharges.length} payor(s)
+                      </Text>
+                    </View>
+                    <View style={styles.totalCardMetaPill}>
+                      <Text style={styles.totalCardMetaText}>
+                        {selectedCycleCustomCharges.length} extra charge(s)
+                      </Text>
+                    </View>
+                  </View>
                 </View>
 
-                {/* Bills Breakdown */}
                 <View style={styles.sectionCard}>
                   <View style={styles.sectionHeader}>
                     <Ionicons
@@ -427,210 +578,173 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                     />
                     <Text style={styles.sectionTitle}>Bills Breakdown</Text>
                   </View>
-                  {[
-                    { type: "rent", label: "Rent", value: selectedCycle.rent },
-                    {
-                      type: "electricity",
-                      label: "Electricity",
-                      value: selectedCycle.electricity,
-                    },
-                    {
-                      type: "water",
-                      label: "Water",
-                      value: selectedCycle.waterBillAmount,
-                    },
-                    {
-                      type: "internet",
-                      label: "Internet",
-                      value: selectedCycle.internet,
-                    },
-                    ...(selectedCycle.customCharges &&
-                    selectedCycle.customCharges.length > 0
-                      ? [
-                          {
-                            type: "custom_charges",
-                            label: "Additional Charges",
-                            value: selectedCycle.customCharges.reduce(
-                              (sum, c) => sum + parseFloat(c.amount || 0),
-                              0,
-                            ),
-                            isCustom: true,
-                          },
-                        ]
-                      : []),
-                  ].map((bill, i, arr) => (
-                    <View
-                      key={bill.type}
-                      style={[
-                        styles.billRow,
-                        i < arr.length - 1 && styles.billRowBorder,
-                      ]}
-                    >
-                      <View style={styles.billRowLeft}>
-                        <View style={styles.billIconWrap}>
-                          <Ionicons
-                            name={getBillIcon(bill.type)}
-                            size={16}
-                            color={colors.accent}
-                          />
-                        </View>
-                        <Text style={styles.billLabel}>{bill.label}</Text>
-                      </View>
-                      <Text style={styles.billAmount}>
-                        {formatCurrency(bill.value)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-
-                {/* Member Charges */}
-                {selectedCycle.memberCharges &&
-                  selectedCycle.memberCharges.filter((m) => m.isPayer).length >
-                    0 && (
-                    <View style={styles.sectionCard}>
-                      <View style={styles.sectionHeader}>
-                        <Ionicons
-                          name="people-outline"
-                          size={16}
-                          color={colors.accent}
-                        />
-                        <Text style={styles.sectionTitle}>Member Charges</Text>
-                      </View>
-                      {selectedCycle.memberCharges
-                        .filter((m) => m.isPayer)
-                        .map((member, idx, arr) => (
+                  {selectedCycleBreakdown.map((bill, index, arr) => {
+                    const billColors = getBillTypeColors(bill.type);
+                    return (
+                      <View
+                        key={bill.type}
+                        style={[
+                          styles.billRow,
+                          index < arr.length - 1 && styles.billRowBorder,
+                        ]}
+                      >
+                        <View style={styles.billRowLeft}>
                           <View
-                            key={idx}
                             style={[
-                              styles.memberCard,
-                              idx < arr.length - 1 && styles.memberCardBorder,
+                              styles.billIconWrap,
+                              { backgroundColor: billColors.bg },
                             ]}
                           >
-                            {/* Member Top Row */}
-                            <View style={styles.memberTopRow}>
-                              <View style={styles.memberAvatar}>
-                                <Ionicons
-                                  name="person-outline"
-                                  size={16}
-                                  color={colors.accent}
-                                />
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.memberName}>
-                                  {member.name}
-                                </Text>
-                                <View style={styles.memberBadgeRow}>
-                                  <View style={styles.payerBadge}>
-                                    <Ionicons
-                                      name="checkmark-circle"
-                                      size={12}
-                                      color="#22c55e"
-                                    />
-                                    <Text style={styles.payerBadgeText}>
-                                      Payor
-                                    </Text>
-                                  </View>
-                                  {member.presenceDays > 0 && (
-                                    <View style={styles.presenceBadge}>
-                                      <Ionicons
-                                        name="calendar-outline"
-                                        size={11}
-                                        color={colors.textSecondary}
-                                      />
-                                      <Text style={styles.presenceBadgeText}>
-                                        {member.presenceDays}d
-                                      </Text>
-                                    </View>
-                                  )}
-                                </View>
-                              </View>
-                              <Text style={styles.memberTotal}>
-                                {formatCurrency(member.totalDue || 0)}
-                              </Text>
-                            </View>
+                            <Ionicons
+                              name={getBillIcon(bill.type)}
+                              size={16}
+                              color={billColors.color}
+                            />
+                          </View>
+                          <Text style={styles.billLabel}>{bill.label}</Text>
+                        </View>
+                        <Text style={styles.billAmount}>
+                          {formatCurrency(bill.value)}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
 
-                            {/* Breakdown rows */}
-                            <View style={styles.memberBreakdown}>
-                              {member.rentShare > 0 && (
-                                <View style={styles.breakdownRow}>
-                                  <Text style={styles.breakdownLabel}>
-                                    Rent Share
-                                  </Text>
-                                  <Text style={styles.breakdownValue}>
-                                    {formatCurrency(member.rentShare)}
-                                  </Text>
-                                </View>
-                              )}
-                              {member.electricityShare > 0 && (
-                                <View style={styles.breakdownRow}>
-                                  <Text style={styles.breakdownLabel}>
-                                    Electricity Share
-                                  </Text>
-                                  <Text style={styles.breakdownValue}>
-                                    {formatCurrency(member.electricityShare)}
-                                  </Text>
-                                </View>
-                              )}
-                              {member.waterBillShare > 0 && (
-                                <>
-                                  <View style={styles.breakdownRow}>
-                                    <Text style={styles.breakdownLabel}>
-                                      Water Share
-                                    </Text>
-                                    <Text style={styles.breakdownValue}>
-                                      {formatCurrency(member.waterBillShare)}
-                                    </Text>
-                                  </View>
-                                  {getMemberWaterBreakdown(member) && (
-                                    <View style={styles.waterDetail}>
-                                      <Text style={styles.waterDetailText}>
-                                        Own:{" "}
-                                        {formatCurrency(
-                                          getMemberWaterBreakdown(member)
-                                            .ownWater,
-                                        )}
-                                        {"  "}·{"  "}
-                                        Shared:{" "}
-                                        {formatCurrency(
-                                          getMemberWaterBreakdown(member)
-                                            .sharedNonPayorWater,
-                                        )}
-                                      </Text>
-                                    </View>
-                                  )}
-                                </>
-                              )}
-                              {member.internetShare > 0 && (
-                                <View style={styles.breakdownRow}>
-                                  <Text style={styles.breakdownLabel}>
-                                    Internet Share
-                                  </Text>
-                                  <Text style={styles.breakdownValue}>
-                                    {formatCurrency(member.internetShare)}
-                                  </Text>
-                                </View>
-                              )}
-                              {member.custom_charges_share > 0 && (
-                                <View style={styles.breakdownRow}>
-                                  <Text style={styles.breakdownLabel}>
-                                    Additional Charges Share
-                                  </Text>
-                                  <Text style={styles.breakdownValue}>
-                                    {formatCurrency(
-                                      member.custom_charges_share,
-                                    )}
+                {selectedCycleMemberCharges.length > 0 && (
+                  <View style={styles.sectionCard}>
+                    <View style={styles.sectionHeader}>
+                      <Ionicons
+                        name="people-outline"
+                        size={16}
+                        color={colors.accent}
+                      />
+                      <Text style={styles.sectionTitle}>Member Charges</Text>
+                    </View>
+                    {selectedCycleMemberCharges.map((member, index, arr) => (
+                      <View
+                        key={`${member.name}-${index}`}
+                        style={[
+                          styles.memberCard,
+                          index < arr.length - 1 && styles.memberCardBorder,
+                        ]}
+                      >
+                        <View style={styles.memberTopRow}>
+                          <View style={styles.memberAvatar}>
+                            <Ionicons
+                              name="person-outline"
+                              size={16}
+                              color={colors.accent}
+                            />
+                          </View>
+
+                          <View style={styles.memberInfo}>
+                            <Text style={styles.memberName}>{member.name}</Text>
+                            <View style={styles.memberBadgeRow}>
+                              <View style={styles.payerBadge}>
+                                <Ionicons
+                                  name="checkmark-circle"
+                                  size={12}
+                                  color={colors.success}
+                                />
+                                <Text style={styles.payerBadgeText}>Payor</Text>
+                              </View>
+                              {member.presenceDays > 0 && (
+                                <View style={styles.presenceBadge}>
+                                  <Ionicons
+                                    name="calendar-outline"
+                                    size={11}
+                                    color={colors.textSecondary}
+                                  />
+                                  <Text style={styles.presenceBadgeText}>
+                                    {member.presenceDays}d
                                   </Text>
                                 </View>
                               )}
                             </View>
                           </View>
-                        ))}
-                    </View>
-                  )}
 
-                {/* Meter Readings */}
-                {(selectedCycle.previousMeterReading ||
-                  selectedCycle.currentMeterReading) && (
+                          <Text style={styles.memberTotal}>
+                            {formatCurrency(member.totalDue || 0)}
+                          </Text>
+                        </View>
+
+                        <View style={styles.memberBreakdown}>
+                          {member.rentShare > 0 && (
+                            <View style={styles.breakdownRow}>
+                              <Text style={styles.breakdownLabel}>
+                                Rent Share
+                              </Text>
+                              <Text style={styles.breakdownValue}>
+                                {formatCurrency(member.rentShare)}
+                              </Text>
+                            </View>
+                          )}
+                          {member.electricityShare > 0 && (
+                            <View style={styles.breakdownRow}>
+                              <Text style={styles.breakdownLabel}>
+                                Electricity Share
+                              </Text>
+                              <Text style={styles.breakdownValue}>
+                                {formatCurrency(member.electricityShare)}
+                              </Text>
+                            </View>
+                          )}
+                          {member.waterBillShare > 0 && (
+                            <>
+                              <View style={styles.breakdownRow}>
+                                <Text style={styles.breakdownLabel}>
+                                  Water Share
+                                </Text>
+                                <Text style={styles.breakdownValue}>
+                                  {formatCurrency(member.waterBillShare)}
+                                </Text>
+                              </View>
+                              {getMemberWaterBreakdown(member) && (
+                                <View style={styles.waterDetail}>
+                                  <Text style={styles.waterDetailText}>
+                                    Own{" "}
+                                    {formatCurrency(
+                                      getMemberWaterBreakdown(member).ownWater,
+                                    )}{" "}
+                                    and shared{" "}
+                                    {formatCurrency(
+                                      getMemberWaterBreakdown(member)
+                                        .sharedNonPayorWater,
+                                    )}
+                                  </Text>
+                                </View>
+                              )}
+                            </>
+                          )}
+                          {member.internetShare > 0 && (
+                            <View style={styles.breakdownRow}>
+                              <Text style={styles.breakdownLabel}>
+                                Internet Share
+                              </Text>
+                              <Text style={styles.breakdownValue}>
+                                {formatCurrency(member.internetShare)}
+                              </Text>
+                            </View>
+                          )}
+                          {member.custom_charges_share > 0 && (
+                            <View style={styles.breakdownRow}>
+                              <Text style={styles.breakdownLabel}>
+                                Additional Charges Share
+                              </Text>
+                              <Text style={styles.breakdownValue}>
+                                {formatCurrency(member.custom_charges_share)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {(selectedCycle.previousMeterReading != null ||
+                  selectedCycle.currentMeterReading != null) && (
                   <View style={styles.sectionCard}>
                     <View style={styles.sectionHeader}>
                       <Ionicons
@@ -644,9 +758,10 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                       <View style={styles.meterItem}>
                         <Text style={styles.meterLabel}>Previous</Text>
                         <Text style={styles.meterValue}>
-                          {selectedCycle.previousMeterReading ?? "—"}
+                          {selectedCycle.previousMeterReading ?? "--"}
                         </Text>
                       </View>
+
                       <View style={styles.meterArrow}>
                         <Ionicons
                           name="arrow-forward"
@@ -654,12 +769,14 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                           color={colors.accent}
                         />
                       </View>
+
                       <View style={styles.meterItem}>
                         <Text style={styles.meterLabel}>Current</Text>
                         <Text style={styles.meterValue}>
-                          {selectedCycle.currentMeterReading ?? "—"}
+                          {selectedCycle.currentMeterReading ?? "--"}
                         </Text>
                       </View>
+
                       {selectedCycle.previousMeterReading != null &&
                         selectedCycle.currentMeterReading != null && (
                           <View style={styles.meterUsage}>
@@ -674,6 +791,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
                     </View>
                   </View>
                 )}
+
                 <ModalBottomSpacer />
               </ScrollViewWithDetection>
             )}
@@ -684,10 +802,8 @@ const BillingHistoryScreen = ({ route, navigation }) => {
   );
 };
 
-/* ═══════════════════════ STYLES ═══════════════════════ */
 const createStyles = (colors) =>
   StyleSheet.create({
-    /* ─── Layout ─── */
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -703,50 +819,137 @@ const createStyles = (colors) =>
       fontSize: 13,
       color: colors.textTertiary,
     },
-
-    /* ─── Header ─── */
+    headerShell: {
+      backgroundColor: colors.headerBg,
+      paddingBottom: 26,
+      borderBottomLeftRadius: 28,
+      borderBottomRightRadius: 28,
+    },
     header: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.card,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.divider,
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 18,
     },
     backBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.background,
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      backgroundColor: "rgba(255,255,255,0.12)",
       justifyContent: "center",
       alignItems: "center",
     },
     headerCenter: {
       flex: 1,
-      alignItems: "center",
+      paddingHorizontal: 14,
     },
     headerTitle: {
-      fontSize: 17,
-      fontWeight: "700",
-      color: colors.text,
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.headerText,
+      letterSpacing: -0.3,
     },
     headerSubtitle: {
-      fontSize: 11,
-      color: colors.textTertiary,
+      fontSize: 12,
+      color: "rgba(255,255,255,0.72)",
       marginTop: 2,
     },
     headerRight: {
-      width: 60,
+      minWidth: 70,
       alignItems: "flex-end",
     },
     cycleCount: {
       fontSize: 11,
-      color: colors.accent,
-      fontWeight: "600",
+      color: colors.textOnAccent,
+      fontWeight: "700",
     },
-
-    /* ─── Empty State ─── */
+    heroCard: {
+      marginHorizontal: 16,
+      marginTop: 2,
+      padding: 18,
+      borderRadius: 24,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+    },
+    heroTopRow: {
+      flexDirection: "row",
+      gap: 14,
+    },
+    heroCopy: {
+      flex: 1,
+    },
+    heroEyebrow: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: "rgba(255,255,255,0.72)",
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
+      marginBottom: 8,
+    },
+    heroTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.headerText,
+      letterSpacing: -0.3,
+    },
+    heroSubtitleText: {
+      fontSize: 13,
+      color: "rgba(255,255,255,0.8)",
+      lineHeight: 19,
+      marginTop: 8,
+    },
+    heroTotalCard: {
+      minWidth: 110,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderRadius: 18,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      alignItems: "flex-end",
+      justifyContent: "center",
+    },
+    heroTotalLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "rgba(255,255,255,0.72)",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+    heroTotalValue: {
+      fontSize: 19,
+      fontWeight: "900",
+      color: colors.headerText,
+      letterSpacing: -0.4,
+      marginTop: 8,
+    },
+    heroStatsRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 16,
+    },
+    heroStatCard: {
+      flex: 1,
+      backgroundColor: "rgba(255,255,255,0.1)",
+      borderRadius: 18,
+      paddingVertical: 14,
+      paddingHorizontal: 10,
+      alignItems: "center",
+    },
+    heroStatValue: {
+      fontSize: 19,
+      fontWeight: "900",
+      color: colors.headerText,
+    },
+    heroStatLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: "rgba(255,255,255,0.72)",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+      marginTop: 5,
+      textAlign: "center",
+    },
     emptyContainer: {
       flex: 1,
       justifyContent: "center",
@@ -754,17 +957,22 @@ const createStyles = (colors) =>
       paddingHorizontal: 40,
     },
     emptyIconWrap: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: colors.inputBg,
+      width: 82,
+      height: 82,
+      borderRadius: 28,
+      backgroundColor: colors.card,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 16,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      elevation: 3,
     },
     emptyTitle: {
-      fontSize: 17,
-      fontWeight: "700",
+      fontSize: 18,
+      fontWeight: "800",
       color: colors.text,
       marginBottom: 6,
     },
@@ -779,151 +987,192 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginTop: 20,
       paddingHorizontal: 18,
-      paddingVertical: 10,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: "#b38604",
+      paddingVertical: 11,
+      borderRadius: 999,
+      backgroundColor: colors.accentLight,
       gap: 6,
     },
     emptyRefreshText: {
       fontSize: 13,
-      fontWeight: "600",
+      fontWeight: "700",
       color: colors.accent,
     },
-
-    /* ─── List ─── */
     listContent: {
-      padding: 14,
-      paddingBottom: 24,
+      padding: 16,
+      paddingTop: 18,
+      paddingBottom: 28,
     },
-
-    /* ─── Cycle Card ─── */
     cycleCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 14,
-      marginBottom: 12,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.06,
-      shadowRadius: 6,
-      elevation: 2,
+      borderRadius: 22,
+      padding: 18,
+      marginBottom: 14,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      elevation: 3,
+      overflow: "hidden",
+    },
+    cycleCardAccent: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 4,
+      backgroundColor: colors.accent,
     },
     cycleCardTop: {
       flexDirection: "row",
-      alignItems: "center",
-    },
-    cycleIconWrap: {
-      marginRight: 12,
-    },
-    cycleIconCircle: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      justifyContent: "center",
-      alignItems: "center",
+      gap: 14,
     },
     cycleMeta: {
       flex: 1,
     },
-    cyclePeriod: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.text,
-    },
-    cycleIdRow: {
+    cycleEyebrowRow: {
       flexDirection: "row",
+      justifyContent: "space-between",
       alignItems: "center",
-      marginTop: 4,
-      gap: 8,
+      gap: 10,
     },
     cycleIdLabel: {
       fontSize: 11,
       color: colors.textTertiary,
-      fontWeight: "500",
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
     },
     statusPill: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 10,
-      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 999,
+      gap: 6,
     },
     statusDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
+      width: 7,
+      height: 7,
+      borderRadius: 4,
     },
     statusPillText: {
-      fontSize: 10,
-      fontWeight: "700",
+      fontSize: 11,
+      fontWeight: "800",
     },
-
+    cyclePeriod: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.text,
+      marginTop: 10,
+      letterSpacing: -0.2,
+    },
+    cycleSubtext: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 18,
+      marginTop: 6,
+    },
     cycleCardDivider: {
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.skeleton,
-      marginVertical: 12,
+      backgroundColor: colors.borderLight,
+      marginVertical: 16,
     },
-
+    cycleMiniStatsRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginBottom: 16,
+    },
+    cycleMiniStat: {
+      flex: 1,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 10,
+      alignItems: "center",
+    },
+    cycleMiniStatValue: {
+      fontSize: 18,
+      fontWeight: "900",
+      color: colors.text,
+    },
+    cycleMiniStatLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+      marginTop: 4,
+    },
     cycleCardBottom: {
       flexDirection: "row",
-      alignItems: "flex-end",
-      justifyContent: "space-between",
+      alignItems: "center",
     },
     cycleMiniAmounts: {
       flexDirection: "row",
-      gap: 12,
+      gap: 10,
       flex: 1,
     },
     miniAmountItem: {
+      flex: 1,
       alignItems: "center",
+      backgroundColor: colors.background,
+      borderRadius: 16,
+      paddingVertical: 10,
+      paddingHorizontal: 6,
+    },
+    miniAmountIconWrap: {
+      width: 26,
+      height: 26,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 7,
     },
     miniAmountLabel: {
-      fontSize: 9,
+      fontSize: 10,
       color: colors.textTertiary,
-      fontWeight: "600",
+      fontWeight: "700",
       textTransform: "uppercase",
-      letterSpacing: 0.3,
-      marginBottom: 2,
+      letterSpacing: 0.4,
+      marginBottom: 4,
     },
     miniAmountValue: {
       fontSize: 11,
-      fontWeight: "600",
+      fontWeight: "700",
       color: colors.textSecondary,
+      textAlign: "center",
     },
     cycleTotalWrap: {
+      minWidth: 112,
       alignItems: "flex-end",
     },
     cycleTotalLabel: {
-      fontSize: 9,
+      fontSize: 10,
       color: colors.textTertiary,
-      fontWeight: "600",
+      fontWeight: "700",
       textTransform: "uppercase",
-      letterSpacing: 0.3,
-      marginBottom: 2,
+      letterSpacing: 0.6,
+      marginBottom: 6,
     },
     cycleTotalValue: {
-      fontSize: 16,
-      fontWeight: "800",
+      fontSize: 22,
+      fontWeight: "900",
       color: colors.accent,
+      letterSpacing: -0.5,
+      textAlign: "right",
     },
     chevronHint: {
-      position: "absolute",
-      right: 14,
-      top: 18,
+      marginLeft: 12,
     },
-
-    /* ─── Modal ─── */
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.4)",
+      backgroundColor: colors.overlay,
       justifyContent: "flex-end",
     },
     modalSheet: {
       backgroundColor: colors.card,
-      borderTopLeftRadius: 22,
-      borderTopRightRadius: 22,
+      borderTopLeftRadius: 26,
+      borderTopRightRadius: 26,
       maxHeight: "92%",
     },
     dragHandleWrap: {
@@ -932,7 +1181,7 @@ const createStyles = (colors) =>
       paddingBottom: 4,
     },
     dragHandle: {
-      width: 36,
+      width: 38,
       height: 4,
       borderRadius: 2,
       backgroundColor: colors.skeleton,
@@ -948,19 +1197,20 @@ const createStyles = (colors) =>
       borderBottomColor: colors.divider,
     },
     modalTitle: {
-      fontSize: 18,
-      fontWeight: "700",
+      fontSize: 19,
+      fontWeight: "800",
       color: colors.text,
+      letterSpacing: -0.3,
     },
     modalSubtitle: {
       fontSize: 12,
       color: colors.textTertiary,
-      marginTop: 2,
+      marginTop: 3,
     },
     closeBtn: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
       backgroundColor: colors.background,
       justifyContent: "center",
       alignItems: "center",
@@ -969,67 +1219,82 @@ const createStyles = (colors) =>
       paddingHorizontal: 18,
       paddingTop: 16,
     },
-
-    /* ─── Status Banner ─── */
     statusBanner: {
       flexDirection: "row",
       alignItems: "center",
-      paddingVertical: 10,
+      paddingVertical: 11,
       paddingHorizontal: 14,
-      borderRadius: 10,
+      borderRadius: 14,
       borderWidth: 1,
       marginBottom: 14,
       gap: 8,
     },
     statusBannerText: {
       fontSize: 13,
-      fontWeight: "700",
+      fontWeight: "800",
     },
     statusBannerDate: {
       fontSize: 12,
-      color: colors.textTertiary,
+      color: colors.textSecondary,
+      marginLeft: "auto",
     },
-
-    /* ─── Total Card ─── */
     totalCard: {
       alignItems: "center",
       backgroundColor: colors.card,
-      borderRadius: 14,
-      paddingVertical: 20,
+      borderRadius: 20,
+      paddingVertical: 22,
+      paddingHorizontal: 16,
       marginBottom: 14,
-      borderWidth: 1.5,
-      borderColor: "#b38604",
-      shadowColor: "#b38604",
-      shadowOffset: { width: 0, height: 2 },
+      borderWidth: 1,
+      borderColor: colors.accentSurface,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.08,
-      shadowRadius: 8,
+      shadowRadius: 12,
       elevation: 3,
     },
     totalCardLabel: {
       fontSize: 11,
-      fontWeight: "600",
+      fontWeight: "800",
       color: colors.textTertiary,
       textTransform: "uppercase",
-      letterSpacing: 0.5,
-      marginBottom: 4,
+      letterSpacing: 0.6,
+      marginBottom: 6,
     },
     totalCardAmount: {
-      fontSize: 28,
-      fontWeight: "800",
+      fontSize: 30,
+      fontWeight: "900",
+      color: colors.accent,
+      letterSpacing: -0.7,
+    },
+    totalCardMetaRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 14,
+      flexWrap: "wrap",
+      justifyContent: "center",
+    },
+    totalCardMetaPill: {
+      backgroundColor: colors.accentLight,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+    },
+    totalCardMetaText: {
+      fontSize: 11,
+      fontWeight: "700",
       color: colors.accent,
     },
-
-    /* ─── Section Cards ─── */
     sectionCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 14,
+      borderRadius: 18,
+      padding: 16,
       marginBottom: 14,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 4,
-      elevation: 1,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 2,
     },
     sectionHeader: {
       flexDirection: "row",
@@ -1038,12 +1303,10 @@ const createStyles = (colors) =>
       gap: 8,
     },
     sectionTitle: {
-      fontSize: 14,
-      fontWeight: "700",
+      fontSize: 15,
+      fontWeight: "800",
       color: colors.text,
     },
-
-    /* ─── Bill Rows ─── */
     billRow: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -1060,25 +1323,22 @@ const createStyles = (colors) =>
       gap: 10,
     },
     billIconWrap: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: colors.warningBg,
+      width: 34,
+      height: 34,
+      borderRadius: 12,
       justifyContent: "center",
       alignItems: "center",
     },
     billLabel: {
       fontSize: 14,
       color: colors.textSecondary,
-      fontWeight: "500",
+      fontWeight: "600",
     },
     billAmount: {
       fontSize: 14,
-      fontWeight: "700",
+      fontWeight: "800",
       color: colors.text,
     },
-
-    /* ─── Member Cards ─── */
     memberCard: {
       paddingVertical: 12,
     },
@@ -1091,69 +1351,84 @@ const createStyles = (colors) =>
       alignItems: "center",
     },
     memberAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.warningBg,
+      width: 40,
+      height: 40,
+      borderRadius: 15,
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
       marginRight: 10,
     },
+    memberInfo: {
+      flex: 1,
+    },
     memberName: {
       fontSize: 14,
-      fontWeight: "700",
+      fontWeight: "800",
       color: colors.text,
     },
     memberBadgeRow: {
       flexDirection: "row",
       alignItems: "center",
-      marginTop: 3,
+      marginTop: 4,
       gap: 8,
+      flexWrap: "wrap",
     },
     payerBadge: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 3,
+      gap: 4,
+      backgroundColor: colors.successBg,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
     },
     payerBadgeText: {
       fontSize: 10,
-      fontWeight: "600",
-      color: "#22c55e",
+      fontWeight: "700",
+      color: colors.success,
     },
     presenceBadge: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 3,
+      gap: 4,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
     },
     presenceBadgeText: {
       fontSize: 10,
-      fontWeight: "500",
+      fontWeight: "700",
       color: colors.textSecondary,
     },
     memberTotal: {
       fontSize: 15,
-      fontWeight: "800",
+      fontWeight: "900",
       color: colors.accent,
+      marginLeft: 12,
     },
     memberBreakdown: {
-      marginTop: 10,
-      marginLeft: 46,
+      marginTop: 12,
+      marginLeft: 50,
       backgroundColor: colors.cardAlt,
-      borderRadius: 10,
-      padding: 10,
+      borderRadius: 14,
+      padding: 12,
     },
     breakdownRow: {
       flexDirection: "row",
       justifyContent: "space-between",
       paddingVertical: 4,
+      gap: 12,
     },
     breakdownLabel: {
       fontSize: 12,
       color: colors.textSecondary,
+      flex: 1,
     },
     breakdownValue: {
       fontSize: 12,
-      fontWeight: "600",
+      fontWeight: "700",
       color: colors.text,
     },
     waterDetail: {
@@ -1164,21 +1439,21 @@ const createStyles = (colors) =>
       fontSize: 10,
       color: colors.textTertiary,
       fontStyle: "italic",
+      lineHeight: 15,
     },
-
-    /* ─── Meter Readings ─── */
     meterRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: 12,
+      gap: 10,
     },
     meterItem: {
       flex: 1,
       alignItems: "center",
       backgroundColor: colors.cardAlt,
-      borderRadius: 10,
-      paddingVertical: 12,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 8,
     },
     meterArrow: {
       marginHorizontal: 2,
@@ -1186,39 +1461,40 @@ const createStyles = (colors) =>
     meterLabel: {
       fontSize: 10,
       color: colors.textTertiary,
-      fontWeight: "600",
+      fontWeight: "700",
       textTransform: "uppercase",
-      letterSpacing: 0.3,
+      letterSpacing: 0.5,
       marginBottom: 4,
     },
     meterValue: {
       fontSize: 18,
-      fontWeight: "800",
+      fontWeight: "900",
       color: colors.text,
     },
     meterUsage: {
       flex: 1,
       alignItems: "center",
-      backgroundColor: colors.warningBg,
-      borderRadius: 10,
-      paddingVertical: 12,
+      backgroundColor: colors.accentLight,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 8,
     },
     meterUsageLabel: {
       fontSize: 10,
       color: colors.accent,
-      fontWeight: "600",
+      fontWeight: "700",
       textTransform: "uppercase",
-      letterSpacing: 0.3,
+      letterSpacing: 0.5,
       marginBottom: 4,
     },
     meterUsageValue: {
       fontSize: 18,
-      fontWeight: "800",
+      fontWeight: "900",
       color: colors.accent,
     },
     meterUnit: {
       fontSize: 11,
-      fontWeight: "500",
+      fontWeight: "600",
     },
   });
 

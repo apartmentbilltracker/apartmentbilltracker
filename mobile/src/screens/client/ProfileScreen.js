@@ -23,15 +23,13 @@ import {
   hostRoleService,
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection } from "../../navigation/ClientNavigator";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { getAPIBaseURL } from "../../config/config";
 import { biometricAuth } from "../../utils/biometricAuth";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const THEME_OPTIONS = [
   { key: "light", label: "Light", icon: "sunny" },
-  { key: "dark", label: "Dark", icon: "moon" },
-  { key: "system", label: "System", icon: "phone-portrait-outline" },
 ];
 
 const ProfileScreen = ({ navigation }) => {
@@ -514,6 +512,63 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const activeThemeLabel = useMemo(
+    () =>
+      THEME_OPTIONS.find((option) => option.key === preference)?.label ||
+      "System",
+    [preference],
+  );
+
+  const accountRoleLabel = useMemo(() => {
+    if (isAdmin) return "Administrator";
+    if (isHost) return "Room Host";
+    if (payorStatus === "Payor") return "Payor";
+    if (payorStatus === "Non-Payor") return "Member";
+    return "Client";
+  }, [isAdmin, isHost, payorStatus]);
+
+  const totalUnreadRequests = unreadTickets + unreadBugReports;
+
+  const profileHighlights = useMemo(
+    () => [
+      {
+        key: "role",
+        label: "Access",
+        value: accountRoleLabel,
+        icon: "shield-checkmark-outline",
+        tint: colors.accentLight,
+        color: colors.accent,
+      },
+      {
+        key: "requests",
+        label: "Updates",
+        value: totalUnreadRequests > 0 ? `${totalUnreadRequests} new` : "All read",
+        icon: "mail-unread-outline",
+        tint: colors.infoBg,
+        color: colors.info,
+      },
+      {
+        key: "theme",
+        label: "Theme",
+        value: activeThemeLabel,
+        icon: "color-palette-outline",
+        tint: colors.purpleBg,
+        color: colors.textSecondary,
+      },
+    ],
+    [
+      accountRoleLabel,
+      activeThemeLabel,
+      colors.accent,
+      colors.accentLight,
+      colors.info,
+      colors.infoBg,
+      colors.purpleBg,
+      colors.textSecondary,
+      totalUnreadRequests,
+    ],
+  );
+
   const getAvatarSource = () => {
     if (avatarError) return require("../../assets/default-avatar.png");
     if (selectedImage?.uri) return { uri: selectedImage.uri };
@@ -532,9 +587,35 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollViewWithDetection style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollViewWithDetection
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
       {/* ─── PROFILE HEADER ─── */}
       <View style={styles.headerBg}>
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerBadge}>
+            <Ionicons
+              name="sparkles-outline"
+              size={14}
+              color={colors.textOnAccent}
+            />
+            <Text style={styles.headerBadgeText}>Account Center</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.headerEditBtn}
+            onPress={handleEditPress}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="create-outline"
+              size={14}
+              color={colors.textOnAccent}
+            />
+            <Text style={styles.headerEditBtnText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.avatarWrap}>
           <Image
             source={getAvatarSource()}
@@ -551,39 +632,90 @@ const ProfileScreen = ({ navigation }) => {
         </View>
         <Text style={styles.userName}>{user.name || "User"}</Text>
         <Text style={styles.userEmail}>{user.email || "N/A"}</Text>
-        {payorStatus && (
-          <View
-            style={[
-              styles.statusChip,
-              payorStatus === "Payor"
-                ? { backgroundColor: colors.successBg }
-                : { backgroundColor: colors.inputBg },
-            ]}
-          >
+        <Text style={styles.headerSubcopy}>
+          Manage your profile, requests, theme, and security settings in one
+          place.
+        </Text>
+        <View style={styles.headerChipRow}>
+          <View style={styles.roleChip}>
             <Ionicons
-              name={payorStatus === "Payor" ? "checkmark-circle" : "person"}
-              size={14}
-              color={
-                payorStatus === "Payor" ? colors.success : colors.textSecondary
+              name={
+                isAdmin
+                  ? "shield-outline"
+                  : isHost
+                    ? "home-outline"
+                    : "person-outline"
               }
+              size={14}
+              color={colors.textOnAccent}
             />
-            <Text
+            <Text style={styles.roleChipText}>{accountRoleLabel}</Text>
+          </View>
+          {payorStatus && (
+            <View
               style={[
-                styles.statusChipText,
+                styles.statusChip,
                 payorStatus === "Payor"
-                  ? { color: colors.success }
-                  : { color: colors.textSecondary },
+                  ? { backgroundColor: colors.successBg }
+                  : { backgroundColor: colors.inputBg },
               ]}
             >
-              {payorStatus}
+              <Ionicons
+                name={payorStatus === "Payor" ? "checkmark-circle" : "person"}
+                size={14}
+                color={
+                  payorStatus === "Payor"
+                    ? colors.success
+                    : colors.textSecondary
+                }
+              />
+              <Text
+                style={[
+                  styles.statusChipText,
+                  payorStatus === "Payor"
+                    ? { color: colors.success }
+                    : { color: colors.textSecondary },
+                ]}
+              >
+                {payorStatus}
+              </Text>
+            </View>
+          )}
+          {hostRequestStatus === "pending" && (
+            <View style={[styles.statusChip, styles.pendingStatusChip]}>
+              <Ionicons name="time-outline" size={14} color={colors.info} />
+              <Text style={[styles.statusChipText, { color: colors.info }]}>
+                Host Review
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.summaryRow}>
+        {profileHighlights.map((item) => (
+          <View key={item.key} style={styles.summaryCard}>
+            <View
+              style={[styles.summaryIconWrap, { backgroundColor: item.tint }]}
+            >
+              <Ionicons name={item.icon} size={18} color={item.color} />
+            </View>
+            <Text style={styles.summaryValue} numberOfLines={1}>
+              {item.value}
             </Text>
+            <Text style={styles.summaryLabel}>{item.label}</Text>
           </View>
-        )}
+        ))}
       </View>
 
       {/* ─── ACCOUNT INFO ─── */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Account Information</Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Account Information</Text>
+          <Text style={styles.cardSubtitle}>
+            Your personal and membership details.
+          </Text>
+        </View>
         <View style={styles.infoRow}>
           <View style={styles.infoLeft}>
             <View
@@ -627,7 +759,12 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* ─── CUSTOMER SERVICE ─── */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Customer Service</Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Customer Service</Text>
+          <Text style={styles.cardSubtitle}>
+            Reach support, browse help, or report issues.
+          </Text>
+        </View>
         <TouchableOpacity
           style={styles.menuRow}
           onPress={() => setSupportModalVisible(true)}
@@ -690,7 +827,12 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* ─── TRACK REQUESTS ─── */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Track My Requests</Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Track My Requests</Text>
+          <Text style={styles.cardSubtitle}>
+            Follow up on tickets and bug reports.
+          </Text>
+        </View>
         <TouchableOpacity
           style={styles.trackRow}
           onPress={() => navigation.navigate("MyTickets")}
@@ -742,7 +884,12 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* ─── APPEARANCE ─── */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Appearance</Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Appearance</Text>
+          <Text style={styles.cardSubtitle}>
+            Choose how the app looks for you.
+          </Text>
+        </View>
         <View style={styles.themeRow}>
           {THEME_OPTIONS.map((opt) => {
             const active = preference === opt.key;
@@ -775,7 +922,12 @@ const ProfileScreen = ({ navigation }) => {
       {/* ─── BECOME A HOST ─── */}
       {!isAdmin && !isHost && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Room Host</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Room Host</Text>
+            <Text style={styles.cardSubtitle}>
+              Unlock room management and billing tools.
+            </Text>
+          </View>
           {hostRequestStatus === "pending" ? (
             <View
               style={{
@@ -903,9 +1055,14 @@ const ProfileScreen = ({ navigation }) => {
       {/* ─── ADMIN / HOST PANEL ─── */}
       {(isAdmin || isHost) && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            {isAdmin ? "Admin Panel" : "Host Panel"}
-          </Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>
+              {isAdmin ? "Admin Panel" : "Host Panel"}
+            </Text>
+            <Text style={styles.cardSubtitle}>
+              Open your management workspace.
+            </Text>
+          </View>
           <TouchableOpacity
             style={styles.adminBtn}
             onPress={handleAdminButtonPress}
@@ -920,7 +1077,12 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* ─── LEGAL ─── */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Legal</Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Legal</Text>
+          <Text style={styles.cardSubtitle}>
+            Review the terms and privacy details.
+          </Text>
+        </View>
         <TouchableOpacity
           style={styles.legalRow}
           onPress={() => navigation.navigate("TermsOfService")}
@@ -960,7 +1122,12 @@ const ProfileScreen = ({ navigation }) => {
       {/* ─── SECURITY ─── */}
       {biometricAvailable && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Security</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Security</Text>
+            <Text style={styles.cardSubtitle}>
+              Control how you sign in to your account.
+            </Text>
+          </View>
           <View style={styles.biometricRow}>
             <View style={styles.biometricInfo}>
               <View
@@ -1488,27 +1655,75 @@ const createStyles = (colors) =>
       flex: 1,
       backgroundColor: colors.background,
     },
+    contentContainer: {
+      paddingBottom: 26,
+    },
 
     /* ─── Header ─── */
     headerBg: {
       alignItems: "center",
-      paddingTop: 30,
-      paddingBottom: 24,
-      backgroundColor: colors.card,
-      borderBottomLeftRadius: 24,
-      borderBottomRightRadius: 24,
+      paddingTop: 24,
+      paddingBottom: 28,
+      paddingHorizontal: 18,
+      marginHorizontal: 16,
+      marginTop: 16,
+      backgroundColor: colors.headerBg,
+      borderRadius: 28,
+      overflow: "hidden",
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 18,
+      elevation: 5,
+    },
+    headerTopRow: {
+      width: "100%",
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 18,
+    },
+    headerBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.14)",
+    },
+    headerBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textOnAccent,
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+    },
+    headerEditBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.12)",
+    },
+    headerEditBtnText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.textOnAccent,
     },
     avatarWrap: {
       position: "relative",
-      marginBottom: 14,
+      marginBottom: 16,
     },
     avatarImg: {
-      width: 88,
-      height: 88,
-      borderRadius: 44,
+      width: 94,
+      height: 94,
+      borderRadius: 47,
       backgroundColor: colors.inputBg,
       borderWidth: 3,
-      borderColor: "#fdf6e3",
+      borderColor: "rgba(255,255,255,0.75)",
     },
     avatarFallback: {
       width: 88,
@@ -1539,27 +1754,99 @@ const createStyles = (colors) =>
       borderColor: "#fff",
     },
     userName: {
-      fontSize: 22,
-      fontWeight: "700",
-      color: colors.text,
-      marginBottom: 2,
+      fontSize: 25,
+      fontWeight: "800",
+      color: colors.textOnAccent,
+      marginBottom: 4,
     },
     userEmail: {
       fontSize: 13,
-      color: colors.textTertiary,
+      color: "rgba(255,255,255,0.78)",
       marginBottom: 10,
+    },
+    headerSubcopy: {
+      fontSize: 13,
+      lineHeight: 19,
+      color: "rgba(255,255,255,0.82)",
+      textAlign: "center",
+      maxWidth: 280,
+      marginBottom: 14,
+    },
+    headerChipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      gap: 8,
+    },
+    roleChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.16)",
+    },
+    roleChipText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.textOnAccent,
     },
     statusChip: {
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
       paddingHorizontal: 12,
-      paddingVertical: 4,
-      borderRadius: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
     },
     statusChipText: {
       fontSize: 12,
+      fontWeight: "700",
+    },
+    pendingStatusChip: {
+      backgroundColor: colors.infoBg,
+    },
+    summaryRow: {
+      flexDirection: "row",
+      gap: 12,
+      marginHorizontal: 16,
+      marginTop: 14,
+    },
+    summaryCard: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 16,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.06,
+      shadowRadius: 10,
+      elevation: 2,
+    },
+    summaryIconWrap: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    summaryValue: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: colors.text,
+      textAlign: "center",
+    },
+    summaryLabel: {
+      fontSize: 11,
       fontWeight: "600",
+      color: colors.textTertiary,
+      marginTop: 5,
     },
 
     /* ─── Cards ─── */
@@ -1567,14 +1854,29 @@ const createStyles = (colors) =>
       marginHorizontal: 16,
       marginTop: 14,
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 20,
       padding: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
+      elevation: 2,
+    },
+    cardHeader: {
+      marginBottom: 14,
     },
     cardTitle: {
-      fontSize: 15,
-      fontWeight: "700",
+      fontSize: 17,
+      fontWeight: "800",
       color: colors.text,
-      marginBottom: 14,
+    },
+    cardSubtitle: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 4,
+      lineHeight: 18,
     },
 
     /* ─── Info Rows ─── */
@@ -1582,7 +1884,7 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      paddingVertical: 10,
+      paddingVertical: 12,
     },
     infoLeft: {
       flexDirection: "row",
@@ -1590,9 +1892,9 @@ const createStyles = (colors) =>
       gap: 10,
     },
     infoIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
+      width: 36,
+      height: 36,
+      borderRadius: 12,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1608,19 +1910,19 @@ const createStyles = (colors) =>
     },
     divider: {
       height: 1,
-      backgroundColor: colors.inputBg,
+      backgroundColor: colors.borderLight,
     },
 
     /* ─── Menu Rows ─── */
     menuRow: {
       flexDirection: "row",
       alignItems: "center",
-      paddingVertical: 12,
+      paddingVertical: 14,
     },
     menuIcon: {
-      width: 38,
-      height: 38,
-      borderRadius: 12,
+      width: 42,
+      height: 42,
+      borderRadius: 14,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1629,8 +1931,8 @@ const createStyles = (colors) =>
       marginLeft: 12,
     },
     menuTitle: {
-      fontSize: 14,
-      fontWeight: "600",
+      fontSize: 15,
+      fontWeight: "700",
       color: colors.text,
     },
     menuTitleRow: {
@@ -1648,7 +1950,7 @@ const createStyles = (colors) =>
     trackRow: {
       flexDirection: "row",
       alignItems: "center",
-      paddingVertical: 12,
+      paddingVertical: 14,
       position: "relative",
     },
     trackStrip: {
@@ -1672,14 +1974,14 @@ const createStyles = (colors) =>
       alignItems: "center",
       justifyContent: "center",
       gap: 8,
-      backgroundColor: colors.text,
-      borderRadius: 12,
-      paddingVertical: 14,
+      backgroundColor: colors.accent,
+      borderRadius: 14,
+      paddingVertical: 15,
     },
     adminBtnText: {
-      color: colors.background,
+      color: colors.textOnAccent,
       fontSize: 15,
-      fontWeight: "600",
+      fontWeight: "700",
     },
 
     /* ─── Legal ─── */
@@ -1687,7 +1989,7 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
-      paddingVertical: 11,
+      paddingVertical: 13,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
@@ -1704,6 +2006,7 @@ const createStyles = (colors) =>
       alignItems: "center",
       justifyContent: "space-between",
       gap: 12,
+      paddingVertical: 6,
     },
     biometricInfo: {
       flex: 1,
@@ -1723,10 +2026,10 @@ const createStyles = (colors) =>
       justifyContent: "center",
       gap: 8,
       backgroundColor: colors.card,
-      borderRadius: 14,
-      paddingVertical: 14,
+      borderRadius: 18,
+      paddingVertical: 16,
       borderWidth: 1,
-      borderColor: "#fce4ec",
+      borderColor: colors.errorBg,
     },
     logoutBtnText: {
       color: "#e53935",
@@ -1945,18 +2248,17 @@ const createStyles = (colors) =>
     themeRow: {
       flexDirection: "row",
       gap: 10,
-      paddingHorizontal: 12,
-      paddingBottom: 14,
+      paddingBottom: 4,
     },
     themeOption: {
       flex: 1,
       alignItems: "center",
-      paddingVertical: 12,
-      borderRadius: 12,
+      paddingVertical: 14,
+      borderRadius: 16,
       backgroundColor: colors.inputBg,
       borderWidth: 1.5,
       borderColor: "transparent",
-      gap: 4,
+      gap: 6,
     },
     themeOptionActive: {
       borderColor: colors.accent,

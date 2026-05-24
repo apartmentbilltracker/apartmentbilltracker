@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthContext } from "../../context/AuthContext";
 import { hostRoleService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { FlatListWithDetection } from "../../navigation/AdminNavigator";
+import { FlatListWithDetection } from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const ROLE_FILTERS = [
