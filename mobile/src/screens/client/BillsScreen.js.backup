@@ -13,7 +13,6 @@ import {
   Modal,
   Image,
   Dimensions,
-  StatusBar,
 } from "react-native";
 import { MaterialIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
 import ViewShot from "react-native-view-shot";
@@ -965,11 +964,6 @@ const BillsScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={colors.headerBg}
-        translucent={false}
-      />
       <ScrollViewWithDetection
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
@@ -1801,13 +1795,12 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     contentPadding: {
       paddingHorizontal: 16,
     },
-    // scrollContent: {
-    //   paddingBottom: insets.bottom + 120,
-    // },
+    scrollContent: {
+      paddingBottom: insets.bottom + 120,
+    },
     header: {
       paddingHorizontal: 20,
-      // paddingTop: insets.top + 14,
-      paddingTop: 20,
+      paddingTop: insets.top + 14,
       paddingBottom: 60,
       backgroundColor: colors.headerBg,
       borderBottomLeftRadius: 32,
