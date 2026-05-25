@@ -137,6 +137,7 @@ const adminBroadcastRoutes = require("./controller/adminBroadcast-supabase");
 const chatRoutes = require("./controller/chat-supabase");
 const badgesRoutes = require("./controller/badges-supabase");
 const adsRoutes = require("./controller/adsController");
+const roommateRoutes = require("./controller/roommate-supabase");
 
 // App Version Check Endpoint — reads from app_settings DB table (cached 5 min)
 app.get("/api/app-version", async (req, res) => {
@@ -228,6 +229,7 @@ app.use("/api/v2/admin/broadcast", adminBroadcastRoutes);
 app.use("/api/v2/chat", chatRoutes);
 app.use("/api/v2/badges", badgesRoutes);
 app.use("/api/v2/ads", adsRoutes);
+app.use("/api/v2/roommates", roommateRoutes);
 
 // Logout route - ensures the token cookie is properly removed
 app.get("/api/v2/user/logout", async (req, res, next) => {

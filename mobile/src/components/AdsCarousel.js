@@ -110,11 +110,12 @@ export const AdsCarousel = ({
             TermsOfService: "ProfileStack",
             PrivacyPolicy: "ProfileStack",
 
-            // AnnouncementsStack
-            AnnouncementsMain: "AnnouncementsStack",
+            // RoomsStack
+            RoomsMain: "RoomsStack",
+            RoomView: "RoomsStack",
 
-            // NotificationsStack
-            NotificationsInbox: "NotificationsStack",
+            // HomeStack
+            NotificationsInbox: "HomeStack",
 
             // Top-level/ChatRoom
             ChatRoom: null, // Top-level, no parent

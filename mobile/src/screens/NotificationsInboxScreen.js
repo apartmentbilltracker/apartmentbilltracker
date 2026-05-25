@@ -17,17 +17,29 @@ import { apiService } from "../services/apiService";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme/ThemeContext";
 import ModalBottomSpacer from "../components/ModalBottomSpacer";
+import AnnouncementsScreen from "./client/AnnouncementsScreen";
 
 const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const insets = useSafeAreaInsets();
+  const initialView =
+    route?.params?.view === "alerts" ? "alerts" : "announcements";
 
+  const [activeView, setActiveView] = useState(initialView);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedNotification, setSelectedNotification] = useState(null);
+
+  useEffect(() => {
+    if (route?.params?.view === "alerts") {
+      setActiveView("alerts");
+    } else if (route?.params?.view === "announcements") {
+      setActiveView("announcements");
+    }
+  }, [route?.params?.view]);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -154,15 +166,116 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
     return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
   };
 
+  const renderHeader = () => (
+    <View style={styles.headerWrap}>
+      <View style={styles.header}>
+        <View style={{ width: 36 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Inbox</Text>
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount}</Text>
+            </View>
+          )}
+        </View>
+        <View style={{ width: 36 }} />
+      </View>
+
+      <View style={styles.segmentedWrap}>
+        <TouchableOpacity
+          style={[
+            styles.segmentButton,
+            activeView === "announcements" && styles.segmentButtonActive,
+          ]}
+          onPress={() => setActiveView("announcements")}
+          activeOpacity={0.75}
+        >
+          <Ionicons
+            name={
+              activeView === "announcements"
+                ? "megaphone"
+                : "megaphone-outline"
+            }
+            size={15}
+            color={
+              activeView === "announcements"
+                ? colors.textOnAccent
+                : colors.accent
+            }
+          />
+          <Text
+            style={[
+              styles.segmentText,
+              activeView === "announcements" && styles.segmentTextActive,
+            ]}
+          >
+            Announcements
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.segmentButton,
+            activeView === "alerts" && styles.segmentButtonActive,
+          ]}
+          onPress={() => setActiveView("alerts")}
+          activeOpacity={0.75}
+        >
+          <Ionicons
+            name={
+              activeView === "alerts"
+                ? "notifications"
+                : "notifications-outline"
+            }
+            size={15}
+            color={activeView === "alerts" ? colors.textOnAccent : colors.accent}
+          />
+          <Text
+            style={[
+              styles.segmentText,
+              activeView === "alerts" && styles.segmentTextActive,
+            ]}
+          >
+            Alerts
+          </Text>
+          {unreadCount > 0 && (
+            <View
+              style={[
+                styles.segmentBadge,
+                activeView === "alerts" && styles.segmentBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.segmentBadgeText,
+                  activeView === "alerts" && styles.segmentBadgeTextActive,
+                ]}
+              >
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  if (activeView === "announcements") {
+    return (
+      <View style={styles.container}>
+        {renderHeader()}
+        <View style={styles.embeddedContent}>
+          <AnnouncementsScreen navigation={navigation} />
+        </View>
+      </View>
+    );
+  }
+
   /* ─── Loading ─── */
   if (loading && notifications.length === 0) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={{ width: 36 }} />
-          <Text style={styles.headerTitle}>Notifications</Text>
-          <View style={{ width: 36 }} />
-        </View>
+        {renderHeader()}
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Loading notifications…</Text>
@@ -195,7 +308,8 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
             name={getNotifMeta(item).icon}
             size={18}
             color={
-              getNotifMeta(item).color || (isUnread ? "#b38604" : "#94a3b8")
+              getNotifMeta(item).color ||
+              (isUnread ? colors.accent : colors.textTertiary)
             }
           />
         </View>
@@ -246,18 +360,7 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={{ width: 36 }} />
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Notifications</Text>
-          {unreadCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unreadCount}</Text>
-            </View>
-          )}
-        </View>
-        <View style={{ width: 36 }} />
-      </View>
+      {renderHeader()}
 
       {/* Mark All Read */}
       {unreadCount > 0 && (
@@ -305,8 +408,8 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#b38604"]}
-              tintcolor={colors.accent}
+              colors={[colors.accent]}
+              tintColor={colors.accent}
             />
           }
         />
@@ -417,6 +520,9 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
     },
+    embeddedContent: {
+      flex: 1,
+    },
     loadingText: {
       marginTop: 12,
       fontSize: 13,
@@ -424,14 +530,22 @@ const createStyles = (colors) =>
     },
 
     /* Header */
+    headerWrap: {
+      backgroundColor: colors.card,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.divider,
+      shadowColor: colors.shadow || "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 10,
+      elevation: 2,
+      zIndex: 2,
+    },
     header: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.card,
       paddingHorizontal: 14,
       paddingVertical: 14,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.divider,
     },
     headerCenter: {
       flex: 1,
@@ -459,6 +573,62 @@ const createStyles = (colors) =>
       fontWeight: "700",
       fontSize: 11,
     },
+    segmentedWrap: {
+      flexDirection: "row",
+      marginHorizontal: 14,
+      marginBottom: 12,
+      padding: 4,
+      borderRadius: 16,
+      backgroundColor: colors.accentLight || colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      gap: 4,
+    },
+    segmentButton: {
+      flex: 1,
+      minHeight: 40,
+      borderRadius: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+    },
+    segmentButtonActive: {
+      backgroundColor: colors.accent,
+      shadowColor: colors.shadow || colors.accent,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.18,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    segmentText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.accent,
+    },
+    segmentTextActive: {
+      color: colors.textOnAccent,
+    },
+    segmentBadge: {
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      paddingHorizontal: 5,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    segmentBadgeActive: {
+      backgroundColor: colors.card,
+    },
+    segmentBadgeText: {
+      fontSize: 9,
+      fontWeight: "800",
+      color: colors.textOnAccent,
+    },
+    segmentBadgeTextActive: {
+      color: colors.accent,
+    },
 
     /* Mark All */
     markAllBtn: {
@@ -470,7 +640,7 @@ const createStyles = (colors) =>
       paddingVertical: 9,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: "#b38604",
+      borderColor: colors.accent,
       gap: 6,
     },
     markAllText: {
@@ -515,7 +685,7 @@ const createStyles = (colors) =>
       paddingVertical: 10,
       borderRadius: 20,
       borderWidth: 1,
-      borderColor: "#b38604",
+      borderColor: colors.accent,
       gap: 6,
     },
     emptyRefreshText: {
@@ -545,9 +715,9 @@ const createStyles = (colors) =>
       elevation: 1,
     },
     cardUnread: {
-      backgroundColor: colors.warningBg,
+      backgroundColor: colors.accentLight || colors.warningBg,
       borderLeftWidth: 3,
-      borderLeftColor: "#b38604",
+      borderLeftColor: colors.accent,
     },
     iconWrap: {
       width: 36,
@@ -559,7 +729,7 @@ const createStyles = (colors) =>
       marginTop: 2,
     },
     iconUnread: {
-      backgroundColor: colors.warningBg,
+      backgroundColor: colors.accentSurface,
     },
     iconRead: {
       backgroundColor: colors.background,
@@ -640,7 +810,7 @@ const createStyles = (colors) =>
       width: 36,
       height: 36,
       borderRadius: 12,
-      backgroundColor: colors.warningBg,
+      backgroundColor: colors.accentSurface,
       justifyContent: "center",
       alignItems: "center",
       marginRight: 10,

@@ -28,6 +28,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import SafeMapView from "../../components/SafeMapView";
 import AdsCarousel from "../../components/AdsCarousel";
+import RoommateProfileModal from "../../components/RoommateProfileModal";
 import { AuthContext } from "../../context/AuthContext";
 import AnimatedAmount from "../../components/AnimatedAmount";
 import chatReadTracker from "../../services/chatReadTracker";
@@ -38,6 +39,7 @@ import {
   billingCycleService,
   apiService,
   chatService,
+  roommateService,
   announcementService,
   paymentService,
   badgeService,
@@ -52,6 +54,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const ACTION_CARD_WIDTH = (SCREEN_WIDTH - 44) / 2;
+const ROOMMATE_ONBOARDING_KEY = "@roommate_onboarding_seen";
 
 // Same amenity map used by host — maps key to icon+label
 const AMENITY_MAP = {
@@ -103,6 +106,11 @@ const ClientHomeScreen = ({ navigation, route }) => {
   const [memberActivity, setMemberActivity] = useState([]);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
+  const [roommateProfiles, setRoommateProfiles] = useState([]);
+  const [roommateLoading, setRoommateLoading] = useState(false);
+  const [roommateOnboardingVisible, setRoommateOnboardingVisible] =
+    useState(false);
+  const [myRoommateProfile, setMyRoommateProfile] = useState(null);
   const [avatarError, setAvatarError] = useState(false);
   const initialLoadDone = useRef(false);
   const lastFocusFetch = useRef(0);
@@ -110,6 +118,14 @@ const ClientHomeScreen = ({ navigation, route }) => {
   const userId = state?.user?.id || state?.user?._id;
   const userName = state?.user?.name || "User";
   const userEmail = state?.user?.email || "";
+  const verifiedRoommateProfiles = useMemo(
+    () =>
+      roommateProfiles.filter(
+        (profile) =>
+          profile?.isVerified !== false && (profile?.id || profile?._id),
+      ),
+    [roommateProfiles],
+  );
 
   const getAvatarSource = () => {
     if (avatarError) return require("../../assets/default-avatar.png");
@@ -147,6 +163,74 @@ const ClientHomeScreen = ({ navigation, route }) => {
     const days = Math.floor(hrs / 24);
     if (days === 1) return "Active a day ago";
     return `Active ${days}d ago`;
+  };
+
+  const isNewAccountForRoommatePrompt = () => {
+    const createdAt =
+      state?.user?.created_at || state?.user?.createdAt || state?.user?.created;
+    if (!createdAt) return false;
+    const createdTime = new Date(createdAt).getTime();
+    if (Number.isNaN(createdTime)) return false;
+    return Date.now() - createdTime < 7 * 24 * 60 * 60 * 1000;
+  };
+
+  const getProfileId = (profile) => profile?.id || profile?._id;
+
+  const getRoommateAvatarSource = (profile) => {
+    const avatar = profile?.avatar;
+    if (avatar?.url?.startsWith?.("http")) return { uri: avatar.url };
+    if (typeof avatar === "string" && avatar.startsWith("http")) {
+      return { uri: avatar };
+    }
+    return null;
+  };
+
+  const formatRoommateBudget = (budget) => {
+    const amount = Number(budget);
+    if (!Number.isFinite(amount) || amount <= 0) return "Budget open";
+    if (amount >= 1000) {
+      return `PHP ${(amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1)}K/mo`;
+    }
+    return `PHP ${amount.toLocaleString()}/mo`;
+  };
+
+  const formatMoveInDate = (value) => {
+    if (!value) return "Move-in flexible";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return `Move in ${date.toLocaleDateString("en-US", {
+      month: "short",
+      year: "numeric",
+    })}`;
+  };
+
+  const getLocationLabel = (profile, fallback = "Location flexible") => {
+    const locations = Array.isArray(profile?.preferredLocations)
+      ? profile.preferredLocations
+      : [];
+    return locations.length > 0 ? locations.join(", ") : fallback;
+  };
+
+  const handleCloseRoommateOnboarding = async () => {
+    setRoommateOnboardingVisible(false);
+    if (userId) {
+      await AsyncStorage.setItem(
+        `${ROOMMATE_ONBOARDING_KEY}:${userId}`,
+        "1",
+      );
+    }
+  };
+
+  const handleRoommateSaved = (profile) => {
+    setMyRoommateProfile(profile);
+    if (profile) {
+      setRoommateProfiles((current) =>
+        current.filter(
+          (item) =>
+            String(item.userId || item.user_id) !== String(profile.userId),
+        ),
+      );
+    }
   };
 
   // Check if current user is a payor
@@ -823,6 +907,43 @@ const ClientHomeScreen = ({ navigation, route }) => {
     }
   };
 
+  const fetchRoommateProfiles = async () => {
+    try {
+      setRoommateLoading(true);
+      const profiles = await roommateService.getProfiles();
+      setRoommateProfiles(
+        (Array.isArray(profiles) ? profiles : []).filter(
+          (profile) => profile?.isVerified !== false,
+        ),
+      );
+    } catch (error) {
+      console.error("Error fetching roommate profiles:", error);
+      setRoommateProfiles([]);
+    } finally {
+      setRoommateLoading(false);
+    }
+  };
+
+  const fetchMyRoommateProfile = async ({ promptIfNew = false } = {}) => {
+    if (!userId) return;
+
+    try {
+      const profile = await roommateService.getMyProfile();
+      setMyRoommateProfile(profile);
+
+      if (promptIfNew && !profile && isNewAccountForRoommatePrompt()) {
+        const seen = await AsyncStorage.getItem(
+          `${ROOMMATE_ONBOARDING_KEY}:${userId}`,
+        );
+        if (!seen) {
+          setRoommateOnboardingVisible(true);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching my roommate profile:", error);
+    }
+  };
+
   // Immediately refresh outstanding balance and billing cycle when returning from payment with refresh param
   useEffect(() => {
     if (route.params?.refresh && userJoinedRoom) {
@@ -848,6 +969,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
       // Start lightweight status polling (no DB egress)
       const roomId = userJoinedRoom?.id || userJoinedRoom?._id;
+      fetchRoommateProfiles();
       fetchStatusChangeNotifications();
       if (roomId) fetchChatBadge(roomId);
       const interval = roomId
@@ -858,6 +980,10 @@ const ClientHomeScreen = ({ navigation, route }) => {
       };
     }, [userJoinedRoom]),
   );
+
+  useEffect(() => {
+    fetchMyRoommateProfile({ promptIfNew: true });
+  }, [userId]);
 
   const fetchRooms = async (showSpinner = false) => {
     try {
@@ -901,6 +1027,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
       Promise.all([
         roomId ? fetchActiveBillingCycle(roomId) : Promise.resolve(),
         fetchStatusChangeNotifications(),
+        fetchRoommateProfiles(),
         roomId ? fetchChatBadge(roomId) : Promise.resolve(),
         roomId ? fetchAnnouncementBanner(roomId) : Promise.resolve(),
         roomId ? fetchOutstandingBalance(roomId) : Promise.resolve(),
@@ -930,7 +1057,11 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchRooms();
+    await Promise.all([
+      fetchRooms(),
+      fetchRoommateProfiles(),
+      fetchMyRoommateProfile(),
+    ]);
     setRefreshing(false);
   };
 
@@ -1138,6 +1269,13 @@ const ClientHomeScreen = ({ navigation, route }) => {
     const previewPhotos = Array.isArray(previewRoom.photos)
       ? previewRoom.photos
       : [];
+    const previewRent = Number(
+      previewRoom.rent ||
+        previewRoom.price ||
+        previewRoom.monthlyRent ||
+        previewRoom.billing?.rent ||
+        0,
+    );
     const [activePhotoIdx, setActivePhotoIdx] = React.useState(0);
     const photoWidth = SCREEN_WIDTH - 48;
 
@@ -1311,12 +1449,16 @@ const ClientHomeScreen = ({ navigation, route }) => {
                 <View style={styles.roomInfoStatDivider} />
                 <View style={styles.roomInfoStat}>
                   <Ionicons
-                    name="shield-checkmark"
+                    name="pricetag"
                     size={18}
                     color={colors.accent}
                   />
-                  <Text style={styles.roomInfoStatValue}>Verified</Text>
-                  <Text style={styles.roomInfoStatLabel}>Host</Text>
+                  <Text style={styles.roomInfoStatValue} numberOfLines={1}>
+                    {previewRent > 0
+                      ? `₱${previewRent.toLocaleString()}`
+                      : "Ask"}
+                  </Text>
+                  <Text style={styles.roomInfoStatLabel}>Price</Text>
                 </View>
               </View>
 
@@ -1810,6 +1952,182 @@ const ClientHomeScreen = ({ navigation, route }) => {
     new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
   // ─── NEW USERS FEATURE CARDS ───
+  const RoommateAvatar = ({ profile, style, placeholderStyle, textStyle }) => {
+    const source = getRoommateAvatarSource(profile);
+    if (source) {
+      return <Image source={source} style={style} resizeMode="cover" />;
+    }
+
+    return (
+      <View style={placeholderStyle}>
+        <Text style={textStyle}>
+          {(profile?.name || "R").charAt(0).toUpperCase()}
+        </Text>
+      </View>
+    );
+  };
+
+  const RoommateCard = ({ profile, isLast }) => {
+    const locations = getLocationLabel(profile);
+    return (
+      <TouchableOpacity
+        style={[styles.roommateCard, isLast && styles.roommateCardLast]}
+        activeOpacity={0.86}
+        onPress={() =>
+          navigation.navigate("RoomieDetails", {
+            profileId: getProfileId(profile),
+            profile,
+          })
+        }
+      >
+        <View style={styles.roommatePhotoWrap}>
+          <RoommateAvatar
+            profile={profile}
+            style={styles.roommatePhoto}
+            placeholderStyle={styles.roommatePhotoPlaceholder}
+            textStyle={styles.roommatePhotoInitial}
+          />
+          <View style={styles.roommatePhotoShade} />
+          <View style={styles.roommateTopBadges}>
+            <View style={styles.roommateVerifiedBadge}>
+              <Ionicons name="shield-checkmark" size={11} color="#fff" />
+              <Text style={styles.roommateVerifiedText}>Verified</Text>
+            </View>
+            {profile.hasRoom && (
+              <View style={styles.roommateHasRoomBadge}>
+                <Ionicons name="home" size={11} color="#063F39" />
+                <Text style={styles.roommateHasRoomText}>Has room</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.roommateNameBlock}>
+            <Text style={styles.roommateName} numberOfLines={1}>
+              {profile.name}
+              {profile.age ? `, ${profile.age}` : ""}
+            </Text>
+            {!!profile.work && (
+              <Text style={styles.roommateWork} numberOfLines={1}>
+                {profile.work}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.roommateCardBody}>
+          <View style={styles.roommateMetaRow}>
+            <Ionicons
+              name="location-outline"
+              size={13}
+              color={colors.textTertiary}
+            />
+            <Text style={styles.roommateMetaText} numberOfLines={1}>
+              {locations}
+            </Text>
+          </View>
+          <View style={styles.roommateMetaRow}>
+            <Ionicons
+              name="calendar-outline"
+              size={13}
+              color={colors.textTertiary}
+            />
+            <Text style={styles.roommateMetaText} numberOfLines={1}>
+              {formatMoveInDate(profile.moveInDate)}
+            </Text>
+          </View>
+          <View style={styles.roommateDivider} />
+          <View style={styles.roommateChipRow}>
+            <View style={styles.roommateChip}>
+              <Ionicons name="wallet-outline" size={12} color={colors.accent} />
+              <Text style={styles.roommateChipText} numberOfLines={1}>
+                {formatRoommateBudget(profile.budget)}
+              </Text>
+            </View>
+            {!!profile.gender && (
+              <View style={styles.roommateChip}>
+                <Ionicons
+                  name="person-outline"
+                  size={12}
+                  color={colors.accent}
+                />
+                <Text style={styles.roommateChipText} numberOfLines={1}>
+                  {profile.gender}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const RoommateSection = () => (
+    <View style={styles.roommateSection}>
+      <View style={styles.availSectionHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.sectionLabel}>Roomies Looking</Text>
+          <Text style={styles.sectionDescription}>
+            Verified renters who are looking for roommates.
+          </Text>
+        </View>
+        <View style={styles.roommateHeaderActions}>
+          <TouchableOpacity
+            style={styles.roommateViewBtn}
+            onPress={() => navigation.navigate("Roomies")}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.roommateViewText}>View</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.roommateCreateBtn}
+            onPress={() => setRoommateOnboardingVisible(true)}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="person-add-outline" size={14} color="#fff" />
+            <Text style={styles.roommateCreateText}>
+              {myRoommateProfile ? "Edit" : "Create"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {roommateLoading && verifiedRoommateProfiles.length === 0 ? (
+        <View style={styles.roommateLoadingCard}>
+          <ActivityIndicator size="small" color={colors.accent} />
+          <Text style={styles.roommateLoadingText}>Loading roomies...</Text>
+        </View>
+      ) : verifiedRoommateProfiles.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.roommateCarouselContent}
+          decelerationRate="fast"
+          snapToInterval={styles.roommateCard.width + 12}
+          snapToAlignment="start"
+        >
+          {verifiedRoommateProfiles.map((profile, index) => (
+            <RoommateCard
+              key={getProfileId(profile)}
+              profile={profile}
+              isLast={index === verifiedRoommateProfiles.length - 1}
+            />
+          ))}
+        </ScrollView>
+      ) : (
+        <View style={styles.roommateEmptyCard}>
+          <View style={styles.roommateEmptyIcon}>
+            <Ionicons name="people-outline" size={22} color={colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.roommateEmptyTitle}>No roomies listed yet</Text>
+            <Text style={styles.roommateEmptyText}>
+              Be the first verified renter to share a roommate profile.
+            </Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
   const FeatureCard = ({ icon, title, description, bgColor }) => (
     <View style={[styles.featureCard, { backgroundColor: bgColor }]}>
       <View style={styles.featureCardTop}>
@@ -1850,6 +2168,13 @@ const ClientHomeScreen = ({ navigation, route }) => {
       <ExpenseModal />
       <RoomInfoModal />
       <FullMapModal />
+      <RoommateProfileModal
+        visible={roommateOnboardingVisible}
+        initialProfile={myRoommateProfile}
+        user={state?.user}
+        onClose={handleCloseRoommateOnboarding}
+        onSaved={handleRoommateSaved}
+      />
       {/* Full-screen photo viewer */}
       <Modal
         visible={!!photoViewData}
@@ -1951,7 +2276,11 @@ const ClientHomeScreen = ({ navigation, route }) => {
               <View style={styles.headerNotifContainer}>
                 <TouchableOpacity
                   style={styles.headerNotifBtn}
-                  onPress={() => navigation.navigate("NotificationsInbox")}
+                  onPress={() =>
+                    navigation.navigate("NotificationsInbox", {
+                      view: "alerts",
+                    })
+                  }
                   activeOpacity={0.7}
                 >
                   <Ionicons
@@ -2239,6 +2568,8 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
           {/* ─── ADS CAROUSEL ─── */}
           <AdsCarousel screen="home" navigation={navigation} />
+
+          <RoommateSection />
 
           {/* ─── NEW USERS FEATURES ─── */}
           {!userJoinedRoom && <NewUsersSection />}
@@ -3112,9 +3443,18 @@ const ClientHomeScreen = ({ navigation, route }) => {
                                   Starts at
                                 </Text>
                                 <Text style={styles.availCarouselPrice}>
-                                  {room.billing?.rent
+                                  {Number(
+                                    room.rent ||
+                                      room.price ||
+                                      room.monthlyRent ||
+                                      room.billing?.rent ||
+                                      0,
+                                  ) > 0
                                     ? `₱${Number(
-                                        room.billing.rent,
+                                        room.rent ||
+                                          room.price ||
+                                          room.monthlyRent ||
+                                          room.billing?.rent,
                                       ).toLocaleString()}`
                                     : "Ask for price"}
                                 </Text>
@@ -4447,6 +4787,385 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     },
 
     // ─── AVAILABLE ROOMS ───
+    roommateSection: {
+      marginTop: 18,
+    },
+    roommateHeaderActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    roommateViewBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.accentSurface,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    roommateViewText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.accent,
+    },
+    roommateCreateBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "#063F39",
+    },
+    roommateCreateText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: "#fff",
+    },
+    roommateCarouselContent: {
+      paddingLeft: 16,
+      paddingRight: 8,
+      paddingBottom: 4,
+    },
+    roommateCard: {
+      width: SCREEN_WIDTH * 0.64,
+      marginRight: 12,
+      borderRadius: 18,
+      overflow: "hidden",
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      elevation: 4,
+    },
+    roommateCardLast: {
+      marginRight: 16,
+    },
+    roommatePhotoWrap: {
+      height: 206,
+      backgroundColor: "#063F39",
+      position: "relative",
+    },
+    roommatePhoto: {
+      width: "100%",
+      height: "100%",
+    },
+    roommatePhotoPlaceholder: {
+      width: "100%",
+      height: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#0B5A52",
+    },
+    roommatePhotoInitial: {
+      fontSize: 44,
+      fontWeight: "900",
+      color: "rgba(255,255,255,0.85)",
+    },
+    roommatePhotoShade: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.24)",
+    },
+    roommateTopBadges: {
+      position: "absolute",
+      top: 9,
+      left: 9,
+      right: 9,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+    },
+    roommateVerifiedBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: "rgba(6,63,57,0.78)",
+    },
+    roommateVerifiedText: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: "#fff",
+    },
+    roommateHasRoomBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.88)",
+    },
+    roommateHasRoomText: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: "#063F39",
+    },
+    roommateNameBlock: {
+      position: "absolute",
+      left: 14,
+      right: 14,
+      bottom: 12,
+    },
+    roommateName: {
+      fontSize: 18,
+      fontWeight: "900",
+      color: "#fff",
+    },
+    roommateWork: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "rgba(255,255,255,0.86)",
+      marginTop: 3,
+    },
+    roommateCardBody: {
+      padding: 13,
+      gap: 8,
+    },
+    roommateMetaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    roommateMetaText: {
+      flex: 1,
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+    roommateDivider: {
+      height: 1,
+      backgroundColor: colors.borderLight || colors.border,
+      marginTop: 2,
+    },
+    roommateChipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 7,
+    },
+    roommateChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      maxWidth: "100%",
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: colors.accentSurface,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    roommateChipText: {
+      maxWidth: 112,
+      fontSize: 10,
+      fontWeight: "800",
+      color: colors.textSecondary,
+    },
+    roommateLoadingCard: {
+      marginHorizontal: 16,
+      paddingVertical: 22,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    roommateLoadingText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
+    roommateEmptyCard: {
+      marginHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      padding: 14,
+      borderRadius: 16,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    roommateEmptyIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.accentSurface,
+    },
+    roommateEmptyTitle: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    roommateEmptyText: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    roommateDetailSheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 22,
+      borderTopRightRadius: 22,
+      maxHeight: "90%",
+      overflow: "hidden",
+    },
+    roommateDetailHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      paddingHorizontal: 18,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight || colors.border,
+    },
+    roommateDetailHeaderLeft: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    roommateDetailAvatar: {
+      width: 58,
+      height: 58,
+      borderRadius: 18,
+      backgroundColor: colors.inputBg,
+    },
+    roommateDetailAvatarPlaceholder: {
+      width: 58,
+      height: 58,
+      borderRadius: 18,
+      backgroundColor: "#063F39",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    roommateDetailAvatarText: {
+      fontSize: 24,
+      fontWeight: "900",
+      color: "#fff",
+    },
+    roommateDetailName: {
+      fontSize: 19,
+      fontWeight: "900",
+      color: colors.text,
+    },
+    roommateDetailBadgeRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 7,
+      marginTop: 7,
+    },
+    roommateDetailVerified: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: colors.successBg,
+    },
+    roommateDetailVerifiedText: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: colors.success,
+    },
+    roommateDetailRoomBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: colors.accentSurface,
+    },
+    roommateDetailRoomText: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: "#063F39",
+    },
+    roommateDetailBody: {
+      paddingHorizontal: 18,
+      paddingTop: 16,
+    },
+    roommateDetailAbout: {
+      marginBottom: 16,
+    },
+    roommateDetailSectionTitle: {
+      fontSize: 14,
+      fontWeight: "900",
+      color: colors.text,
+      marginBottom: 7,
+    },
+    roommateDetailBio: {
+      fontSize: 13,
+      lineHeight: 20,
+      color: colors.textSecondary,
+    },
+    roommateDetailGrid: {
+      gap: 10,
+    },
+    roommateDetailItem: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 11,
+      padding: 12,
+      borderRadius: 14,
+      backgroundColor: colors.cardAlt || colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    roommateDetailItemIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.accentSurface,
+    },
+    roommateDetailLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      marginBottom: 3,
+    },
+    roommateDetailValue: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: colors.text,
+      lineHeight: 18,
+    },
+    roommateDetailFooter: {
+      paddingHorizontal: 18,
+      paddingTop: 12,
+      paddingBottom: Math.max(18, insets.bottom + 10),
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight || colors.border,
+    },
+    roommateDetailChatBtn: {
+      height: 48,
+      borderRadius: 14,
+      backgroundColor: "#063F39",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    roommateDetailChatText: {
+      fontSize: 15,
+      fontWeight: "900",
+      color: "#fff",
+    },
+
     availSection: { marginTop: 18 },
     availSectionHeader: {
       flexDirection: "row",

@@ -19,6 +19,7 @@ import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../../context/AuthContext";
 import {
   roomService,
+  roommateService,
   supportService,
   hostRoleService,
 } from "../../services/apiService";
@@ -27,6 +28,7 @@ import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrapper
 import { getAPIBaseURL } from "../../config/config";
 import { biometricAuth } from "../../utils/biometricAuth";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
+import RoommateProfileModal from "../../components/RoommateProfileModal";
 
 const THEME_OPTIONS = [
   { key: "light", label: "Light", icon: "sunny" },
@@ -83,6 +85,9 @@ const ProfileScreen = ({ navigation }) => {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [disablingBiometric, setDisablingBiometric] = useState(false);
+  const [roommateModalVisible, setRoommateModalVisible] = useState(false);
+  const [roommateProfile, setRoommateProfile] = useState(null);
+  const [roommateProfileLoading, setRoommateProfileLoading] = useState(false);
 
   const user = state.user || {};
   const userId = user.id || user._id;
@@ -111,6 +116,22 @@ const ProfileScreen = ({ navigation }) => {
       }
     };
     if (userId && !isAdmin && !isHost) fetchHostStatus();
+  }, [userId]);
+
+  React.useEffect(() => {
+    const fetchRoommateProfile = async () => {
+      try {
+        setRoommateProfileLoading(true);
+        const profile = await roommateService.getMyProfile();
+        setRoommateProfile(profile);
+      } catch (error) {
+        console.error("Error fetching roommate profile:", error);
+      } finally {
+        setRoommateProfileLoading(false);
+      }
+    };
+
+    if (userId) fetchRoommateProfile();
   }, [userId]);
 
   const handleRequestHost = () => {
@@ -144,6 +165,10 @@ const ProfileScreen = ({ navigation }) => {
         },
       ],
     );
+  };
+
+  const handleRoommateProfileSaved = (profile) => {
+    setRoommateProfile(profile);
   };
 
   // Fetch room to determine payor status
@@ -753,7 +778,30 @@ const ProfileScreen = ({ navigation }) => {
             </View>
             <Text style={styles.infoLabel}>Status</Text>
           </View>
-          <Text style={styles.infoValue}>{payorStatus || "No Room"}</Text>
+          <View style={styles.infoRightGroup}>
+            <Text style={styles.infoValue}>{payorStatus || "No Room"}</Text>
+            <TouchableOpacity
+              style={styles.roommateInlineButton}
+              onPress={() => setRoommateModalVisible(true)}
+              disabled={roommateProfileLoading}
+              activeOpacity={0.7}
+            >
+              {roommateProfileLoading ? (
+                <ActivityIndicator color={colors.accent} size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={roommateProfile ? "people" : "people-outline"}
+                    size={14}
+                    color={colors.accent}
+                  />
+                  <Text style={styles.roommateInlineText}>
+                    {roommateProfile ? "Edit roomies" : "Create roomies"}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -1645,6 +1693,14 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      <RoommateProfileModal
+        visible={roommateModalVisible}
+        initialProfile={roommateProfile}
+        user={user}
+        onClose={() => setRoommateModalVisible(false)}
+        onSaved={handleRoommateProfileSaved}
+      />
     </ScrollViewWithDetection>
   );
 };
@@ -1907,6 +1963,28 @@ const createStyles = (colors) =>
       fontWeight: "600",
       color: colors.text,
       maxWidth: 180,
+    },
+    infoRightGroup: {
+      flex: 1,
+      alignItems: "flex-end",
+      gap: 8,
+      marginLeft: 10,
+    },
+    roommateInlineButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: colors.accentSurface,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    roommateInlineText: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: colors.accent,
     },
     divider: {
       height: 1,

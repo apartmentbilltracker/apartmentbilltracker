@@ -48,6 +48,10 @@ const normalizeRoom = (room) => {
   room.createdAt = room.created_at;
   room.createdBy = room.created_by;
   room.roomCode = room.room_code;
+  room.maxOccupancy = room.max_occupancy;
+  room.rent = parseFloat(room.rent) || 0;
+  room.price = room.rent;
+  room.monthlyRent = room.rent;
   // Location fields (lat/lng stored as floats, address as text)
   if (room.latitude != null) room.latitude = parseFloat(room.latitude);
   if (room.longitude != null) room.longitude = parseFloat(room.longitude);
@@ -125,6 +129,9 @@ router.post("/", isAuthenticated, async (req, res, next) => {
     const {
       name,
       description,
+      rent,
+      price,
+      maxOccupancy,
       latitude,
       longitude,
       address,
@@ -140,6 +147,8 @@ router.post("/", isAuthenticated, async (req, res, next) => {
       name,
       code,
       description: description || "",
+      rent: Math.max(0, parseFloat(rent ?? price ?? 0) || 0),
+      max_occupancy: maxOccupancy ? Number(maxOccupancy) : null,
       created_by: req.user?.id || null,
     };
     if (latitude != null && longitude != null) {
@@ -649,6 +658,11 @@ router.get("/admin/all", isAuthenticated, async (req, res, next) => {
         name: room.name,
         code: room.code,
         description: room.description,
+        rent: room.rent || 0,
+        price: room.rent || 0,
+        monthlyRent: room.rent || 0,
+        maxOccupancy: room.max_occupancy || null,
+        max_occupancy: room.max_occupancy || null,
         created_at: room.created_at,
         created_by: room.created_by,
         latitude: room.latitude ?? null,
@@ -1179,6 +1193,8 @@ router.put("/:id", isAuthenticated, async (req, res, next) => {
     const {
       name,
       description,
+      rent,
+      price,
       maxOccupancy,
       latitude,
       longitude,
@@ -1198,6 +1214,10 @@ router.put("/:id", isAuthenticated, async (req, res, next) => {
     const updateData = {
       name: name.trim(),
       description: description ? description.trim() : room.description,
+      rent:
+        rent !== undefined || price !== undefined
+          ? Math.max(0, parseFloat(rent ?? price) || 0)
+          : room.rent || 0,
       max_occupancy: maxOccupancy ? Number(maxOccupancy) : room.max_occupancy,
     };
     if (latitude != null && longitude != null) {

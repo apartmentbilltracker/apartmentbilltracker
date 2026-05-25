@@ -612,6 +612,26 @@ export const chatService = {
       .then(extractData),
 };
 
+export const roommateService = {
+  getProfiles: () =>
+    api
+      .get("/api/v2/roommates")
+      .then(extractData)
+      .then((r) => r?.profiles || []),
+  getMyProfile: () =>
+    api
+      .get("/api/v2/roommates/me")
+      .then(extractData)
+      .then((r) => r?.profile || null),
+  saveMyProfile: (data) =>
+    api.post("/api/v2/roommates/me", data).then(extractData),
+  getProfile: (id) =>
+    api
+      .get(`/api/v2/roommates/${id}`)
+      .then(extractData)
+      .then((r) => r?.profile || r),
+};
+
 // Ads Service
 export const adsService = {
   // Get active ads for display

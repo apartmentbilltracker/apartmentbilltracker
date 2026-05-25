@@ -674,8 +674,8 @@ const AnnouncementsScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#b38604"]}
-            tintcolor={colors.accent}
+            colors={[colors.accent]}
+            tintColor={colors.accent}
           />
         }
         contentContainerStyle={styles.listContent}

@@ -341,6 +341,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
   const photos = Array.isArray(room.photos) ? room.photos : [];
   const amenities = Array.isArray(room.amenities) ? room.amenities : [];
   const payorCount = members.filter((member) => member.isPayer).length;
+  const roomRent = parseFloat(room.rent || room.price || room.monthlyRent || 0);
   const waterTotal = calculateTotalWaterBill();
   const customChargesTotal =
     activeCycle?.customCharges?.reduce(
@@ -416,6 +417,14 @@ const RoomDetailsScreen = ({ route, navigation }) => {
                 {hasBillingCycle ? "Active cycle" : "No cycle"}
               </Text>
             </View>
+            {roomRent > 0 ? (
+              <View style={styles.pricePill}>
+                <Ionicons name="pricetag" size={13} color={colors.accent} />
+                <Text style={styles.pricePillText}>
+                  {formatCurrency(roomRent)} / month
+                </Text>
+              </View>
+            ) : null}
           </View>
           <View style={styles.heroStatsRow}>
             {[
@@ -1270,6 +1279,22 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontSize: 12,
       fontWeight: "700",
       color: colors.textSecondary,
+    },
+    pricePill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 16,
+      backgroundColor: colors.accentSurface,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    pricePillText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.accent,
     },
     heroStatsRow: {
       flexDirection: "row",
