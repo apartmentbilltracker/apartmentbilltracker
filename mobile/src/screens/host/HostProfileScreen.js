@@ -286,9 +286,28 @@ const HostProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollViewWithDetection style={styles.container}>
+    <ScrollViewWithDetection
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Profile Header Card */}
       <View style={styles.profileCard}>
+        <View style={styles.profileTopRow}>
+          <View style={styles.profilePill}>
+            <Ionicons name="leaf-outline" size={13} color="#ffffff" />
+            <Text style={styles.profilePillText}>Host Profile</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.headerEditBtn}
+            onPress={handleEditPress}
+            disabled={isUpdating}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="create-outline" size={14} color="#ffffff" />
+            <Text style={styles.headerEditBtnText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.avatarContainer}>
           <Image
             source={getAvatarSource()}
@@ -312,7 +331,7 @@ const HostProfileScreen = ({ navigation }) => {
         <Text style={styles.userEmail}>{user.email || "N/A"}</Text>
 
         <View style={styles.roleBadge}>
-          <Ionicons name="key" size={13} color="#b38604" />
+          <Ionicons name="key" size={13} color="#ffffff" />
           <Text style={styles.roleBadgeText}>Room Host</Text>
         </View>
       </View>
@@ -335,23 +354,8 @@ const HostProfileScreen = ({ navigation }) => {
         </View>
         <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
           <Text style={styles.infoLabel}>Role</Text>
-          <View
-            style={{
-              backgroundColor: "rgba(179,134,4,0.12)",
-              paddingHorizontal: 10,
-              paddingVertical: 4,
-              borderRadius: 8,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "700",
-                color: colors.accent,
-              }}
-            >
-              Host
-            </Text>
+          <View style={styles.infoBadge}>
+            <Text style={styles.infoBadgeText}>Host</Text>
           </View>
         </View>
       </View>
@@ -725,40 +729,96 @@ const HostProfileScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const forestHeader = isDarkMode ? colors.background : "#063f39";
+  const softSurface = isDarkMode
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(3,109,65,0.055)";
+  const softBorder = isDarkMode
+    ? "rgba(158,208,205,0.16)"
+    : "rgba(3,109,65,0.12)";
+  const cardShadow = isDarkMode ? "#000000" : "#0a4240";
+
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
     },
+    contentContainer: {
+      paddingBottom: 28,
+    },
     profileCard: {
       alignItems: "center",
-      paddingVertical: 28,
-      paddingHorizontal: 16,
-      marginHorizontal: 12,
-      marginTop: 12,
-      backgroundColor: colors.card,
-      borderRadius: 14,
+      paddingTop: 18,
+      paddingBottom: 28,
+      paddingHorizontal: 18,
+      marginHorizontal: 16,
+      marginTop: 16,
+      backgroundColor: forestHeader,
+      borderRadius: 28,
+      overflow: "hidden",
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.07,
-          shadowOffset: { width: 0, height: 2 },
-          shadowRadius: 8,
+          shadowColor: cardShadow,
+          shadowOpacity: 0.12,
+          shadowOffset: { width: 0, height: 8 },
+          shadowRadius: 18,
         },
-        android: { elevation: 2 },
+        android: { elevation: 5 },
       }),
+    },
+    profileTopRow: {
+      width: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 18,
+    },
+    profilePill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.14)",
+    },
+    profilePillText: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: "#ffffff",
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+    },
+    headerEditBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.14)",
+    },
+    headerEditBtnText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#ffffff",
     },
     avatarContainer: { marginBottom: 14, position: "relative" },
     avatar: {
       width: 88,
       height: 88,
       borderRadius: 44,
-      backgroundColor: "#b38604",
+      backgroundColor: colors.accent,
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 3,
-      borderColor: "rgba(179,134,4,0.18)",
+      borderColor: "rgba(255,255,255,0.75)",
     },
     avatarImage: {
       width: 88,
@@ -766,7 +826,7 @@ const createStyles = (colors) =>
       borderRadius: 44,
       backgroundColor: colors.inputBg,
       borderWidth: 3,
-      borderColor: "rgba(179,134,4,0.18)",
+      borderColor: "rgba(255,255,255,0.75)",
     },
     avatarText: { fontSize: 34, fontWeight: "700", color: "#fff" },
     editAvatarBtn: {
@@ -780,33 +840,36 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 2,
-      borderColor: "#fff",
+      borderColor: "#ffffff",
     },
     userName: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: colors.text,
+      fontSize: 25,
+      fontWeight: "900",
+      color: "#ffffff",
       marginBottom: 4,
+      textAlign: "center",
     },
     userEmail: {
       fontSize: 14,
-      color: colors.textTertiary,
+      color: "rgba(255,255,255,0.78)",
       marginBottom: 12,
+      textAlign: "center",
     },
     roleBadge: {
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
-      backgroundColor: "rgba(179,134,4,0.12)",
+      backgroundColor: "rgba(255,255,255,0.14)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.14)",
       paddingHorizontal: 12,
-      paddingVertical: 5,
-      borderRadius: 8,
-      marginBottom: 16,
+      paddingVertical: 8,
+      borderRadius: 999,
     },
     roleBadgeText: {
       fontSize: 12,
       fontWeight: "700",
-      color: "#b38604",
+      color: "#ffffff",
     },
     editButton: {
       flexDirection: "row",
@@ -819,20 +882,22 @@ const createStyles = (colors) =>
     },
     editButtonText: { color: "#fff", fontSize: 14, fontWeight: "600" },
     section: {
-      marginHorizontal: 12,
-      marginTop: 12,
+      marginHorizontal: 16,
+      marginTop: 14,
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 20,
       paddingVertical: 14,
       paddingHorizontal: 16,
+      borderWidth: 1,
+      borderColor: softBorder,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.05,
-          shadowOffset: { width: 0, height: 2 },
-          shadowRadius: 6,
+          shadowColor: cardShadow,
+          shadowOpacity: 0.06,
+          shadowOffset: { width: 0, height: 5 },
+          shadowRadius: 12,
         },
-        android: { elevation: 1 },
+        android: { elevation: 2 },
       }),
     },
     sectionHeader: {
@@ -844,21 +909,23 @@ const createStyles = (colors) =>
     sectionIconWrap: {
       width: 28,
       height: 28,
-      borderRadius: 14,
-      backgroundColor: "rgba(179,134,4,0.12)",
+      borderRadius: 10,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
     sectionTitle: {
       fontSize: 15,
-      fontWeight: "700",
+      fontWeight: "800",
       color: colors.text,
       flex: 1,
     },
     sectionAppearanceTitle: {
       fontSize: 15,
       marginBottom: 12,
-      fontWeight: "700",
+      fontWeight: "800",
       color: colors.text,
       flex: 1,
     },
@@ -878,7 +945,9 @@ const createStyles = (colors) =>
     menuIcon: {
       width: 32,
       height: 32,
-      borderRadius: 8,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -902,6 +971,19 @@ const createStyles = (colors) =>
     },
     infoLabel: { fontSize: 14, color: colors.textTertiary },
     infoValue: { fontSize: 14, fontWeight: "600", color: colors.text },
+    infoBadge: {
+      backgroundColor: softSurface,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: softBorder,
+    },
+    infoBadgeText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.accent,
+    },
     themeRow: {
       flexDirection: "row",
       gap: 10,
@@ -912,15 +994,15 @@ const createStyles = (colors) =>
       flex: 1,
       alignItems: "center",
       paddingVertical: 12,
-      borderRadius: 12,
-      backgroundColor: colors.inputBg,
+      borderRadius: 16,
+      backgroundColor: softSurface,
       borderWidth: 1.5,
-      borderColor: "transparent",
+      borderColor: softBorder,
       gap: 4,
     },
     themeOptionActive: {
       borderColor: colors.accent,
-      backgroundColor: colors.accentSurface,
+      backgroundColor: softSurface,
     },
     themeOptionLabel: {
       fontSize: 12,
@@ -935,7 +1017,7 @@ const createStyles = (colors) =>
       paddingVertical: 11,
       paddingHorizontal: 12,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
+      borderBottomColor: colors.borderLight,
     },
     legalRowText: {
       flex: 1,
@@ -945,10 +1027,15 @@ const createStyles = (colors) =>
     },
     clientViewButton: {
       backgroundColor: colors.accent,
-      borderRadius: 12,
+      borderRadius: 18,
       padding: 14,
       flexDirection: "row",
       alignItems: "center",
+      shadowColor: cardShadow,
+      shadowOffset: { width: 0, height: 7 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 4,
     },
     clientViewIconWrap: {
       width: 38,
@@ -971,17 +1058,17 @@ const createStyles = (colors) =>
       fontSize: 12,
     },
     logoutSection: {
-      marginHorizontal: 12,
-      marginTop: 12,
+      marginHorizontal: 16,
+      marginTop: 14,
       marginBottom: 32,
     },
     logoutButton: {
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 18,
       padding: 16,
       alignItems: "center",
       borderWidth: 1,
-      borderColor: "rgba(231,76,60,0.2)",
+      borderColor: colors.errorBg,
     },
     logoutButtonDisabled: { opacity: 0.7 },
     logoutLoading: {
@@ -990,13 +1077,13 @@ const createStyles = (colors) =>
       gap: 8,
     },
     logoutButtonText: {
-      color: "#e74c3c",
+      color: colors.error,
       fontSize: 15,
       fontWeight: "700",
     },
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0, 0, 0, 0.45)",
+      backgroundColor: colors.overlay || "rgba(0, 0, 0, 0.5)",
       justifyContent: "flex-end",
     },
     modalSheet: {
@@ -1006,12 +1093,14 @@ const createStyles = (colors) =>
       paddingHorizontal: 20,
       paddingBottom: 8,
       maxHeight: "90%",
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     modalHandle: {
       width: 36,
       height: 4,
       borderRadius: 2,
-      backgroundColor: colors.skeleton,
+      backgroundColor: softBorder,
       alignSelf: "center",
       marginTop: 10,
       marginBottom: 12,
@@ -1031,16 +1120,21 @@ const createStyles = (colors) =>
       width: 32,
       height: 32,
       borderRadius: 16,
-      backgroundColor: colors.background,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
     modalContent: {
       backgroundColor: colors.card,
-      borderRadius: 18,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
       paddingBottom: 24,
       paddingTop: 10,
       maxHeight: "90%",
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     modalIconHeader: {
       alignItems: "center",
@@ -1051,7 +1145,9 @@ const createStyles = (colors) =>
       width: 48,
       height: 48,
       borderRadius: 24,
-      backgroundColor: "rgba(179,134,4,0.12)",
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1068,7 +1164,9 @@ const createStyles = (colors) =>
       width: 32,
       height: 32,
       borderRadius: 16,
-      backgroundColor: colors.background,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1086,7 +1184,7 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginBottom: 12,
       borderWidth: 3,
-      borderColor: "rgba(179,134,4,0.18)",
+      borderColor: softBorder,
     },
     modalAvatarImage: {
       width: 96,
@@ -1095,17 +1193,22 @@ const createStyles = (colors) =>
       backgroundColor: colors.inputBg,
       marginBottom: 12,
       borderWidth: 3,
-      borderColor: "rgba(179,134,4,0.18)",
+      borderColor: softBorder,
     },
     modalAvatarText: { fontSize: 38, fontWeight: "700", color: "#fff" },
     changeAvatarButton: {
       flexDirection: "row",
       backgroundColor: colors.accent,
-      borderRadius: 10,
+      borderRadius: 14,
       paddingHorizontal: 16,
       paddingVertical: 10,
       alignItems: "center",
       gap: 6,
+      shadowColor: cardShadow,
+      shadowOffset: { width: 0, height: 5 },
+      shadowOpacity: 0.16,
+      shadowRadius: 10,
+      elevation: 3,
     },
     changeAvatarText: { color: "#fff", fontSize: 13, fontWeight: "600" },
     modalBody: {
@@ -1120,23 +1223,23 @@ const createStyles = (colors) =>
     },
     nameInput: {
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
+      borderColor: softBorder,
+      borderRadius: 14,
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 14,
       color: colors.text,
-      backgroundColor: colors.cardAlt,
+      backgroundColor: softSurface,
     },
     formInput: {
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
+      borderColor: softBorder,
+      borderRadius: 14,
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 14,
       color: colors.text,
-      backgroundColor: colors.cardAlt,
+      backgroundColor: softSurface,
     },
     saveBtn: {
       flexDirection: "row",
@@ -1144,7 +1247,7 @@ const createStyles = (colors) =>
       justifyContent: "center",
       gap: 8,
       backgroundColor: colors.accent,
-      borderRadius: 12,
+      borderRadius: 14,
       paddingVertical: 14,
     },
     saveBtnText: {
@@ -1155,15 +1258,21 @@ const createStyles = (colors) =>
     saveButton: {
       flexDirection: "row",
       backgroundColor: colors.accent,
-      borderRadius: 12,
+      borderRadius: 14,
       paddingVertical: 14,
       alignItems: "center",
       justifyContent: "center",
       marginHorizontal: 20,
       gap: 8,
+      shadowColor: cardShadow,
+      shadowOffset: { width: 0, height: 7 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 4,
     },
     saveButtonDisabled: { opacity: 0.6 },
     saveButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   });
+};
 
 export default HostProfileScreen;

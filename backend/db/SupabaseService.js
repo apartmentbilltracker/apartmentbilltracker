@@ -419,18 +419,7 @@ class SupabaseService {
         `room_id,
         is_payer,
         status,
-        rooms(
-          id,
-          name,
-          code,
-          description,
-          created_by,
-          created_at,
-          updated_at,
-          water_billing_mode,
-          water_fixed_amount,
-          water_fixed_type
-        )`,
+        rooms(*)`,
       )
       .eq("user_id", userId)
       .eq("status", "approved");

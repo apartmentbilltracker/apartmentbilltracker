@@ -36,7 +36,10 @@ import PaymentHistoryScreen from "../screens/client/PaymentHistoryScreen";
 import SettlementScreen from "../screens/client/SettlementScreen";
 import ChatRoomScreen from "../screens/chat/ChatRoomScreen";
 import NotificationsInboxScreen from "../screens/NotificationsInboxScreen";
-import AnnouncementsScreen from "../screens/client/AnnouncementsScreen";
+import ClientRoomsScreen from "../screens/client/ClientRoomsScreen";
+import ClientRoomViewScreen from "../screens/client/ClientRoomViewScreen";
+import ClientRoomiesScreen from "../screens/client/ClientRoomiesScreen";
+import ClientRoomieDetailsScreen from "../screens/client/ClientRoomieDetailsScreen";
 import {
   apiService,
   announcementService,
@@ -115,6 +118,16 @@ const ClientHomeStack = () => {
         name="NotificationsInbox"
         component={NotificationsInboxScreen}
         options={{ title: "Notifications" }}
+      />
+      <Stack.Screen
+        name="Roomies"
+        component={ClientRoomiesScreen}
+        options={{ title: "Roomies" }}
+      />
+      <Stack.Screen
+        name="RoomieDetails"
+        component={ClientRoomieDetailsScreen}
+        options={{ title: "Roomie Details" }}
       />
     </Stack.Navigator>
   );
@@ -224,14 +237,19 @@ const ProfileStack = () => {
   );
 };
 
-const AnnouncementsStack = () => {
+const RoomsStack = () => {
   const headerOptions = useHeaderOptions();
   return (
     <Stack.Navigator screenOptions={headerOptions}>
       <Stack.Screen
-        name="AnnouncementsMain"
-        component={AnnouncementsScreen}
-        options={{ title: "Announcements" }}
+        name="RoomsMain"
+        component={ClientRoomsScreen}
+        options={{ title: "Properties" }}
+      />
+      <Stack.Screen
+        name="RoomView"
+        component={ClientRoomViewScreen}
+        options={{ title: "Room Preview" }}
       />
     </Stack.Navigator>
   );
@@ -342,15 +360,15 @@ const ClientTabNavigator = () => {
 
     const leftTabs = state.routes.slice(0, 2); // Home, Presence
     const centerTab = state.routes[2]; // Bills (FAB)
-    const rightTabs = state.routes.slice(3); // Announcements, Notifications, Profile
+    const rightTabs = state.routes.slice(3); // Rooms, Profile
 
     const iconFor = (routeName, focused) => {
       if (routeName === "HomeStack") return focused ? "home" : "home-outline";
       if (routeName === "PresenceStack")
         return focused ? "checkbox" : "checkbox-outline";
       if (routeName === "BillsStack") return "receipt-outline";
-      if (routeName === "AnnouncementsStack")
-        return focused ? "megaphone" : "megaphone-outline";
+      if (routeName === "RoomsStack")
+        return focused ? "business" : "business-outline";
       if (routeName === "NotificationsStack")
         return focused ? "notifications" : "notifications-outline";
       if (routeName === "ProfileStack")
@@ -380,7 +398,7 @@ const ClientTabNavigator = () => {
             BillsStack: "BillsMain",
             HomeStack: "ClientHome",
             PresenceStack: "PresenceMain",
-            AnnouncementsStack: "AnnouncementsMain",
+            RoomsStack: "RoomsMain",
             NotificationsStack: "NotificationsInbox",
             ProfileStack: "Profile",
           }[route.name] ?? route.name;
@@ -640,23 +658,20 @@ const ClientTabNavigator = () => {
             })}
           />
           <Tab.Screen
-            name="AnnouncementsStack"
-            component={AnnouncementsStack}
+            name="RoomsStack"
+            component={RoomsStack}
             options={{
-              title: "News",
-              tabBarBadge: announcementCount > 0 ? announcementCount : null,
+              title: "Properties",
             }}
             listeners={({ navigation }) => ({
               tabPress: () => {
-                setAnnouncementCount(0);
-                fetchAnnouncementCount();
                 navigation.dispatch(
                   CommonActions.reset({
                     index: 0,
                     routes: [
                       {
-                        name: "AnnouncementsStack",
-                        state: { routes: [{ name: "AnnouncementsMain" }] },
+                        name: "RoomsStack",
+                        state: { routes: [{ name: "RoomsMain" }] },
                       },
                     ],
                   }),

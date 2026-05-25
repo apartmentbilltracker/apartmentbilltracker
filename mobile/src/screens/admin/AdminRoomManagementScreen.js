@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,6 @@ import {
   Platform,
   Modal,
   KeyboardAvoidingView,
-  Dimensions,
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,8 +23,6 @@ import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // Predefined amenity options hosts can pick from
 const AMENITY_OPTIONS = [
@@ -66,6 +63,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [roomName, setRoomName] = useState("");
   const [roomDescription, setRoomDescription] = useState("");
+  const [roomPrice, setRoomPrice] = useState("");
   const [maxOccupancy, setMaxOccupancy] = useState("");
   const [roomLatitude, setRoomLatitude] = useState(null);
   const [roomLongitude, setRoomLongitude] = useState(null);
@@ -106,12 +104,18 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
       Alert.alert("Error", "Please enter room name");
       return;
     }
+    const rentValue = roomPrice.trim() ? Number(roomPrice) : 0;
+    if (Number.isNaN(rentValue) || rentValue < 0) {
+      Alert.alert("Error", "Please enter a valid monthly price");
+      return;
+    }
 
     try {
       setSaving(true);
       const data = {
         name: roomName.trim(),
         description: roomDescription.trim(),
+        rent: rentValue,
         maxOccupancy: maxOccupancy ? Number(maxOccupancy) : undefined,
       };
       if (roomLatitude != null && roomLongitude != null) {
@@ -142,12 +146,18 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
       Alert.alert("Error", "Please enter room name");
       return;
     }
+    const rentValue = roomPrice.trim() ? Number(roomPrice) : 0;
+    if (Number.isNaN(rentValue) || rentValue < 0) {
+      Alert.alert("Error", "Please enter a valid monthly price");
+      return;
+    }
 
     try {
       setSaving(true);
       const data = {
         name: roomName.trim(),
         description: roomDescription.trim(),
+        rent: rentValue,
         maxOccupancy: maxOccupancy ? Number(maxOccupancy) : undefined,
       };
       if (roomLatitude != null && roomLongitude != null) {
@@ -203,6 +213,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
   const resetForm = () => {
     setRoomName("");
     setRoomDescription("");
+    setRoomPrice("");
     setMaxOccupancy("");
     setRoomLatitude(null);
     setRoomLongitude(null);
@@ -223,6 +234,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
     setEditingRoom(room);
     setRoomName(room.name || "");
     setRoomDescription(room.description || "");
+    setRoomPrice(String(room.rent || room.price || room.monthlyRent || ""));
     setMaxOccupancy(String(room.maxOccupancy || room.max_occupancy || ""));
     setRoomLatitude(room.latitude != null ? parseFloat(room.latitude) : null);
     setRoomLongitude(
@@ -408,6 +420,16 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
     (sum, r) => sum + (r.members?.length || 0),
     0,
   );
+  const pinnedRooms = rooms.reduce(
+    (sum, r) => sum + (r.latitude != null && r.longitude != null ? 1 : 0),
+    0,
+  );
+  const formatCurrency = (value) =>
+    "\u20B1" +
+    Number(value || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
 
   const renderRoomCard = (room) => {
     const memberCount = room.members?.length || 0;
@@ -416,6 +438,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
       ? Math.round((memberCount / maxOcc) * 100)
       : null;
     const roomCode = room.code || room.room_code;
+    const rent = Number(room.rent || room.price || room.monthlyRent || 0);
 
     return (
       <TouchableOpacity
@@ -457,7 +480,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
               onPress={() => handleDeleteRoom(room.id || room._id)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="trash-outline" size={18} color="#c62828" />
+              <Ionicons name="trash-outline" size={18} color={colors.error} />
             </TouchableOpacity>
           </View>
         </View>
@@ -483,6 +506,15 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
             </View>
           ) : null}
 
+          {rent > 0 ? (
+            <View style={styles.metaChip}>
+              <Ionicons name="pricetag" size={13} color={colors.accent} />
+              <Text style={styles.metaChipText}>
+                {formatCurrency(rent)} / month
+              </Text>
+            </View>
+          ) : null}
+
           {occupancyPercent !== null ? (
             <View
               style={[
@@ -490,9 +522,9 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
                 {
                   backgroundColor:
                     occupancyPercent >= 90
-                      ? "#fce4ec"
+                      ? colors.errorBg
                       : occupancyPercent >= 70
-                        ? "#fff8e1"
+                        ? colors.warningBg
                         : colors.successBg,
                 },
               ]}
@@ -502,7 +534,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
                 size={13}
                 color={
                   occupancyPercent >= 90
-                    ? "#c62828"
+                    ? colors.error
                     : occupancyPercent >= 70
                       ? colors.electricityColor
                       : colors.success
@@ -514,7 +546,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
                   {
                     color:
                       occupancyPercent >= 90
-                        ? "#c62828"
+                        ? colors.error
                         : occupancyPercent >= 70
                           ? colors.electricityColor
                           : colors.success,
@@ -564,8 +596,55 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      {/* Summary Strip */}
-      <View style={styles.summaryStrip}>
+      <ScrollViewWithDetection
+        style={styles.pageScroll}
+        contentContainerStyle={styles.pageContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+          />
+        }
+      >
+        {/* Forest Header */}
+        <View style={styles.header}>
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerIconWrap}>
+            <Ionicons name="leaf-outline" size={21} color="#ffffff" />
+          </View>
+          <View style={styles.headerTopPill}>
+            <Ionicons name="business-outline" size={13} color="#ffffff" />
+            <Text style={styles.headerTopPillText}>Admin Rooms</Text>
+          </View>
+        </View>
+
+        <Text style={styles.headerEyebrow}>Room Management</Text>
+        <Text style={styles.headerTitle}>Rooms</Text>
+        <Text style={styles.headerSubtitle} numberOfLines={2}>
+          Manage room details, occupancy, locations, amenities, and house rules.
+        </Text>
+
+        <View style={styles.headerStatusRow}>
+          <View style={styles.headerStatusChip}>
+            <Ionicons name="home-outline" size={13} color="#ffffff" />
+            <Text style={styles.headerStatusChipText}>
+              {rooms.length} room{rooms.length !== 1 ? "s" : ""}
+            </Text>
+          </View>
+          <View style={styles.headerStatusChip}>
+            <Ionicons name="location-outline" size={13} color="#ffffff" />
+            <Text style={styles.headerStatusChipText}>
+              {pinnedRooms} pinned
+            </Text>
+          </View>
+        </View>
+        </View>
+
+        {/* Summary Strip */}
+        <View style={styles.summaryStrip}>
         <View style={styles.summaryItem}>
           <View
             style={[
@@ -597,10 +676,10 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
           <Ionicons name="add-circle" size={20} color={colors.textOnAccent} />
           <Text style={styles.addRoomBtnText}>Add Room</Text>
         </TouchableOpacity>
-      </View>
+        </View>
 
-      {/* Search */}
-      <View style={styles.searchWrap}>
+        {/* Search */}
+        <View style={styles.searchWrap}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color={colors.textTertiary} />
           <TextInput
@@ -620,51 +699,42 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           )}
         </View>
-      </View>
+        </View>
 
-      {/* Rooms List */}
-      <ScrollViewWithDetection
-        style={styles.listWrap}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintcolor={colors.accent}
-            colors={["#b38604"]}
-          />
-        }
-      >
-        {loading ? (
-          <View style={styles.centerWrap}>
-            <ActivityIndicator size="large" color={colors.accent} />
-            <Text style={styles.loadingText}>Loading rooms...</Text>
-          </View>
-        ) : filteredRooms.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="home-outline" size={44} color={colors.accent} />
+        {/* Rooms List */}
+        <View style={styles.listWrap}>
+          <View style={styles.listContent}>
+          {loading ? (
+            <View style={styles.centerWrap}>
+              <ActivityIndicator size="large" color={colors.accent} />
+              <Text style={styles.loadingText}>Loading rooms...</Text>
             </View>
-            <Text style={styles.emptyTitle}>
-              {rooms.length === 0 ? "No rooms yet" : "No matches found"}
-            </Text>
-            <Text style={styles.emptySubtitle}>
-              {rooms.length === 0
-                ? 'Tap "Add Room" to create your first room'
-                : "Try a different search term"}
-            </Text>
+          ) : filteredRooms.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="home-outline" size={44} color={colors.accent} />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {rooms.length === 0 ? "No rooms yet" : "No matches found"}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {rooms.length === 0
+                  ? 'Tap "Add Room" to create your first room'
+                  : "Try a different search term"}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.listHeader}>
+                {filteredRooms.length} room{filteredRooms.length !== 1 ? "s" : ""}
+                {searchTerm ? ` matching "${searchTerm}"` : ""}
+              </Text>
+              {filteredRooms.map(renderRoomCard)}
+            </>
+          )}
+          <View style={{ height: 24 }} />
           </View>
-        ) : (
-          <>
-            <Text style={styles.listHeader}>
-              {filteredRooms.length} room{filteredRooms.length !== 1 ? "s" : ""}
-              {searchTerm ? ` matching "${searchTerm}"` : ""}
-            </Text>
-            {filteredRooms.map(renderRoomCard)}
-          </>
-        )}
-        <View style={{ height: 24 }} />
+        </View>
       </ScrollViewWithDetection>
 
       {/* Create/Edit Modal */}
@@ -813,6 +883,22 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
                   </View>
                 </View>
 
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Monthly Price</Text>
+                  <View style={styles.inputWrap}>
+                    <Text style={styles.currencyPrefix}>₱</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. 8500"
+                      placeholderTextColor={colors.textTertiary}
+                      value={roomPrice}
+                      onChangeText={setRoomPrice}
+                      keyboardType="decimal-pad"
+                      editable={!saving}
+                    />
+                  </View>
+                </View>
+
                 {/* ── Location Section ── */}
                 <View style={styles.fieldGroup}>
                   <Text style={styles.fieldLabel}>Location</Text>
@@ -851,12 +937,12 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
                           <Ionicons
                             name="close-circle-outline"
                             size={14}
-                            color="#c62828"
+                            color={colors.error}
                           />
                           <Text
                             style={[
                               styles.locationActionText,
-                              { color: "#c62828" },
+                              { color: colors.error },
                             ]}
                           >
                             Remove
@@ -982,7 +1068,7 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
                         <Ionicons
                           name="close-circle"
                           size={18}
-                          color="#c62828"
+                          color={colors.error}
                         />
                       </TouchableOpacity>
                     </View>
@@ -1156,25 +1242,134 @@ const AdminRoomManagementScreen = ({ navigation, route }) => {
   );
 };
 
-const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
-  StyleSheet.create({
+const createStyles = (colors, insets = { top: 0, bottom: 0 }) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const forestHeader = isDarkMode ? colors.background : "#063f39";
+  const softSurface = isDarkMode
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(3,109,65,0.055)";
+  const softBorder = isDarkMode
+    ? "rgba(158,208,205,0.16)"
+    : "rgba(3,109,65,0.12)";
+  const cardShadow = isDarkMode ? "#000000" : "#0a4240";
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    pageScroll: {
+      flex: 1,
+    },
+    pageContent: {
+      paddingBottom: Math.max(28, insets.bottom + 20),
+    },
+
+    // Forest Header
+    header: {
+      backgroundColor: forestHeader,
+      paddingHorizontal: 20,
+      // paddingTop: Math.max(18, insets.top + 10),
+      paddingTop: 20,
+      paddingBottom: 72,
+      borderBottomLeftRadius: 32,
+      borderBottomRightRadius: 32,
+    },
+    headerTopRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 18,
+    },
+    headerIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 18,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.14)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerTopPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.14)",
+    },
+    headerTopPillText: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: "#ffffff",
+    },
+    headerEyebrow: {
+      fontSize: 11,
+      color: "rgba(255,255,255,0.72)",
+      fontWeight: "800",
+      letterSpacing: 1,
+      textTransform: "uppercase",
+      marginBottom: 6,
+    },
+    headerTitle: {
+      fontSize: 31,
+      fontWeight: "900",
+      color: "#ffffff",
+    },
+    headerSubtitle: {
+      fontSize: 13,
+      lineHeight: 19,
+      color: "rgba(255,255,255,0.78)",
+      marginTop: 8,
+      fontWeight: "500",
+    },
+    headerStatusRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 18,
+    },
+    headerStatusChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 11,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.10)",
+    },
+    headerStatusChipText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#effaf7",
     },
 
     // Summary Strip
     summaryStrip: {
       flexDirection: "row",
       alignItems: "center",
+      flexWrap: "wrap",
       backgroundColor: colors.card,
+      marginHorizontal: 16,
+      marginTop: -48,
+      borderRadius: 18,
       paddingHorizontal: 16,
       paddingVertical: 14,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: "#e8e8e8",
+      borderWidth: 1,
+      borderColor: softBorder,
       gap: 12,
+      shadowColor: cardShadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.1,
+      shadowRadius: 16,
+      elevation: 5,
     },
     summaryItem: {
+      flex: 1,
+      minWidth: 0,
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
@@ -1182,20 +1377,24 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     summaryIconWrap: {
       width: 32,
       height: 32,
-      borderRadius: 8,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
     summaryValue: {
       fontSize: 16,
-      fontWeight: "700",
+      fontWeight: "900",
       color: colors.text,
     },
     summaryLabel: {
       fontSize: 10,
-      fontWeight: "500",
+      fontWeight: "800",
       color: colors.textTertiary,
       marginTop: -1,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
     },
     summaryDivider: {
       width: 1,
@@ -1203,14 +1402,22 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       backgroundColor: colors.skeleton,
     },
     addRoomBtn: {
+      width: "100%",
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "center",
       gap: 5,
       backgroundColor: colors.accent,
       paddingHorizontal: 14,
       paddingVertical: 9,
-      borderRadius: 10,
-      marginLeft: "auto",
+      borderRadius: 14,
+      marginLeft: 0,
+      marginTop: 2,
+      shadowColor: cardShadow,
+      shadowOffset: { width: 0, height: 5 },
+      shadowOpacity: 0.16,
+      shadowRadius: 10,
+      elevation: 3,
     },
     addRoomBtnText: {
       color: "#fff",
@@ -1221,17 +1428,20 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     // Search
     searchWrap: {
       paddingHorizontal: 16,
-      paddingVertical: 10,
-      backgroundColor: colors.card,
+      paddingTop: 12,
+      paddingBottom: 6,
+      backgroundColor: colors.background,
     },
     searchBar: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.background,
-      borderRadius: 10,
+      backgroundColor: colors.card,
+      borderRadius: 16,
       paddingHorizontal: 12,
       gap: 8,
-      height: 40,
+      height: 44,
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     searchInput: {
       flex: 1,
@@ -1242,7 +1452,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
 
     // List
     listWrap: {
-      flex: 1,
+      width: "100%",
     },
     listContent: {
       paddingHorizontal: 16,
@@ -1250,7 +1460,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     },
     listHeader: {
       fontSize: 12,
-      fontWeight: "600",
+      fontWeight: "800",
       color: colors.textTertiary,
       marginBottom: 10,
       textTransform: "uppercase",
@@ -1260,15 +1470,17 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     // Room Card
     roomCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 18,
       padding: 16,
       marginBottom: 10,
+      borderWidth: 1,
+      borderColor: softBorder,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.05,
-          shadowRadius: 6,
+          shadowColor: cardShadow,
+          shadowOffset: { width: 0, height: 5 },
+          shadowOpacity: 0.07,
+          shadowRadius: 12,
         },
         android: { elevation: 2 },
       }),
@@ -1281,7 +1493,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     roomIconWrap: {
       width: 42,
       height: 42,
-      borderRadius: 12,
+      borderRadius: 15,
       backgroundColor: colors.accent,
       justifyContent: "center",
       alignItems: "center",
@@ -1291,18 +1503,20 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     },
     roomName: {
       fontSize: 15,
-      fontWeight: "700",
+      fontWeight: "800",
       color: colors.text,
     },
     codeBadge: {
       flexDirection: "row",
       alignItems: "center",
       gap: 3,
-      backgroundColor: colors.accentSurface,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       alignSelf: "flex-start",
       paddingHorizontal: 6,
       paddingVertical: 2,
-      borderRadius: 4,
+      borderRadius: 999,
       marginTop: 3,
     },
     codeText: {
@@ -1318,8 +1532,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     actionBtn: {
       width: 34,
       height: 34,
-      borderRadius: 10,
-      backgroundColor: colors.background,
+      borderRadius: 12,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1341,10 +1557,12 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      backgroundColor: colors.background,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       paddingHorizontal: 8,
       paddingVertical: 4,
-      borderRadius: 6,
+      borderRadius: 999,
     },
     metaChipText: {
       fontSize: 11,
@@ -1358,7 +1576,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       marginTop: 12,
       paddingTop: 10,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.divider,
+      borderTopColor: colors.borderLight,
       gap: 4,
     },
     viewDetailsText: {
@@ -1385,7 +1603,9 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       width: 72,
       height: 72,
       borderRadius: 36,
-      backgroundColor: colors.accentSurface,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 16,
@@ -1406,13 +1626,15 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     // Modal
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.4)",
+      backgroundColor: colors.overlay || "rgba(0,0,0,0.5)",
       justifyContent: "flex-end",
     },
     modalSheet: {
       backgroundColor: colors.card,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
+      borderWidth: 1,
+      borderColor: softBorder,
       paddingBottom:
         Platform.OS === "ios" ? 36 : Math.max(24, insets.bottom + 8),
       maxHeight: "85%",
@@ -1426,7 +1648,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       width: 36,
       height: 4,
       borderRadius: 2,
-      backgroundColor: colors.skeleton,
+      backgroundColor: softBorder,
     },
     modalTitleRow: {
       flexDirection: "row",
@@ -1438,8 +1660,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     modalTitleIconWrap: {
       width: 38,
       height: 38,
-      borderRadius: 12,
-      backgroundColor: colors.accentSurface,
+      borderRadius: 14,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1453,7 +1677,9 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       width: 34,
       height: 34,
       borderRadius: 17,
-      backgroundColor: colors.background,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1473,12 +1699,12 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     inputWrap: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.background,
-      borderRadius: 12,
+      backgroundColor: softSurface,
+      borderRadius: 14,
       paddingHorizontal: 14,
       gap: 10,
       borderWidth: 1,
-      borderColor: colors.divider,
+      borderColor: softBorder,
     },
     textAreaWrap: {
       alignItems: "flex-start",
@@ -1489,6 +1715,11 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontSize: 14,
       color: colors.text,
       paddingVertical: 12,
+    },
+    currencyPrefix: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.accent,
     },
     textArea: {
       minHeight: 70,
@@ -1505,10 +1736,12 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     },
     cancelBtn: {
       flex: 1,
-      backgroundColor: colors.background,
-      borderRadius: 12,
+      backgroundColor: softSurface,
+      borderRadius: 14,
       paddingVertical: 14,
       alignItems: "center",
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     cancelBtnText: {
       fontSize: 14,
@@ -1519,11 +1752,16 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       flex: 2,
       flexDirection: "row",
       backgroundColor: colors.accent,
-      borderRadius: 12,
+      borderRadius: 14,
       paddingVertical: 14,
       alignItems: "center",
       justifyContent: "center",
       gap: 6,
+      shadowColor: cardShadow,
+      shadowOffset: { width: 0, height: 7 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 4,
     },
     submitBtnText: {
       fontSize: 14,
@@ -1536,10 +1774,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
 
     // ── Location in Form ──
     locationPreview: {
-      backgroundColor: colors.background,
-      borderRadius: 12,
+      backgroundColor: softSurface,
+      borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.divider,
+      borderColor: softBorder,
       overflow: "hidden",
     },
     miniMap: {
@@ -1579,10 +1817,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       alignItems: "center",
       justifyContent: "center",
       gap: 6,
-      backgroundColor: colors.background,
-      borderRadius: 12,
+      backgroundColor: softSurface,
+      borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.divider,
+      borderColor: softBorder,
       paddingVertical: 12,
     },
     locationPickBtnText: {
@@ -1595,10 +1833,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     cardMapWrap: {
       marginTop: 10,
       marginLeft: 54,
-      borderRadius: 10,
+      borderRadius: 14,
       overflow: "hidden",
       borderWidth: 1,
-      borderColor: colors.divider,
+      borderColor: softBorder,
     },
     cardMap: {
       width: "100%",
@@ -1609,7 +1847,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       color: colors.textTertiary,
       paddingHorizontal: 8,
       paddingVertical: 4,
-      backgroundColor: colors.background,
+      backgroundColor: softSurface,
     },
 
     // ── Map Picker Modal ──
@@ -1634,11 +1872,13 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       height: 42,
       borderRadius: 21,
       backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: cardShadow,
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.15,
           shadowRadius: 6,
@@ -1655,9 +1895,11 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       paddingVertical: 8,
       borderRadius: 20,
       overflow: "hidden",
+      borderWidth: 1,
+      borderColor: softBorder,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: cardShadow,
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.15,
           shadowRadius: 6,
@@ -1675,11 +1917,13 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       height: 48,
       borderRadius: 24,
       backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: cardShadow,
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.15,
           shadowRadius: 6,
@@ -1698,9 +1942,11 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       backgroundColor: colors.card,
       borderRadius: 14,
       padding: 14,
+      borderWidth: 1,
+      borderColor: softBorder,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: cardShadow,
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.15,
           shadowRadius: 6,
@@ -1731,9 +1977,11 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       backgroundColor: colors.card,
       borderRadius: 14,
       padding: 14,
+      borderWidth: 1,
+      borderColor: softBorder,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: cardShadow,
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.15,
           shadowRadius: 6,
@@ -1759,10 +2007,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       gap: 5,
       paddingHorizontal: 10,
       paddingVertical: 8,
-      borderRadius: 10,
-      backgroundColor: colors.inputBg,
+      borderRadius: 999,
+      backgroundColor: softSurface,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: softBorder,
     },
     amenityChipText: {
       fontSize: 12,
@@ -1777,8 +2025,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       gap: 8,
       paddingVertical: 8,
       paddingHorizontal: 8,
-      backgroundColor: colors.inputBg,
-      borderRadius: 8,
+      backgroundColor: softSurface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: softBorder,
       marginBottom: 6,
     },
     ruleBullet: {
@@ -1809,7 +2059,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     addRuleBtn: {
       width: 38,
       height: 38,
-      borderRadius: 10,
+      borderRadius: 14,
       backgroundColor: colors.accent,
       justifyContent: "center",
       alignItems: "center",
@@ -1823,14 +2073,16 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     photoThumbWrap: {
       width: 100,
       height: 72,
-      borderRadius: 10,
+      borderRadius: 12,
       marginRight: 8,
       overflow: "hidden",
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     photoThumb: {
       width: "100%",
       height: "100%",
-      borderRadius: 10,
+      borderRadius: 12,
     },
     photoRemoveBtn: {
       position: "absolute",
@@ -1846,13 +2098,14 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     photoAddBtn: {
       width: 100,
       height: 72,
-      borderRadius: 10,
+      borderRadius: 12,
       borderWidth: 1.5,
       borderColor: colors.accent,
       borderStyle: "dashed",
       justifyContent: "center",
       alignItems: "center",
       gap: 4,
+      backgroundColor: softSurface,
     },
     photoAddText: {
       fontSize: 10,
@@ -1860,5 +2113,6 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       color: colors.accent,
     },
   });
+};
 
 export default AdminRoomManagementScreen;

@@ -17,10 +17,14 @@ import {
 import { useTheme } from "../../theme/ThemeContext";
 import {
   ScrollViewWithDetection,
-  FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
 import { AuthContext } from "../../context/AuthContext";
-import { findUserCharge } from "../../utils/paymentAmounts";
+import {
+  PAYMENT_BILL_TYPE_ORDER,
+  buildBillSharesFromCharge,
+  findUserCharge,
+  normalizePaymentBillType,
+} from "../../utils/paymentAmounts";
 
 const PAYMENT_GROUP_WINDOW_MS = 5 * 60 * 1000;
 
@@ -29,6 +33,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
   const styles = createStyles(colors);
   const authContext = useContext(AuthContext);
   const user = authContext?.state?.user;
+  const userId = user?.id || user?._id;
 
   const { roomId, roomName } = route.params;
   const [payments, setPayments] = useState([]);
@@ -41,6 +46,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
   const [receiptMemberInfo, setReceiptMemberInfo] = useState(null);
   const [receiptUserCharge, setReceiptUserCharge] = useState(null);
   const [expandedPayments, setExpandedPayments] = useState({});
+  const [billingSharesByCycleKey, setBillingSharesByCycleKey] = useState({});
 
   useEffect(() => {
     const fetchReceiptData = async () => {
@@ -53,7 +59,6 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
       }
 
       try {
-        const userId = user?.id || user?._id;
         const roomResponse = await roomService.getRoomById(roomId);
         const room =
           roomResponse?.data?.room ||
@@ -124,12 +129,15 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
     };
 
     fetchReceiptData();
-  }, [selectedPayment, roomId, user]);
+  }, [selectedPayment, roomId, userId]);
 
   const fetchPaymentHistory = async () => {
     try {
       setError("");
-      const response = await apiService.getTransactions(roomId);
+      const [response, cycleResponse] = await Promise.all([
+        apiService.getTransactions(roomId),
+        billingCycleService.getBillingCycles(roomId).catch(() => null),
+      ]);
       if (response.success) {
         const validTransactions = (response.transactions || []).filter(
           (transaction) =>
@@ -137,6 +145,39 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
             transaction.status !== "deleted",
         );
         setPayments(validTransactions);
+
+        const cycleList = Array.isArray(cycleResponse)
+          ? cycleResponse
+          : cycleResponse?.billingCycles || cycleResponse?.data || [];
+        const sharesByKey = {};
+
+        cycleList.forEach((cycle) => {
+          const memberCharges =
+            typeof cycle.memberCharges === "string"
+              ? parseCustomCharges(cycle.memberCharges)
+              : typeof cycle.member_charges === "string"
+                ? parseCustomCharges(cycle.member_charges)
+                : cycle.memberCharges || cycle.member_charges || [];
+          const charge = findUserCharge(memberCharges, userId);
+          const shares = buildBillSharesFromCharge(charge);
+          if (!shares) return;
+
+          const cycleId = cycle.id || cycle._id;
+          const cycleStart = cycle.start_date || cycle.startDate;
+          const cycleEnd = cycle.end_date || cycle.endDate;
+          const keys = [
+            cycleId,
+            [normalizeCycleDateKey(cycleStart), normalizeCycleDateKey(cycleEnd)]
+              .filter(Boolean)
+              .join(":"),
+          ].filter(Boolean);
+
+          keys.forEach((key) => {
+            sharesByKey[String(key)] = shares;
+          });
+        });
+
+        setBillingSharesByCycleKey(sharesByKey);
       } else {
         setError("No transactions found");
       }
@@ -150,7 +191,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     fetchPaymentHistory();
-  }, [roomId]);
+  }, [roomId, userId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -349,14 +390,19 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
   const getPaymentId = (payment, index = 0) =>
     String(payment.id || payment._id || payment.transactionId || index);
 
+  const normalizeCycleDateKey = (date) =>
+    date ? String(date).slice(0, 10) : "";
+
   const getBillingCycleKey = (payment) =>
     payment.billingCycleId ||
     payment.billing_cycle_id ||
     payment.billingCycle?._id ||
     payment.billingCycle?.id ||
     [
-      payment.billingCycleStart || payment.billing_cycle_start,
-      payment.billingCycleEnd || payment.billing_cycle_end,
+      normalizeCycleDateKey(
+        payment.billingCycleStart || payment.billing_cycle_start,
+      ),
+      normalizeCycleDateKey(payment.billingCycleEnd || payment.billing_cycle_end),
     ]
       .filter(Boolean)
       .join(":") ||
@@ -364,6 +410,19 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
 
   const getBillBreakdownKey = (billType) =>
     billType === "custom_charges" ? "customCharges" : billType;
+
+  const getBillShareKey = (billType) => {
+    const normalized = normalizePaymentBillType(billType);
+    if (normalized === "custom_charges") return "customCharges";
+    return normalized;
+  };
+
+  const getCycleShareAmount = (payment, billType) => {
+    const shares = billingSharesByCycleKey[String(getBillingCycleKey(payment))];
+    const shareKey = getBillShareKey(billType);
+    const value = Number(shares?.[shareKey]);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  };
 
   const getPaymentUserKey = (payment) =>
     payment.paidBy ||
@@ -428,22 +487,23 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
 
   const buildGroupedPayment = (items, key) => {
     const sortedItems = items.slice().sort((a, b) => {
-      const order = [
-        "rent",
-        "electricity",
-        "water",
-        "internet",
-        "custom_charges",
-      ];
-      return order.indexOf(a.billType) - order.indexOf(b.billType);
+      const aType = normalizePaymentBillType(a.billType) || a.billType;
+      const bType = normalizePaymentBillType(b.billType) || b.billType;
+      const aOrder = PAYMENT_BILL_TYPE_ORDER.indexOf(aType);
+      const bOrder = PAYMENT_BILL_TYPE_ORDER.indexOf(bType);
+      return (aOrder === -1 ? 99 : aOrder) - (bOrder === -1 ? 99 : bOrder);
     });
+    const getDetailAmount = (item) =>
+      sortedItems.length > 1
+        ? getCycleShareAmount(item, item.billType) ?? getPaymentAmount(item)
+        : getPaymentAmount(item);
     const totalAmount = sortedItems.reduce(
-      (sum, item) => sum + getPaymentAmount(item),
+      (sum, item) => sum + getDetailAmount(item),
       0,
     );
     const billDetails = sortedItems.map((item) => ({
-      type: item.billType,
-      amount: getPaymentAmount(item),
+      type: normalizePaymentBillType(item.billType) || item.billType,
+      amount: getDetailAmount(item),
       payment: item,
     }));
     const billBreakdown = billDetails.reduce(
@@ -533,7 +593,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
           new Date(getPaymentDateValue(b) || 0) -
           new Date(getPaymentDateValue(a) || 0),
       );
-  }, [payments]);
+  }, [payments, billingSharesByCycleKey]);
 
   const totalPaid = paymentGroups
     .filter(
@@ -1122,7 +1182,19 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
 
   return (
     <>
-      <View style={styles.container}>
+      <ScrollViewWithDetection
+        style={styles.container}
+        contentContainerStyle={styles.screenScrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.accent]}
+            tintColor={colors.accent}
+          />
+        }
+      >
         <View style={styles.headerShell}>
           <View style={styles.header}>
             <TouchableOpacity
@@ -1256,27 +1328,23 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
         ) : (
-          <FlatListWithDetection
-            data={paymentGroups}
-            renderItem={renderPayment}
-            keyExtractor={(item, index) =>
-              String(
-                item.key || item.id || item._id || item.transactionId || index,
-              )
-            }
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[colors.accent]}
-                tintColor={colors.accent}
-              />
-            }
-          />
+          <View style={styles.listContent}>
+            {paymentGroups.map((payment, index) => (
+              <React.Fragment
+                key={String(
+                  payment.key ||
+                    payment.id ||
+                    payment._id ||
+                    payment.transactionId ||
+                    index,
+                )}
+              >
+                {renderPayment({ item: payment, index })}
+              </React.Fragment>
+            ))}
+          </View>
         )}
-      </View>
+      </ScrollViewWithDetection>
       {renderReceiptModal()}
     </>
   );
@@ -1287,6 +1355,9 @@ const createStyles = (colors) =>
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    screenScrollContent: {
+      paddingBottom: 28,
     },
     centerContent: {
       flex: 1,
@@ -1457,7 +1528,7 @@ const createStyles = (colors) =>
       flex: 1,
     },
     emptyContainer: {
-      flex: 1,
+      minHeight: 360,
       justifyContent: "center",
       alignItems: "center",
       paddingHorizontal: 40,

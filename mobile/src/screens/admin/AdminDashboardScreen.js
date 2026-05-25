@@ -347,12 +347,12 @@ const AdminDashboardScreen = ({ navigation }) => {
       <Svg width={chartWidth} height={chartHeight}>
         <Defs>
           <LinearGradient id="billedArea" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopcolor={colors.accent} stopOpacity="0.12" />
-            <Stop offset="1" stopcolor={colors.accent} stopOpacity="0.01" />
+            <Stop offset="0" stopColor={colors.accent} stopOpacity="0.16" />
+            <Stop offset="1" stopColor={colors.accent} stopOpacity="0.02" />
           </LinearGradient>
           <LinearGradient id="collectedArea" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={colors.success} stopOpacity="0.10" />
-            <Stop offset="1" stopColor={colors.success} stopOpacity="0.01" />
+            <Stop offset="0" stopColor={colors.success} stopOpacity="0.14" />
+            <Stop offset="1" stopColor={colors.success} stopOpacity="0.02" />
           </LinearGradient>
         </Defs>
 
@@ -367,7 +367,7 @@ const AdminDashboardScreen = ({ navigation }) => {
                 y1={y}
                 x2={pL + gW}
                 y2={y}
-                stroke="#eee"
+                stroke={colors.borderLight}
                 strokeWidth={1}
               />
               <SvgText
@@ -375,7 +375,7 @@ const AdminDashboardScreen = ({ navigation }) => {
                 y={y + 3}
                 textAnchor="end"
                 fontSize={9}
-                fill="#aaa"
+                fill={colors.textTertiary}
               >
                 {fmtShort(val)}
               </SvgText>
@@ -398,8 +398,8 @@ const AdminDashboardScreen = ({ navigation }) => {
           <Polyline
             points={billedPts.join(" ")}
             fill="none"
-            stroke="#b38604"
-            strokeWidth={2}
+            stroke={colors.accent}
+            strokeWidth={2.5}
             strokeLinejoin="round"
             strokeLinecap="round"
           />
@@ -422,8 +422,8 @@ const AdminDashboardScreen = ({ navigation }) => {
             cx={getX(i)}
             cy={getY(b.totalBilled || 0)}
             r={3.5}
-            fill="#fff"
-            stroke="#b38604"
+            fill={colors.card}
+            stroke={colors.accent}
             strokeWidth={1.5}
           />
         ))}
@@ -447,7 +447,7 @@ const AdminDashboardScreen = ({ navigation }) => {
             y={chartHeight - 6}
             textAnchor="middle"
             fontSize={10}
-            fill="#888"
+            fill={colors.textTertiary}
             fontWeight="500"
           >
             {b.month?.split(" ")[0]?.substring(0, 3) || ""}
@@ -486,15 +486,15 @@ const AdminDashboardScreen = ({ navigation }) => {
       icon: "card-outline",
       label: "Payments",
       color: colors.internetColor,
-      bg: colors.purpleBg,
+      bg: colors.actionChatBg || colors.accentLight,
       onPress: () =>
         navigation.navigate("BillingStack", { screen: "AdminBilling" }),
     },
     {
       icon: "settings-outline",
       label: "Pay Settings",
-      color: "#e65100",
-      bg: "#fff3e0",
+      color: colors.accent,
+      bg: colors.actionRoomInfoBg || colors.accentLight,
       onPress: () => {
         // Payment settings must be per-room — resolve the target room
         const targetRoomId =
@@ -515,8 +515,8 @@ const AdminDashboardScreen = ({ navigation }) => {
     {
       icon: "chatbubble-ellipses-outline",
       label: "Chat",
-      color: "#1976d2",
-      bg: "#e3f2fd",
+      color: colors.accent,
+      bg: colors.actionPresenceBg || colors.accentLight,
       onPress: () => {
         const room = selectedRoomId
           ? rooms.find((r) => (r.id || r._id) === selectedRoomId)
@@ -543,22 +543,48 @@ const AdminDashboardScreen = ({ navigation }) => {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintcolor={colors.accent}
-          colors={["#b38604"]}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
         />
       }
     >
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>{getGreeting()}</Text>
-            <Text style={styles.userName} numberOfLines={1}>
-              {state.user?.name || "Admin"}
-            </Text>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="leaf-outline" size={21} color="#ffffff" />
+            </View>
+            <View style={styles.headerTopPill}>
+              <Ionicons name="shield-checkmark" size={13} color="#ffffff" />
+              <Text style={styles.headerTopPillText}>Admin Console</Text>
+            </View>
           </View>
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="grid" size={22} color={colors.accent} />
+
+          <View style={styles.headerTitleRow}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.headerEyebrow}>{getGreeting()}</Text>
+              <Text style={styles.headerTitle}>Dashboard</Text>
+              <Text style={styles.headerSubtitle} numberOfLines={2}>
+                {state.user?.name || "Admin"}, track collections, rooms, and
+                billing activity from one place.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.headerStatusRow}>
+            <View style={styles.headerStatusChip}>
+              <Ionicons name="home-outline" size={13} color="#ffffff" />
+              <Text style={styles.headerStatusChipText}>
+                {selectedRoomId ? "1 room" : `${rooms.length} rooms`}
+              </Text>
+            </View>
+            <View style={styles.headerStatusChip}>
+              <Ionicons name="people-outline" size={13} color="#ffffff" />
+              <Text style={styles.headerStatusChipText}>
+                {totalMembers} members
+              </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -1243,75 +1269,145 @@ const AdminDashboardScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isDarkMode = colors.statusBarStyle === "light-content";
+  const forestHeader = isDarkMode ? colors.background : "#063f39";
+  const softSurface = isDarkMode
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(3,109,65,0.055)";
+  const softBorder = isDarkMode
+    ? "rgba(158,208,205,0.16)"
+    : "rgba(3,109,65,0.12)";
+  const cardShadow = isDarkMode ? "#000000" : "#0a4240";
+
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
     },
     contentContainer: {
-      paddingBottom: 16,
+      paddingBottom: 28,
     },
 
     // Header
     header: {
-      backgroundColor: colors.card,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: "#e8e8e8",
+      backgroundColor: forestHeader,
+      paddingHorizontal: 20,
+      paddingTop: 18,
+      paddingBottom: 72,
+      borderBottomLeftRadius: 32,
+      borderBottomRightRadius: 32,
     },
     headerContent: {
+      gap: 18,
+    },
+    headerTopRow: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      paddingHorizontal: 20,
-      paddingVertical: 18,
     },
     headerLeft: {
       flex: 1,
     },
-    greeting: {
-      fontSize: 13,
-      color: colors.textTertiary,
-      fontWeight: "500",
-      letterSpacing: 0.3,
-    },
-    userName: {
-      fontSize: 22,
+    headerEyebrow: {
+      fontSize: 11,
+      color: "rgba(255,255,255,0.72)",
       fontWeight: "800",
-      color: colors.text,
-      marginTop: 2,
+      letterSpacing: 1,
+      textTransform: "uppercase",
+      marginBottom: 6,
+    },
+    headerTitle: {
+      fontSize: 31,
+      fontWeight: "900",
+      color: "#ffffff",
+    },
+    headerTitleRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+    },
+    headerSubtitle: {
+      fontSize: 13,
+      lineHeight: 19,
+      color: "rgba(255,255,255,0.78)",
+      marginTop: 8,
+      fontWeight: "500",
+    },
+    headerTopPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.14)",
+    },
+    headerTopPillText: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: "#ffffff",
     },
     headerIconWrap: {
       width: 44,
       height: 44,
-      borderRadius: 14,
-      backgroundColor: colors.accentSurface,
+      borderRadius: 18,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.14)",
       justifyContent: "center",
       alignItems: "center",
+    },
+    headerStatusRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    headerStatusChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 11,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,255,255,0.10)",
+    },
+    headerStatusChipText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#effaf7",
     },
 
     // Room Selector
     roomSelectorWrap: {
       paddingHorizontal: 16,
-      marginTop: 12,
+      marginTop: -48,
       zIndex: 10,
     },
     roomSelectorBtn: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 8,
+      gap: 10,
       backgroundColor: colors.card,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 11,
+      borderRadius: 18,
+      paddingHorizontal: 15,
+      paddingVertical: 13,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: softBorder,
+      shadowColor: cardShadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.1,
+      shadowRadius: 16,
+      elevation: 5,
     },
     roomSelectorIconBg: {
-      width: 30,
-      height: 30,
-      borderRadius: 8,
-      backgroundColor: colors.accentSurface,
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1323,19 +1419,19 @@ const createStyles = (colors) =>
     },
     roomDropdown: {
       backgroundColor: colors.card,
-      borderRadius: 12,
-      marginTop: 6,
+      borderRadius: 18,
+      marginTop: 8,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: softBorder,
       overflow: "hidden",
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
+          shadowColor: cardShadow,
+          shadowOffset: { width: 0, height: 8 },
           shadowOpacity: 0.1,
-          shadowRadius: 12,
+          shadowRadius: 18,
         },
-        android: { elevation: 6 },
+        android: { elevation: 8 },
       }),
     },
     roomDropdownItem: {
@@ -1348,7 +1444,7 @@ const createStyles = (colors) =>
       borderBottomColor: colors.borderLight,
     },
     roomDropdownItemActive: {
-      backgroundColor: colors.accentSurface,
+      backgroundColor: softSurface,
     },
     roomDropdownText: {
       flex: 1,
@@ -1368,11 +1464,11 @@ const createStyles = (colors) =>
     // Section
     sectionWrap: {
       paddingHorizontal: 16,
-      marginTop: 16,
+      marginTop: 18,
     },
     sectionTitle: {
-      fontSize: 16,
-      fontWeight: "700",
+      fontSize: 17,
+      fontWeight: "800",
       color: colors.text,
     },
     sectionSubtitle: {
@@ -1390,16 +1486,18 @@ const createStyles = (colors) =>
     // Collection Card
     collectionCard: {
       backgroundColor: colors.card,
-      borderRadius: 16,
+      borderRadius: 22,
       padding: 18,
+      borderWidth: 1,
+      borderColor: softBorder,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.06,
-          shadowRadius: 8,
+          shadowColor: cardShadow,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.1,
+          shadowRadius: 18,
         },
-        android: { elevation: 3 },
+        android: { elevation: 5 },
       }),
     },
     collectionHeader: {
@@ -1409,18 +1507,20 @@ const createStyles = (colors) =>
       marginBottom: 16,
     },
     collectionTitle: {
-      fontSize: 15,
-      fontWeight: "700",
+      fontSize: 16,
+      fontWeight: "900",
       color: colors.text,
     },
     periodBadge: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      backgroundColor: colors.accentSurface,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 6,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 999,
       marginTop: 6,
     },
     periodText: {
@@ -1432,9 +1532,9 @@ const createStyles = (colors) =>
       width: 56,
       height: 56,
       borderRadius: 28,
-      backgroundColor: colors.accentSurface,
-      borderWidth: 2.5,
-      borderColor: "#b38604",
+      backgroundColor: softSurface,
+      borderWidth: 2,
+      borderColor: colors.accent,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1445,7 +1545,7 @@ const createStyles = (colors) =>
     },
     rateLabel: {
       fontSize: 9,
-      fontWeight: "500",
+      fontWeight: "700",
       color: colors.textTertiary,
       marginTop: -1,
     },
@@ -1465,7 +1565,7 @@ const createStyles = (colors) =>
     collectionDivider: {
       width: 1,
       height: 40,
-      backgroundColor: colors.skeleton,
+      backgroundColor: colors.borderLight,
     },
     metricIconRow: {
       flexDirection: "row",
@@ -1476,7 +1576,7 @@ const createStyles = (colors) =>
     metricIconBg: {
       width: 28,
       height: 28,
-      borderRadius: 8,
+      borderRadius: 10,
       backgroundColor: colors.successBg,
       justifyContent: "center",
       alignItems: "center",
@@ -1487,15 +1587,15 @@ const createStyles = (colors) =>
       color: colors.textTertiary,
     },
     metricAmount: {
-      fontSize: 18,
-      fontWeight: "700",
+      fontSize: 19,
+      fontWeight: "900",
     },
     progressWrap: {
       marginTop: 14,
     },
     progressTrack: {
       height: 6,
-      backgroundColor: colors.inputBg,
+      backgroundColor: softSurface,
       borderRadius: 3,
       overflow: "hidden",
     },
@@ -1512,43 +1612,47 @@ const createStyles = (colors) =>
       gap: 10,
     },
     statCard: {
-      width: (SCREEN_WIDTH - 32 - 30) / 4,
+      width: (SCREEN_WIDTH - 32 - 10) / 2,
       backgroundColor: colors.card,
-      borderRadius: 14,
-      paddingVertical: 14,
-      paddingHorizontal: 6,
-      alignItems: "center",
+      borderRadius: 18,
+      paddingVertical: 15,
+      paddingHorizontal: 14,
+      alignItems: "flex-start",
+      borderWidth: 1,
+      borderColor: softBorder,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.04,
-          shadowRadius: 4,
+          shadowColor: cardShadow,
+          shadowOffset: { width: 0, height: 5 },
+          shadowOpacity: 0.07,
+          shadowRadius: 12,
         },
-        android: { elevation: 2 },
+        android: { elevation: 3 },
       }),
     },
     statIconWrap: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
+      width: 38,
+      height: 38,
+      borderRadius: 13,
       justifyContent: "center",
       alignItems: "center",
-      marginBottom: 8,
+      marginBottom: 10,
     },
     statValue: {
-      fontSize: 14,
-      fontWeight: "700",
+      fontSize: 20,
+      fontWeight: "900",
       color: colors.text,
-      marginBottom: 2,
-      textAlign: "center",
+      marginBottom: 3,
+      textAlign: "left",
       width: "100%",
     },
     statLabel: {
-      fontSize: 10,
-      fontWeight: "500",
+      fontSize: 11,
+      fontWeight: "700",
       color: colors.textTertiary,
-      textAlign: "center",
+      textAlign: "left",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
     },
 
     // Quick Actions
@@ -1561,16 +1665,18 @@ const createStyles = (colors) =>
     actionCard: {
       width: (SCREEN_WIDTH - 32 - 20) / 3,
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 18,
       paddingVertical: 16,
       paddingHorizontal: 6,
       alignItems: "center",
+      borderWidth: 1,
+      borderColor: softBorder,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.04,
-          shadowRadius: 4,
+          shadowColor: cardShadow,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 10,
         },
         android: { elevation: 2 },
       }),
@@ -1578,14 +1684,14 @@ const createStyles = (colors) =>
     actionIconWrap: {
       width: 42,
       height: 42,
-      borderRadius: 12,
+      borderRadius: 15,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 8,
     },
     actionLabel: {
       fontSize: 11,
-      fontWeight: "600",
+      fontWeight: "800",
       color: colors.textSecondary,
       textAlign: "center",
       width: "100%",
@@ -1614,23 +1720,27 @@ const createStyles = (colors) =>
     // Chart
     card: {
       backgroundColor: colors.card,
-      borderRadius: 16,
+      borderRadius: 22,
       padding: 16,
+      borderWidth: 1,
+      borderColor: softBorder,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.06,
-          shadowRadius: 8,
+          shadowColor: cardShadow,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.08,
+          shadowRadius: 16,
         },
-        android: { elevation: 3 },
+        android: { elevation: 4 },
       }),
     },
     trendBadge: {
       width: 38,
       height: 38,
-      borderRadius: 12,
-      backgroundColor: colors.accentSurface,
+      borderRadius: 14,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1657,10 +1767,12 @@ const createStyles = (colors) =>
     },
     chartSummary: {
       flexDirection: "row",
-      backgroundColor: colors.cardAlt,
-      borderRadius: 12,
+      backgroundColor: softSurface,
+      borderRadius: 16,
       padding: 12,
       marginTop: 12,
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     chartSumItem: {
       flex: 1,
@@ -1670,13 +1782,13 @@ const createStyles = (colors) =>
     },
     chartSumDivider: {
       width: 1,
-      backgroundColor: colors.skeleton,
+      backgroundColor: colors.borderLight,
       marginHorizontal: 8,
     },
     chartSumIcon: {
       width: 32,
       height: 32,
-      borderRadius: 8,
+      borderRadius: 11,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1731,18 +1843,20 @@ const createStyles = (colors) =>
     // Rooms
     roomCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 14,
-      marginBottom: 8,
+      borderRadius: 18,
+      padding: 15,
+      marginBottom: 10,
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
+      borderWidth: 1,
+      borderColor: softBorder,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.04,
-          shadowRadius: 4,
+          shadowColor: cardShadow,
+          shadowOffset: { width: 0, height: 5 },
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
         },
         android: { elevation: 2 },
       }),
@@ -1756,7 +1870,7 @@ const createStyles = (colors) =>
     roomIconWrap: {
       width: 40,
       height: 40,
-      borderRadius: 12,
+      borderRadius: 14,
       backgroundColor: colors.accent,
       justifyContent: "center",
       alignItems: "center",
@@ -1784,10 +1898,12 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      backgroundColor: colors.accentSurface,
+      backgroundColor: softSurface,
+      borderWidth: 1,
+      borderColor: softBorder,
       paddingHorizontal: 8,
       paddingVertical: 4,
-      borderRadius: 8,
+      borderRadius: 999,
     },
     roomBadgeText: {
       fontSize: 11,
@@ -1798,7 +1914,9 @@ const createStyles = (colors) =>
       alignItems: "center",
       paddingVertical: 28,
       backgroundColor: colors.card,
-      borderRadius: 16,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: softBorder,
     },
     emptyRoomsIcon: {
       width: 64,
@@ -1820,5 +1938,6 @@ const createStyles = (colors) =>
       color: colors.textTertiary,
     },
   });
+};
 
 export default AdminDashboardScreen;
