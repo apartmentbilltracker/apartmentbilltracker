@@ -16,13 +16,13 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Platform,
   Image,
   KeyboardAvoidingView,
   Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Toast, ConfirmModal, InlineAlert } from "../../components/CustomAlert";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
@@ -62,6 +62,12 @@ const LoginScreen = ({ navigation }) => {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricStoredEmail, setBiometricStoredEmail] = useState(null);
   const [accountsWithBiometric, setAccountsWithBiometric] = useState(new Set()); // Track which accounts have biometric
+  const [toast, setToast] = useState({ visible: false, type: "info", message: "" });
+  const [removeConfirm, setRemoveConfirm] = useState({ visible: false, email: null });
+
+  const showToast = (message, type = "info") =>
+    setToast({ visible: true, type, message });
+  const hideToast = () => setToast((t) => ({ ...t, visible: false }));
   const {
     signIn,
     signInWithGoogle,
@@ -156,26 +162,18 @@ const LoginScreen = ({ navigation }) => {
 
   // Remove a saved account
   const handleRemoveAccount = useCallback((accountEmail) => {
-    Alert.alert(
-      "Remove Account",
-      "Remove this saved login? You can still log in manually.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            await savedAccountsService.removeAccount(accountEmail);
-            setSavedAccounts((prev) =>
-              prev.filter(
-                (a) => a.email.toLowerCase() !== accountEmail.toLowerCase(),
-              ),
-            );
-          },
-        },
-      ],
-    );
+    setRemoveConfirm({ visible: true, email: accountEmail });
   }, []);
+
+  const handleConfirmRemove = useCallback(async () => {
+    const accountEmail = removeConfirm.email;
+    setRemoveConfirm({ visible: false, email: null });
+    if (!accountEmail) return;
+    await savedAccountsService.removeAccount(accountEmail);
+    setSavedAccounts((prev) =>
+      prev.filter((a) => a.email.toLowerCase() !== accountEmail.toLowerCase()),
+    );
+  }, [removeConfirm.email]);
 
   // ── Google OAuth ──
   // Uses native Android account picker (no browser/redirect URI needed).
@@ -200,11 +198,7 @@ const LoginScreen = ({ navigation }) => {
 
   const handleGooglePress = () => {
     if (IS_EXPO_GO) {
-      Alert.alert(
-        "Google Sign-In",
-        "Google login is not available in Expo Go. Please use the installed app to sign in with Google.",
-        [{ text: "OK" }],
-      );
+      showToast("Google login isn't available in Expo Go. Use the installed app.", "info");
       return;
     }
     promptAsync();
@@ -304,19 +298,11 @@ const LoginScreen = ({ navigation }) => {
 
   const handleFacebookPress = () => {
     if (IS_EXPO_GO) {
-      Alert.alert(
-        "Facebook Sign-In",
-        "Facebook login is not available in Expo Go. Please use the installed app to sign in with Facebook.",
-        [{ text: "OK" }],
-      );
+      showToast("Facebook login isn't available in Expo Go. Use the installed app.", "info");
       return;
     }
     if (!FB_ENABLED) {
-      Alert.alert(
-        "Facebook Login",
-        "Facebook login is not configured yet. Please use Google or email/password login.",
-        [{ text: "OK" }],
-      );
+      showToast("Facebook login isn't configured yet. Use Google or email/password.", "warning");
       return;
     }
     handleFacebookServerLogin();
@@ -388,20 +374,34 @@ const LoginScreen = ({ navigation }) => {
     >
       <AuthBubbles />
 
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={hideToast}
+      />
+
+      <ConfirmModal
+        visible={removeConfirm.visible}
+        title="Remove Saved Account"
+        message="Remove this saved login? You can still sign in manually."
+        confirmText="Remove"
+        cancelText="Keep it"
+        confirmStyle="destructive"
+        onConfirm={handleConfirmRemove}
+        onCancel={() => setRemoveConfirm({ visible: false, email: null })}
+      />
+
       {/* ─── Session Expired Banner ─── */}
       {sessionExpired && (
-        <View style={[styles.sessionBanner, { marginTop: insets.top + 8 }]}>
-          <Ionicons name="time-outline" size={18} color="#92400e" />
-          <Text style={styles.sessionBannerText}>
-            Your session expired due to inactivity. Please log in again.
-          </Text>
-          <TouchableOpacity
-            onPress={clearSessionExpired}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="close" size={18} color="#92400e" />
-          </TouchableOpacity>
-        </View>
+        <InlineAlert
+          visible={sessionExpired}
+          type="warning"
+          title="Session expired"
+          message="Your session timed out due to inactivity. Please sign in again."
+          onDismiss={clearSessionExpired}
+          style={{ marginHorizontal: 20, marginTop: insets.top + 8 }}
+        />
       )}
 
       <ScrollView
@@ -439,12 +439,13 @@ const LoginScreen = ({ navigation }) => {
         </View>
 
         {/* ─── Error ─── */}
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={16} color="#ef4444" />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        <InlineAlert
+          visible={!!error}
+          type="error"
+          message={error}
+          onDismiss={() => setError("")}
+          style={{ marginBottom: 16 }}
+        />
 
         {/* ─── Saved Accounts (shown when no account is selected) ─── */}
         {savedAccounts.length > 0 && !selectedAccount ? (

@@ -116,6 +116,10 @@ export const roomService = {
     api.get(`/api/v2/rooms/${roomId}/member-activity`).then(extractData),
   getMemberStatus: (roomId) =>
     api.get(`/api/v2/rooms/${roomId}/member-status`).then(extractData),
+  updateWaterPayorPreference: (roomId, data) =>
+    api
+      .put(`/api/v2/rooms/${roomId}/water-payor-preference`, data)
+      .then(extractData),
 };
 
 // Presence Services

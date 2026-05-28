@@ -9,12 +9,12 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Toast, InlineAlert } from "../../components/CustomAlert";
 import { authService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import AuthBubbles from "../../components/AuthBubbles";
@@ -27,6 +27,9 @@ const RegisterStep1Screen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const showToast = (message, type = "success") => setToast({ visible: true, type, message });
+  const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -52,7 +55,7 @@ const RegisterStep1Screen = ({ navigation }) => {
     try {
       const response = await authService.createUser({ name: fullName, email });
       if (response.success) {
-        Alert.alert("Success", "Verification code sent to your email");
+        showToast("Verification code sent to your email", "success");
         navigation.navigate("RegisterStep2", { email, name: fullName });
       } else {
         setError(response.message || "Failed to create user");
@@ -70,6 +73,12 @@ const RegisterStep1Screen = ({ navigation }) => {
       style={styles.container}
     >
       <AuthBubbles />
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={hideToast}
+      />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -107,12 +116,13 @@ const RegisterStep1Screen = ({ navigation }) => {
         </View>
 
         {/* ─── Error ─── */}
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={16} color="#ef4444" />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        <InlineAlert
+          visible={!!error}
+          type="error"
+          message={error}
+          onDismiss={() => setError("")}
+          style={{ marginBottom: 16 }}
+        />
 
         {/* ─── Form ─── */}
         <View style={styles.form}>

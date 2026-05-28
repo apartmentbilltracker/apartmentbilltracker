@@ -338,7 +338,7 @@ const ClientRoomsScreen = ({ navigation }) => {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading rooms...</Text>
+        <Text style={styles.loadingText}>Loading properties...</Text>
       </View>
     );
   }

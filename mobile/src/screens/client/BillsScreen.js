@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   Modal,
   Image,
   Dimensions,
@@ -26,6 +25,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import { Toast } from "../../components/CustomAlert";
 import SelectivePaymentModal from "../../components/SelectivePaymentModal";
 import {
   buildBillSharesFromCharge,
@@ -81,6 +81,14 @@ const BillsScreen = ({ navigation, route }) => {
   const [showBillingStmt, setShowBillingStmt] = useState(false);
   const [showSelectivePaymentModal, setShowSelectivePaymentModal] =
     useState(false);
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
 
   const userId = state?.user?.id || state?.user?._id;
 
@@ -209,7 +217,7 @@ const BillsScreen = ({ navigation, route }) => {
         }
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to load rooms");
+      showToast("Failed to load rooms", "error");
     } finally {
       setLoading(false);
     }
@@ -239,13 +247,13 @@ const BillsScreen = ({ navigation, route }) => {
   const downloadBillingImage = async () => {
     try {
       if (!selectedRoom?.billing) {
-        Alert.alert("Error", "No billing information available");
+        showToast("No billing information available", "error");
         return;
       }
       setDownloadingPDF(true);
       const billShare = calculateBillShare();
       if (!billShare) {
-        Alert.alert("Error", "Could not calculate bill shares");
+        showToast("Could not calculate bill shares", "error");
         setDownloadingPDF(false);
         return;
       }
@@ -263,18 +271,21 @@ const BillsScreen = ({ navigation, route }) => {
                 asset,
                 false,
               );
-              Alert.alert(
-                "Success",
+              showToast(
                 isPayor
                   ? `Payor invoice saved as "${filename}"`
                   : `Non-payor statement saved as "${filename}"`,
+                "success",
               );
             } else {
-              Alert.alert("Permission Denied", "Cannot access photo library");
+              showToast(
+                "Cannot access photo library. Please grant permission in Settings.",
+                "error",
+              );
             }
           }
         } catch (error) {
-          Alert.alert("Error", "Failed to save image: " + error.message);
+          showToast("Failed to save image: " + error.message, "error");
         } finally {
           setShowBillingStmt(false);
           setDownloadingPDF(false);
@@ -282,7 +293,7 @@ const BillsScreen = ({ navigation, route }) => {
       }, 500);
     } catch (error) {
       setDownloadingPDF(false);
-      Alert.alert("Error", "Failed to export image: " + error.message);
+      showToast("Failed to export image: " + error.message, "error");
     }
   };
 
@@ -301,16 +312,19 @@ const BillsScreen = ({ navigation, route }) => {
                 asset,
                 false,
               );
-              Alert.alert(
-                "Success",
+              showToast(
                 `Payment receipt saved as "Receipt_${paymentReceiptData?.receiptNumber}"`,
+                "success",
               );
             } else {
-              Alert.alert("Permission Denied", "Cannot access photo library");
+              showToast(
+                "Cannot access photo library. Please grant permission in Settings.",
+                "error",
+              );
             }
           }
         } catch (error) {
-          Alert.alert("Error", "Failed to save receipt: " + error.message);
+          showToast("Failed to save receipt: " + error.message, "error");
         } finally {
           setShowPaymentReceipt(false);
           setDownloadingPDF(false);
@@ -318,7 +332,7 @@ const BillsScreen = ({ navigation, route }) => {
       }, 500);
     } catch (error) {
       setDownloadingPDF(false);
-      Alert.alert("Error", "Failed to download receipt: " + error.message);
+      showToast("Failed to download receipt: " + error.message, "error");
     }
   };
 
@@ -964,6 +978,12 @@ const BillsScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
       <ScrollViewWithDetection
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
@@ -1037,6 +1057,34 @@ const BillsScreen = ({ navigation, route }) => {
                 );
               })}
             </ScrollViewWithDetection>
+          </View>
+        )}
+
+        {/* ─── EMPTY STATE ─── */}
+        {!loading && rooms.length === 0 && (
+          <View style={styles.emptyStateContainer}>
+            <View style={styles.emptyStateIconBg}>
+              <MaterialIcons
+                name="meeting-room"
+                size={40}
+                color={colors.accent}
+              />
+            </View>
+            <Text style={styles.emptyStateTitle}>No room yet</Text>
+            <Text style={styles.emptyStateSubtext}>
+              You haven't joined a room. Once you're added to one, your bills
+              and payment history will appear here.
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyStateCta}
+              onPress={() =>
+                navigation.navigate("RoomsStack", { screen: "RoomsMain" })
+              }
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="add" size={18} color="#fff" />
+              <Text style={styles.emptyStateCtaText}>Browse rooms</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -2585,6 +2633,51 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       color: colors.textTertiary,
       marginTop: 3,
       lineHeight: 17,
+    },
+    emptyStateContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 36,
+      paddingTop: 60,
+      paddingBottom: 40,
+    },
+    emptyStateIconBg: {
+      width: 88,
+      height: 88,
+      borderRadius: 28,
+      backgroundColor: colors.accentLight,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 24,
+    },
+    emptyStateTitle: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: colors.text,
+      textAlign: "center",
+      marginBottom: 10,
+    },
+    emptyStateSubtext: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: "center",
+      lineHeight: 22,
+      marginBottom: 32,
+    },
+    emptyStateCta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: colors.accent,
+      borderRadius: 14,
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+    },
+    emptyStateCtaText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: "#fff",
     },
   });
 

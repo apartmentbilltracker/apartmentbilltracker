@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   Modal,
   TextInput,
 } from "react-native";
@@ -21,6 +20,7 @@ import {
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
+import { Toast } from "../../components/CustomAlert";
 
 const MyBugReportsScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -34,6 +34,10 @@ const MyBugReportsScreen = ({ navigation }) => {
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [newResponse, setNewResponse] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
 
   useEffect(() => {
     fetchBugReports();
@@ -50,7 +54,7 @@ const MyBugReportsScreen = ({ navigation }) => {
       setBugReports(Array.isArray(response) ? response : response?.data || []);
     } catch (error) {
       console.error("Error fetching bug reports:", error);
-      Alert.alert("Error", "Failed to load your bug reports");
+      showToast("Failed to load your bug reports", "error");
     } finally {
       setLoading(false);
     }
@@ -81,13 +85,13 @@ const MyBugReportsScreen = ({ navigation }) => {
         console.error("Error marking bug report as read:", error);
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to load bug report details");
+      showToast("Failed to load bug report details", "error");
     }
   };
 
   const handleAddResponse = async () => {
     if (!newResponse.trim()) {
-      Alert.alert("Validation", "Please enter your message");
+      showToast("Please enter your message", "warning");
       return;
     }
     setSubmitting(true);
@@ -96,7 +100,7 @@ const MyBugReportsScreen = ({ navigation }) => {
         selectedReport.id || selectedReport._id,
         newResponse,
       );
-      Alert.alert("Success", "Response added successfully");
+      showToast("Response added successfully", "success");
       setNewResponse("");
       const response = await supportService.getBugReportDetails(
         selectedReport.id || selectedReport._id,
@@ -110,7 +114,7 @@ const MyBugReportsScreen = ({ navigation }) => {
         ),
       );
     } catch (error) {
-      Alert.alert("Error", "Failed to add response");
+      showToast("Failed to add response", "error");
     } finally {
       setSubmitting(false);
     }
@@ -321,6 +325,12 @@ const MyBugReportsScreen = ({ navigation }) => {
   /* ─── Main ─── */
   return (
     <View style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
       {/* Summary bar */}
       <View style={styles.summaryBar}>
         <Ionicons name="bug-outline" size={16} color={colors.accent} />

@@ -401,6 +401,8 @@ class SupabaseService {
           is_payer,
           joined_at,
           presence,
+          water_split_mode,
+          water_split_payor_ids,
           status
         ),
         room_billing(*)`,
@@ -418,6 +420,8 @@ class SupabaseService {
       .select(
         `room_id,
         is_payer,
+        water_split_mode,
+        water_split_payor_ids,
         status,
         rooms(*)`,
       )
@@ -456,6 +460,8 @@ class SupabaseService {
         is_payer: data.is_payer !== undefined ? data.is_payer : true,
         joined_at: data.joined_at || new Date().toISOString(),
         presence: data.presence || [],
+        water_split_mode: data.water_split_mode || "all_payors",
+        water_split_payor_ids: data.water_split_payor_ids || [],
         status: data.status || "pending",
       });
     }
@@ -468,6 +474,8 @@ class SupabaseService {
       is_payer: args[3] !== undefined ? args[3] : true,
       joined_at: new Date().toISOString(),
       presence: [],
+      water_split_mode: "all_payors",
+      water_split_payor_ids: [],
       status: "pending",
     });
   }
@@ -477,7 +485,7 @@ class SupabaseService {
       "room_members",
       "room_id",
       roomId,
-      "id, user_id, name, is_payer, joined_at, presence, status",
+      "id, user_id, name, is_payer, joined_at, presence, water_split_mode, water_split_payor_ids, status",
       "joined_at",
     );
     // Only return approved members (or members without a status column yet)
@@ -490,7 +498,7 @@ class SupabaseService {
       "room_members",
       "room_id",
       roomId,
-      "id, user_id, name, is_payer, joined_at, presence, status",
+      "id, user_id, name, is_payer, joined_at, presence, water_split_mode, water_split_payor_ids, status",
       "joined_at",
     );
   }

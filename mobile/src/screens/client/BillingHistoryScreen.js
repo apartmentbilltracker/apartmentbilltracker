@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Modal,
   RefreshControl,
 } from "react-native";
@@ -18,6 +17,7 @@ import {
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
+import { Toast } from "../../components/CustomAlert";
 
 const WATER_BILL_PER_DAY = 5;
 
@@ -31,6 +31,10 @@ const BillingHistoryScreen = ({ route, navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCycle, setSelectedCycle] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
 
   useFocusEffect(
     React.useCallback(() => {
@@ -50,7 +54,7 @@ const BillingHistoryScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       console.error("Error fetching cycles:", error);
-      Alert.alert("Error", "Failed to load billing history");
+      showToast("Failed to load billing history", "error");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -386,6 +390,12 @@ const BillingHistoryScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
       <View style={styles.headerShell}>
         <View style={styles.header}>
           <TouchableOpacity

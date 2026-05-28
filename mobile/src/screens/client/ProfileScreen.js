@@ -9,11 +9,15 @@ import {
   Modal,
   TextInput,
   Image,
-  Alert,
   Switch,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import {
+  InlineAlert,
+  Toast,
+  ConfirmModal,
+} from "../../components/CustomAlert";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../../context/AuthContext";
@@ -89,6 +93,22 @@ const ProfileScreen = ({ navigation }) => {
   const [roommateProfile, setRoommateProfile] = useState(null);
   const [roommateProfileLoading, setRoommateProfileLoading] = useState(false);
 
+  // ── Custom alert system ────────────────────────────────────────────────────
+  // Toast: transient screen-level notification
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  // ConfirmModal: replaces 2-button Alert.alert()
+  const [confirmConfig, setConfirmConfig] = useState({ visible: false });
+  // InlineAlerts: per-modal validation / error banners
+  const [editModalAlert, setEditModalAlert] = useState({ visible: false, type: "error", message: "" });
+  const [biometricModalAlert, setBiometricModalAlert] = useState({ visible: false, type: "error", message: "" });
+  const [supportModalAlert, setSupportModalAlert] = useState({ visible: false, type: "error", message: "" });
+  const [bugModalAlert, setBugModalAlert] = useState({ visible: false, type: "error", message: "" });
+
+  const showToast = (type, message) => setToast({ visible: true, type, message });
+  const hideToast = () => setToast((prev) => ({ ...prev, visible: false }));
+  const showConfirm = (config) => setConfirmConfig({ visible: true, ...config });
+  const hideConfirm = () => setConfirmConfig((prev) => ({ ...prev, visible: false }));
+
   const user = state.user || {};
   const userId = user.id || user._id;
 
@@ -135,36 +155,32 @@ const ProfileScreen = ({ navigation }) => {
   }, [userId]);
 
   const handleRequestHost = () => {
-    Alert.alert(
-      "Become a Host",
-      "Request to become a room host? An admin will review your request. Once approved you'll get access to room management features.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Request",
-          onPress: async () => {
-            try {
-              setRequestingHost(true);
-              await hostRoleService.requestHost();
-              setHostRequestStatus("pending");
-              Alert.alert(
-                "Success",
-                "Host request submitted! An admin will review it soon.",
-              );
-            } catch (error) {
-              Alert.alert(
-                "Error",
-                error.response?.data?.message ||
-                  error.message ||
-                  "Failed to submit request",
-              );
-            } finally {
-              setRequestingHost(false);
-            }
-          },
-        },
-      ],
-    );
+    showConfirm({
+      title: "Become a Host",
+      message:
+        "Request to become a room host? An admin will review your request. Once approved you'll get access to room management features.",
+      confirmText: "Request",
+      confirmStyle: "default",
+      onCancel: hideConfirm,
+      onConfirm: async () => {
+        hideConfirm();
+        try {
+          setRequestingHost(true);
+          await hostRoleService.requestHost();
+          setHostRequestStatus("pending");
+          showToast("success", "Host request submitted! An admin will review it soon.");
+        } catch (error) {
+          showToast(
+            "error",
+            error.response?.data?.message ||
+              error.message ||
+              "Failed to submit request",
+          );
+        } finally {
+          setRequestingHost(false);
+        }
+      },
+    });
   };
 
   const handleRoommateProfileSaved = (profile) => {
@@ -274,40 +290,32 @@ const ProfileScreen = ({ navigation }) => {
 
     if (newValue === false) {
       // Disabling biometric
-      Alert.alert(
-        "Disable Biometric Login",
-        "Are you sure you want to disable biometric login? You will need to enter your password on next login.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Disable",
-            style: "destructive",
-            onPress: async () => {
-              setDisablingBiometric(true);
-              try {
-                const result = await disableBiometric(user.email);
-                if (result.success) {
-                  setBiometricEnabled(false);
-                } else {
-                  Alert.alert(
-                    "Error",
-                    result.error || "Failed to disable biometric",
-                  );
-                  setBiometricEnabled(true);
-                }
-              } catch (error) {
-                Alert.alert(
-                  "Error",
-                  error.message || "Failed to disable biometric",
-                );
-                setBiometricEnabled(true);
-              } finally {
-                setDisablingBiometric(false);
-              }
-            },
-          },
-        ],
-      );
+      showConfirm({
+        title: "Disable Biometric Login",
+        message:
+          "Are you sure you want to disable biometric login? You will need to enter your password on next login.",
+        confirmText: "Disable",
+        confirmStyle: "destructive",
+        onCancel: hideConfirm,
+        onConfirm: async () => {
+          hideConfirm();
+          setDisablingBiometric(true);
+          try {
+            const result = await disableBiometric(user.email);
+            if (result.success) {
+              setBiometricEnabled(false);
+            } else {
+              showToast("error", result.error || "Failed to disable biometric");
+              setBiometricEnabled(true);
+            }
+          } catch (error) {
+            showToast("error", error.message || "Failed to disable biometric");
+            setBiometricEnabled(true);
+          } finally {
+            setDisablingBiometric(false);
+          }
+        },
+      });
     } else {
       // Enabling biometric - show password modal for validation
       setBiometricPassword("");
@@ -316,8 +324,9 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const handleEnableBiometric = async () => {
+    setBiometricModalAlert({ visible: false });
     if (!biometricPassword.trim()) {
-      Alert.alert("Error", "Please enter your password");
+      setBiometricModalAlert({ visible: true, type: "error", message: "Please enter your password." });
       return;
     }
 
@@ -345,21 +354,24 @@ const ProfileScreen = ({ navigation }) => {
           validationResponse.status,
           parseError,
         );
-        Alert.alert(
-          "Server Error",
-          `Server returned invalid response (${validationResponse.status}). Please try again later.`,
-        );
+        setBiometricModalAlert({
+          visible: true,
+          type: "error",
+          message: `Server returned an invalid response (${validationResponse.status}). Please try again later.`,
+        });
         setBiometricEnabled(false);
         setEnablingBiometric(false);
         return;
       }
 
       if (!validationResponse.ok) {
-        Alert.alert(
-          "Invalid Password",
-          validationData?.message ||
+        setBiometricModalAlert({
+          visible: true,
+          type: "error",
+          message:
+            validationData?.message ||
             "The password you entered is incorrect. Please try again.",
-        );
+        });
         setBiometricEnabled(false);
         setEnablingBiometric(false);
         return;
@@ -373,15 +385,23 @@ const ProfileScreen = ({ navigation }) => {
       );
       if (result.success) {
         setBiometricEnabled(true);
-        Alert.alert("Success", "Biometric login has been enabled");
         setBiometricPasswordModalVisible(false);
         setBiometricPassword("");
+        showToast("success", "Biometric login has been enabled.");
       } else {
-        Alert.alert("Error", result.error || "Failed to enable biometric");
+        setBiometricModalAlert({
+          visible: true,
+          type: "error",
+          message: result.error || "Failed to enable biometric.",
+        });
         setBiometricEnabled(false);
       }
     } catch (error) {
-      Alert.alert("Error", error.message || "Failed to enable biometric");
+      setBiometricModalAlert({
+        visible: true,
+        type: "error",
+        message: error.message || "Failed to enable biometric.",
+      });
       setBiometricEnabled(false);
     } finally {
       setEnablingBiometric(false);
@@ -428,13 +448,14 @@ const ProfileScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to pick image");
+      showToast("error", "Failed to pick image. Please try again.");
     }
   };
 
   const handleSaveProfile = async () => {
+    setEditModalAlert({ visible: false });
     if (!editName.trim()) {
-      Alert.alert("Validation", "Name cannot be empty");
+      setEditModalAlert({ visible: true, type: "warning", message: "Name cannot be empty." });
       return;
     }
 
@@ -446,15 +467,19 @@ const ProfileScreen = ({ navigation }) => {
       );
 
       if (result.success) {
-        Alert.alert("Success", "Profile updated successfully");
+        showToast("success", "Profile updated successfully.");
         setEditModalVisible(false);
         setSelectedImage(null);
       } else {
-        Alert.alert("Error", result.error || "Failed to update profile");
+        setEditModalAlert({
+          visible: true,
+          type: "error",
+          message: result.error || "Failed to update profile.",
+        });
       }
     } catch (error) {
       console.error("Error saving profile:", error);
-      Alert.alert("Error", "Failed to update profile");
+      setEditModalAlert({ visible: true, type: "error", message: "Failed to update profile." });
     } finally {
       setIsUpdating(false);
     }
@@ -466,18 +491,19 @@ const ProfileScreen = ({ navigation }) => {
       await signOut();
     } catch (error) {
       console.error("Logout error:", error);
-      Alert.alert("Error", "Failed to logout");
+      showToast("error", "Failed to logout. Please try again.");
       setIsLoggingOut(false);
     }
   };
 
   // Support Service Handlers
   const handleContactSupport = async () => {
+    setSupportModalAlert({ visible: false });
     if (
       !supportTicketForm.title.trim() ||
       !supportTicketForm.description.trim()
     ) {
-      Alert.alert("Validation", "Please fill in all fields");
+      setSupportModalAlert({ visible: true, type: "warning", message: "Please fill in all fields." });
       return;
     }
 
@@ -487,12 +513,12 @@ const ProfileScreen = ({ navigation }) => {
         ...supportTicketForm,
         roomId: userRoomId || undefined,
       });
-      Alert.alert("Success", "Support ticket created successfully!");
+      showToast("success", "Support ticket created successfully!");
       setSupportModalVisible(false);
       setSupportTicketForm({ title: "", description: "", category: "general" });
     } catch (error) {
       console.error("Error creating ticket:", error);
-      Alert.alert("Error", "Failed to create support ticket");
+      setSupportModalAlert({ visible: true, type: "error", message: "Failed to create support ticket." });
     } finally {
       setIsSubmitting(false);
     }
@@ -506,22 +532,23 @@ const ProfileScreen = ({ navigation }) => {
       setFAQModalVisible(true);
     } catch (error) {
       console.error("Error fetching FAQs:", error);
-      Alert.alert("Error", "Failed to load FAQs");
+      showToast("error", "Failed to load FAQs. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleReportIssue = async () => {
+    setBugModalAlert({ visible: false });
     if (!bugReportForm.title.trim() || !bugReportForm.description.trim()) {
-      Alert.alert("Validation", "Please fill in all fields");
+      setBugModalAlert({ visible: true, type: "warning", message: "Please fill in all fields." });
       return;
     }
 
     setIsSubmitting(true);
     try {
       await supportService.createBugReport(bugReportForm);
-      Alert.alert("Success", "Bug report submitted successfully!");
+      showToast("success", "Bug report submitted successfully!");
       setBugModalVisible(false);
       setBugReportForm({
         title: "",
@@ -531,7 +558,7 @@ const ProfileScreen = ({ navigation }) => {
       });
     } catch (error) {
       console.error("Error creating bug report:", error);
-      Alert.alert("Error", "Failed to submit bug report");
+      setBugModalAlert({ visible: true, type: "error", message: "Failed to submit bug report." });
     } finally {
       setIsSubmitting(false);
     }
@@ -612,6 +639,7 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollViewWithDetection
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
@@ -1290,6 +1318,13 @@ const ProfileScreen = ({ navigation }) => {
               />
             </View>
 
+            <InlineAlert
+              visible={editModalAlert.visible}
+              type={editModalAlert.type}
+              message={editModalAlert.message}
+              onDismiss={() => setEditModalAlert({ visible: false })}
+            />
+
             <TouchableOpacity
               style={[styles.saveBtn, isUpdating && { opacity: 0.6 }]}
               onPress={handleSaveProfile}
@@ -1376,6 +1411,13 @@ const ProfileScreen = ({ navigation }) => {
                   />
                 </TouchableOpacity>
               </View>
+
+              <InlineAlert
+                visible={biometricModalAlert.visible}
+                type={biometricModalAlert.type}
+                message={biometricModalAlert.message}
+                onDismiss={() => setBiometricModalAlert({ visible: false })}
+              />
 
               <TouchableOpacity
                 style={[
@@ -1486,6 +1528,13 @@ const ProfileScreen = ({ navigation }) => {
                 multiline
                 numberOfLines={6}
                 placeholderTextColor={colors.textTertiary}
+              />
+
+              <InlineAlert
+                visible={supportModalAlert.visible}
+                type={supportModalAlert.type}
+                message={supportModalAlert.message}
+                onDismiss={() => setSupportModalAlert({ visible: false })}
               />
 
               <TouchableOpacity
@@ -1679,6 +1728,13 @@ const ProfileScreen = ({ navigation }) => {
                 placeholderTextColor={colors.textTertiary}
               />
 
+              <InlineAlert
+                visible={bugModalAlert.visible}
+                type={bugModalAlert.type}
+                message={bugModalAlert.message}
+                onDismiss={() => setBugModalAlert({ visible: false })}
+              />
+
               <TouchableOpacity
                 style={[styles.submitBtn, isSubmitting && { opacity: 0.6 }]}
                 onPress={handleReportIssue}
@@ -1702,6 +1758,21 @@ const ProfileScreen = ({ navigation }) => {
         onSaved={handleRoommateProfileSaved}
       />
     </ScrollViewWithDetection>
+
+    {/* ── Screen-level Toast (floats above everything) ── */}
+    <Toast
+      visible={toast.visible}
+      type={toast.type}
+      message={toast.message}
+      onHide={hideToast}
+    />
+
+    {/* ── Confirmation dialog (replaces 2-button Alert) ── */}
+    <ConfirmModal
+      {...confirmConfig}
+      accentColor={colors.accent}
+    />
+    </View>
   );
 };
 

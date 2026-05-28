@@ -9,12 +9,12 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Toast, InlineAlert } from "../../components/CustomAlert";
 import { authService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import AuthBubbles from "../../components/AuthBubbles";
@@ -30,6 +30,9 @@ const RegisterStep2Screen = ({ navigation, route }) => {
   const [error, setError] = useState("");
   const [resendTimer, setResendTimer] = useState(0);
   const timerRef = useRef(null);
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const showToast = (message, type = "success") => setToast({ visible: true, type, message });
+  const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   React.useEffect(() => {
     if (resendTimer > 0) {
@@ -59,7 +62,7 @@ const RegisterStep2Screen = ({ navigation, route }) => {
         activationCode: code,
       });
       if (response.success) {
-        Alert.alert("Success", "Email verified successfully");
+        showToast("Email verified successfully", "success");
         navigation.navigate("RegisterStep3", { email, name });
       } else {
         setError(response.message || "Invalid verification code");
@@ -77,7 +80,7 @@ const RegisterStep2Screen = ({ navigation, route }) => {
     try {
       const response = await authService.resendVerification(email);
       if (response.success) {
-        Alert.alert("Success", "New verification code sent to your email");
+        showToast("New verification code sent to your email", "success");
         setResendTimer(60);
         setCode("");
       } else {
@@ -96,6 +99,12 @@ const RegisterStep2Screen = ({ navigation, route }) => {
       style={styles.container}
     >
       <AuthBubbles />
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={hideToast}
+      />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -142,12 +151,13 @@ const RegisterStep2Screen = ({ navigation, route }) => {
         </View>
 
         {/* ─── Error ─── */}
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={16} color="#ef4444" />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        <InlineAlert
+          visible={!!error}
+          type="error"
+          message={error}
+          onDismiss={() => setError("")}
+          style={{ marginBottom: 16 }}
+        />
 
         {/* ─── Form ─── */}
         <View style={styles.form}>

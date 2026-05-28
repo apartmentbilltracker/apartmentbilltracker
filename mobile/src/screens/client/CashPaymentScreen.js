@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
   TextInput,
   Modal,
@@ -19,6 +18,7 @@ import apiService, {
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import { Toast } from "../../components/CustomAlert";
 import { AuthContext } from "../../context/AuthContext";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import {
@@ -55,6 +55,10 @@ const CashPaymentScreen = ({ navigation, route }) => {
   const [transactionId, setTransactionId] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [receiptLoading, setReceiptLoading] = useState(false);
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
   const [roomData, setRoomData] = useState(null);
   const [billingData, setBillingData] = useState(null);
   const [billShares, setBillShares] = useState(null);
@@ -241,17 +245,17 @@ const CashPaymentScreen = ({ navigation, route }) => {
 
   const handleRecordCash = async () => {
     if (!receiptNumber.trim()) {
-      Alert.alert("Required", "Please enter the receipt number");
+      showToast("Please enter the receipt number", "warning");
       return;
     }
 
     if (!receivedBy.trim()) {
-      Alert.alert("Required", "Please enter who received the payment");
+      showToast("Please enter who received the payment", "warning");
       return;
     }
 
     if (!witnessName.trim()) {
-      Alert.alert("Required", "Please enter a witness name");
+      showToast("Please enter a witness name", "warning");
       return;
     }
 
@@ -272,7 +276,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
         .filter((bt) => bt !== null);
 
       if (selectedBillTypes.length === 0) {
-        Alert.alert("Error", "Invalid bill types selected. Please try again.");
+        showToast("Invalid bill types selected. Please try again.", "error");
         return;
       }
 
@@ -283,10 +287,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
       );
 
       if (missingAmountType) {
-        Alert.alert(
-          "Bill amounts not ready",
-          "Please wait a moment for the exact bill amounts to load, then try again.",
-        );
+        showToast("Please wait for bill amounts to load, then try again.", "warning");
         return;
       }
 
@@ -352,7 +353,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
         setStep("success");
       }
     } catch (error) {
-      Alert.alert("Error", error.message || "Failed to record cash payment");
+      showToast(error.message || "Failed to record cash payment", "error");
     } finally {
       setLoading(false);
     }
@@ -363,17 +364,14 @@ const CashPaymentScreen = ({ navigation, route }) => {
       setReceiptLoading(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Please allow gallery access to save the receipt.",
-        );
+        showToast("Please allow gallery access to save the receipt.", "warning");
         return;
       }
       const uri = await captureRef(receiptRef, { format: "png", quality: 1 });
       await MediaLibrary.saveToLibraryAsync(uri);
-      Alert.alert("Saved!", "Receipt image saved to your gallery.");
+      showToast("Receipt image saved to your gallery.", "success");
     } catch (error) {
-      Alert.alert("Error", "Failed to save receipt. Please try again.");
+      showToast("Failed to save receipt. Please try again.", "error");
     } finally {
       setReceiptLoading(false);
     }
@@ -410,6 +408,12 @@ const CashPaymentScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity

@@ -7,13 +7,13 @@ import {
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
-  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { apiService } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
 import { FlatListWithDetection } from "../../components/ScrollDetectionWrappers";
+import { Toast, ConfirmModal, InlineAlert } from "../../components/CustomAlert";
 
 const SettlementScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -25,6 +25,13 @@ const SettlementScreen = ({ navigation, route }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("pending");
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [confirmModal, setConfirmModal] = useState({ visible: false, settlement: null });
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
+
+  const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   const fetchSettlements = async () => {
     try {
@@ -36,6 +43,7 @@ const SettlementScreen = ({ navigation, route }) => {
     } catch (err) {
       console.error("Error fetching settlements:", err);
       setError("Failed to load settlements");
+      showToast("Failed to load settlements", "error");
     } finally {
       setLoading(false);
     }
@@ -53,41 +61,29 @@ const SettlementScreen = ({ navigation, route }) => {
   };
 
   const handleMarkAsSettled = (settlement) => {
-    const debtorName = settlement.debtor?.name || "Debtor";
-    const creditorName = settlement.creditor?.name || "Creditor";
+    setConfirmModal({ visible: true, settlement });
+  };
 
-    Alert.alert(
-      "Confirm Settlement",
-      `Mark the ₱${(parseFloat(settlement.amount) || 0).toFixed(2)} settlement between ${debtorName} and ${creditorName} as settled?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          onPress: async () => {
-            try {
-              const response = await apiService.recordSettlement(
-                roomId,
-                settlement.debtor?.id ||
-                  settlement.debtor?._id ||
-                  settlement.debtorId,
-                settlement.creditor?.id ||
-                  settlement.creditor?._id ||
-                  settlement.creditorId,
-                settlement.amount,
-                settlement.amount,
-                "Settled",
-              );
-              if (response.success) {
-                Alert.alert("Success", "Settlement recorded successfully");
-                await fetchSettlements();
-              }
-            } catch (err) {
-              Alert.alert("Error", "Failed to record settlement");
-            }
-          },
-        },
-      ],
-    );
+  const handleConfirmSettlement = async () => {
+    const settlement = confirmModal.settlement;
+    setConfirmModal({ visible: false, settlement: null });
+    if (!settlement) return;
+    try {
+      const response = await apiService.recordSettlement(
+        roomId,
+        settlement.debtor?.id || settlement.debtor?._id || settlement.debtorId,
+        settlement.creditor?.id || settlement.creditor?._id || settlement.creditorId,
+        settlement.amount,
+        settlement.amount,
+        "Settled",
+      );
+      if (response.success) {
+        showToast("Settlement recorded successfully", "success");
+        await fetchSettlements();
+      }
+    } catch (err) {
+      showToast("Failed to record settlement", "error");
+    }
   };
 
   /* ─── Status helpers ─── */
@@ -145,6 +141,12 @@ const SettlementScreen = ({ navigation, route }) => {
   if (loading) {
     return (
       <View style={styles.container}>
+        <Toast
+          visible={toast.visible}
+          type={toast.type}
+          message={toast.message}
+          onHide={hideToast}
+        />
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backBtn}
@@ -283,6 +285,25 @@ const SettlementScreen = ({ navigation, route }) => {
   /* ─── Main ─── */
   return (
     <View style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={hideToast}
+      />
+      <ConfirmModal
+        visible={confirmModal.visible}
+        title="Confirm Settlement"
+        message={
+          confirmModal.settlement
+            ? `Mark the ₱${(parseFloat(confirmModal.settlement.amount) || 0).toFixed(2)} settlement between ${confirmModal.settlement.debtor?.name || "Debtor"} and ${confirmModal.settlement.creditor?.name || "Creditor"} as settled?`
+            : ""
+        }
+        confirmText="Confirm"
+        cancelText="Cancel"
+        onConfirm={handleConfirmSettlement}
+        onCancel={() => setConfirmModal({ visible: false, settlement: null })}
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -360,12 +381,14 @@ const SettlementScreen = ({ navigation, route }) => {
       )}
 
       {/* Error */}
-      {error ? (
-        <View style={styles.errorBar}>
-          <Ionicons name="alert-circle-outline" size={16} color="#ef4444" />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
+      <InlineAlert
+        visible={!!error}
+        type="error"
+        title="Something went wrong"
+        message={error}
+        onDismiss={() => setError("")}
+        style={{ marginHorizontal: 14, marginTop: 10 }}
+      />
 
       {/* List / Empty */}
       {settlements.length === 0 ? (

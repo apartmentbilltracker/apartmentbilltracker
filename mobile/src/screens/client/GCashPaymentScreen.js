@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Image,
   TextInput,
@@ -23,6 +22,7 @@ import { settingsService } from "../../services/apiService";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import { Toast, ConfirmModal } from "../../components/CustomAlert";
 import { AuthContext } from "../../context/AuthContext";
 import {
   buildBillSharesFromCharge,
@@ -91,6 +91,11 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   };
   const [mobileNumberFocused, setMobileNumberFocused] = useState(false);
   const [mobileNumberError, setMobileNumberError] = useState(false);
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
 
   const getSelectedBillAmount = (type, index, selectedTypes) => {
     const exactAmount = getExactBillAmount(type, {
@@ -214,30 +219,21 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
   const handleCancelPayment = async () => {
     if (!transactionId) return navigation.goBack();
+    setCancelConfirmVisible(true);
+  };
 
-    Alert.alert(
-      "Cancel Payment",
-      "Are you sure you want to cancel this payment?",
-      [
-        { text: "No" },
-        {
-          text: "Yes",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setCancelLoading(true);
-              await apiService.cancelTransaction(transactionId);
-              Alert.alert("Cancelled", "Payment has been cancelled");
-              navigation.goBack();
-            } catch (err) {
-              Alert.alert("Error", err?.message || "Failed to cancel payment");
-            } finally {
-              setCancelLoading(false);
-            }
-          },
-        },
-      ],
-    );
+  const executeCancelPayment = async () => {
+    setCancelConfirmVisible(false);
+    try {
+      setCancelLoading(true);
+      await apiService.cancelTransaction(transactionId);
+      showToast("Payment has been cancelled", "info");
+      navigation.goBack();
+    } catch (err) {
+      showToast(err?.message || "Failed to cancel payment", "error");
+    } finally {
+      setCancelLoading(false);
+    }
   };
 
   const handleDownloadReceipt = async () => {
@@ -245,17 +241,14 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       setReceiptLoading(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Please allow gallery access to save the receipt.",
-        );
+        showToast("Please allow gallery access to save the receipt.", "warning");
         return;
       }
       const uri = await captureRef(receiptRef, { format: "png", quality: 1 });
       await MediaLibrary.saveToLibraryAsync(uri);
-      Alert.alert("Saved!", "Receipt image saved to your gallery.");
+      showToast("Receipt image saved to your gallery.", "success");
     } catch (error) {
-      Alert.alert("Error", "Failed to save receipt. Please try again.");
+      showToast("Failed to save receipt. Please try again.", "error");
     } finally {
       setReceiptLoading(false);
     }
@@ -268,10 +261,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       // Request gallery permission
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Please allow access to your photo gallery to save the QR code.",
-        );
+        showToast("Please allow access to your photo gallery to save the QR code.", "warning");
         return;
       }
 
@@ -284,10 +274,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         destFile.write(Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)));
       } else {
         if (!hostQrUri) {
-          Alert.alert(
-            "No QR Available",
-            "No QR code has been configured for this host.",
-          );
+          showToast("No QR code has been configured for this host.", "warning");
           return;
         }
         const response = await fetch(hostQrUri);
@@ -297,9 +284,9 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       }
 
       await MediaLibrary.saveToLibraryAsync(destFile.uri);
-      Alert.alert("Saved!", "QR code has been saved to your gallery.");
+      showToast("QR code has been saved to your gallery.", "success");
     } catch (error) {
-      Alert.alert("Error", "Failed to save QR code. Please try again.");
+      showToast("Failed to save QR code. Please try again.", "error");
     } finally {
       setDownloadLoading(false);
     }
@@ -336,7 +323,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       });
 
       if (selectedBillTypes.length === 0) {
-        Alert.alert("Error", "Invalid bill types selected. Please try again.");
+        showToast("Invalid bill types selected. Please try again.", "error");
         navigation.goBack();
         return;
       }
@@ -416,7 +403,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         }
       }
     } catch (error) {
-      Alert.alert("Error", error.message || "Failed to initiate GCash payment");
+      showToast(error.message || "Failed to initiate GCash payment", "error");
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -426,7 +413,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const handleVerifyPayment = async () => {
     if (!mobileNumber.trim()) {
       setMobileNumberError(true);
-      Alert.alert("Required", "Please enter your GCash mobile number");
+      showToast("Please enter your GCash mobile number", "warning");
       return;
     }
     setMobileNumberError(false);
@@ -472,10 +459,7 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         }
       }
     } catch (error) {
-      Alert.alert(
-        "Verification Failed",
-        error.message || "Unable to verify payment. Please try again.",
-      );
+      showToast(error.message || "Unable to verify payment. Please try again.", "error");
     } finally {
       setVerifyLoading(false);
     }
@@ -484,9 +468,9 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   const copyToClipboard = async (text) => {
     try {
       await Clipboard.setStringAsync(text);
-      Alert.alert("Copied", "Reference number copied to clipboard");
+      showToast("Reference number copied to clipboard", "success");
     } catch (error) {
-      Alert.alert("Error", "Failed to copy");
+      showToast("Failed to copy", "error");
     }
   };
 
@@ -510,6 +494,22 @@ const GCashPaymentScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
+      <ConfirmModal
+        visible={cancelConfirmVisible}
+        title="Cancel Payment"
+        message="Are you sure you want to cancel this payment?"
+        confirmText="Yes, Cancel"
+        cancelText="No"
+        confirmStyle="destructive"
+        onConfirm={executeCancelPayment}
+        onCancel={() => setCancelConfirmVisible(false)}
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>

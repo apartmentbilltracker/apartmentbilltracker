@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Toast, InlineAlert } from "../../components/CustomAlert";
 import Constants from "expo-constants";
 import * as Application from "expo-application";
 import { AuthContext } from "../../context/AuthContext";
@@ -46,6 +46,9 @@ const RegisterStep3Screen = ({ navigation, route }) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const showToast = (message, type = "success") => setToast({ visible: true, type, message });
+  const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   const getPasswordStrength = () => {
     if (!password) return null;
@@ -92,13 +95,10 @@ const RegisterStep3Screen = ({ navigation, route }) => {
     try {
       const response = await authService.setPassword({ email, password });
       if (response.success) {
-        Alert.alert("Success", "Account created successfully!");
+        showToast("Account created successfully!", "success");
         const loginResult = await signIn(email, password);
         if (!loginResult.success) {
-          Alert.alert(
-            "Info",
-            "Account created! Please log in with your credentials.",
-          );
+          showToast("Account created! Please log in with your credentials.", "info");
           navigation.navigate("Login");
         }
       } else {
@@ -119,6 +119,12 @@ const RegisterStep3Screen = ({ navigation, route }) => {
       style={styles.container}
     >
       <AuthBubbles />
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={hideToast}
+      />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -156,12 +162,13 @@ const RegisterStep3Screen = ({ navigation, route }) => {
         </View>
 
         {/* ─── Error ─── */}
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={16} color="#ef4444" />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        <InlineAlert
+          visible={!!error}
+          type="error"
+          message={error}
+          onDismiss={() => setError("")}
+          style={{ marginBottom: 16 }}
+        />
 
         {/* ─── Form ─── */}
         <View style={styles.form}>
