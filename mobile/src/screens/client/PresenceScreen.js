@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +18,7 @@ import {
 import { AuthContext } from "../../context/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import { Toast, ConfirmModal } from "../../components/CustomAlert";
 
 const PresenceScreen = () => {
   const { colors } = useTheme();
@@ -39,6 +39,25 @@ const PresenceScreen = () => {
   const inFlightRef = useRef(false);
   const pendingDatesRef = useRef(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [waterSplitMode, setWaterSplitMode] = useState("all_payors");
+  const [selectedWaterPayorIds, setSelectedWaterPayorIds] = useState([]);
+  const [savingWaterPreference, setSavingWaterPreference] = useState(false);
+
+  // Custom alerts
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
+  const [confirmModal, setConfirmModal] = useState({
+    visible: false,
+    config: {},
+  });
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
+
+  const showConfirm = (config) => setConfirmModal({ visible: true, config });
 
   const hasActiveCycle = Boolean(
     selectedRoom?.currentCycleId ||
@@ -61,6 +80,8 @@ const PresenceScreen = () => {
   const isFixedMonthlyWater =
     selectedRoom?.waterBillingMode === "fixed_monthly" ||
     selectedRoom?.water_billing_mode === "fixed_monthly";
+  const waterFixedType =
+    selectedRoom?.waterFixedType || selectedRoom?.water_fixed_type || "by_room";
   const canMarkPresence =
     hasActiveCycle &&
     !userPaidStatus &&
@@ -72,6 +93,45 @@ const PresenceScreen = () => {
   const markedDatesSet = useMemo(() => new Set(markedDates), [markedDates]);
   const [rangeStartDate, setRangeStartDate] = useState(null);
   const [markingMultiple, setMarkingMultiple] = useState(false);
+
+  const getMemberUserId = (member) =>
+    String(
+      member?.user?.id ||
+        member?.user?._id ||
+        member?.user ||
+        member?.userId ||
+        member?.user_id ||
+        "",
+    );
+
+  const currentUserMember = useMemo(() => {
+    if (!selectedRoom?.members || !userId) return null;
+    return selectedRoom.members.find(
+      (member) => getMemberUserId(member) === String(userId),
+    );
+  }, [selectedRoom?.members, userId]);
+
+  const isCurrentUserPayor =
+    currentUserMember?.isPayer !== undefined
+      ? currentUserMember.isPayer
+      : currentUserMember?.is_payer !== false;
+
+  const waterPayorMembers = useMemo(
+    () =>
+      (selectedRoom?.members || []).filter((member) =>
+        member?.isPayer !== undefined
+          ? member.isPayer
+          : member.is_payer !== false,
+      ),
+    [selectedRoom?.members],
+  );
+
+  const canChooseWaterPayors =
+    !!selectedRoom &&
+    currentUserMember &&
+    !isCurrentUserPayor &&
+    (!isFixedMonthlyWater || waterFixedType === "per_person") &&
+    waterPayorMembers.length > 0;
 
   useFocusEffect(
     React.useCallback(() => {
@@ -107,6 +167,34 @@ const PresenceScreen = () => {
     }
   }, [selectedRoom?.id || selectedRoom?._id]);
 
+  useEffect(() => {
+    if (!currentUserMember) {
+      setWaterSplitMode("all_payors");
+      setSelectedWaterPayorIds([]);
+      return;
+    }
+
+    const mode =
+      currentUserMember.waterSplitMode ||
+      currentUserMember.water_split_mode ||
+      "all_payors";
+    const payorIds =
+      currentUserMember.waterSplitPayorIds ||
+      currentUserMember.water_split_payor_ids ||
+      [];
+
+    setWaterSplitMode(mode === "specific_payors" ? mode : "all_payors");
+    setSelectedWaterPayorIds(
+      Array.isArray(payorIds) ? payorIds.map(String) : [],
+    );
+  }, [
+    currentUserMember?.id,
+    currentUserMember?.waterSplitMode,
+    currentUserMember?.water_split_mode,
+    currentUserMember?.waterSplitPayorIds?.length,
+    currentUserMember?.water_split_payor_ids?.length,
+  ]);
+
   const fetchRooms = async (skipAutoSelect = false) => {
     try {
       setLoading(true);
@@ -119,7 +207,7 @@ const PresenceScreen = () => {
       }
     } catch (error) {
       console.error("Error fetching rooms:", error);
-      Alert.alert("Error", "Failed to load rooms");
+      showToast("Failed to load rooms", "error");
     } finally {
       setLoading(false);
     }
@@ -129,6 +217,70 @@ const PresenceScreen = () => {
     setRefreshing(true);
     await fetchRooms();
     setRefreshing(false);
+  };
+
+  const updateCurrentMemberInRoom = (updatedMember) => {
+    if (!updatedMember) return;
+    setSelectedRoom((prev) => {
+      if (!prev?.members) return prev;
+      return {
+        ...prev,
+        members: prev.members.map((member) =>
+          String(member.id) === String(updatedMember.id) ||
+          getMemberUserId(member) ===
+            String(updatedMember.userId || updatedMember.user_id)
+            ? { ...member, ...updatedMember }
+            : member,
+        ),
+      };
+    });
+  };
+
+  const toggleWaterPayor = (payorId) => {
+    setWaterSplitMode("specific_payors");
+    setSelectedWaterPayorIds((current) => {
+      const id = String(payorId);
+      if (current.includes(id)) return current.filter((item) => item !== id);
+      if (current.length >= 3) {
+        showToast("You can select up to 3 payors only.", "warning");
+        return current;
+      }
+      return [...current, id];
+    });
+  };
+
+  const saveWaterPayorPreference = async () => {
+    if (!selectedRoom) return;
+    if (
+      waterSplitMode === "specific_payors" &&
+      selectedWaterPayorIds.length === 0
+    ) {
+      showToast("Choose at least one payor for your water bill.", "warning");
+      return;
+    }
+
+    try {
+      setSavingWaterPreference(true);
+      const roomId = selectedRoom.id || selectedRoom._id;
+      const response = await roomService.updateWaterPayorPreference(roomId, {
+        mode: waterSplitMode,
+        payorIds:
+          waterSplitMode === "specific_payors" ? selectedWaterPayorIds : [],
+      });
+      updateCurrentMemberInRoom(response.member);
+      showToast("Water payor preference updated.", "success");
+      await loadMarkedDates();
+    } catch (error) {
+      console.error("Error saving water payor preference:", error);
+      showToast(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to update water payor preference.",
+        "error",
+      );
+    } finally {
+      setSavingWaterPreference(false);
+    }
   };
 
   const loadMarkedDates = async () => {
@@ -144,9 +296,26 @@ const PresenceScreen = () => {
           prev
             ? {
                 ...prev,
+                members: room.members ?? prev.members,
                 memberPayments: room.memberPayments,
                 billing: room.billing ?? prev.billing,
                 cycleStatus: room.cycleStatus ?? prev.cycleStatus,
+                waterBillingMode:
+                  room.waterBillingMode ??
+                  room.water_billing_mode ??
+                  prev.waterBillingMode,
+                water_billing_mode:
+                  room.water_billing_mode ??
+                  room.waterBillingMode ??
+                  prev.water_billing_mode,
+                waterFixedType:
+                  room.waterFixedType ??
+                  room.water_fixed_type ??
+                  prev.waterFixedType,
+                water_fixed_type:
+                  room.water_fixed_type ??
+                  room.waterFixedType ??
+                  prev.water_fixed_type,
               }
             : prev,
         );
@@ -209,19 +378,19 @@ const PresenceScreen = () => {
 
     if (!canMarkPresence) {
       if (isFixedMonthlyWater) {
-        Alert.alert(
-          "Fixed Water Billing",
-          "Your host has set a fixed monthly water bill. Presence tracking is not required for this room.",
+        showToast(
+          "Fixed water billing is set. Presence tracking is not required.",
+          "info",
         );
       } else if (hasPendingPayment) {
-        Alert.alert(
-          "Payment Awaiting Verification",
-          "You have a payment that is awaiting host verification. You cannot mark presence until your payment is approved or rejected.",
+        showToast(
+          "A payment is awaiting host verification. Presence is locked until it's approved.",
+          "warning",
         );
       } else {
-        Alert.alert(
-          "No active billing cycle or billing period",
-          "Unable to mark presence because there is no active billing cycle or billing period, or you have already paid all your bills. Please contact your admin.",
+        showToast(
+          "No active billing cycle. Please contact your admin.",
+          "info",
         );
       }
       return;
@@ -283,7 +452,7 @@ const PresenceScreen = () => {
           });
           setSelectedRoom((prev) => ({ ...prev, members: revertedMembers }));
         }
-        Alert.alert("Error", error.message || "Failed to update presence");
+        showToast(error.message || "Failed to update presence", "error");
       } finally {
         inFlightRef.current = false;
         pendingUpdatesRef.current.clear();
@@ -301,10 +470,7 @@ const PresenceScreen = () => {
 
   const markTodayPresence = async () => {
     if (!hasActiveCycle) {
-      Alert.alert(
-        "No active billing cycle or billing period",
-        "Unable to mark presence because there is no active billing cycle or billing period. Please contact your admin.",
-      );
+      showToast("No active billing cycle. Please contact your admin.", "info");
       return;
     }
     await markPresence(new Date());
@@ -313,10 +479,7 @@ const PresenceScreen = () => {
   const markAllCurrentMonth = async () => {
     if (!selectedRoom || !userId) return;
     if (!hasActiveCycle) {
-      Alert.alert(
-        "No Active Cycle",
-        "No active billing cycle or billing period. Contact your admin.",
-      );
+      showToast("No active billing cycle. Contact your admin.", "info");
       return;
     }
     try {
@@ -346,12 +509,12 @@ const PresenceScreen = () => {
         });
         setSelectedRoom({ ...selectedRoom, members: updatedMembers });
       }
-      Alert.alert(
-        "Success",
+      showToast(
         `Marked ${datesToAdd.length} dates in ${currentMonth.toLocaleDateString("en-US", { month: "long" })}`,
+        "success",
       );
     } catch (error) {
-      Alert.alert("Error", error.message || "Failed to mark all dates");
+      showToast(error.message || "Failed to mark all dates", "error");
     } finally {
       setMarkingMultiple(false);
     }
@@ -360,10 +523,7 @@ const PresenceScreen = () => {
   const markWorkdaysCurrentMonth = async () => {
     if (!selectedRoom || !userId) return;
     if (!hasActiveCycle) {
-      Alert.alert(
-        "No Active Cycle",
-        "No active billing cycle or billing period. Contact your admin.",
-      );
+      showToast("No active billing cycle. Contact your admin.", "info");
       return;
     }
     try {
@@ -396,12 +556,12 @@ const PresenceScreen = () => {
         });
         setSelectedRoom({ ...selectedRoom, members: updatedMembers });
       }
-      Alert.alert(
-        "Success",
+      showToast(
         `Marked ${datesToAdd.length} workdays in ${currentMonth.toLocaleDateString("en-US", { month: "long" })}`,
+        "success",
       );
     } catch (error) {
-      Alert.alert("Error", error.message || "Failed to mark workdays");
+      showToast(error.message || "Failed to mark workdays", "error");
     } finally {
       setMarkingMultiple(false);
     }
@@ -410,10 +570,7 @@ const PresenceScreen = () => {
   const markDateRange = async (startDate, endDate) => {
     if (!selectedRoom || !userId) return;
     if (!hasActiveCycle) {
-      Alert.alert(
-        "No Active Cycle",
-        "No active billing cycle or billing period. Contact your admin.",
-      );
+      showToast("No active billing cycle. Contact your admin.", "info");
       return;
     }
     try {
@@ -421,7 +578,7 @@ const PresenceScreen = () => {
       const start = new Date(startDate);
       const end = new Date(endDate);
       if (start > end) {
-        Alert.alert("Error", "Start date must be before end date");
+        showToast("Start date must be before end date", "error");
         setMarkingMultiple(false);
         return;
       }
@@ -449,13 +606,13 @@ const PresenceScreen = () => {
         });
         setSelectedRoom({ ...selectedRoom, members: updatedMembers });
       }
-      Alert.alert(
-        "Success",
+      showToast(
         `Marked ${datesToAdd.length} dates from ${start.toLocaleDateString()} to ${end.toLocaleDateString()}`,
+        "success",
       );
       setRangeStartDate(null);
     } catch (error) {
-      Alert.alert("Error", error.message || "Failed to mark date range");
+      showToast(error.message || "Failed to mark date range", "error");
     } finally {
       setMarkingMultiple(false);
     }
@@ -636,619 +793,788 @@ const PresenceScreen = () => {
   }
 
   return (
-    <ScrollViewWithDetection
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.accent}
-        />
-      }
-      showsVerticalScrollIndicator={false}
-    >
-      {/* ─── HERO HEADER ─── */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.headerTitleRow}>
-            <View style={styles.headerIconBg}>
-              <Ionicons name="calendar" size={22} color="#fff" />
+    <>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
+      <ScrollViewWithDetection
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ─── HERO HEADER ─── */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerTitleRow}>
+              <View style={styles.headerIconBg}>
+                <Ionicons name="calendar" size={22} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.headerTitle}>Presence</Text>
+                <Text style={styles.headerSubtitle}>
+                  {selectedRoom ? selectedRoom.name : "Select a room to begin"}
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>Presence</Text>
-              <Text style={styles.headerSubtitle}>
-                {selectedRoom ? selectedRoom.name : "Select a room to begin"}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.headerFootnote}>
-            Mark the days you stayed in the room and keep your water billing
-            history accurate for the active cycle.
-          </Text>
-          <View style={styles.headerStatusRow}>
-            <View style={styles.headerStatusChip}>
-              <Ionicons
-                name={presenceStatusMeta.icon}
-                size={13}
-                color="#d8efe8"
-              />
-              <Text style={styles.headerStatusChipText}>
-                {selectedRoom ? presenceStatusMeta.label : "Waiting"}
-              </Text>
-            </View>
-            <View style={styles.headerStatusChip}>
-              <Ionicons name="water-outline" size={13} color="#d8efe8" />
-              <Text style={styles.headerStatusChipText}>
-                {selectedRoom
-                  ? `\u20B1${estimatedWaterBill.toFixed(0)} water est.`
-                  : "Water estimate"}
-              </Text>
+            <Text style={styles.headerFootnote}>
+              Mark the days you stayed in the room and keep your water billing
+              history accurate for the active cycle.
+            </Text>
+            <View style={styles.headerStatusRow}>
+              <View style={styles.headerStatusChip}>
+                <Ionicons
+                  name={presenceStatusMeta.icon}
+                  size={13}
+                  color="#d8efe8"
+                />
+                <Text style={styles.headerStatusChipText}>
+                  {selectedRoom ? presenceStatusMeta.label : "Waiting"}
+                </Text>
+              </View>
+              <View style={styles.headerStatusChip}>
+                <Ionicons name="water-outline" size={13} color="#d8efe8" />
+                <Text style={styles.headerStatusChipText}>
+                  {selectedRoom
+                    ? `\u20B1${estimatedWaterBill.toFixed(0)} water est.`
+                    : "Water estimate"}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
-      {/* ─── ROOM PILLS ─── */}
-      {rooms.length > 0 && (
-        <View style={styles.roomSelectorContainer}>
-          <ScrollViewWithDetection
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.roomPillsRow}
-          >
-            {rooms.map((room) => {
-              const active =
-                (selectedRoom?.id || selectedRoom?._id) ===
-                (room.id || room._id);
-              return (
+        {/* ─── ROOM PILLS ─── */}
+        {rooms.length > 0 && (
+          <View style={styles.roomSelectorContainer}>
+            <ScrollViewWithDetection
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.roomPillsRow}
+            >
+              {rooms.map((room) => {
+                const active =
+                  (selectedRoom?.id || selectedRoom?._id) ===
+                  (room.id || room._id);
+                return (
+                  <TouchableOpacity
+                    key={room.id || room._id}
+                    style={[styles.roomPill, active && styles.roomPillActive]}
+                    onPress={() => setSelectedRoom(room)}
+                    activeOpacity={0.75}
+                  >
+                    <View
+                      style={[
+                        styles.roomPillDot,
+                        active && styles.roomPillDotActive,
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.roomPillText,
+                        active && styles.roomPillTextActive,
+                      ]}
+                    >
+                      {room.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollViewWithDetection>
+          </View>
+        )}
+
+        {selectedRoom && (
+          <View style={styles.contentPadding}>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryTopRow}>
+                <View style={styles.summaryCopy}>
+                  <Text style={styles.summaryEyebrow}>Current snapshot</Text>
+                  <Text style={styles.summaryTitle}>Presence this cycle</Text>
+                  <Text style={styles.summaryPrimaryValue}>
+                    {markedDates.length} days
+                  </Text>
+                  <Text style={styles.summarySubtext}>
+                    {canMarkPresence
+                      ? `${remainingBillingDays} cycle day(s) still unmarked.`
+                      : "Presence marking is locked for this room right now."}
+                  </Text>
+                </View>
+                <View style={styles.summaryBadgeStack}>
+                  <View
+                    style={[
+                      styles.summaryBadge,
+                      { backgroundColor: presenceStatusMeta.backgroundColor },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.summaryBadgeText,
+                        { color: presenceStatusMeta.color },
+                      ]}
+                    >
+                      {presenceStatusMeta.label}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryBadge}>
+                    <Text style={styles.summaryBadgeText}>
+                      {billingPeriodLabel}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.summaryStatsRow}>
+                {summaryStats.map((stat) => (
+                  <View key={stat.label} style={styles.summaryStatCard}>
+                    <Text style={styles.summaryStatValue}>{stat.value}</Text>
+                    <Text style={styles.summaryStatLabel}>{stat.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {canChooseWaterPayors && (
+          <View style={styles.waterSplitCard}>
+            <View style={styles.waterSplitHeader}>
+              <View style={styles.waterSplitIcon}>
+                <Ionicons
+                  name="water-outline"
+                  size={18}
+                  color={colors.accent}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.waterSplitTitle}>Water Payor Split</Text>
+                <Text style={styles.waterSplitSub}>
+                  Choose who will absorb your water bill for this cycle.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.waterModeRow}>
+              <TouchableOpacity
+                style={[
+                  styles.waterModeChip,
+                  waterSplitMode === "all_payors" && styles.waterModeChipActive,
+                ]}
+                onPress={() => {
+                  setWaterSplitMode("all_payors");
+                  setSelectedWaterPayorIds([]);
+                }}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name={
+                    waterSplitMode === "all_payors"
+                      ? "checkmark-circle"
+                      : "ellipse-outline"
+                  }
+                  size={16}
+                  color={
+                    waterSplitMode === "all_payors"
+                      ? colors.textOnAccent
+                      : colors.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.waterModeText,
+                    waterSplitMode === "all_payors" &&
+                      styles.waterModeTextActive,
+                  ]}
+                >
+                  Split all payors
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.waterModeChip,
+                  waterSplitMode === "specific_payors" &&
+                    styles.waterModeChipActive,
+                ]}
+                onPress={() => setWaterSplitMode("specific_payors")}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name={
+                    waterSplitMode === "specific_payors"
+                      ? "checkmark-circle"
+                      : "ellipse-outline"
+                  }
+                  size={16}
+                  color={
+                    waterSplitMode === "specific_payors"
+                      ? colors.textOnAccent
+                      : colors.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.waterModeText,
+                    waterSplitMode === "specific_payors" &&
+                      styles.waterModeTextActive,
+                  ]}
+                >
+                  Specific payors
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {waterSplitMode === "specific_payors" && (
+              <View style={styles.payorChoiceWrap}>
+                {waterPayorMembers.map((member) => {
+                  const payorId = getMemberUserId(member);
+                  const selected = selectedWaterPayorIds.includes(payorId);
+                  return (
+                    <TouchableOpacity
+                      key={payorId || member.id}
+                      style={[
+                        styles.payorChoiceChip,
+                        selected && styles.payorChoiceChipActive,
+                      ]}
+                      onPress={() => toggleWaterPayor(payorId)}
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons
+                        name={selected ? "checkbox" : "square-outline"}
+                        size={16}
+                        color={selected ? colors.accent : colors.textTertiary}
+                      />
+                      <Text
+                        style={[
+                          styles.payorChoiceText,
+                          selected && styles.payorChoiceTextActive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {member.name || member.user?.name || "Payor"}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                <Text style={styles.payorChoiceHint}>
+                  Select up to 3 payors.
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.waterSaveButton,
+                savingWaterPreference && styles.waterSaveButtonDisabled,
+              ]}
+              onPress={saveWaterPayorPreference}
+              disabled={savingWaterPreference}
+              activeOpacity={0.8}
+            >
+              {savingWaterPreference ? (
+                <ActivityIndicator color={colors.textOnAccent} />
+              ) : (
+                <>
+                  <Ionicons
+                    name="save-outline"
+                    size={16}
+                    color={colors.textOnAccent}
+                  />
+                  <Text style={styles.waterSaveText}>Save Water Split</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Select room prompt */}
+        {!selectedRoom && rooms.length > 0 && (
+          <View style={styles.contentPadding}>
+            <View style={styles.emptyCard}>
+              <View
+                style={[
+                  styles.emptyIconWrap,
+                  { backgroundColor: colors.accentLight },
+                ]}
+              >
+                <Ionicons name="home-outline" size={32} color={colors.accent} />
+              </View>
+              <Text style={styles.emptyTitle}>Select a Room</Text>
+              <Text style={styles.emptySub}>
+                Choose a room above to mark attendance.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* ─── MAIN CONTENT ─── */}
+        {selectedRoom && canMarkPresence ? (
+          <>
+            {/* Billing Period Strip */}
+            {selectedRoom?.billing?.start && selectedRoom?.billing?.end && (
+              <View style={styles.billingStrip}>
+                <View style={styles.billingStripAccent} />
+                <Ionicons name="time-outline" size={14} color={colors.accent} />
+                <Text style={styles.billingStripText}>
+                  <Text style={styles.billingStripLabel}>Billing Period </Text>
+                  {new Date(selectedRoom.billing.start).toLocaleDateString(
+                    "en-US",
+                    {
+                      month: "short",
+                      day: "numeric",
+                    },
+                  )}
+                  {" – "}
+                  {new Date(selectedRoom.billing.end).toLocaleDateString(
+                    "en-US",
+                    {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    },
+                  )}
+                </Text>
+              </View>
+            )}
+
+            {/* ─── STATS ROW ─── */}
+            <View style={styles.statsRowCompact}>
+              <View
+                style={[
+                  styles.statBox,
+                  { backgroundColor: colors.actionPresenceBg },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statIconWrap,
+                    { backgroundColor: colors.accentSurface },
+                  ]}
+                >
+                  <Ionicons
+                    name="checkmark-done"
+                    size={18}
+                    color={colors.actionPresenceIcon}
+                  />
+                </View>
+                <Text style={styles.statNum}>{markedDates.length}</Text>
+                <Text style={styles.statLabel}>Days Marked</Text>
+              </View>
+              <View
+                style={[
+                  styles.statBox,
+                  { backgroundColor: colors.actionRoomInfoBg },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statIconWrap,
+                    { backgroundColor: colors.accentSurface },
+                  ]}
+                >
+                  <Ionicons
+                    name="water-outline"
+                    size={18}
+                    color={colors.actionRoomInfoIcon}
+                  />
+                </View>
+                <Text style={styles.statNum}>
+                  ₱{(markedDates.length * 5).toFixed(0)}
+                </Text>
+                <Text style={styles.statLabel}>Est. Water Bill</Text>
+              </View>
+              <View
+                style={[
+                  styles.statBox,
+                  { backgroundColor: colors.actionPayBillsBg },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statIconWrap,
+                    { backgroundColor: colors.accentSurface },
+                  ]}
+                >
+                  <Ionicons
+                    name="trending-up-outline"
+                    size={18}
+                    color={colors.actionPayBillsIcon}
+                  />
+                </View>
+                <Text style={styles.statNum}>{attendanceRate}%</Text>
+                <Text style={styles.statLabel}>Attendance</Text>
+              </View>
+            </View>
+
+            {/* ─── QUICK ACTIONS CARD ─── */}
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Ionicons
+                  name="flash-outline"
+                  size={16}
+                  color={colors.accent}
+                />
+                <Text style={styles.cardTitle}>Quick Actions</Text>
+              </View>
+
+              {/* Primary CTA */}
+              <TouchableOpacity
+                style={[
+                  styles.primaryBtn,
+                  (marking || markingMultiple) && styles.primaryBtnDisabled,
+                ]}
+                onPress={markTodayPresence}
+                disabled={marking || markingMultiple || !hasActiveCycle}
+                activeOpacity={0.82}
+              >
+                {marking || markingMultiple ? (
+                  <ActivityIndicator color={colors.textOnAccent} size={18} />
+                ) : (
+                  <>
+                    <View style={styles.primaryBtnIconWrap}>
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={18}
+                        color={colors.textOnAccent}
+                      />
+                    </View>
+                    <Text style={styles.primaryBtnText}>
+                      Mark Today's Presence
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Bulk action row */}
+              <View style={styles.bulkRow}>
                 <TouchableOpacity
-                  key={room.id || room._id}
-                  style={[styles.roomPill, active && styles.roomPillActive]}
-                  onPress={() => setSelectedRoom(room)}
+                  style={styles.bulkBtn}
+                  onPress={() => {
+                    if (!hasActiveCycle) {
+                      showToast(
+                        "No active billing cycle. Contact your admin.",
+                        "info",
+                      );
+                      return;
+                    }
+                    markAllCurrentMonth();
+                  }}
+                  disabled={markingMultiple || !hasActiveCycle}
                   activeOpacity={0.75}
                 >
                   <View
                     style={[
-                      styles.roomPillDot,
-                      active && styles.roomPillDotActive,
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.roomPillText,
-                      active && styles.roomPillTextActive,
+                      styles.bulkIcon,
+                      { backgroundColor: colors.infoBg },
                     ]}
                   >
-                    {room.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollViewWithDetection>
-        </View>
-      )}
-
-      {selectedRoom && (
-        <View style={styles.contentPadding}>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryTopRow}>
-              <View style={styles.summaryCopy}>
-                <Text style={styles.summaryEyebrow}>Current snapshot</Text>
-                <Text style={styles.summaryTitle}>Presence this cycle</Text>
-                <Text style={styles.summaryPrimaryValue}>
-                  {markedDates.length} days
-                </Text>
-                <Text style={styles.summarySubtext}>
-                  {canMarkPresence
-                    ? `${remainingBillingDays} cycle day(s) still unmarked.`
-                    : "Presence marking is locked for this room right now."}
-                </Text>
-              </View>
-              <View style={styles.summaryBadgeStack}>
-                <View
-                  style={[
-                    styles.summaryBadge,
-                    { backgroundColor: presenceStatusMeta.backgroundColor },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.summaryBadgeText,
-                      { color: presenceStatusMeta.color },
-                    ]}
-                  >
-                    {presenceStatusMeta.label}
-                  </Text>
-                </View>
-                <View style={styles.summaryBadge}>
-                  <Text style={styles.summaryBadgeText}>
-                    {billingPeriodLabel}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.summaryStatsRow}>
-              {summaryStats.map((stat) => (
-                <View key={stat.label} style={styles.summaryStatCard}>
-                  <Text style={styles.summaryStatValue}>{stat.value}</Text>
-                  <Text style={styles.summaryStatLabel}>{stat.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Select room prompt */}
-      {!selectedRoom && rooms.length > 0 && (
-        <View style={styles.contentPadding}>
-          <View style={styles.emptyCard}>
-            <View
-              style={[
-                styles.emptyIconWrap,
-                { backgroundColor: colors.accentLight },
-              ]}
-            >
-              <Ionicons name="home-outline" size={32} color={colors.accent} />
-            </View>
-            <Text style={styles.emptyTitle}>Select a Room</Text>
-            <Text style={styles.emptySub}>
-              Choose a room above to mark attendance.
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* ─── MAIN CONTENT ─── */}
-      {selectedRoom && canMarkPresence ? (
-        <>
-          {/* Billing Period Strip */}
-          {selectedRoom?.billing?.start && selectedRoom?.billing?.end && (
-            <View style={styles.billingStrip}>
-              <View style={styles.billingStripAccent} />
-              <Ionicons name="time-outline" size={14} color={colors.accent} />
-              <Text style={styles.billingStripText}>
-                <Text style={styles.billingStripLabel}>Billing Period </Text>
-                {new Date(selectedRoom.billing.start).toLocaleDateString(
-                  "en-US",
-                  {
-                    month: "short",
-                    day: "numeric",
-                  },
-                )}
-                {" – "}
-                {new Date(selectedRoom.billing.end).toLocaleDateString(
-                  "en-US",
-                  {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  },
-                )}
-              </Text>
-            </View>
-          )}
-
-          {/* ─── STATS ROW ─── */}
-          <View style={styles.statsRowCompact}>
-            <View
-              style={[
-                styles.statBox,
-                { backgroundColor: colors.actionPresenceBg },
-              ]}
-            >
-              <View
-                style={[
-                  styles.statIconWrap,
-                  { backgroundColor: colors.accentSurface },
-                ]}
-              >
-                <Ionicons
-                  name="checkmark-done"
-                  size={18}
-                  color={colors.actionPresenceIcon}
-                />
-              </View>
-              <Text style={styles.statNum}>{markedDates.length}</Text>
-              <Text style={styles.statLabel}>Days Marked</Text>
-            </View>
-            <View
-              style={[
-                styles.statBox,
-                { backgroundColor: colors.actionRoomInfoBg },
-              ]}
-            >
-              <View
-                style={[
-                  styles.statIconWrap,
-                  { backgroundColor: colors.accentSurface },
-                ]}
-              >
-                <Ionicons
-                  name="water-outline"
-                  size={18}
-                  color={colors.actionRoomInfoIcon}
-                />
-              </View>
-              <Text style={styles.statNum}>
-                ₱{(markedDates.length * 5).toFixed(0)}
-              </Text>
-              <Text style={styles.statLabel}>Est. Water Bill</Text>
-            </View>
-            <View
-              style={[
-                styles.statBox,
-                { backgroundColor: colors.actionPayBillsBg },
-              ]}
-            >
-              <View
-                style={[
-                  styles.statIconWrap,
-                  { backgroundColor: colors.accentSurface },
-                ]}
-              >
-                <Ionicons
-                  name="trending-up-outline"
-                  size={18}
-                  color={colors.actionPayBillsIcon}
-                />
-              </View>
-              <Text style={styles.statNum}>{attendanceRate}%</Text>
-              <Text style={styles.statLabel}>Attendance</Text>
-            </View>
-          </View>
-
-          {/* ─── QUICK ACTIONS CARD ─── */}
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="flash-outline" size={16} color={colors.accent} />
-              <Text style={styles.cardTitle}>Quick Actions</Text>
-            </View>
-
-            {/* Primary CTA */}
-            <TouchableOpacity
-              style={[
-                styles.primaryBtn,
-                (marking || markingMultiple) && styles.primaryBtnDisabled,
-              ]}
-              onPress={markTodayPresence}
-              disabled={marking || markingMultiple || !hasActiveCycle}
-              activeOpacity={0.82}
-            >
-              {marking || markingMultiple ? (
-                <ActivityIndicator color={colors.textOnAccent} size={18} />
-              ) : (
-                <>
-                  <View style={styles.primaryBtnIconWrap}>
                     <Ionicons
-                      name="checkmark-circle"
-                      size={18}
-                      color={colors.textOnAccent}
+                      name="calendar-outline"
+                      size={15}
+                      color={colors.info}
                     />
                   </View>
-                  <Text style={styles.primaryBtnText}>
-                    Mark Today's Presence
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
+                  <View>
+                    <Text style={styles.bulkBtnLabel}>All Month</Text>
+                    <Text style={styles.bulkBtnSub}>Every day</Text>
+                  </View>
+                </TouchableOpacity>
 
-            {/* Bulk action row */}
-            <View style={styles.bulkRow}>
-              <TouchableOpacity
-                style={styles.bulkBtn}
-                onPress={() => {
-                  if (!hasActiveCycle) {
-                    Alert.alert(
-                      "No Active Cycle",
-                      "No active billing cycle or billing period. Contact your admin.",
-                    );
-                    return;
-                  }
-                  markAllCurrentMonth();
-                }}
-                disabled={markingMultiple || !hasActiveCycle}
-                activeOpacity={0.75}
-              >
-                <View
-                  style={[styles.bulkIcon, { backgroundColor: colors.infoBg }]}
+                <TouchableOpacity
+                  style={styles.bulkBtn}
+                  onPress={() => {
+                    if (!hasActiveCycle) {
+                      showToast(
+                        "No active billing cycle. Contact your admin.",
+                        "info",
+                      );
+                      return;
+                    }
+                    markWorkdaysCurrentMonth();
+                  }}
+                  disabled={markingMultiple || !hasActiveCycle}
+                  activeOpacity={0.75}
                 >
-                  <Ionicons
-                    name="calendar-outline"
-                    size={15}
-                    color={colors.info}
-                  />
-                </View>
-                <View>
-                  <Text style={styles.bulkBtnLabel}>All Month</Text>
-                  <Text style={styles.bulkBtnSub}>Every day</Text>
-                </View>
-              </TouchableOpacity>
+                  <View
+                    style={[
+                      styles.bulkIcon,
+                      { backgroundColor: colors.successBg },
+                    ]}
+                  >
+                    <Ionicons
+                      name="briefcase-outline"
+                      size={15}
+                      color={colors.success}
+                    />
+                  </View>
+                  <View>
+                    <Text style={styles.bulkBtnLabel}>Workdays</Text>
+                    <Text style={styles.bulkBtnSub}>Mon – Fri</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={styles.bulkBtn}
-                onPress={() => {
-                  if (!hasActiveCycle) {
-                    Alert.alert(
-                      "No Active Cycle",
-                      "No active billing cycle or billing period. Contact your admin.",
-                    );
-                    return;
-                  }
-                  markWorkdaysCurrentMonth();
-                }}
-                disabled={markingMultiple || !hasActiveCycle}
-                activeOpacity={0.75}
-              >
-                <View
+              {/* Tip */}
+              <View style={styles.tipRow}>
+                <Ionicons
+                  name="finger-print-outline"
+                  size={14}
+                  color={colors.accent}
+                />
+                <Text style={styles.tipText}>
+                  Tap a date to toggle · Long-press to start a range
+                </Text>
+              </View>
+            </View>
+
+            {/* No cycle banner */}
+            {!hasActiveCycle && (
+              <View style={styles.warnBanner}>
+                <Ionicons
+                  name="warning-outline"
+                  size={16}
+                  color={colors.warning}
+                />
+                <Text style={styles.warnText}>
+                  No active billing cycle. Attendance marking is disabled.
+                </Text>
+              </View>
+            )}
+
+            {/* ─── CALENDAR CARD ─── */}
+            <View style={styles.card}>
+              <View style={styles.calendarNav}>
+                <TouchableOpacity
                   style={[
-                    styles.bulkIcon,
-                    { backgroundColor: colors.successBg },
+                    styles.navBtn,
+                    !canGoPrevMonth && styles.navBtnDisabled,
                   ]}
+                  onPress={() => {
+                    if (!canGoPrevMonth) return;
+                    setCurrentMonth(
+                      new Date(
+                        currentMonth.getFullYear(),
+                        currentMonth.getMonth() - 1,
+                      ),
+                    );
+                  }}
+                  disabled={!canGoPrevMonth}
+                  activeOpacity={0.7}
                 >
                   <Ionicons
-                    name="briefcase-outline"
-                    size={15}
-                    color={colors.success}
+                    name="chevron-back"
+                    size={18}
+                    color={canGoPrevMonth ? colors.accent : colors.textTertiary}
                   />
-                </View>
-                <View>
-                  <Text style={styles.bulkBtnLabel}>Workdays</Text>
-                  <Text style={styles.bulkBtnSub}>Mon – Fri</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
+                </TouchableOpacity>
 
-            {/* Tip */}
-            <View style={styles.tipRow}>
-              <Ionicons
-                name="finger-print-outline"
-                size={14}
-                color={colors.accent}
-              />
-              <Text style={styles.tipText}>
-                Tap a date to toggle · Long-press to start a range
-              </Text>
-            </View>
-          </View>
+                <Text style={styles.monthLabel}>{monthName}</Text>
 
-          {/* No cycle banner */}
-          {!hasActiveCycle && (
-            <View style={styles.warnBanner}>
-              <Ionicons
-                name="warning-outline"
-                size={16}
-                color={colors.warning}
-              />
-              <Text style={styles.warnText}>
-                No active billing cycle. Attendance marking is disabled.
-              </Text>
-            </View>
-          )}
+                <TouchableOpacity
+                  style={[
+                    styles.navBtn,
+                    !canGoNextMonth && styles.navBtnDisabled,
+                  ]}
+                  onPress={() => {
+                    if (!canGoNextMonth) return;
+                    setCurrentMonth(
+                      new Date(
+                        currentMonth.getFullYear(),
+                        currentMonth.getMonth() + 1,
+                      ),
+                    );
+                  }}
+                  disabled={!canGoNextMonth}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={canGoNextMonth ? colors.accent : colors.textTertiary}
+                  />
+                </TouchableOpacity>
+              </View>
 
-          {/* ─── CALENDAR CARD ─── */}
-          <View style={styles.card}>
-            <View style={styles.calendarNav}>
-              <TouchableOpacity
-                style={[
-                  styles.navBtn,
-                  !canGoPrevMonth && styles.navBtnDisabled,
-                ]}
-                onPress={() => {
-                  if (!canGoPrevMonth) return;
-                  setCurrentMonth(
-                    new Date(
-                      currentMonth.getFullYear(),
-                      currentMonth.getMonth() - 1,
-                    ),
-                  );
-                }}
-                disabled={!canGoPrevMonth}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="chevron-back"
-                  size={18}
-                  color={canGoPrevMonth ? colors.accent : colors.textTertiary}
-                />
-              </TouchableOpacity>
-
-              <Text style={styles.monthLabel}>{monthName}</Text>
-
-              <TouchableOpacity
-                style={[
-                  styles.navBtn,
-                  !canGoNextMonth && styles.navBtnDisabled,
-                ]}
-                onPress={() => {
-                  if (!canGoNextMonth) return;
-                  setCurrentMonth(
-                    new Date(
-                      currentMonth.getFullYear(),
-                      currentMonth.getMonth() + 1,
-                    ),
-                  );
-                }}
-                disabled={!canGoNextMonth}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={canGoNextMonth ? colors.accent : colors.textTertiary}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Week headers */}
-            <View style={styles.weekRow}>
-              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d, i) => (
-                <View key={i} style={styles.weekCell}>
-                  <Text
-                    style={[
-                      styles.weekText,
-                      (i === 0 || i === 6) && styles.weekTextWeekend,
-                    ]}
-                  >
-                    {d}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Day grid */}
-            <View style={styles.dayGrid}>
-              {calendarDays.map((date, index) => {
-                if (!date) return <View key={index} style={styles.dayCell} />;
-
-                const markable = isDateMarkable(date);
-                const marked = isDateMarked(date);
-                const todayFlag = isToday(date);
-                const dateYMD = formatToYMD(date);
-                const isRangeStart =
-                  rangeStartDate && dateYMD === rangeStartDate;
-
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.dayCell,
-                      todayFlag && styles.todayCell,
-                      marked && !todayFlag && styles.markedCell,
-                      marked && todayFlag && styles.markedTodayCell,
-                      isRangeStart && styles.rangeCell,
-                      !markable && styles.dimCell,
-                    ]}
-                    onPress={() => {
-                      if (!markable) return;
-                      if (rangeStartDate) {
-                        markDateRange(new Date(rangeStartDate), date);
-                      } else {
-                        markPresence(date);
-                      }
-                    }}
-                    onLongPress={() => {
-                      if (markable)
-                        setRangeStartDate(rangeStartDate ? null : dateYMD);
-                    }}
-                    disabled={!markable}
-                    activeOpacity={0.65}
-                  >
+              {/* Week headers */}
+              <View style={styles.weekRow}>
+                {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d, i) => (
+                  <View key={i} style={styles.weekCell}>
                     <Text
                       style={[
-                        styles.dayNum,
-                        todayFlag && styles.todayNum,
-                        marked && styles.markedNum,
-                        !markable && styles.dimText,
-                        isRangeStart && styles.rangeNum,
+                        styles.weekText,
+                        (i === 0 || i === 6) && styles.weekTextWeekend,
                       ]}
                     >
-                      {date.getDate()}
+                      {d}
                     </Text>
-                    {marked && (
-                      <View
+                  </View>
+                ))}
+              </View>
+
+              {/* Day grid */}
+              <View style={styles.dayGrid}>
+                {calendarDays.map((date, index) => {
+                  if (!date) return <View key={index} style={styles.dayCell} />;
+
+                  const markable = isDateMarkable(date);
+                  const marked = isDateMarked(date);
+                  const todayFlag = isToday(date);
+                  const dateYMD = formatToYMD(date);
+                  const isRangeStart =
+                    rangeStartDate && dateYMD === rangeStartDate;
+
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.dayCell,
+                        todayFlag && styles.todayCell,
+                        marked && !todayFlag && styles.markedCell,
+                        marked && todayFlag && styles.markedTodayCell,
+                        isRangeStart && styles.rangeCell,
+                        !markable && styles.dimCell,
+                      ]}
+                      onPress={() => {
+                        if (!markable) return;
+                        if (rangeStartDate) {
+                          markDateRange(new Date(rangeStartDate), date);
+                        } else {
+                          markPresence(date);
+                        }
+                      }}
+                      onLongPress={() => {
+                        if (markable)
+                          setRangeStartDate(rangeStartDate ? null : dateYMD);
+                      }}
+                      disabled={!markable}
+                      activeOpacity={0.65}
+                    >
+                      <Text
                         style={[
-                          styles.markDot,
-                          todayFlag && styles.markDotToday,
+                          styles.dayNum,
+                          todayFlag && styles.todayNum,
+                          marked && styles.markedNum,
+                          !markable && styles.dimText,
+                          isRangeStart && styles.rangeNum,
                         ]}
-                      />
-                    )}
-                    {isRangeStart && (
-                      <View style={styles.rangePip}>
-                        <Ionicons
-                          name="flag"
-                          size={7}
-                          color={colors.textOnAccent}
+                      >
+                        {date.getDate()}
+                      </Text>
+                      {marked && (
+                        <View
+                          style={[
+                            styles.markDot,
+                            todayFlag && styles.markDotToday,
+                          ]}
                         />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+                      )}
+                      {isRangeStart && (
+                        <View style={styles.rangePip}>
+                          <Ionicons
+                            name="flag"
+                            size={7}
+                            color={colors.textOnAccent}
+                          />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Legend */}
+              <View style={styles.legendRow}>
+                {[
+                  { color: colors.accentLight, label: "Today" },
+                  { color: colors.successBg, label: "Marked" },
+                  { color: colors.warningBg, label: "Range" },
+                  { color: colors.skeleton, label: "N/A" },
+                ].map((item) => (
+                  <View key={item.label} style={styles.legendItem}>
+                    <View
+                      style={[
+                        styles.legendDot,
+                        { backgroundColor: item.color },
+                      ]}
+                    />
+                    <Text style={styles.legendLabel}>{item.label}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
+          </>
+        ) : selectedRoom &&
+          selectedRoom?.cycleStatus === "cycle_closed" &&
+          !userPaidStatus ? (
+          <StateCard
+            icon="lock-closed"
+            iconBg={colors.errorBg}
+            iconColor={colors.error}
+            title="Billing Cycle Closed"
+            message="This billing cycle has been closed by your host. Attendance marking is no longer available. Please contact your host to settle your outstanding payment."
+            colors={colors}
+          />
+        ) : selectedRoom && userPaidStatus ? (
+          <StateCard
+            icon="checkmark-circle"
+            iconBg={colors.successBg}
+            iconColor={colors.success}
+            title="All Bills Paid"
+            message="You have paid all your bills for this billing period. Attendance marking is locked."
+            colors={colors}
+          />
+        ) : selectedRoom && isFixedMonthlyWater ? (
+          <StateCard
+            icon="water"
+            iconBg={colors.infoBg}
+            iconColor={colors.info}
+            title="Fixed Monthly Billing"
+            message="Your host has set a fixed monthly water bill for this room. Attendance tracking is not required — your water charge is already calculated."
+            colors={colors}
+          />
+        ) : selectedRoom && hasPendingPayment ? (
+          <StateCard
+            icon="hourglass-outline"
+            iconBg={colors.warningBg}
+            iconColor={colors.warning}
+            title="Awaiting Verification"
+            message="Your payment has been submitted and is pending verification by your host. Attendance marking will be available again once your payment is verified."
+            colors={colors}
+          />
+        ) : selectedRoom ? (
+          <StateCard
+            icon="time-outline"
+            iconBg={colors.actionPresenceBg}
+            iconColor={colors.accent}
+            title="No Active Billing Cycle"
+            message="Waiting for your admin to set billing details for this billing period."
+            colors={colors}
+          />
+        ) : null}
 
-            {/* Legend */}
-            <View style={styles.legendRow}>
-              {[
-                { color: colors.accentLight, label: "Today" },
-                { color: colors.successBg, label: "Marked" },
-                { color: colors.warningBg, label: "Range" },
-                { color: colors.skeleton, label: "N/A" },
-              ].map((item) => (
-                <View key={item.label} style={styles.legendItem}>
-                  <View
-                    style={[styles.legendDot, { backgroundColor: item.color }]}
-                  />
-                  <Text style={styles.legendLabel}>{item.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </>
-      ) : selectedRoom &&
-        selectedRoom?.cycleStatus === "cycle_closed" &&
-        !userPaidStatus ? (
-        <StateCard
-          icon="lock-closed"
-          iconBg={colors.errorBg}
-          iconColor={colors.error}
-          title="Billing Cycle Closed"
-          message="This billing cycle has been closed by your host. Attendance marking is no longer available. Please contact your host to settle your outstanding payment."
-          colors={colors}
-        />
-      ) : selectedRoom && userPaidStatus ? (
-        <StateCard
-          icon="checkmark-circle"
-          iconBg={colors.successBg}
-          iconColor={colors.success}
-          title="All Bills Paid"
-          message="You have paid all your bills for this billing period. Attendance marking is locked."
-          colors={colors}
-        />
-      ) : selectedRoom && isFixedMonthlyWater ? (
-        <StateCard
-          icon="water"
-          iconBg={colors.infoBg}
-          iconColor={colors.info}
-          title="Fixed Monthly Billing"
-          message="Your host has set a fixed monthly water bill for this room. Attendance tracking is not required — your water charge is already calculated."
-          colors={colors}
-        />
-      ) : selectedRoom && hasPendingPayment ? (
-        <StateCard
-          icon="hourglass-outline"
-          iconBg={colors.warningBg}
-          iconColor={colors.warning}
-          title="Awaiting Verification"
-          message="Your payment has been submitted and is pending verification by your host. Attendance marking will be available again once your payment is verified."
-          colors={colors}
-        />
-      ) : selectedRoom ? (
-        <StateCard
-          icon="time-outline"
-          iconBg={colors.actionPresenceBg}
-          iconColor={colors.accent}
-          title="No Active Billing Cycle"
-          message="Waiting for your admin to set billing details for this billing period."
-          colors={colors}
-        />
-      ) : null}
+        {rooms.length === 0 && (
+          <StateCard
+            icon="home-outline"
+            iconBg={colors.cardAlt}
+            iconColor={colors.textTertiary}
+            title="No Rooms Joined"
+            message="Join a room from Home to start marking attendance."
+            colors={colors}
+          />
+        )}
 
-      {rooms.length === 0 && (
-        <StateCard
-          icon="home-outline"
-          iconBg={colors.cardAlt}
-          iconColor={colors.textTertiary}
-          title="No Rooms Joined"
-          message="Join a room from Home to start marking attendance."
-          colors={colors}
-        />
-      )}
-
-      <View style={{ height: 36 }} />
-    </ScrollViewWithDetection>
+        <View style={{ height: 36 }} />
+      </ScrollViewWithDetection>
+    </>
   );
 };
 
@@ -1464,6 +1790,133 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     },
 
     // ── Hero Header ──
+    waterSplitCard: {
+      marginHorizontal: 16,
+      marginTop: 14,
+      backgroundColor: colors.card,
+      borderRadius: 22,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      elevation: 3,
+    },
+    waterSplitHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 14,
+    },
+    waterSplitIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      backgroundColor: colors.accentLight,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    waterSplitTitle: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    waterSplitSub: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
+      lineHeight: 17,
+    },
+    waterModeRow: {
+      flexDirection: "row",
+      gap: 10,
+    },
+    waterModeChip: {
+      flex: 1,
+      minHeight: 44,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      backgroundColor: colors.cardAlt,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+      paddingHorizontal: 10,
+    },
+    waterModeChipActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    waterModeText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.textSecondary,
+      textAlign: "center",
+    },
+    waterModeTextActive: {
+      color: colors.textOnAccent,
+    },
+    payorChoiceWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 12,
+    },
+    payorChoiceChip: {
+      maxWidth: "48%",
+      flexGrow: 1,
+      minHeight: 42,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      backgroundColor: colors.cardAlt,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      paddingHorizontal: 11,
+    },
+    payorChoiceChipActive: {
+      borderColor: colors.accent,
+      backgroundColor: colors.accentLight,
+    },
+    payorChoiceText: {
+      flex: 1,
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.textSecondary,
+    },
+    payorChoiceTextActive: {
+      color: colors.accent,
+    },
+    payorChoiceHint: {
+      width: "100%",
+      fontSize: 11,
+      color: colors.textTertiary,
+      fontWeight: "600",
+      marginTop: 2,
+    },
+    waterSaveButton: {
+      height: 46,
+      borderRadius: 15,
+      backgroundColor: colors.accent,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 14,
+    },
+    waterSaveButtonDisabled: {
+      opacity: 0.6,
+    },
+    waterSaveText: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.textOnAccent,
+    },
+
     heroHeader: {
       backgroundColor: colors.card,
       paddingHorizontal: 20,

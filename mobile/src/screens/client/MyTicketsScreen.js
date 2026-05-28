@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   Modal,
   TextInput,
 } from "react-native";
@@ -21,6 +20,7 @@ import {
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
+import { Toast } from "../../components/CustomAlert";
 
 const MyTicketsScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -35,6 +35,10 @@ const MyTicketsScreen = ({ navigation }) => {
   const [newReply, setNewReply] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("all");
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
 
   useEffect(() => {
     fetchTickets();
@@ -51,7 +55,7 @@ const MyTicketsScreen = ({ navigation }) => {
       setTickets(Array.isArray(response) ? response : response?.data || []);
     } catch (error) {
       console.error("Error fetching tickets:", error);
-      Alert.alert("Error", "Failed to load your support tickets");
+      showToast("Failed to load your support tickets", "error");
     } finally {
       setLoading(false);
     }
@@ -82,13 +86,13 @@ const MyTicketsScreen = ({ navigation }) => {
         console.error("Error marking ticket as read:", error);
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to load ticket details");
+      showToast("Failed to load ticket details", "error");
     }
   };
 
   const handleAddReply = async () => {
     if (!newReply.trim()) {
-      Alert.alert("Validation", "Please enter your message");
+      showToast("Please enter your message", "warning");
       return;
     }
     setSubmitting(true);
@@ -97,7 +101,7 @@ const MyTicketsScreen = ({ navigation }) => {
         selectedTicket.id || selectedTicket._id,
         newReply,
       );
-      Alert.alert("Success", "Reply added successfully");
+      showToast("Reply added successfully", "success");
       setNewReply("");
       const response = await supportService.getTicketDetails(
         selectedTicket.id || selectedTicket._id,
@@ -111,7 +115,7 @@ const MyTicketsScreen = ({ navigation }) => {
         ),
       );
     } catch (error) {
-      Alert.alert("Error", "Failed to add reply");
+      showToast("Failed to add reply", "error");
     } finally {
       setSubmitting(false);
     }
@@ -293,6 +297,12 @@ const MyTicketsScreen = ({ navigation }) => {
   /* ─── Main ─── */
   return (
     <View style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
       {/* Filter Tabs */}
       <ScrollViewWithDetection
         horizontal

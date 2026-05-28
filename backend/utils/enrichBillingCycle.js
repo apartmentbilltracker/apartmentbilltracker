@@ -15,6 +15,47 @@ const WATER_RATE_PER_DAY = 5; // ₱5 per day
 /** Round to 2 decimal places (cents) */
 const r2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
 
+const memberId = (member) => String(member?.user_id || "");
+
+const getPreferredWaterPayorIds = (member, payingMembers) => {
+  const allPayorIds = payingMembers.map((m) => memberId(m)).filter(Boolean);
+  const preferred = Array.isArray(member.water_split_payor_ids)
+    ? member.water_split_payor_ids.map(String)
+    : [];
+
+  if (member.water_split_mode !== "specific_payors" || preferred.length === 0) {
+    return allPayorIds;
+  }
+
+  const validPayorIds = new Set(allPayorIds);
+  const selected = [...new Set(preferred)].filter((id) =>
+    validPayorIds.has(id),
+  );
+  return selected.length > 0 ? selected : allPayorIds;
+};
+
+const distributeWater = (assignments, sources, payorIds, amount, sourceId) => {
+  if (!amount || payorIds.length === 0) return;
+
+  const share = r2(amount / payorIds.length);
+  let assigned = 0;
+  payorIds.forEach((payorId, index) => {
+    const portion =
+      index === payorIds.length - 1 ? r2(amount - assigned) : share;
+    assignments.set(payorId, r2((assignments.get(payorId) || 0) + portion));
+    if (!sources.has(payorId)) sources.set(payorId, []);
+    sources.get(payorId).push(sourceId);
+    assigned = r2(assigned + portion);
+  });
+};
+
+const waterPreferenceSnapshot = (member) => ({
+  water_split_mode: member.water_split_mode || "all_payors",
+  water_split_payor_ids: Array.isArray(member.water_split_payor_ids)
+    ? member.water_split_payor_ids
+    : [],
+});
+
 /**
  * Enrich a single billing cycle with computed member charges from presence data.
  * Mutates the cycle object in-place and also returns it.
@@ -246,25 +287,34 @@ async function enrichBillingCycle(cycle, members, roomData) {
   // ── FIXED MONTHLY WATER ──
   if (waterBillingMode === "fixed_monthly") {
     // per_person: every member is allocated waterFixedAmount; non-payer
-    //   shares are redistributed equally to payers.
+    //   shares are redistributed to their chosen payers.
     // by_room:    one total (waterFixedAmount) split equally among payors
     const allMembersCount = members.length || 1;
-    const nonPayerCount = allMembersCount - payerCount;
     const totalFixedWater =
       waterFixedType === "per_person"
         ? r2(waterFixedAmount * allMembersCount)
         : waterFixedAmount;
-    // For per_person payers absorb non-payer water equally
-    const nonPayorWaterPerPayor =
-      waterFixedType === "per_person" && payerCount > 0
-        ? r2((nonPayerCount * waterFixedAmount) / payerCount)
-        : 0;
+    const fixedWaterAssignments = new Map();
+    const fixedWaterSources = new Map();
+
+    if (waterFixedType === "per_person") {
+      members
+        .filter((member) => member.is_payer === false)
+        .forEach((member) => {
+          distributeWater(
+            fixedWaterAssignments,
+            fixedWaterSources,
+            getPreferredWaterPayorIds(member, payingMembers),
+            waterFixedAmount,
+            memberId(member),
+          );
+        });
+    }
+
     const fixedWaterPerPayor =
-      waterFixedType === "per_person"
-        ? r2(waterFixedAmount + nonPayorWaterPerPayor)
-        : payerCount > 0
-          ? r2(waterFixedAmount / payerCount)
-          : 0;
+      waterFixedType === "by_room" && payerCount > 0
+        ? r2(waterFixedAmount / payerCount)
+        : 0;
     let waterAssignedFixed = 0;
     let fixedPayerIndex = 0;
 
@@ -287,12 +337,24 @@ async function enrichBillingCycle(cycle, members, roomData) {
           memberRentShare = r2(rent - rentAssigned);
           memberElecShare = r2(electricity - elecAssigned);
           memberInternetShare = r2(internet - internetAssigned);
-          waterBillShare = r2(totalFixedWater - waterAssignedFixed);
+          waterBillShare =
+            waterFixedType === "by_room"
+              ? r2(totalFixedWater - waterAssignedFixed)
+              : r2(
+                  waterFixedAmount +
+                    (fixedWaterAssignments.get(memberId(member)) || 0),
+                );
         } else {
           memberRentShare = rentShare;
           memberElecShare = electricityShare;
           memberInternetShare = internetShare;
-          waterBillShare = fixedWaterPerPayor;
+          waterBillShare =
+            waterFixedType === "by_room"
+              ? fixedWaterPerPayor
+              : r2(
+                  waterFixedAmount +
+                    (fixedWaterAssignments.get(memberId(member)) || 0),
+                );
         }
         rentAssigned = r2(rentAssigned + memberRentShare);
         elecAssigned = r2(elecAssigned + memberElecShare);
@@ -319,8 +381,13 @@ async function enrichBillingCycle(cycle, members, roomData) {
           waterFixedType === "per_person" ? waterFixedAmount : waterBillShare,
         water_shared_nonpayor:
           member.is_payer !== false && waterFixedType === "per_person"
-            ? r2(waterBillShare - waterFixedAmount)
+            ? r2(fixedWaterAssignments.get(memberId(member)) || 0)
             : 0,
+        water_covered_nonpayor_ids:
+          member.is_payer !== false && waterFixedType === "per_person"
+            ? fixedWaterSources.get(memberId(member)) || []
+            : [],
+        ...waterPreferenceSnapshot(member),
         internet_share: memberInternetShare,
         custom_charges_share: member.is_payer !== false ? customChargeShare : 0,
         total_due: r2(
@@ -338,6 +405,24 @@ async function enrichBillingCycle(cycle, members, roomData) {
     // Correct last payer total_due for any rounding
     const payerCharges = memberCharges.filter((c) => c.is_payer !== false);
     if (payerCharges.length > 0) {
+      if (waterFixedType === "per_person") {
+        const waterSum = payerCharges.reduce(
+          (s, c) => r2(s + (c.water_bill_share || 0)),
+          0,
+        );
+        const waterDiff = r2(totalFixedWater - waterSum);
+        if (waterDiff !== 0) {
+          const lastPayer = payerCharges[payerCharges.length - 1];
+          lastPayer.water_bill_share = r2(
+            (lastPayer.water_bill_share || 0) + waterDiff,
+          );
+          lastPayer.water_shared_nonpayor = r2(
+            (lastPayer.water_shared_nonpayor || 0) + waterDiff,
+          );
+          lastPayer.total_due = r2((lastPayer.total_due || 0) + waterDiff);
+        }
+      }
+
       const sumPayerTotals = payerCharges.reduce(
         (s, c) => r2(s + c.total_due),
         0,
@@ -368,10 +453,6 @@ async function enrichBillingCycle(cycle, members, roomData) {
     return { member, presenceDays, ownWater };
   });
 
-  // Non-payor water split evenly among payors
-  const nonPayorWaterPerPayor =
-    payerCount > 0 ? r2(nonPayorWaterTotal / payerCount) : 0;
-
   const rawTotalWater = memberWaterOwn.reduce(
     (sum, m) => r2(sum + m.ownWater),
     0,
@@ -386,6 +467,20 @@ async function enrichBillingCycle(cycle, members, roomData) {
   // Active presence-based cycles: trust live computation, no scaling
   const targetWaterTotal = rawTotalWater;
   const waterScale = 1;
+  const waterAssignments = new Map();
+  const waterAssignmentSources = new Map();
+
+  memberWaterOwn
+    .filter(({ member }) => member.is_payer === false)
+    .forEach(({ member, ownWater }) => {
+      distributeWater(
+        waterAssignments,
+        waterAssignmentSources,
+        getPreferredWaterPayorIds(member, payingMembers),
+        r2(ownWater * waterScale),
+        memberId(member),
+      );
+    });
 
   // console.log(
   //   "[enrichBillingCycle] WATER DEBUG:",
@@ -419,20 +514,16 @@ async function enrichBillingCycle(cycle, members, roomData) {
 
       if (member.is_payer) {
         payerIndex++;
-        // Scaled non-payor water per payor
-        const scaledNonPayorPerPayor =
-          payerCount > 0
-            ? r2((nonPayorWaterTotal * waterScale) / payerCount)
-            : 0;
-        waterBillShare = r2(scaledOwnWater + scaledNonPayorPerPayor);
+        const assignedNonPayorWater = r2(
+          waterAssignments.get(memberId(member)) || 0,
+        );
+        waterBillShare = r2(scaledOwnWater + assignedNonPayorWater);
 
         if (payerIndex === payerCount) {
           // Last payer gets the remainder to ensure sum == total exactly
           memberRentShare = r2(rent - rentAssigned);
           memberElecShare = r2(electricity - elecAssigned);
           memberInternetShare = r2(internet - internetAssigned);
-          // Water remainder: ensure payer water sums to target total
-          waterBillShare = r2(targetWaterTotal - waterAssigned);
         } else {
           memberRentShare = rentShare;
           memberElecShare = electricityShare;
@@ -462,8 +553,12 @@ async function enrichBillingCycle(cycle, members, roomData) {
         water_bill_share: waterBillShare,
         water_own: scaledOwnWater,
         water_shared_nonpayor: member.is_payer
-          ? r2(waterBillShare - scaledOwnWater)
+          ? r2(waterAssignments.get(memberId(member)) || 0)
           : 0,
+        water_covered_nonpayor_ids: member.is_payer
+          ? waterAssignmentSources.get(memberId(member)) || []
+          : [],
+        ...waterPreferenceSnapshot(member),
         internet_share: memberInternetShare,
         custom_charges_share: member.is_payer ? customChargeShare : 0,
         total_due: r2(totalDue + (member.is_payer ? customChargeShare : 0)),
@@ -485,6 +580,22 @@ async function enrichBillingCycle(cycle, members, roomData) {
   // ── Final pass: correct last payer's total_due so sum matches total_billed_amount ──
   const payerCharges = memberCharges.filter((c) => c.is_payer !== false);
   if (payerCharges.length > 0) {
+    const waterSum = payerCharges.reduce(
+      (s, c) => r2(s + (c.water_bill_share || 0)),
+      0,
+    );
+    const waterDiff = r2(targetWaterTotal - waterSum);
+    if (waterDiff !== 0) {
+      const lastPayer = payerCharges[payerCharges.length - 1];
+      lastPayer.water_bill_share = r2(
+        (lastPayer.water_bill_share || 0) + waterDiff,
+      );
+      lastPayer.water_shared_nonpayor = r2(
+        (lastPayer.water_shared_nonpayor || 0) + waterDiff,
+      );
+      lastPayer.total_due = r2((lastPayer.total_due || 0) + waterDiff);
+    }
+
     const sumPayerTotals = payerCharges.reduce(
       (s, c) => r2(s + c.total_due),
       0,

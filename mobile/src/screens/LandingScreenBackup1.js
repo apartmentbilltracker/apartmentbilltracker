@@ -1,0 +1,1099 @@
+import React, { useRef, useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  TouchableOpacity,
+  Animated,
+  TextInput,
+  Platform,
+  KeyboardAvoidingView,
+  StatusBar,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../theme/ThemeContext";
+
+const { width, height } = Dimensions.get("window");
+
+// ── Forest Green Palette (mirrors colors.js dark tokens) ──────────────────────
+const FOREST_BG = "#002b29"; // darkColors.background
+const ACCENT_MINT = "#9af2bb"; // lightColors.accentSurface
+const ACCENT_EMERALD = "#81d8a3"; // darkColors.accent
+const ACCENT_LEAF = "#78dc77"; // darkColors.success
+const TEAL_MUTED = "#9ed0cd"; // darkColors.info
+const TEXT_PRI = "#eaf1ff"; // darkColors.text
+const TEXT_SEC = "rgba(158,208,205,0.62)";
+const CARD_BG = "rgba(255,255,255,0.07)";
+const CARD_BORDER = "rgba(158,208,205,0.15)";
+
+// ── Data ───────────────────────────────────────────────────────────────────────
+const FLOATING_ICONS = [
+  {
+    name: "flash-outline",
+    color: ACCENT_MINT,
+    x: 0.06,
+    y: 0.07,
+    size: 17,
+    delay: 0,
+  },
+  {
+    name: "water-outline",
+    color: ACCENT_EMERALD,
+    x: 0.8,
+    y: 0.06,
+    size: 15,
+    delay: 200,
+  },
+  {
+    name: "wifi-outline",
+    color: TEAL_MUTED,
+    x: 0.86,
+    y: 0.19,
+    size: 13,
+    delay: 350,
+  },
+  {
+    name: "home-outline",
+    color: ACCENT_LEAF,
+    x: 0.04,
+    y: 0.21,
+    size: 15,
+    delay: 100,
+  },
+  {
+    name: "people-outline",
+    color: ACCENT_MINT,
+    x: 0.74,
+    y: 0.31,
+    size: 12,
+    delay: 450,
+  },
+  {
+    name: "receipt-outline",
+    color: ACCENT_EMERALD,
+    x: 0.87,
+    y: 0.39,
+    size: 13,
+    delay: 150,
+  },
+  {
+    name: "stats-chart-outline",
+    color: TEAL_MUTED,
+    x: 0.03,
+    y: 0.38,
+    size: 14,
+    delay: 300,
+  },
+  {
+    name: "key-outline",
+    color: ACCENT_LEAF,
+    x: 0.7,
+    y: 0.5,
+    size: 12,
+    delay: 250,
+  },
+];
+
+const FEATURE_PILLS = [
+  { icon: "receipt-outline", label: "Track Bills", color: ACCENT_MINT },
+  { icon: "people-outline", label: "Split Fairly", color: ACCENT_EMERALD },
+  { icon: "business-outline", label: "Manage Units", color: ACCENT_LEAF },
+  { icon: "bar-chart-outline", label: "View Reports", color: TEAL_MUTED },
+];
+
+// ── Floating Icon ──────────────────────────────────────────────────────────────
+const FloatingIcon = ({ name, color, x, y, size, delay }) => {
+  const float = useRef(new Animated.Value(0)).current;
+  const fadeIn = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeIn, {
+      toValue: 1,
+      duration: 700,
+      delay,
+      useNativeDriver: true,
+    }).start();
+
+    const dur = 2600 + Math.random() * 900;
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, {
+          toValue: 1,
+          duration: dur,
+          useNativeDriver: true,
+        }),
+        Animated.timing(float, {
+          toValue: 0,
+          duration: dur,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+
+    return () => float.stopAnimation();
+  }, []);
+
+  const translateY = float.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -11],
+  });
+  const rotate = float.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ["-4deg", "0deg", "4deg"],
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        left: width * x,
+        top: height * y,
+        opacity: fadeIn,
+        transform: [{ translateY }, { rotate }],
+      }}
+    >
+      <View
+        style={{
+          width: size + 18,
+          height: size + 18,
+          borderRadius: (size + 18) / 2,
+          backgroundColor: color + "14",
+          justifyContent: "center",
+          alignItems: "center",
+          borderWidth: 1,
+          borderColor: color + "28",
+        }}
+      >
+        <Ionicons name={name} size={size} color={color + "90"} />
+      </View>
+    </Animated.View>
+  );
+};
+
+// ── Feature Pill ──────────────────────────────────────────────────────────────
+const FeaturePill = ({ icon, label, color, delay }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 520,
+      delay,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const scale = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.75, 1],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        pillStyles.pill,
+        {
+          borderColor: color + "32",
+          backgroundColor: color + "10",
+          opacity: anim,
+          transform: [{ scale }],
+        },
+      ]}
+    >
+      <View style={[pillStyles.iconWrap, { backgroundColor: color + "1e" }]}>
+        <Ionicons name={icon} size={12} color={color} />
+      </View>
+      <Text style={[pillStyles.label, { color }]}>{label}</Text>
+    </Animated.View>
+  );
+};
+
+const pillStyles = StyleSheet.create({
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  iconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+});
+
+// ── Stat Item ─────────────────────────────────────────────────────────────────
+const StatItem = ({ value, label, color, delay }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 600,
+      delay,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  return (
+    <Animated.View style={[statStyles.item, { opacity: anim }]}>
+      <Text style={[statStyles.value, { color }]}>{value}</Text>
+      <Text style={statStyles.label}>{label}</Text>
+    </Animated.View>
+  );
+};
+
+const statStyles = StyleSheet.create({
+  item: { alignItems: "center", flex: 1 },
+  value: { fontSize: 21, fontWeight: "800", letterSpacing: -0.5 },
+  label: {
+    fontSize: 11,
+    color: "rgba(158,208,205,0.45)",
+    fontWeight: "500",
+    marginTop: 2,
+    letterSpacing: 0.1,
+  },
+});
+
+// ── Auth Bottom Sheet Modal (lightweight fallback) ─────────────────────────────
+const AuthModal = ({ visible, onClose, onAuth }) => {
+  const insets = useSafeAreaInsets();
+  const translateY = useRef(new Animated.Value(height)).current;
+  const backdrop = useRef(new Animated.Value(0)).current;
+  const [email, setEmail] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      Animated.parallel([
+        Animated.spring(translateY, {
+          toValue: 0,
+          tension: 62,
+          friction: 11,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdrop, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else if (mounted) {
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: height,
+          duration: 310,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdrop, {
+          toValue: 0,
+          duration: 280,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setMounted(false));
+    }
+  }, [visible]);
+
+  if (!mounted) return null;
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: "rgba(0,0,0,0.65)", opacity: backdrop },
+        ]}
+      >
+        <TouchableOpacity
+          style={{ flex: 1 }}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+      </Animated.View>
+
+      <Animated.View
+        style={[
+          modalStyles.sheet,
+          { paddingBottom: insets.bottom + 16, transform: [{ translateY }] },
+        ]}
+      >
+        <View style={modalStyles.handle} />
+        <TouchableOpacity
+          style={modalStyles.closeBtn}
+          onPress={onClose}
+          activeOpacity={0.7}
+        >
+          <View style={modalStyles.closeBtnInner}>
+            <Ionicons name="close" size={17} color={TEXT_SEC} />
+          </View>
+        </TouchableOpacity>
+
+        <Text style={modalStyles.title}>Log in or sign up</Text>
+        <Text style={modalStyles.subtitle}>
+          Track bills, split costs fairly, and manage{"\n"}your property — all
+          in one place.
+        </Text>
+
+        <View style={modalStyles.socialList}>
+          {[
+            {
+              method: "google",
+              icon: "logo-google",
+              iconColor: "#EA4335",
+              label: "Continue with Google",
+            },
+            {
+              method: "apple",
+              icon: "logo-apple",
+              iconColor: TEXT_PRI,
+              label: "Continue with Apple",
+            },
+            {
+              method: "phone",
+              icon: "call-outline",
+              iconColor: TEXT_PRI,
+              label: "Continue with phone",
+            },
+          ].map(({ method, icon, iconColor, label }) => (
+            <TouchableOpacity
+              key={method}
+              style={modalStyles.socialBtn}
+              onPress={() => onAuth?.(method)}
+              activeOpacity={0.78}
+            >
+              <View style={modalStyles.socialIconWrap}>
+                <Ionicons name={icon} size={17} color={iconColor} />
+              </View>
+              <Text style={modalStyles.socialBtnText}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={modalStyles.orRow}>
+          <View style={modalStyles.orLine} />
+          <Text style={modalStyles.orText}>OR</Text>
+          <View style={modalStyles.orLine} />
+        </View>
+
+        <View style={modalStyles.inputWrap}>
+          <TextInput
+            style={modalStyles.input}
+            placeholder="Email address"
+            placeholderTextColor="rgba(158,208,205,0.38)"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[modalStyles.continueBtn, !email.length && { opacity: 0.5 }]}
+          onPress={() => email && onAuth?.("email", email)}
+          activeOpacity={0.85}
+          disabled={!email.length}
+        >
+          <LinearGradient
+            colors={["#036d41", "#81d8a3"]}
+            style={modalStyles.continueBtnGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <Text style={modalStyles.continueBtnText}>Continue</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <Text style={modalStyles.terms}>
+          By continuing, you agree to our{" "}
+          <Text style={{ color: ACCENT_EMERALD }}>Terms</Text> and{" "}
+          <Text style={{ color: ACCENT_EMERALD }}>Privacy Policy</Text>.
+        </Text>
+      </Animated.View>
+    </View>
+  );
+};
+
+const modalStyles = StyleSheet.create({
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#071412",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    borderBottomWidth: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 24,
+    elevation: 24,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(158,208,205,0.22)",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  closeBtn: { position: "absolute", top: 20, right: 20 },
+  closeBtnInner: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(158,208,205,0.09)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(158,208,205,0.14)",
+  },
+  title: {
+    fontSize: 23,
+    fontWeight: "800",
+    color: TEXT_PRI,
+    textAlign: "center",
+    marginBottom: 7,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: TEXT_SEC,
+    textAlign: "center",
+    lineHeight: 19,
+    marginBottom: 22,
+  },
+  socialList: { gap: 10 },
+  socialBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 20,
+    gap: 14,
+  },
+  socialIconWrap: { width: 22, alignItems: "center" },
+  socialBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEXT_PRI,
+    letterSpacing: 0.1,
+  },
+  orRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 16,
+    gap: 10,
+  },
+  orLine: { flex: 1, height: 1, backgroundColor: "rgba(158,208,205,0.10)" },
+  orText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "rgba(158,208,205,0.32)",
+    letterSpacing: 1.5,
+  },
+  inputWrap: {
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    borderRadius: 14,
+    backgroundColor: CARD_BG,
+    marginBottom: 12,
+  },
+  input: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    fontSize: 14,
+    color: TEXT_PRI,
+    letterSpacing: 0.1,
+  },
+  continueBtn: { borderRadius: 14, overflow: "hidden", marginBottom: 14 },
+  continueBtnGradient: {
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  continueBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#002b29",
+    letterSpacing: 0.2,
+  },
+  terms: {
+    fontSize: 11,
+    color: "rgba(158,208,205,0.28)",
+    textAlign: "center",
+    lineHeight: 16,
+  },
+});
+
+// ── Main Landing Screen ────────────────────────────────────────────────────────
+const LandingScreen = ({ onGetStarted, onAuthSuccess }) => {
+  // eslint-disable-next-line no-unused-vars
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [showModal, setShowModal] = useState(false);
+
+  const logoAnim = useRef(new Animated.Value(0)).current;
+  const heroAnim = useRef(new Animated.Value(0)).current;
+  const textAnim = useRef(new Animated.Value(0)).current;
+  const pillsAnim = useRef(new Animated.Value(0)).current;
+  const statsAnim = useRef(new Animated.Value(0)).current;
+  const ctaAnim = useRef(new Animated.Value(0)).current;
+  const ctaScale = useRef(new Animated.Value(1)).current;
+  const ringAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.stagger(110, [
+      Animated.timing(logoAnim, {
+        toValue: 1,
+        duration: 580,
+        useNativeDriver: true,
+      }),
+      Animated.timing(heroAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(textAnim, {
+        toValue: 1,
+        duration: 580,
+        useNativeDriver: true,
+      }),
+      Animated.timing(pillsAnim, {
+        toValue: 1,
+        duration: 520,
+        useNativeDriver: true,
+      }),
+      Animated.timing(statsAnim, {
+        toValue: 1,
+        duration: 520,
+        useNativeDriver: true,
+      }),
+      Animated.timing(ctaAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(ctaScale, {
+          toValue: 1.026,
+          duration: 1700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(ctaScale, {
+          toValue: 1,
+          duration: 1700,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(ringAnim, {
+          toValue: 1,
+          duration: 2500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(ringAnim, {
+          toValue: 0,
+          duration: 2500,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, []);
+
+  const ringScale = ringAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.08],
+  });
+  const ringOpacity = ringAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.09, 0.2, 0.09],
+  });
+
+  const handleAuth = (method, data) => {
+    setShowModal(false);
+    onAuthSuccess?.(method, data);
+    onGetStarted?.();
+  };
+
+  return (
+    <View style={ls.root}>
+      <StatusBar barStyle="light-content" backgroundColor={FOREST_BG} />
+
+      <LinearGradient
+        colors={["#001e1c", "#002b29", "#003330"]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+      />
+
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: -80,
+          right: -80,
+          width: 260,
+          height: 260,
+          borderRadius: 130,
+          backgroundColor: ACCENT_MINT + "0B",
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          bottom: height * 0.28,
+          left: -50,
+          width: 190,
+          height: 190,
+          borderRadius: 95,
+          backgroundColor: ACCENT_EMERALD + "08",
+        }}
+      />
+
+      {FLOATING_ICONS.map((fi, i) => (
+        <FloatingIcon key={i} {...fi} />
+      ))}
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <View
+          style={[
+            ls.content,
+            { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 20 },
+          ]}
+        >
+          <Animated.View
+            style={[
+              ls.logoRow,
+              {
+                opacity: logoAnim,
+                transform: [
+                  {
+                    translateY: logoAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-18, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={ls.logoIconWrap}>
+              <LinearGradient
+                colors={["#036d41", "#81d8a3"]}
+                style={ls.logoIconGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="leaf" size={19} color="#002b29" />
+              </LinearGradient>
+            </View>
+            <Text style={ls.appName}>PropFlow</Text>
+            <View style={ls.betaBadge}>
+              <Text style={ls.betaText}>BETA</Text>
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              ls.heroZone,
+              {
+                opacity: heroAnim,
+                transform: [
+                  {
+                    scale: heroAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.88, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                width: width * 0.7,
+                height: width * 0.7,
+                borderRadius: width * 0.35,
+                borderWidth: 1,
+                borderColor: ACCENT_MINT,
+                opacity: ringOpacity,
+                transform: [{ scale: ringScale }],
+              }}
+            />
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                width: width * 0.5,
+                height: width * 0.5,
+                borderRadius: width * 0.25,
+                borderWidth: 1,
+                borderColor: ACCENT_MINT + "1C",
+              }}
+            />
+
+            <View style={ls.centralBadge}>
+              <LinearGradient
+                colors={["#036d41", "#0a4240"]}
+                style={ls.centralGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons
+                  name="receipt-outline"
+                  size={30}
+                  color={ACCENT_MINT}
+                />
+              </LinearGradient>
+            </View>
+
+            {[
+              {
+                label: "Electric",
+                icon: "flash",
+                color: ACCENT_MINT,
+                style: ls.orbitTL,
+              },
+              {
+                label: "Water",
+                icon: "water",
+                color: ACCENT_EMERALD,
+                style: ls.orbitTR,
+              },
+              {
+                label: "Internet",
+                icon: "wifi",
+                color: TEAL_MUTED,
+                style: ls.orbitBL,
+              },
+              {
+                label: "Rent",
+                icon: "home",
+                color: ACCENT_LEAF,
+                style: ls.orbitBR,
+              },
+            ].map(({ label, icon, color, style }) => (
+              <View key={label} style={[ls.orbitCard, style]}>
+                <View
+                  style={[ls.orbitCardInner, { borderColor: color + "2E" }]}
+                >
+                  <Ionicons name={icon} size={11} color={color} />
+                  <Text style={[ls.orbitCardText, { color }]}>{label}</Text>
+                </View>
+              </View>
+            ))}
+          </Animated.View>
+
+          <Animated.View
+            style={{
+              opacity: textAnim,
+              transform: [
+                {
+                  translateY: textAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [18, 0],
+                  }),
+                },
+              ],
+              alignItems: "center",
+              paddingHorizontal: 24,
+            }}
+          >
+            <Text style={ls.heroTitle}>
+              Property Bills,{"\n"}
+              <Text style={{ color: ACCENT_MINT }}>Organised</Text> & Split
+            </Text>
+            <Text style={ls.heroDesc}>
+              Track every utility, split water bills by presence, and manage all
+              your units — effortlessly.
+            </Text>
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              ls.pillsRow,
+              {
+                opacity: pillsAnim,
+                transform: [
+                  {
+                    translateY: pillsAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [14, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {FEATURE_PILLS.map((f, i) => (
+              <FeaturePill key={f.label} {...f} delay={i * 55} />
+            ))}
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              ls.statsCard,
+              {
+                opacity: statsAnim,
+                transform: [
+                  {
+                    translateY: statsAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [14, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <StatItem
+              value="100%"
+              label="Transparent"
+              color={ACCENT_MINT}
+              delay={200}
+            />
+            <View style={ls.statDivider} />
+            <StatItem
+              value="Fair"
+              label="Water Split"
+              color={ACCENT_EMERALD}
+              delay={300}
+            />
+            <View style={ls.statDivider} />
+            <StatItem
+              value="All"
+              label="Bill Types"
+              color={TEAL_MUTED}
+              delay={400}
+            />
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              ls.ctaWrap,
+              {
+                opacity: ctaAnim,
+                transform: [
+                  {
+                    translateY: ctaAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [18, 0],
+                    }),
+                  },
+                  { scale: ctaScale },
+                ],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              onPress={() => {
+                if (typeof onGetStarted === "function") return onGetStarted();
+                setShowModal(true);
+              }}
+              activeOpacity={0.87}
+              style={{ borderRadius: 18, overflow: "hidden", width: "100%" }}
+            >
+              <LinearGradient
+                colors={["#036d41", "#81d8a3"]}
+                style={ls.ctaBtn}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={ls.ctaBtnText}>Get Started</Text>
+                <Ionicons name="arrow-forward" size={17} color="#002b29" />
+              </LinearGradient>
+            </TouchableOpacity>
+            <Text style={ls.ctaNote}>
+              Free to use · No credit card required
+            </Text>
+          </Animated.View>
+        </View>
+      </KeyboardAvoidingView>
+
+      <AuthModal
+        visible={showModal}
+        onClose={() => setShowModal(false)}
+        onAuth={handleAuth}
+      />
+    </View>
+  );
+};
+
+const ls = StyleSheet.create({
+  root: { flex: 1, backgroundColor: FOREST_BG },
+  content: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+  },
+  logoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    alignSelf: "flex-start",
+    marginLeft: 4,
+  },
+  logoIconWrap: { borderRadius: 12, overflow: "hidden" },
+  logoIconGradient: {
+    width: 38,
+    height: 38,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  appName: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: TEXT_PRI,
+    letterSpacing: -0.5,
+  },
+  betaBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: ACCENT_MINT + "16",
+    borderWidth: 1,
+    borderColor: ACCENT_MINT + "2E",
+  },
+  betaText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: ACCENT_MINT,
+    letterSpacing: 1,
+  },
+  heroZone: {
+    width: width * 0.76,
+    height: width * 0.7,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+  },
+  centralBadge: {
+    borderRadius: 22,
+    overflow: "hidden",
+    shadowColor: ACCENT_MINT,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  centralGradient: {
+    width: 74,
+    height: 74,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  orbitCard: { position: "absolute" },
+  orbitTL: { top: "13%", left: "3%" },
+  orbitTR: { top: "11%", right: "1%" },
+  orbitBL: { bottom: "15%", left: "5%" },
+  orbitBR: { bottom: "13%", right: "3%" },
+  orbitCardInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  orbitCardText: { fontSize: 10, fontWeight: "700" },
+  heroTitle: {
+    fontSize: 29,
+    fontWeight: "800",
+    color: TEXT_PRI,
+    textAlign: "center",
+    lineHeight: 35,
+    letterSpacing: -0.8,
+    marginBottom: 9,
+  },
+  heroDesc: {
+    fontSize: 13,
+    color: TEXT_SEC,
+    textAlign: "center",
+    lineHeight: 20,
+    letterSpacing: 0.1,
+  },
+  pillsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  statsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    width: "100%",
+  },
+  statDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: "rgba(158,208,205,0.10)",
+  },
+  ctaWrap: { width: "100%", alignItems: "center", gap: 9 },
+  ctaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+  },
+  ctaBtnText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#002b29",
+    letterSpacing: 0.2,
+  },
+  ctaNote: {
+    fontSize: 11,
+    color: "rgba(158,208,205,0.32)",
+    letterSpacing: 0.3,
+  },
+});
+
+export default LandingScreen;

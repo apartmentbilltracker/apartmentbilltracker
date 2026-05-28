@@ -6,6 +6,8 @@ import {
   Text,
   StyleSheet,
   Animated,
+  TouchableOpacity,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme/ThemeContext";
@@ -28,14 +30,21 @@ import OnboardingScreen, {
   checkOnboardingComplete,
 } from "../screens/OnboardingScreen";
 
-const Stack = createNativeStackNavigator();
+// IMPORTANT: Do not reuse the same Stack navigator for nested stacks.
+// Each nested navigator must have its own stack instance.
+const AuthStackNav = createNativeStackNavigator();
+const UnauthedNav = createNativeStackNavigator();
+
+import LandingScreen from "../screens/LandingScreen";
+
+const { height: WINDOW_HEIGHT } = Dimensions.get("window");
 
 // Auth Stack for login/register
 const AuthStack = () => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   return (
-    <Stack.Navigator
+    <AuthStackNav.Navigator
       screenOptions={{
         headerShown: false,
         contentStyle: {
@@ -44,29 +53,151 @@ const AuthStack = () => {
         },
       }}
     >
-      <Stack.Screen
+      <AuthStackNav.Screen
         name="Login"
         component={LoginScreen}
         options={{
           animationEnabled: false,
         }}
       />
-      <Stack.Screen
+      <AuthStackNav.Screen
         name="Register"
         component={RegisterScreen}
         options={{
           animationEnabled: false,
         }}
       />
-      <Stack.Screen name="RegisterStep1" component={RegisterStep1Screen} />
-      <Stack.Screen name="RegisterStep2" component={RegisterStep2Screen} />
-      <Stack.Screen name="RegisterStep3" component={RegisterStep3Screen} />
-      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-      <Stack.Screen name="VerifyResetCode" component={VerifyResetCodeScreen} />
-      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
-      <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
-      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-    </Stack.Navigator>
+      <AuthStackNav.Screen name="RegisterStep1" component={RegisterStep1Screen} />
+      <AuthStackNav.Screen name="RegisterStep2" component={RegisterStep2Screen} />
+      <AuthStackNav.Screen name="RegisterStep3" component={RegisterStep3Screen} />
+      <AuthStackNav.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <AuthStackNav.Screen name="VerifyResetCode" component={VerifyResetCodeScreen} />
+      <AuthStackNav.Screen name="ResetPassword" component={ResetPasswordScreen} />
+      <AuthStackNav.Screen name="TermsOfService" component={TermsOfServiceScreen} />
+      <AuthStackNav.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+    </AuthStackNav.Navigator>
+  );
+};
+
+const AuthModalScreen = ({ navigation }) => {
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const translateY = useRef(new Animated.Value(WINDOW_HEIGHT)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const closingRef = useRef(false);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(translateY, {
+        toValue: 0,
+        tension: 65,
+        friction: 12,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const close = () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: WINDOW_HEIGHT,
+        duration: 260,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => navigation.goBack());
+  };
+
+  return (
+    <View style={unauthStyles.modalRoot}>
+      <Animated.View
+        style={[
+          unauthStyles.backdrop,
+          { opacity: backdropOpacity },
+        ]}
+      >
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={close} />
+      </Animated.View>
+      <Animated.View
+        style={[
+          unauthStyles.sheet,
+          {
+            backgroundColor: colors.background,
+            paddingBottom: insets.bottom,
+            height: Math.round(WINDOW_HEIGHT * 0.92),
+            transform: [{ translateY }],
+          },
+        ]}
+      >
+        <View style={unauthStyles.dragHandle} />
+        <TouchableOpacity
+          onPress={close}
+          activeOpacity={0.75}
+          style={unauthStyles.closeBtn}
+        >
+          <Text
+            style={[
+              unauthStyles.closeText,
+              { color: isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)" },
+            ]}
+          >
+            Close
+          </Text>
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <AuthStack />
+        </View>
+      </Animated.View>
+    </View>
+  );
+};
+
+const UnauthedStack = () => {
+  return (
+    <UnauthedNav.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <UnauthedNav.Screen name="Landing">
+        {(props) => (
+          <LandingScreen
+            {...props}
+            onGetStarted={() => props.navigation.navigate("AuthModal")}
+          />
+        )}
+      </UnauthedNav.Screen>
+      <UnauthedNav.Screen
+        name="AuthModal"
+        component={AuthModalScreen}
+        options={{
+          presentation: "transparentModal",
+          animation: "none",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
+      <UnauthedNav.Screen
+        name="TermsOfService"
+        component={TermsOfServiceScreen}
+        options={{ headerShown: true, title: "Terms of Service" }}
+      />
+      <UnauthedNav.Screen
+        name="PrivacyPolicy"
+        component={PrivacyPolicyScreen}
+        options={{ headerShown: true, title: "Privacy Policy" }}
+      />
+    </UnauthedNav.Navigator>
   );
 };
 
@@ -214,8 +345,51 @@ const RootNavigator = () => {
   }
 
   // Not signed in - show auth screens
-  console.log("RootNavigator: User not signed in, showing AuthStack");
-  return <AuthStack />;
+  console.log("RootNavigator: User not signed in, showing Landing/Auth modal");
+  return <UnauthedStack />;
 };
 
 export default RootNavigator;
+
+const unauthStyles = StyleSheet.create({
+  modalRoot: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  sheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    // Allow overlays (Toast) to slide in without clipping.
+    overflow: "visible",
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(127,127,127,0.25)",
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  closeBtn: {
+    position: "absolute",
+    right: 16,
+    top: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    zIndex: 2,
+  },
+  closeText: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+});

@@ -39,6 +39,10 @@ const normalizeMember = (member) => ({
   joinedAt: member.joined_at,
   userId: member.user_id,
   roomId: member.room_id,
+  waterSplitMode: member.water_split_mode || "all_payors",
+  waterSplitPayorIds: Array.isArray(member.water_split_payor_ids)
+    ? member.water_split_payor_ids
+    : [],
   status: member.status || "approved",
 });
 
@@ -1365,6 +1369,76 @@ router.put(
         success: true,
         message: "Member updated successfully",
         member: updatedMember,
+      });
+    } catch (error) {
+      next(new ErrorHandler(error.message, 500));
+    }
+  },
+);
+
+// ============================================================
+// UPDATE CURRENT USER WATER PAYOR PREFERENCE
+// ============================================================
+router.put(
+  "/:id/water-payor-preference",
+  isAuthenticated,
+  async (req, res, next) => {
+    try {
+      const room = await SupabaseService.findRoomById(req.params.id);
+      if (!room) return next(new ErrorHandler("Room not found", 404));
+
+      const members = await SupabaseService.getRoomMembers(req.params.id);
+      const currentMember = (members || []).find(
+        (m) => String(m.user_id) === String(req.user.id),
+      );
+
+      if (!currentMember) {
+        return next(new ErrorHandler("You are not a member of this room", 403));
+      }
+
+      if (currentMember.is_payer !== false) {
+        return next(
+          new ErrorHandler("Only non-payor members can choose water payors", 400),
+        );
+      }
+
+      const mode =
+        req.body.mode === "specific_payors" ? "specific_payors" : "all_payors";
+      const rawPayorIds = Array.isArray(req.body.payorIds)
+        ? req.body.payorIds
+        : [];
+
+      const validPayorIds = new Set(
+        (members || [])
+          .filter((m) => m.is_payer !== false)
+          .map((m) => String(m.user_id)),
+      );
+      const selectedPayorIds = [
+        ...new Set(rawPayorIds.map((id) => String(id)).filter(Boolean)),
+      ].filter((id) => validPayorIds.has(id));
+
+      if (mode === "specific_payors" && selectedPayorIds.length === 0) {
+        return next(new ErrorHandler("Select at least one payor", 400));
+      }
+
+      if (selectedPayorIds.length > 3) {
+        return next(new ErrorHandler("Select up to 3 payors only", 400));
+      }
+
+      const updatedMember = await SupabaseService.update(
+        "room_members",
+        currentMember.id,
+        {
+          water_split_mode: mode,
+          water_split_payor_ids:
+            mode === "specific_payors" ? selectedPayorIds : [],
+        },
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Water payor preference updated",
+        member: normalizeMember(updatedMember),
       });
     } catch (error) {
       next(new ErrorHandler(error.message, 500));

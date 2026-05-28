@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Linking,
   ScrollView,
@@ -14,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { roommateService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import { Toast } from "../../components/CustomAlert";
 
 const getAvatarSource = (profile) => {
   const avatar = profile?.avatar;
@@ -96,6 +96,10 @@ const ClientRoomieDetailsScreen = ({ navigation, route }) => {
   const styles = createStyles(colors, insets);
   const [profile, setProfile] = useState(route.params?.profile || null);
   const [loading, setLoading] = useState(!!route.params?.profileId);
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+
+  const showToast = (message, type = "info") =>
+    setToast({ visible: true, type, message });
 
   const profileId = route.params?.profileId || profile?.id || profile?._id;
   const avatarSource = getAvatarSource(profile);
@@ -153,18 +157,12 @@ const ClientRoomieDetailsScreen = ({ navigation, route }) => {
   const openMessenger = () => {
     const url = getMessengerUrl(profile?.facebookAccount);
     if (!url) {
-      Alert.alert(
-        "Facebook account needed",
-        "This roomies profile has no Facebook or Messenger account yet.",
-      );
+      showToast("This roomie's profile has no Facebook or Messenger account yet.", "warning");
       return;
     }
 
     Linking.openURL(url).catch(() => {
-      Alert.alert(
-        "Messenger unavailable",
-        "Could not open this Messenger profile. Please check their Facebook account.",
-      );
+      showToast("Could not open this Messenger profile. Please check their Facebook account.", "error");
     });
   };
 
@@ -180,6 +178,12 @@ const ClientRoomieDetailsScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}

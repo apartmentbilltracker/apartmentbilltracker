@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Modal,
   Image,
@@ -23,6 +22,7 @@ import { settingsService } from "../../services/apiService";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import { Toast, ConfirmModal } from "../../components/CustomAlert";
 import { AuthContext } from "../../context/AuthContext";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import {
@@ -60,6 +60,11 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [receiptLoading, setReceiptLoading] = useState(false);
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
   const [transactionId, setTransactionId] = useState("");
   const [paymentDate, setPaymentDate] = useState(null);
   const [roomData, setRoomData] = useState(null);
@@ -165,6 +170,17 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const getMemberStatus = () => {
     return memberInfo?.isPayer ? "Payor" : "Non-Payor";
   };
+
+  const cancelTransactionIds = async (rawId) => {
+    let ids = [];
+    try {
+      const parsed = JSON.parse(rawId);
+      ids = Array.isArray(parsed) ? parsed : [rawId];
+    } catch {
+      ids = [rawId];
+    }
+    await Promise.all(ids.map((id) => apiService.cancelTransaction(id)));
+  };
   const stepRef = React.useRef(step);
   const transactionIdRef = React.useRef(transactionId);
   const receiptRef = React.useRef(null);
@@ -178,7 +194,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const handleBack = async () => {
     if (transactionIdRef.current && stepRef.current === "qr") {
       try {
-        await apiService.cancelTransaction(transactionIdRef.current);
+        await cancelTransactionIds(transactionIdRef.current);
       } catch (err) {
         // ignore
       }
@@ -189,29 +205,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const handleCancelTransfer = () => {
     if (!transactionId) return navigation.goBack();
 
-    Alert.alert(
-      "Cancel Transfer",
-      "Are you sure you want to cancel this transfer?",
-      [
-        { text: "No" },
-        {
-          text: "Yes",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setCancelLoading(true);
-              await apiService.cancelTransaction(transactionId);
-              Alert.alert("Cancelled", "Transfer has been cancelled");
-              navigation.goBack();
-            } catch (err) {
-              Alert.alert("Error", err?.message || "Failed to cancel transfer");
-            } finally {
-              setCancelLoading(false);
-            }
-          },
-        },
-      ],
-    );
+    setCancelConfirmVisible(true);
   };
 
   const handleDownloadQR = async () => {
@@ -219,19 +213,13 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       setDownloadLoading(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Please allow access to your photo gallery to save the QR code.",
-        );
+        showToast("Please allow gallery access to save the QR code.", "warning");
         return;
       }
 
       const bankQrUri = selectedBank?.qrUrl;
       if (!bankQrUri) {
-        Alert.alert(
-          "No QR Available",
-          "No QR code has been configured for this bank account.",
-        );
+        showToast("No QR code configured for this bank account.", "warning");
         return;
       }
 
@@ -250,9 +238,9 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       }
 
       await MediaLibrary.saveToLibraryAsync(destFile.uri);
-      Alert.alert("Saved!", "QR code has been saved to your gallery.");
+      showToast("QR code saved to your gallery.", "success");
     } catch (error) {
-      Alert.alert("Error", "Failed to save QR code. Please try again.");
+      showToast("Failed to save QR code. Please try again.", "error");
     } finally {
       setDownloadLoading(false);
     }
@@ -319,7 +307,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       const cancelOnUnmount = async () => {
         if (transactionIdRef.current && stepRef.current === "qr") {
           try {
-            await apiService.cancelTransaction(transactionIdRef.current);
+            await cancelTransactionIds(transactionIdRef.current);
           } catch (err) {
             // Ignore errors on cancel
           }
@@ -344,7 +332,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       });
 
       if (selectedBillTypes.length === 0) {
-        Alert.alert("Error", "Invalid bill types selected. Please try again.");
+        showToast("Invalid bill types selected. Please try again.", "error");
         navigation.goBack();
         return;
       }
@@ -426,7 +414,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
         }
       }
     } catch (error) {
-      Alert.alert("Error", error.message || "Failed to initiate bank transfer");
+      showToast(error.message || "Failed to initiate bank transfer", "error");
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -475,10 +463,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
         }
       }
     } catch (error) {
-      Alert.alert(
-        "Confirmation Failed",
-        error.message || "Unable to confirm transfer. Please try again.",
-      );
+      showToast(error.message || "Unable to confirm transfer. Please try again.", "error");
     } finally {
       setVerifyLoading(false);
     }
@@ -489,17 +474,14 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       setReceiptLoading(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Please allow gallery access to save the receipt.",
-        );
+        showToast("Please allow gallery access to save the receipt.", "warning");
         return;
       }
       const uri = await captureRef(receiptRef, { format: "png", quality: 1 });
       await MediaLibrary.saveToLibraryAsync(uri);
-      Alert.alert("Saved!", "Receipt image saved to your gallery.");
+      showToast("Receipt image saved to your gallery.", "success");
     } catch (error) {
-      Alert.alert("Error", "Failed to save receipt. Please try again.");
+      showToast("Failed to save receipt. Please try again.", "error");
     } finally {
       setReceiptLoading(false);
     }
@@ -508,9 +490,9 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const copyToClipboard = async (text) => {
     try {
       await Clipboard.setStringAsync(text);
-      Alert.alert("Copied", "Copied to clipboard");
+      showToast("Copied to clipboard", "success");
     } catch (error) {
-      Alert.alert("Error", "Failed to copy");
+      showToast("Failed to copy to clipboard", "error");
     }
   };
 
@@ -532,8 +514,47 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
     );
   }
 
+  const executeCancelTransfer = async () => {
+    setCancelConfirmVisible(false);
+    try {
+      setCancelLoading(true);
+      // transactionId may be a JSON array string for batch payments
+      let idsToCancel = [];
+      try {
+        const parsed = JSON.parse(transactionId);
+        idsToCancel = Array.isArray(parsed) ? parsed : [transactionId];
+      } catch {
+        idsToCancel = [transactionId];
+      }
+      await Promise.all(idsToCancel.map((id) => apiService.cancelTransaction(id)));
+      showToast("Transfer has been cancelled", "info");
+      navigation.goBack();
+    } catch (err) {
+      showToast(err?.message || "Failed to cancel transfer", "error");
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
+      <ConfirmModal
+        visible={cancelConfirmVisible}
+        title="Cancel Transfer"
+        message="Are you sure you want to cancel this transfer?"
+        confirmText="Yes, Cancel"
+        cancelText="No"
+        confirmStyle="destructive"
+        onConfirm={executeCancelTransfer}
+        onCancel={() => setCancelConfirmVisible(false)}
+        onClose={() => setCancelConfirmVisible(false)}
+      />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>

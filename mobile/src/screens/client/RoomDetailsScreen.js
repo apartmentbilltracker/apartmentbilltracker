@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   Share,
   RefreshControl,
@@ -21,6 +20,7 @@ import SafeMapView from "../../components/SafeMapView";
 import { roomService, billingCycleService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import { Toast } from "../../components/CustomAlert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -76,6 +76,10 @@ const RoomDetailsScreen = ({ route, navigation }) => {
   const [photoViewVisible, setPhotoViewVisible] = useState(false);
   const [photoViewIdx, setPhotoViewIdx] = useState(0);
   const [userJoinedRoom, setUserJoinedRoom] = useState(null);
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
 
   const openInMaps = (r) => {
     const lat = r.latitude;
@@ -174,7 +178,7 @@ const RoomDetailsScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       console.error("Error fetching room details:", error.message);
-      Alert.alert("Error", "Failed to load room details");
+      showToast("Failed to load room details", "error");
     } finally {
       setLoading(false);
     }
@@ -360,6 +364,12 @@ const RoomDetailsScreen = ({ route, navigation }) => {
 
   return (
     <>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
       <ScrollViewWithDetection
         style={styles.container}
         contentContainerStyle={styles.scrollContent}

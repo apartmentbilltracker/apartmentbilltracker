@@ -192,9 +192,7 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
         >
           <Ionicons
             name={
-              activeView === "announcements"
-                ? "megaphone"
-                : "megaphone-outline"
+              activeView === "announcements" ? "megaphone" : "megaphone-outline"
             }
             size={15}
             color={
@@ -228,7 +226,9 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
                 : "notifications-outline"
             }
             size={15}
-            color={activeView === "alerts" ? colors.textOnAccent : colors.accent}
+            color={
+              activeView === "alerts" ? colors.textOnAccent : colors.accent
+            }
           />
           <Text
             style={[

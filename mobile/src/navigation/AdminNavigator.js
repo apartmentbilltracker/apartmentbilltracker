@@ -359,7 +359,9 @@ const AdminNavigator = () => {
 
     const labelFor = (routeName) => {
       const descriptor =
-        descriptors[state.routes.find((route) => route.name === routeName)?.key];
+        descriptors[
+          state.routes.find((route) => route.name === routeName)?.key
+        ];
       return descriptor?.options?.title || routeName.replace("Stack", "");
     };
 
@@ -451,7 +453,7 @@ const AdminNavigator = () => {
         <NotchBackground
           color={colors.tabBarBg || "#ffffff"}
           height={TAB_BAR_HEIGHT + tabInsets.bottom}
-          borderColor={colorScheme === "dark" ? "#333333" : "#e0e0e0"}
+          borderColor={"#e0e0e0"}
         />
 
         <View style={[styles.tabRow, { height: TAB_BAR_HEIGHT }]}>

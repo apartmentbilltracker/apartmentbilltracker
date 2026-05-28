@@ -14,7 +14,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Alert,
   Modal,
   Image,
   Dimensions,
@@ -51,6 +50,7 @@ import { getAPIBaseURL } from "../../config/config";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import Feather from "@expo/vector-icons/Feather";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { Toast, ConfirmModal } from "../../components/CustomAlert";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const ACTION_CARD_WIDTH = (SCREEN_WIDTH - 44) / 2;
@@ -112,8 +112,20 @@ const ClientHomeScreen = ({ navigation, route }) => {
     useState(false);
   const [myRoommateProfile, setMyRoommateProfile] = useState(null);
   const [avatarError, setAvatarError] = useState(false);
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
+  const [joinConfirm, setJoinConfirm] = useState({
+    visible: false,
+    roomId: null,
+  });
   const initialLoadDone = useRef(false);
   const lastFocusFetch = useRef(0);
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
 
   const userId = state?.user?.id || state?.user?._id;
   const userName = state?.user?.name || "User";
@@ -214,10 +226,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
   const handleCloseRoommateOnboarding = async () => {
     setRoommateOnboardingVisible(false);
     if (userId) {
-      await AsyncStorage.setItem(
-        `${ROOMMATE_ONBOARDING_KEY}:${userId}`,
-        "1",
-      );
+      await AsyncStorage.setItem(`${ROOMMATE_ONBOARDING_KEY}:${userId}`, "1");
     }
   };
 
@@ -900,9 +909,9 @@ const ClientHomeScreen = ({ navigation, route }) => {
       setProfileModalVisible(true);
     } catch (err) {
       console.error("Profile fetch error:", err);
-      Alert.alert(
-        "Error",
+      showToast(
         "Could not load user profile. " + (err?.message || ""),
+        "error",
       );
     }
   };
@@ -1066,24 +1075,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
   };
 
   const handleJoinRoom = async (roomId) => {
-    // Show alert asking if user is a payer
-    Alert.alert(
-      "Join Room",
-      "Will you be a payer for this room?",
-      [
-        {
-          text: "No (Non-Payer)",
-          onPress: async () => await joinRoomWithPayerStatus(roomId, false),
-          style: "destructive",
-        },
-        {
-          text: "Yes (Payer)",
-          onPress: async () => await joinRoomWithPayerStatus(roomId, true),
-          style: "default",
-        },
-      ],
-      { cancelable: false },
-    );
+    setJoinConfirm({ visible: true, roomId });
   };
 
   const joinRoomWithPayerStatus = async (roomId, isPayer) => {
@@ -1094,20 +1086,20 @@ const ClientHomeScreen = ({ navigation, route }) => {
         isPayer,
       });
       if (response.pending) {
-        Alert.alert(
-          "Request Sent",
-          "Your join request has been sent to the room admin for approval. You'll be notified once approved.",
+        showToast(
+          "Join request sent! You'll be notified once approved.",
+          "info",
         );
       } else {
         const payorStatus = isPayer ? "payor" : "non-payor";
-        Alert.alert("Success", `You've joined the room as a ${payorStatus}!`);
+        showToast(`You've joined the room as a ${payorStatus}!`, "success");
       }
       await fetchRooms();
     } catch (error) {
       console.error("Error joining room:", error);
       const message =
         error.data?.message || error.message || "Failed to join room";
-      Alert.alert("Error", message);
+      showToast(message, "error");
     } finally {
       setJoiningRoomId(null);
     }
@@ -1432,7 +1424,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                       previewRoom.members?.length ??
                       0}
                   </Text>
-                  <Text style={styles.roomInfoStatLabel}>Members</Text>
+                  <Text style={styles.roomInfoStatLabel}>Tenants</Text>
                 </View>
                 <View style={styles.roomInfoStatDivider} />
                 <View style={styles.roomInfoStat}>
@@ -1448,11 +1440,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                 </View>
                 <View style={styles.roomInfoStatDivider} />
                 <View style={styles.roomInfoStat}>
-                  <Ionicons
-                    name="pricetag"
-                    size={18}
-                    color={colors.accent}
-                  />
+                  <Ionicons name="pricetag" size={18} color={colors.accent} />
                   <Text style={styles.roomInfoStatValue} numberOfLines={1}>
                     {previewRent > 0
                       ? `₱${previewRent.toLocaleString()}`
@@ -1538,7 +1526,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     <>
                       <Ionicons name="add-circle" size={18} color="#fff" />
                       <Text style={styles.roomInfoJoinText}>
-                        Join This Room
+                        Inquire this room
                       </Text>
                     </>
                   )}
@@ -2174,6 +2162,33 @@ const ClientHomeScreen = ({ navigation, route }) => {
         user={state?.user}
         onClose={handleCloseRoommateOnboarding}
         onSaved={handleRoommateSaved}
+      />
+
+      {/* ── Custom Alerts ── */}
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
+      <ConfirmModal
+        visible={joinConfirm.visible}
+        title="Join Room"
+        message="Will you be a payer for this room?"
+        confirmText="Yes (Payer)"
+        cancelText="No (Non-Payer)"
+        confirmStyle="default"
+        onConfirm={() => {
+          const { roomId } = joinConfirm;
+          setJoinConfirm({ visible: false, roomId: null });
+          joinRoomWithPayerStatus(roomId, true);
+        }}
+        onCancel={() => {
+          const { roomId } = joinConfirm;
+          setJoinConfirm({ visible: false, roomId: null });
+          joinRoomWithPayerStatus(roomId, false);
+        }}
+        onClose={() => setJoinConfirm({ visible: false, roomId: null })}
       />
       {/* Full-screen photo viewer */}
       <Modal
@@ -3488,7 +3503,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                                     />
                                   ) : (
                                     <Text style={styles.joinBtnText}>
-                                      Request
+                                      Inquire
                                     </Text>
                                   )}
                                 </TouchableOpacity>

@@ -480,7 +480,7 @@ const AdminDashboardScreen = ({ navigation }) => {
       label: "Members",
       color: colors.waterColor,
       bg: colors.infoBg,
-      onPress: () => navigation.navigate("MembersStack", { screen: "Members" }),
+      onPress: () => navigation.navigate("Members", { screen: "Members" }),
     },
     {
       icon: "card-outline",

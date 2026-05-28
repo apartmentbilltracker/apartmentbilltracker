@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   Modal,
   Image,
   ActivityIndicator,
@@ -15,6 +14,7 @@ import { settingsService } from "../../services/apiService";
 import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import { Toast, ConfirmModal } from "../../components/CustomAlert";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 
 const PaymentMethodScreen = ({ navigation, route }) => {
@@ -37,6 +37,11 @@ const PaymentMethodScreen = ({ navigation, route }) => {
   const [methodStatus, setMethodStatus] = useState(null);
   const [settingsFailed, setSettingsFailed] = useState(false);
   const [methodLoading, setMethodLoading] = useState(true);
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [notConfiguredModal, setNotConfiguredModal] = useState({ visible: false, message: "" });
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
 
   useEffect(() => {
     fetchMethodStatus();
@@ -160,11 +165,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
 
     if (isMethodDisabled(method.id)) {
       const customMsg = getMaintenanceMessage(method.id);
-      Alert.alert(
-        "Temporarily Unavailable",
-        customMsg ||
-          `${method.name} is currently undergoing scheduled maintenance. Please try again later or use another payment method.`,
-      );
+      showToast(customMsg || `${method.name} is temporarily unavailable. Please try another method.`, "warning");
       return;
     }
 
@@ -198,11 +199,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
         const { methods: fresh, failed } = await fetchFreshStatus();
         if (!failed && fresh && !fresh?.gcash?.qrUrl) {
           setShowConfirm(false);
-          Alert.alert(
-            "Not Configured",
-            "Your host has not set up GCash payment yet. Please contact your host or use a different payment method.",
-            [{ text: "OK" }, { text: "Retry", onPress: fetchMethodStatus }],
-          );
+          setNotConfiguredModal({ visible: true, message: "Your host has not set up GCash payment yet. Please contact your host or use a different payment method." });
           return;
         }
       }
@@ -218,11 +215,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
         const freshAccounts = fresh?.bank_transfer?.accounts;
         if (!failed && (!freshAccounts || freshAccounts.length === 0)) {
           setShowConfirm(false);
-          Alert.alert(
-            "Not Configured",
-            "Your host has not set up bank transfer accounts yet. Please contact your host or use a different payment method.",
-            [{ text: "OK" }, { text: "Retry", onPress: fetchMethodStatus }],
-          );
+          setNotConfiguredModal({ visible: true, message: "Your host has not set up bank transfer accounts yet. Please contact your host or use a different payment method." });
           return;
         }
       }
@@ -522,6 +515,26 @@ const PaymentMethodScreen = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
+      <ConfirmModal
+        visible={notConfiguredModal.visible}
+        title="Not Configured"
+        message={notConfiguredModal.message}
+        confirmText="Retry"
+        cancelText="OK"
+        confirmStyle="default"
+        onConfirm={() => {
+          setNotConfiguredModal({ visible: false, message: "" });
+          fetchMethodStatus();
+        }}
+        onCancel={() => setNotConfiguredModal({ visible: false, message: "" })}
+        onClose={() => setNotConfiguredModal({ visible: false, message: "" })}
+      />
     </SafeAreaView>
   );
 };

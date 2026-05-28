@@ -9,12 +9,11 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
-  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Toast, InlineAlert } from "../../components/CustomAlert";
 import { authService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import AuthBubbles from "../../components/AuthBubbles";
@@ -27,6 +26,9 @@ const RegisterStep1Screen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const showToast = (message, type = "success") => setToast({ visible: true, type, message });
+  const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -52,7 +54,7 @@ const RegisterStep1Screen = ({ navigation }) => {
     try {
       const response = await authService.createUser({ name: fullName, email });
       if (response.success) {
-        Alert.alert("Success", "Verification code sent to your email");
+        showToast("Verification code sent to your email", "success");
         navigation.navigate("RegisterStep2", { email, name: fullName });
       } else {
         setError(response.message || "Failed to create user");
@@ -70,6 +72,12 @@ const RegisterStep1Screen = ({ navigation }) => {
       style={styles.container}
     >
       <AuthBubbles />
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={hideToast}
+      />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -77,22 +85,11 @@ const RegisterStep1Screen = ({ navigation }) => {
       >
         {/* ─── Branding ─── */}
         <View style={styles.header}>
-          <View style={styles.iconGlow}>
-            <Image
-              source={require("../../assets/icon.png")}
-              style={styles.icon}
-            />
-          </View>
           <View style={styles.brandPill}>
-            <Ionicons
-              name="person-add-outline"
-              size={14}
-              color={colors.accent}
-            />
-            <Text style={styles.brandPillText}>Step 1 of 3</Text>
+            <Text style={styles.brandPillText}>Apartment Bill Tracker</Text>
           </View>
-          <Text style={styles.appName}>PropFlow</Text>
-          <Text style={styles.subtitle}>Create Account</Text>
+          <Text style={styles.appName}>Create account</Text>
+          <Text style={styles.subtitle}>Step 1 of 3</Text>
           <Text style={styles.headerCaption}>
             Start with the basics so we can prepare your account.
           </Text>
@@ -107,12 +104,13 @@ const RegisterStep1Screen = ({ navigation }) => {
         </View>
 
         {/* ─── Error ─── */}
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={16} color="#ef4444" />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        <InlineAlert
+          visible={!!error}
+          type="error"
+          message={error}
+          onDismiss={() => setError("")}
+          style={{ marginBottom: 16 }}
+        />
 
         {/* ─── Form ─── */}
         <View style={styles.form}>
@@ -231,7 +229,6 @@ const createStyles = (colors) => {
     brandPill: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 999,
@@ -246,31 +243,14 @@ const createStyles = (colors) => {
       color: colors.accent,
       textTransform: "uppercase",
     },
-    iconGlow: {
-      width: 108,
-      height: 108,
-      borderRadius: 32,
-      backgroundColor: glassPanel,
-      justifyContent: "center",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: glassBorder,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.12,
-      shadowRadius: 18,
-      elevation: 5,
-      marginBottom: 18,
-    },
-    icon: { width: 72, height: 72, resizeMode: "contain" },
     appName: {
-      fontSize: 26,
+      fontSize: 24,
       fontWeight: "900",
       color: colors.text,
     },
     subtitle: {
-      fontSize: 16,
-      color: colors.textTertiary,
+      fontSize: 14,
+      color: colors.textSecondary,
       marginTop: 6,
       fontWeight: "700",
     },

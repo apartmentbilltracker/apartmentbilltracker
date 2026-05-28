@@ -7,12 +7,11 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Platform,
-  Image,
   KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Toast, InlineAlert } from "../../components/CustomAlert";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import Constants from "expo-constants";
@@ -39,6 +38,9 @@ const RegisterScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { signUp, signInWithGoogle } = useContext(AuthContext);
+  const [toast, setToast] = useState({ visible: false, type: "info", message: "" });
+  const showToast = (message, type = "info") => setToast({ visible: true, type, message });
+  const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   // Google Auth Request - Using Expo's configuration
   // Only enable on iOS/Web, Android needs androidClientId from Google Console
@@ -125,6 +127,12 @@ const RegisterScreen = ({ navigation }) => {
       style={styles.container}
     >
       <AuthBubbles />
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={hideToast}
+      />
       <ScrollView
         style={styles.container}
         contentContainerStyle={[
@@ -135,30 +143,24 @@ const RegisterScreen = ({ navigation }) => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <View style={styles.iconGlow}>
-            <Image
-              source={require("../../assets/icon.png")}
-              style={styles.icon}
-            />
-          </View>
           <View style={styles.brandPill}>
-            <Ionicons name="sparkles-outline" size={14} color={colors.accent} />
-            <Text style={styles.brandPillText}>Start your account</Text>
+            <Text style={styles.brandPillText}>Apartment Bill Tracker</Text>
           </View>
-          <Text style={styles.title}>PropFlow</Text>
-          <Text style={styles.subtitle}>Create Account</Text>
+          <Text style={styles.title}>Create account</Text>
+          <Text style={styles.subtitle}>Get set up in a minute.</Text>
           <Text style={styles.headerCaption}>
             Set up your space to manage rooms, bills, payments, and updates in
             one place.
           </Text>
         </View>
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={16} color={colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        <InlineAlert
+          visible={!!error}
+          type="error"
+          message={error}
+          onDismiss={() => setError("")}
+          style={{ marginBottom: 16 }}
+        />
 
         {/* Email & Password Section */}
         <View style={styles.section}>
@@ -169,66 +171,74 @@ const RegisterScreen = ({ navigation }) => {
             recovery.
           </Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Full Name"
-            value={name}
-            onChangeText={setName}
-            editable={!loading}
-            placeholderTextColor={colors.placeholder}
-          />
-
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            editable={!loading}
-            placeholderTextColor={colors.placeholder}
-          />
-
-          <View style={styles.passwordContainer}>
+          <View style={styles.inputWrap}>
+            <Ionicons name="person-outline" size={18} color={colors.accent} style={styles.inputIcon} />
             <TextInput
-              style={styles.passwordInput}
+              style={styles.input}
+              placeholder="Full Name"
+              value={name}
+              onChangeText={(t) => { setName(t); setError(""); }}
+              editable={!loading}
+              placeholderTextColor={colors.placeholder}
+            />
+          </View>
+
+          <View style={styles.inputWrap}>
+            <Ionicons name="mail-outline" size={18} color={colors.accent} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Email address"
+              value={email}
+              onChangeText={(t) => { setEmail(t); setError(""); }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!loading}
+              placeholderTextColor={colors.placeholder}
+            />
+          </View>
+
+          <View style={styles.inputWrap}>
+            <Ionicons name="lock-closed-outline" size={18} color={colors.accent} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
               placeholder="Password"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(t) => { setPassword(t); setError(""); }}
               secureTextEntry={!showPassword}
               editable={!loading}
               placeholderTextColor={colors.placeholder}
             />
             <TouchableOpacity
               onPress={() => setShowPassword(!showPassword)}
-              style={styles.passwordToggle}
+              style={styles.eyeBtn}
               disabled={loading}
             >
               <Ionicons
-                name={showPassword ? "eye" : "eye-off"}
+                name={showPassword ? "eye-outline" : "eye-off-outline"}
                 size={20}
                 color={colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.passwordContainer}>
+          <View style={styles.inputWrap}>
+            <Ionicons name="lock-closed" size={18} color={colors.accent} style={styles.inputIcon} />
             <TextInput
-              style={styles.passwordInput}
+              style={styles.input}
               placeholder="Confirm Password"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={(t) => { setConfirmPassword(t); setError(""); }}
               secureTextEntry={!showConfirmPassword}
               editable={!loading}
               placeholderTextColor={colors.placeholder}
             />
             <TouchableOpacity
               onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-              style={styles.passwordToggle}
+              style={styles.eyeBtn}
               disabled={loading}
             >
               <Ionicons
-                name={showConfirmPassword ? "eye" : "eye-off"}
+                name={showConfirmPassword ? "eye-outline" : "eye-off-outline"}
                 size={20}
                 color={colors.textSecondary}
               />
@@ -236,18 +246,18 @@ const RegisterScreen = ({ navigation }) => {
           </View>
 
           <TouchableOpacity
-            style={[
-              styles.button,
-              styles.primaryButton,
-              loading && styles.buttonDisabled,
-            ]}
+            style={[styles.primaryBtn, loading && { opacity: 0.6 }]}
             onPress={handleRegister}
             disabled={loading}
+            activeOpacity={0.85}
           >
             {loading ? (
               <ActivityIndicator color={colors.textOnAccent} />
             ) : (
-              <Text style={styles.buttonText}>Create Account</Text>
+              <>
+                <Ionicons name="person-add-outline" size={18} color="#fff" />
+                <Text style={styles.primaryBtnText}>Create Account</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -261,26 +271,20 @@ const RegisterScreen = ({ navigation }) => {
 
         <View style={styles.socialSection}>
           <TouchableOpacity
-            style={[styles.socialButton, !request && styles.buttonDisabled]}
+            style={[styles.socialButton, (!request || loading) && { opacity: 0.5 }]}
             onPress={() => promptAsync()}
             disabled={!request || loading}
+            activeOpacity={0.7}
           >
-            <Ionicons name="logo-google" size={20} color="#4285F4" />
-            <Text style={styles.socialButtonText}>Google</Text>
+            <Text style={styles.socialButtonText}>Continue with Google</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.socialButton, styles.buttonDisabled]}
-            onPress={() =>
-              Alert.alert(
-                "Coming Soon",
-                "Facebook login support will be added soon",
-              )
-            }
-            disabled={true}
+            style={[styles.socialButton, { opacity: 0.45 }]}
+            onPress={() => showToast("Facebook sign-up is coming soon.", "info")}
+            activeOpacity={0.7}
           >
-            <Ionicons name="logo-facebook" size={20} color="#1877F2" />
-            <Text style={styles.socialButtonText}>Facebook</Text>
+            <Text style={styles.socialButtonText}>Continue with Facebook</Text>
           </TouchableOpacity>
         </View>
 
@@ -338,7 +342,6 @@ const createStyles = (colors) => {
     brandPill: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 999,
@@ -354,33 +357,8 @@ const createStyles = (colors) => {
       textTransform: "uppercase",
       letterSpacing: 0.7,
     },
-    iconGlow: {
-      width: 108,
-      height: 108,
-      borderRadius: 32,
-      backgroundColor: glassPanel,
-      justifyContent: "center",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: glassBorder,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.12,
-      shadowRadius: 18,
-      elevation: 5,
-      marginBottom: 18,
-    },
-    title: {
-      fontSize: 26,
-      fontWeight: "900",
-      color: colors.text,
-      marginBottom: 4,
-    },
-    subtitle: {
-      fontSize: 16,
-      color: colors.textSecondary,
-      fontWeight: "700",
-    },
+    title: { fontSize: 24, fontWeight: "900", color: colors.text, marginBottom: 6 },
+    subtitle: { fontSize: 14, color: colors.textSecondary, fontWeight: "700" },
     headerCaption: {
       fontSize: 13,
       color: colors.textSecondary,
@@ -423,15 +401,40 @@ const createStyles = (colors) => {
       marginBottom: 14,
     },
     input: {
+      flex: 1,
+      paddingVertical: 14,
+      fontSize: 15,
+      color: colors.text,
+    },
+    inputWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: glassInput,
       borderWidth: 1,
       borderColor: glassBorderSoft,
       borderRadius: 16,
-      padding: 14,
       marginBottom: 12,
-      fontSize: 15,
-      backgroundColor: glassInput,
-      color: colors.text,
+      paddingHorizontal: 14,
     },
+    inputIcon: { marginRight: 10 },
+    eyeBtn: { padding: 8 },
+    primaryBtn: {
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 16,
+      paddingVertical: 16,
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 6,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+    /* legacy — kept so nothing crashes if referenced elsewhere */
     passwordContainer: {
       flexDirection: "row",
       alignItems: "center",
@@ -531,12 +534,7 @@ const createStyles = (colors) => {
       shadowRadius: 14,
       elevation: 3,
     },
-    socialButtonText: {
-      marginLeft: 8,
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.text,
-    },
+    socialButtonText: { fontSize: 14, fontWeight: "600", color: colors.text },
     footer: {
       flexDirection: "row",
       justifyContent: "center",
@@ -563,11 +561,6 @@ const createStyles = (colors) => {
       fontSize: 12,
       color: colors.textTertiary,
       fontStyle: "italic",
-    },
-    icon: {
-      width: 76,
-      height: 76,
-      resizeMode: "contain",
     },
   });
 };

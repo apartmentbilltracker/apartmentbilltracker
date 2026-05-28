@@ -3,17 +3,22 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../theme/ThemeContext";
+import { LinearGradient } from "expo-linear-gradient";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import AuthBubbles from "../../components/AuthBubbles";
 
+const FOREST_BG = "#001e1c";
+const SHEET_BG = "#062321";
+const CARD_BORDER = "rgba(158,208,205,0.16)";
+const TEXT_PRI = "#e7fff4";
+const TEXT_SEC = "rgba(223,247,239,0.80)";
+const ACCENT_EMERALD = "#81d8a3";
+
 const TermsOfServiceScreen = ({ navigation }) => {
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles();
 
   const sections = [
     {
@@ -86,80 +91,102 @@ const TermsOfServiceScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <LinearGradient
+        colors={["#001e1c", "#002b29", "#003330"]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+      />
       <AuthBubbles />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Terms of Service</Text>
-        <View style={{ width: 36 }} />
-      </View>
-
-      <ScrollViewWithDetection
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Icon */}
-        <View style={styles.iconWrap}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="document-text" size={36} color={colors.accent} />
-          </View>
+      <View style={styles.sheet}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={22} color={TEXT_PRI} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Terms of Service</Text>
+          <View style={{ width: 36 }} />
         </View>
 
-        <Text style={styles.lastUpdated}>Last updated: February 11, 2026</Text>
-
-        {sections.map((section, index) => (
-          <View key={index} style={styles.section}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            {section.content ? (
-              <Text style={styles.sectionContent}>{section.content}</Text>
-            ) : null}
-            {section.body
-              ? section.body.map((item, i) => (
-                  <View key={i} style={styles.bulletRow}>
-                    <View style={styles.bullet} />
-                    <Text style={styles.bulletText}>{item}</Text>
-                  </View>
-                ))
-              : null}
+        <ScrollViewWithDetection
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Icon */}
+          <View style={styles.iconWrap}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="document-text" size={36} color={ACCENT_EMERALD} />
+            </View>
           </View>
-        ))}
 
-        <View style={{ height: 40 }} />
-      </ScrollViewWithDetection>
+          <Text style={styles.lastUpdated}>Last updated: February 11, 2026</Text>
+
+          {sections.map((section, index) => (
+            <View key={index} style={styles.section}>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              {section.content ? (
+                <Text style={styles.sectionContent}>{section.content}</Text>
+              ) : null}
+              {section.body
+                ? section.body.map((item, i) => (
+                    <View key={i} style={styles.bulletRow}>
+                      <View style={styles.bullet} />
+                      <Text style={styles.bulletText}>{item}</Text>
+                    </View>
+                  ))
+                : null}
+            </View>
+          ))}
+
+          <View style={{ height: 40 }} />
+        </ScrollViewWithDetection>
+      </View>
     </View>
   );
 };
 
-const createStyles = (colors) =>
+const createStyles = () =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: FOREST_BG },
+    sheet: {
+      flex: 1,
+      marginTop: 18,
+      backgroundColor: SHEET_BG,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      borderWidth: 1,
+      borderColor: CARD_BORDER,
+      borderBottomWidth: 0,
+      overflow: "hidden",
+    },
     header: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 16,
-      paddingTop: 12,
+      paddingTop: 14,
       paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: CARD_BORDER,
     },
     backBtn: {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: colors.card,
+      backgroundColor: "rgba(158,208,205,0.10)",
+      borderWidth: 1,
+      borderColor: "rgba(158,208,205,0.18)",
       justifyContent: "center",
       alignItems: "center",
     },
     headerTitle: {
       fontSize: 18,
       fontWeight: "700",
-      color: colors.text,
+      color: TEXT_PRI,
     },
     scrollContent: {
       paddingHorizontal: 24,
@@ -173,15 +200,15 @@ const createStyles = (colors) =>
       width: 72,
       height: 72,
       borderRadius: 36,
-      backgroundColor: colors.accent + "15",
+      backgroundColor: "rgba(129,216,163,0.12)",
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 1,
-      borderColor: colors.accent + "25",
+      borderColor: "rgba(129,216,163,0.32)",
     },
     lastUpdated: {
       fontSize: 12,
-      color: colors.textTertiary,
+      color: TEXT_SEC,
       textAlign: "center",
       marginBottom: 24,
       fontWeight: "500",
@@ -192,13 +219,13 @@ const createStyles = (colors) =>
     sectionTitle: {
       fontSize: 15,
       fontWeight: "700",
-      color: colors.text,
+      color: TEXT_PRI,
       marginBottom: 8,
     },
     sectionContent: {
       fontSize: 14,
       lineHeight: 22,
-      color: colors.textSecondary,
+      color: TEXT_SEC,
     },
     bulletRow: {
       flexDirection: "row",
@@ -210,14 +237,14 @@ const createStyles = (colors) =>
       width: 5,
       height: 5,
       borderRadius: 2.5,
-      backgroundColor: colors.accent,
+      backgroundColor: ACCENT_EMERALD,
       marginTop: 8,
     },
     bulletText: {
       flex: 1,
       fontSize: 14,
       lineHeight: 22,
-      color: colors.textSecondary,
+      color: TEXT_SEC,
     },
   });
 

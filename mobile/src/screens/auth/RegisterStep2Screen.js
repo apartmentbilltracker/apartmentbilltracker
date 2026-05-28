@@ -9,12 +9,11 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
-  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Toast, InlineAlert } from "../../components/CustomAlert";
 import { authService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import AuthBubbles from "../../components/AuthBubbles";
@@ -30,6 +29,9 @@ const RegisterStep2Screen = ({ navigation, route }) => {
   const [error, setError] = useState("");
   const [resendTimer, setResendTimer] = useState(0);
   const timerRef = useRef(null);
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const showToast = (message, type = "success") => setToast({ visible: true, type, message });
+  const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   React.useEffect(() => {
     if (resendTimer > 0) {
@@ -59,7 +61,7 @@ const RegisterStep2Screen = ({ navigation, route }) => {
         activationCode: code,
       });
       if (response.success) {
-        Alert.alert("Success", "Email verified successfully");
+        showToast("Email verified successfully", "success");
         navigation.navigate("RegisterStep3", { email, name });
       } else {
         setError(response.message || "Invalid verification code");
@@ -77,7 +79,7 @@ const RegisterStep2Screen = ({ navigation, route }) => {
     try {
       const response = await authService.resendVerification(email);
       if (response.success) {
-        Alert.alert("Success", "New verification code sent to your email");
+        showToast("New verification code sent to your email", "success");
         setResendTimer(60);
         setCode("");
       } else {
@@ -96,6 +98,12 @@ const RegisterStep2Screen = ({ navigation, route }) => {
       style={styles.container}
     >
       <AuthBubbles />
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={hideToast}
+      />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -103,22 +111,11 @@ const RegisterStep2Screen = ({ navigation, route }) => {
       >
         {/* ─── Branding ─── */}
         <View style={styles.header}>
-          <View style={styles.iconGlow}>
-            <Image
-              source={require("../../assets/icon.png")}
-              style={styles.icon}
-            />
-          </View>
           <View style={styles.brandPill}>
-            <Ionicons
-              name="mail-open-outline"
-              size={14}
-              color={colors.accent}
-            />
-            <Text style={styles.brandPillText}>Step 2 of 3</Text>
+            <Text style={styles.brandPillText}>Apartment Bill Tracker</Text>
           </View>
-          <Text style={styles.appName}>PropFlow</Text>
-          <Text style={styles.subtitle}>Verify Your Email</Text>
+          <Text style={styles.appName}>Verify your email</Text>
+          <Text style={styles.subtitle}>Step 2 of 3</Text>
           <Text style={styles.headerCaption}>
             Enter the code from your inbox to confirm this address.
           </Text>
@@ -142,12 +139,13 @@ const RegisterStep2Screen = ({ navigation, route }) => {
         </View>
 
         {/* ─── Error ─── */}
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={16} color="#ef4444" />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        <InlineAlert
+          visible={!!error}
+          type="error"
+          message={error}
+          onDismiss={() => setError("")}
+          style={{ marginBottom: 16 }}
+        />
 
         {/* ─── Form ─── */}
         <View style={styles.form}>
@@ -274,7 +272,6 @@ const createStyles = (colors) => {
     brandPill: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 999,
@@ -289,31 +286,14 @@ const createStyles = (colors) => {
       color: colors.accent,
       textTransform: "uppercase",
     },
-    iconGlow: {
-      width: 108,
-      height: 108,
-      borderRadius: 32,
-      backgroundColor: glassPanel,
-      justifyContent: "center",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: glassBorder,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.12,
-      shadowRadius: 18,
-      elevation: 5,
-      marginBottom: 18,
-    },
-    icon: { width: 72, height: 72, resizeMode: "contain" },
     appName: {
-      fontSize: 26,
+      fontSize: 24,
       fontWeight: "900",
       color: colors.text,
     },
     subtitle: {
-      fontSize: 16,
-      color: colors.textTertiary,
+      fontSize: 14,
+      color: colors.textSecondary,
       marginTop: 6,
       fontWeight: "700",
     },

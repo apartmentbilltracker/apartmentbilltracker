@@ -8,7 +8,6 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
-  Alert,
   TextInput,
   Modal,
   Share,
@@ -24,6 +23,7 @@ import {
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
+import { Toast, ConfirmModal } from "../../components/CustomAlert";
 
 const REACTION_TYPES = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -52,6 +52,13 @@ const AnnouncementsScreen = ({ navigation }) => {
   const [content, setContent] = useState("");
   const [commentText, setCommentText] = useState("");
   const [userReactions, setUserReactions] = useState({});
+
+  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [deleteAnnouncementConfirm, setDeleteAnnouncementConfirm] = useState({ visible: false, id: null });
+  const [deleteCommentConfirm, setDeleteCommentConfirm] = useState({ visible: false, announcementId: null, commentId: null });
+
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
 
   const userId = state?.user?.id || state?.user?._id;
   const userName = state?.user?.name || "User";
@@ -140,7 +147,7 @@ const AnnouncementsScreen = ({ navigation }) => {
       setUserReactions(reactions);
     } catch (error) {
       console.error("Error fetching announcements:", error);
-      Alert.alert("Error", "Failed to load announcements");
+      showToast("Failed to load announcements", "error");
     }
   };
 
@@ -154,7 +161,7 @@ const AnnouncementsScreen = ({ navigation }) => {
 
   const handleCreateAnnouncement = async () => {
     if (!title.trim() || !content.trim()) {
-      Alert.alert("Error", "Please fill in all fields");
+      showToast("Please fill in all fields", "error");
       return;
     }
 
@@ -168,16 +175,16 @@ const AnnouncementsScreen = ({ navigation }) => {
       setContent("");
       setShowCreateModal(false);
       await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
-      Alert.alert("Success", "Announcement created");
+      showToast("Announcement created", "success");
     } catch (error) {
       console.error("Error creating announcement:", error);
-      Alert.alert("Error", "Failed to create announcement");
+      showToast("Failed to create announcement", "error");
     }
   };
 
   const handleAddComment = async () => {
     if (!commentText.trim()) {
-      Alert.alert("Error", "Please enter a comment");
+      showToast("Please enter a comment", "error");
       return;
     }
 
@@ -189,50 +196,43 @@ const AnnouncementsScreen = ({ navigation }) => {
       setCommentText("");
       setShowCommentModal(false);
       await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
-      Alert.alert("Success", "Comment added");
+      showToast("Comment added", "success");
     } catch (error) {
       console.error("Error adding comment:", error);
-      Alert.alert("Error", "Failed to add comment");
+      showToast("Failed to add comment", "error");
     }
   };
 
   const handleDeleteAnnouncement = async (announcementId) => {
-    Alert.alert(
-      "Delete",
-      "Are you sure you want to delete this announcement?",
-      [
-        { text: "Cancel" },
-        {
-          text: "Delete",
-          onPress: async () => {
-            try {
-              await announcementService.deleteAnnouncement(announcementId);
-              await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
-              Alert.alert("Success", "Announcement deleted");
-            } catch (error) {
-              Alert.alert("Error", "Failed to delete announcement");
-            }
-          },
-        },
-      ],
-    );
+    setDeleteAnnouncementConfirm({ visible: true, id: announcementId });
+  };
+
+  const confirmDeleteAnnouncement = async () => {
+    setDeleteAnnouncementConfirm({ visible: false, id: null });
+    try {
+      await announcementService.deleteAnnouncement(deleteAnnouncementConfirm.id);
+      await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
+      showToast("Announcement deleted", "success");
+    } catch (error) {
+      showToast("Failed to delete announcement", "error");
+    }
   };
 
   const handleDeleteComment = async (announcementId, commentId) => {
-    Alert.alert("Delete", "Delete this comment?", [
-      { text: "Cancel" },
-      {
-        text: "Delete",
-        onPress: async () => {
-          try {
-            await announcementService.deleteComment(announcementId, commentId);
-            await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
-          } catch (error) {
-            Alert.alert("Error", "Failed to delete comment");
-          }
-        },
-      },
-    ]);
+    setDeleteCommentConfirm({ visible: true, announcementId, commentId });
+  };
+
+  const confirmDeleteComment = async () => {
+    setDeleteCommentConfirm({ visible: false, announcementId: null, commentId: null });
+    try {
+      await announcementService.deleteComment(
+        deleteCommentConfirm.announcementId,
+        deleteCommentConfirm.commentId,
+      );
+      await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
+    } catch (error) {
+      showToast("Failed to delete comment", "error");
+    }
   };
 
   const handleAddReaction = async (announcementId, reactionType) => {
@@ -241,7 +241,7 @@ const AnnouncementsScreen = ({ navigation }) => {
       await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
       setShowReactionPicker({});
     } catch (error) {
-      Alert.alert("Error", "Failed to add reaction");
+      showToast("Failed to add reaction", "error");
     }
   };
 
@@ -250,7 +250,7 @@ const AnnouncementsScreen = ({ navigation }) => {
       await announcementService.removeReaction(announcementId);
       await fetchAnnouncements(userJoinedRoom.id || userJoinedRoom._id);
     } catch (error) {
-      Alert.alert("Error", "Failed to remove reaction");
+      showToast("Failed to remove reaction", "error");
     }
   };
 
@@ -330,6 +330,32 @@ const AnnouncementsScreen = ({ navigation }) => {
   // ── Main ──
   return (
     <View style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onHide={() => setToast((t) => ({ ...t, visible: false }))}
+      />
+
+      <ConfirmModal
+        visible={deleteAnnouncementConfirm.visible}
+        title="Delete Announcement"
+        message="Are you sure you want to delete this announcement?"
+        confirmText="Delete"
+        confirmStyle="destructive"
+        onConfirm={confirmDeleteAnnouncement}
+        onCancel={() => setDeleteAnnouncementConfirm({ visible: false, id: null })}
+      />
+
+      <ConfirmModal
+        visible={deleteCommentConfirm.visible}
+        title="Delete Comment"
+        message="Are you sure you want to delete this comment?"
+        confirmText="Delete"
+        confirmStyle="destructive"
+        onConfirm={confirmDeleteComment}
+        onCancel={() => setDeleteCommentConfirm({ visible: false, announcementId: null, commentId: null })}
+      />
       <FlatListWithDetection
         data={announcements}
         keyExtractor={(item) => item.id || item._id}
