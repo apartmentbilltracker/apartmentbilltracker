@@ -411,21 +411,10 @@ const LoginScreen = ({ navigation }) => {
       >
         {/* ─── Branding ─── */}
         <View style={styles.header}>
-          <View style={styles.iconGlow}>
-            <Image
-              source={require("../../assets/icon.png")}
-              style={styles.icon}
-            />
-          </View>
           <View style={styles.brandPill}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={14}
-              color={colors.accent}
-            />
-            <Text style={styles.brandPillText}>Secure apartment access</Text>
+            <Text style={styles.brandPillText}>Apartment Bill Tracker</Text>
           </View>
-          <Text style={styles.appName}>PropFlow</Text>
+          <Text style={styles.appName}>Log in or sign up</Text>
           <Text style={styles.subtitle}>
             {savedAccounts.length > 0 && !selectedAccount
               ? "Choose an account"
@@ -488,18 +477,16 @@ const LoginScreen = ({ navigation }) => {
                   )}
                   {account.authProvider !== "email" && (
                     <View style={styles.providerBadge}>
-                      {account.authProvider === "google" ? (
-                        <Image
-                          source={require("../../assets/google-icon.png")}
-                          style={styles.providerBadgeIcon}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="logo-facebook"
-                          size={10}
-                          color="#1877F2"
-                        />
-                      )}
+                      <Text
+                        style={[
+                          styles.providerBadgeText,
+                          account.authProvider === "facebook" && {
+                            color: "#9ed0cd",
+                          },
+                        ]}
+                      >
+                        {account.authProvider === "google" ? "G" : "F"}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -704,14 +691,6 @@ const LoginScreen = ({ navigation }) => {
                     <ActivityIndicator color={colors.textOnAccent} />
                   ) : (
                     <>
-                      {selectedAccount.authProvider === "google" ? (
-                        <Image
-                          source={require("../../assets/google-icon.png")}
-                          style={{ width: 18, height: 18 }}
-                        />
-                      ) : (
-                        <Ionicons name="logo-facebook" size={18} color="#fff" />
-                      )}
                       <Text style={styles.primaryBtnText}>
                         Continue with{" "}
                         {selectedAccount.authProvider === "google"
@@ -830,11 +809,7 @@ const LoginScreen = ({ navigation }) => {
                 disabled={loading}
                 activeOpacity={0.7}
               >
-                <Image
-                  source={require("../../assets/google-icon.png")}
-                  style={styles.socialIcon}
-                />
-                <Text style={styles.socialBtnText}>Google</Text>
+                <Text style={styles.socialBtnText}>Continue with Google</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -843,8 +818,7 @@ const LoginScreen = ({ navigation }) => {
                 disabled={loading}
                 activeOpacity={0.7}
               >
-                <Ionicons name="logo-facebook" size={18} color="#1877F2" />
-                <Text style={styles.socialBtnText}>Facebook</Text>
+                <Text style={styles.socialBtnText}>Continue with Facebook</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -914,7 +888,6 @@ const createStyles = (colors) => {
     brandPill: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 999,
@@ -930,29 +903,8 @@ const createStyles = (colors) => {
       textTransform: "uppercase",
       letterSpacing: 0.7,
     },
-    iconGlow: {
-      width: 108,
-      height: 108,
-      borderRadius: 32,
-      backgroundColor: glassPanelStrong,
-      justifyContent: "center",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: glassBorder,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.12,
-      shadowRadius: 18,
-      elevation: 5,
-      marginBottom: 18,
-    },
-    icon: {
-      width: 72,
-      height: 72,
-      resizeMode: "contain",
-    },
     appName: {
-      fontSize: 26,
+      fontSize: 24,
       fontWeight: "900",
       color: colors.text,
       letterSpacing: 0.2,
@@ -1111,11 +1063,6 @@ const createStyles = (colors) => {
       gap: 12,
       marginBottom: 28,
     },
-    socialIcon: {
-      width: 20,
-      height: 20,
-      resizeMode: "contain",
-    },
     socialBtn: {
       flex: 1,
       flexDirection: "row",
@@ -1243,6 +1190,12 @@ const createStyles = (colors) => {
       width: 12,
       height: 12,
       resizeMode: "contain",
+    },
+    providerBadgeText: {
+      fontSize: 11,
+      fontWeight: "900",
+      color: colors.accent,
+      letterSpacing: 0.2,
     },
     savedInfo: {
       flex: 1,

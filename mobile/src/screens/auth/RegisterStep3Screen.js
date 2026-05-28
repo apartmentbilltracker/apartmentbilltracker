@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Toast, InlineAlert } from "../../components/CustomAlert";
@@ -132,22 +131,11 @@ const RegisterStep3Screen = ({ navigation, route }) => {
       >
         {/* ─── Branding ─── */}
         <View style={styles.header}>
-          <View style={styles.iconGlow}>
-            <Image
-              source={require("../../assets/icon.png")}
-              style={styles.icon}
-            />
-          </View>
           <View style={styles.brandPill}>
-            <Ionicons
-              name="lock-closed-outline"
-              size={14}
-              color={colors.accent}
-            />
-            <Text style={styles.brandPillText}>Step 3 of 3</Text>
+            <Text style={styles.brandPillText}>Apartment Bill Tracker</Text>
           </View>
-          <Text style={styles.appName}>PropFlow</Text>
-          <Text style={styles.subtitle}>Set Your Password</Text>
+          <Text style={styles.appName}>Set your password</Text>
+          <Text style={styles.subtitle}>Step 3 of 3</Text>
           <Text style={styles.headerCaption}>
             Finish with a secure password for future sign-ins.
           </Text>
@@ -400,7 +388,6 @@ const createStyles = (colors) => {
     brandPill: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 999,
@@ -415,31 +402,14 @@ const createStyles = (colors) => {
       color: colors.accent,
       textTransform: "uppercase",
     },
-    iconGlow: {
-      width: 108,
-      height: 108,
-      borderRadius: 32,
-      backgroundColor: glassPanel,
-      justifyContent: "center",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: glassBorder,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.12,
-      shadowRadius: 18,
-      elevation: 5,
-      marginBottom: 18,
-    },
-    icon: { width: 72, height: 72, resizeMode: "contain" },
     appName: {
-      fontSize: 26,
+      fontSize: 24,
       fontWeight: "900",
       color: colors.text,
     },
     subtitle: {
-      fontSize: 16,
-      color: colors.textTertiary,
+      fontSize: 14,
+      color: colors.textSecondary,
       marginTop: 6,
       fontWeight: "700",
     },

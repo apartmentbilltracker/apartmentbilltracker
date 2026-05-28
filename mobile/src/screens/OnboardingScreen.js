@@ -17,7 +17,7 @@ import { useTheme } from "../theme/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
 const ONBOARDING_KEY = "@onboarding_completed";
-const BASE_PANEL_HEIGHT = height * 0.50;
+const BASE_PANEL_HEIGHT = height * 0.5;
 
 // ── Forest Green Palette (sourced from colors.js dark tokens) ─────────────────
 // Primary canvas    : #002b29  (colors.darkColors.background)
@@ -34,69 +34,202 @@ const getPages = () => [
     id: "1",
     // Deep forest gradient — all three stops from colors.darkColors family
     gradient: ["#001e1c", "#002b29", "#003330"],
-    accentColor: "#9af2bb",         // secondary-container (bright mint)
+    accentColor: "#9af2bb", // secondary-container (bright mint)
     icon: "receipt-outline",
     badge: "BILLING",
     title: "Every Bill,\nOrganised",
     description:
       "Electricity, water, internet, and rent — all your property bills tracked in one clean dashboard.",
     features: [
-      { icon: "layers-outline",          text: "Categorised bill cycles",   color: "#9af2bb" },
-      { icon: "sync-outline",            text: "Real-time cycle updates",   color: "#81d8a3" },
-      { icon: "document-text-outline",   text: "Detailed digital receipts", color: "#9ed0cd" },
+      {
+        icon: "layers-outline",
+        text: "Categorised bill cycles",
+        color: "#9af2bb",
+      },
+      {
+        icon: "sync-outline",
+        text: "Real-time cycle updates",
+        color: "#81d8a3",
+      },
+      {
+        icon: "document-text-outline",
+        text: "Detailed digital receipts",
+        color: "#9ed0cd",
+      },
     ],
     floatingIcons: [
-      { name: "flash-outline",          color: "#9af2bb", x: 0.08, y: 0.09, size: 20, delay: 0   },
-      { name: "water-outline",          color: "#81d8a3", x: 0.82, y: 0.07, size: 18, delay: 150 },
-      { name: "wifi-outline",           color: "#9ed0cd", x: 0.87, y: 0.22, size: 16, delay: 300 },
-      { name: "home-outline",           color: "#7daeab", x: 0.06, y: 0.24, size: 18, delay: 450 },
-      { name: "card-outline",           color: "#78dc77", x: 0.75, y: 0.35, size: 14, delay: 200 },
+      {
+        name: "flash-outline",
+        color: "#9af2bb",
+        x: 0.08,
+        y: 0.09,
+        size: 20,
+        delay: 0,
+      },
+      {
+        name: "water-outline",
+        color: "#81d8a3",
+        x: 0.82,
+        y: 0.07,
+        size: 18,
+        delay: 150,
+      },
+      {
+        name: "wifi-outline",
+        color: "#9ed0cd",
+        x: 0.87,
+        y: 0.22,
+        size: 16,
+        delay: 300,
+      },
+      {
+        name: "home-outline",
+        color: "#7daeab",
+        x: 0.06,
+        y: 0.24,
+        size: 18,
+        delay: 450,
+      },
+      {
+        name: "card-outline",
+        color: "#78dc77",
+        x: 0.75,
+        y: 0.35,
+        size: 14,
+        delay: 200,
+      },
     ],
     mockCard: "bills",
   },
   {
     id: "2",
     gradient: ["#001e1c", "#002b29", "#003330"],
-    accentColor: "#81d8a3",         // secondary-fixed-dim (rich emerald on dark)
+    accentColor: "#81d8a3", // secondary-fixed-dim (rich emerald on dark)
     icon: "people-outline",
     badge: "SPLITTING",
     title: "Fair Share,\nEvery Month",
     description:
       "Presence-based water billing means everyone pays only for the days they were actually home.",
     features: [
-      { icon: "calendar-outline",       text: "Presence day tracking",     color: "#81d8a3" },
-      { icon: "git-branch-outline",     text: "Auto cost distribution",    color: "#9af2bb" },
-      { icon: "checkmark-done-outline", text: "Transparent breakdowns",    color: "#9ed0cd" },
+      {
+        icon: "calendar-outline",
+        text: "Presence day tracking",
+        color: "#81d8a3",
+      },
+      {
+        icon: "git-branch-outline",
+        text: "Auto cost distribution",
+        color: "#9af2bb",
+      },
+      {
+        icon: "checkmark-done-outline",
+        text: "Transparent breakdowns",
+        color: "#9ed0cd",
+      },
     ],
     floatingIcons: [
-      { name: "calculator-outline",     color: "#9af2bb", x: 0.07, y: 0.08, size: 20, delay: 0   },
-      { name: "pie-chart-outline",      color: "#81d8a3", x: 0.83, y: 0.06, size: 22, delay: 200 },
-      { name: "calendar-outline",       color: "#9ed0cd", x: 0.88, y: 0.22, size: 16, delay: 350 },
-      { name: "trending-up-outline",    color: "#78dc77", x: 0.05, y: 0.25, size: 18, delay: 100 },
-      { name: "people-outline",         color: "#7daeab", x: 0.78, y: 0.34, size: 14, delay: 250 },
+      {
+        name: "calculator-outline",
+        color: "#9af2bb",
+        x: 0.07,
+        y: 0.08,
+        size: 20,
+        delay: 0,
+      },
+      {
+        name: "pie-chart-outline",
+        color: "#81d8a3",
+        x: 0.83,
+        y: 0.06,
+        size: 22,
+        delay: 200,
+      },
+      {
+        name: "calendar-outline",
+        color: "#9ed0cd",
+        x: 0.88,
+        y: 0.22,
+        size: 16,
+        delay: 350,
+      },
+      {
+        name: "trending-up-outline",
+        color: "#78dc77",
+        x: 0.05,
+        y: 0.25,
+        size: 18,
+        delay: 100,
+      },
+      {
+        name: "people-outline",
+        color: "#7daeab",
+        x: 0.78,
+        y: 0.34,
+        size: 14,
+        delay: 250,
+      },
     ],
     mockCard: "split",
   },
   {
     id: "3",
     gradient: ["#001e1c", "#002b29", "#003330"],
-    accentColor: "#78dc77",         // tertiary-fixed-dim (vibrant leaf green)
+    accentColor: "#78dc77", // tertiary-fixed-dim (vibrant leaf green)
     icon: "business-outline",
     badge: "PROPERTY",
     title: "Manage Your\nProperty Smartly",
     description:
       "Track units, tenants, and billing cycles — everything a landlord or property manager needs.",
     features: [
-      { icon: "key-outline",            text: "Unit & tenant overview",    color: "#78dc77" },
-      { icon: "time-outline",           text: "Billing cycle history",     color: "#81d8a3" },
-      { icon: "share-outline",          text: "Export & share reports",    color: "#9ed0cd" },
+      { icon: "key-outline", text: "Unit & tenant overview", color: "#78dc77" },
+      { icon: "time-outline", text: "Billing cycle history", color: "#81d8a3" },
+      {
+        icon: "share-outline",
+        text: "Export & share reports",
+        color: "#9ed0cd",
+      },
     ],
     floatingIcons: [
-      { name: "shield-checkmark-outline", color: "#78dc77", x: 0.08, y: 0.07, size: 20, delay: 0   },
-      { name: "notifications-outline",    color: "#9af2bb", x: 0.82, y: 0.06, size: 18, delay: 200 },
-      { name: "stats-chart-outline",      color: "#81d8a3", x: 0.87, y: 0.21, size: 16, delay: 350 },
-      { name: "key-outline",              color: "#9ed0cd", x: 0.06, y: 0.23, size: 18, delay: 100 },
-      { name: "checkmark-circle-outline", color: "#7daeab", x: 0.76, y: 0.35, size: 14, delay: 250 },
+      {
+        name: "shield-checkmark-outline",
+        color: "#78dc77",
+        x: 0.08,
+        y: 0.07,
+        size: 20,
+        delay: 0,
+      },
+      {
+        name: "notifications-outline",
+        color: "#9af2bb",
+        x: 0.82,
+        y: 0.06,
+        size: 18,
+        delay: 200,
+      },
+      {
+        name: "stats-chart-outline",
+        color: "#81d8a3",
+        x: 0.87,
+        y: 0.21,
+        size: 16,
+        delay: 350,
+      },
+      {
+        name: "key-outline",
+        color: "#9ed0cd",
+        x: 0.06,
+        y: 0.23,
+        size: 18,
+        delay: 100,
+      },
+      {
+        name: "checkmark-circle-outline",
+        color: "#7daeab",
+        x: 0.76,
+        y: 0.35,
+        size: 14,
+        delay: 250,
+      },
     ],
     mockCard: "property",
   },
@@ -104,31 +237,70 @@ const getPages = () => [
 
 // ── Mock UI Cards ──────────────────────────────────────────────────────────────
 // Shared glass-card style values
-const CARD_BG     = "rgba(255,255,255,0.08)";
-const CARD_BORDER = "rgba(158,208,205,0.18)";   // inverse-primary at low opacity
-const TEXT_PRI    = "#eaf1ff";                   // colors.darkColors.text
-const TEXT_SEC    = "rgba(158,208,205,0.65)";    // toned-down inverse-primary
-const DIVIDER     = "rgba(158,208,205,0.10)";
+const CARD_BG = "rgba(255,255,255,0.08)";
+const CARD_BORDER = "rgba(158,208,205,0.18)"; // inverse-primary at low opacity
+const TEXT_PRI = "#eaf1ff"; // colors.darkColors.text
+const TEXT_SEC = "rgba(158,208,205,0.65)"; // toned-down inverse-primary
+const DIVIDER = "rgba(158,208,205,0.10)";
 
 // Page 1 – Bill cycle overview (no amounts, status-based)
 const MockBillsCard = ({ accentColor }) => {
   const bills = [
-    { icon: "flash-outline",  label: "Electricity", status: "Active",  statusColor: "#81d8a3" },
-    { icon: "water-outline",  label: "Water",        status: "Active",  statusColor: "#81d8a3" },
-    { icon: "wifi-outline",   label: "Internet",     status: "Pending", statusColor: "#9af2bb" },
-    { icon: "home-outline",   label: "Rent",         status: "Due",     statusColor: "#ffb4ab" },
+    {
+      icon: "flash-outline",
+      label: "Electricity",
+      status: "Active",
+      statusColor: "#81d8a3",
+    },
+    {
+      icon: "water-outline",
+      label: "Water",
+      status: "Active",
+      statusColor: "#81d8a3",
+    },
+    {
+      icon: "wifi-outline",
+      label: "Internet",
+      status: "Pending",
+      statusColor: "#9af2bb",
+    },
+    {
+      icon: "home-outline",
+      label: "Rent",
+      status: "Due",
+      statusColor: "#ffb4ab",
+    },
   ];
 
   return (
-    <View style={[mockStyles.card, { backgroundColor: CARD_BG, borderColor: CARD_BORDER }]}>
+    <View
+      style={[
+        mockStyles.card,
+        { backgroundColor: CARD_BG, borderColor: CARD_BORDER },
+      ]}
+    >
       {/* Header */}
       <View style={mockStyles.cardHeader}>
-        <View style={[mockStyles.cardIconWrap, { backgroundColor: accentColor + "22" }]}>
+        <View
+          style={[
+            mockStyles.cardIconWrap,
+            { backgroundColor: accentColor + "22" },
+          ]}
+        >
           <Ionicons name="receipt-outline" size={14} color={accentColor} />
         </View>
-        <Text style={[mockStyles.cardTitle, { color: TEXT_PRI }]}>Current Cycle</Text>
-        <View style={[mockStyles.cardBadge, { backgroundColor: accentColor + "20" }]}>
-          <Text style={[mockStyles.cardBadgeText, { color: accentColor }]}>Open</Text>
+        <Text style={[mockStyles.cardTitle, { color: TEXT_PRI }]}>
+          Current Cycle
+        </Text>
+        <View
+          style={[
+            mockStyles.cardBadge,
+            { backgroundColor: accentColor + "20" },
+          ]}
+        >
+          <Text style={[mockStyles.cardBadgeText, { color: accentColor }]}>
+            Open
+          </Text>
         </View>
       </View>
       <View style={[mockStyles.cardDivider, { backgroundColor: DIVIDER }]} />
@@ -136,12 +308,26 @@ const MockBillsCard = ({ accentColor }) => {
       {/* Bill rows */}
       {bills.map((b, i) => (
         <View key={i} style={mockStyles.billRow}>
-          <View style={[mockStyles.billIconWrap, { backgroundColor: accentColor + "18" }]}>
+          <View
+            style={[
+              mockStyles.billIconWrap,
+              { backgroundColor: accentColor + "18" },
+            ]}
+          >
             <Ionicons name={b.icon} size={11} color={accentColor} />
           </View>
-          <Text style={[mockStyles.billLabel, { color: TEXT_SEC }]}>{b.label}</Text>
-          <View style={[mockStyles.statusPill, { backgroundColor: b.statusColor + "22" }]}>
-            <Text style={[mockStyles.statusPillText, { color: b.statusColor }]}>{b.status}</Text>
+          <Text style={[mockStyles.billLabel, { color: TEXT_SEC }]}>
+            {b.label}
+          </Text>
+          <View
+            style={[
+              mockStyles.statusPill,
+              { backgroundColor: b.statusColor + "22" },
+            ]}
+          >
+            <Text style={[mockStyles.statusPillText, { color: b.statusColor }]}>
+              {b.status}
+            </Text>
           </View>
         </View>
       ))}
@@ -150,7 +336,12 @@ const MockBillsCard = ({ accentColor }) => {
       <View style={[mockStyles.cardDivider, { backgroundColor: DIVIDER }]} />
       <View style={mockStyles.billRow}>
         <Ionicons name="checkmark-circle-outline" size={13} color="#81d8a3" />
-        <Text style={[mockStyles.billLabel, { color: TEXT_SEC, flex: 1, marginLeft: 4 }]}>
+        <Text
+          style={[
+            mockStyles.billLabel,
+            { color: TEXT_SEC, flex: 1, marginLeft: 4 },
+          ]}
+        >
           3 of 4 bills confirmed
         </Text>
         <Text style={[mockStyles.cycleBadge, { color: accentColor }]}>75%</Text>
@@ -169,13 +360,27 @@ const MockSplitCard = ({ accentColor }) => {
   const totalDays = members.reduce((s, m) => s + m.days, 0);
 
   return (
-    <View style={[mockStyles.card, { backgroundColor: CARD_BG, borderColor: CARD_BORDER }]}>
+    <View
+      style={[
+        mockStyles.card,
+        { backgroundColor: CARD_BG, borderColor: CARD_BORDER },
+      ]}
+    >
       <View style={mockStyles.cardHeader}>
-        <View style={[mockStyles.cardIconWrap, { backgroundColor: accentColor + "22" }]}>
+        <View
+          style={[
+            mockStyles.cardIconWrap,
+            { backgroundColor: accentColor + "22" },
+          ]}
+        >
           <Ionicons name="water-outline" size={14} color={accentColor} />
         </View>
-        <Text style={[mockStyles.cardTitle, { color: TEXT_PRI }]}>Water Split</Text>
-        <Text style={[mockStyles.cardSubtitle, { color: TEXT_SEC }]}>{totalDays} days total</Text>
+        <Text style={[mockStyles.cardTitle, { color: TEXT_PRI }]}>
+          Water Split
+        </Text>
+        <Text style={[mockStyles.cardSubtitle, { color: TEXT_SEC }]}>
+          {totalDays} days total
+        </Text>
       </View>
       <View style={[mockStyles.cardDivider, { backgroundColor: DIVIDER }]} />
 
@@ -191,7 +396,10 @@ const MockSplitCard = ({ accentColor }) => {
                 backgroundColor: m.color + "cc",
               },
               i === 0 && { borderTopLeftRadius: 4, borderBottomLeftRadius: 4 },
-              i === members.length - 1 && { borderTopRightRadius: 4, borderBottomRightRadius: 4 },
+              i === members.length - 1 && {
+                borderTopRightRadius: 4,
+                borderBottomRightRadius: 4,
+              },
             ]}
           />
         ))}
@@ -200,17 +408,37 @@ const MockSplitCard = ({ accentColor }) => {
       {/* Member rows */}
       {members.map((m, i) => (
         <View key={i} style={mockStyles.billRow}>
-          <View style={[mockStyles.splitAvatar, { backgroundColor: m.color + "22", borderColor: m.color + "44" }]}>
-            <Text style={[mockStyles.splitAvatarText, { color: m.color }]}>{m.initial}</Text>
+          <View
+            style={[
+              mockStyles.splitAvatar,
+              { backgroundColor: m.color + "22", borderColor: m.color + "44" },
+            ]}
+          >
+            <Text style={[mockStyles.splitAvatarText, { color: m.color }]}>
+              {m.initial}
+            </Text>
           </View>
-          <Text style={[mockStyles.billLabel, { color: TEXT_SEC }]}>{m.days} days</Text>
+          <Text style={[mockStyles.billLabel, { color: TEXT_SEC }]}>
+            {m.days} days
+          </Text>
           <Text style={[mockStyles.sharePercent, { color: TEXT_PRI }]}>
             {Math.round((m.days / totalDays) * 100)}%
           </Text>
-          {m.status === "settled"
-            ? <Ionicons name="checkmark-circle" size={13} color="#81d8a3" style={{ marginLeft: 4 }} />
-            : <Ionicons name="time-outline" size={13} color="#9af2bb" style={{ marginLeft: 4 }} />
-          }
+          {m.status === "settled" ? (
+            <Ionicons
+              name="checkmark-circle"
+              size={13}
+              color="#81d8a3"
+              style={{ marginLeft: 4 }}
+            />
+          ) : (
+            <Ionicons
+              name="time-outline"
+              size={13}
+              color="#9af2bb"
+              style={{ marginLeft: 4 }}
+            />
+          )}
         </View>
       ))}
     </View>
@@ -220,31 +448,72 @@ const MockSplitCard = ({ accentColor }) => {
 // Page 3 – Property / unit management (no amounts)
 const MockPropertyCard = ({ accentColor }) => {
   const units = [
-    { icon: "bed-outline",       label: "Unit 1A",  tenant: "Alex R.",  statusText: "Paid",    statusColor: "#81d8a3",  dotColor: "#81d8a3"  },
-    { icon: "bed-outline",       label: "Unit 1B",  tenant: "Bianca M.", statusText: "Due",     statusColor: "#9af2bb",  dotColor: "#9af2bb"  },
-    { icon: "business-outline",  label: "Unit 2A",  tenant: "Carlos T.", statusText: "Overdue", statusColor: "#ffb4ab",  dotColor: "#ffb4ab"  },
+    {
+      icon: "bed-outline",
+      label: "Unit 1A",
+      tenant: "Alex R.",
+      statusText: "Paid",
+      statusColor: "#81d8a3",
+      dotColor: "#81d8a3",
+    },
+    {
+      icon: "bed-outline",
+      label: "Unit 1B",
+      tenant: "Bianca M.",
+      statusText: "Due",
+      statusColor: "#9af2bb",
+      dotColor: "#9af2bb",
+    },
+    {
+      icon: "business-outline",
+      label: "Unit 2A",
+      tenant: "Carlos T.",
+      statusText: "Overdue",
+      statusColor: "#ffb4ab",
+      dotColor: "#ffb4ab",
+    },
   ];
   const paidCount = units.filter((u) => u.statusText === "Paid").length;
 
   return (
-    <View style={[mockStyles.card, { backgroundColor: CARD_BG, borderColor: CARD_BORDER }]}>
+    <View
+      style={[
+        mockStyles.card,
+        { backgroundColor: CARD_BG, borderColor: CARD_BORDER },
+      ]}
+    >
       {/* Header */}
       <View style={mockStyles.cardHeader}>
-        <View style={[mockStyles.cardIconWrap, { backgroundColor: accentColor + "22" }]}>
+        <View
+          style={[
+            mockStyles.cardIconWrap,
+            { backgroundColor: accentColor + "22" },
+          ]}
+        >
           <Ionicons name="business-outline" size={14} color={accentColor} />
         </View>
-        <Text style={[mockStyles.cardTitle, { color: TEXT_PRI }]}>My Property</Text>
+        <Text style={[mockStyles.cardTitle, { color: TEXT_PRI }]}>
+          My Property
+        </Text>
         <Text style={[mockStyles.cardSubtitle, { color: accentColor }]}>
           {paidCount}/{units.length} settled
         </Text>
       </View>
 
       {/* Progress bar */}
-      <View style={[mockStyles.progressBg, { backgroundColor: "rgba(158,208,205,0.12)" }]}>
+      <View
+        style={[
+          mockStyles.progressBg,
+          { backgroundColor: "rgba(158,208,205,0.12)" },
+        ]}
+      >
         <View
           style={[
             mockStyles.progressFill,
-            { width: `${(paidCount / units.length) * 100}%`, backgroundColor: accentColor },
+            {
+              width: `${(paidCount / units.length) * 100}%`,
+              backgroundColor: accentColor,
+            },
           ]}
         />
       </View>
@@ -255,11 +524,22 @@ const MockPropertyCard = ({ accentColor }) => {
         <View key={i} style={mockStyles.billRow}>
           <View style={[mockStyles.unitDot, { backgroundColor: u.dotColor }]} />
           <View style={{ flex: 1 }}>
-            <Text style={[mockStyles.unitLabel, { color: TEXT_PRI }]}>{u.label}</Text>
-            <Text style={[mockStyles.unitTenant, { color: TEXT_SEC }]}>{u.tenant}</Text>
+            <Text style={[mockStyles.unitLabel, { color: TEXT_PRI }]}>
+              {u.label}
+            </Text>
+            <Text style={[mockStyles.unitTenant, { color: TEXT_SEC }]}>
+              {u.tenant}
+            </Text>
           </View>
-          <View style={[mockStyles.statusPill, { backgroundColor: u.statusColor + "20" }]}>
-            <Text style={[mockStyles.statusPillText, { color: u.statusColor }]}>{u.statusText}</Text>
+          <View
+            style={[
+              mockStyles.statusPill,
+              { backgroundColor: u.statusColor + "20" },
+            ]}
+          >
+            <Text style={[mockStyles.statusPillText, { color: u.statusColor }]}>
+              {u.statusText}
+            </Text>
           </View>
         </View>
       ))}
@@ -416,8 +696,14 @@ const FloatingIcon = ({ name, color, x, y, size, delay }) => {
     return () => float.stopAnimation();
   }, []);
 
-  const translateY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
-  const rotate = float.interpolate({ inputRange: [0, 0.5, 1], outputRange: ["-4deg", "0deg", "4deg"] });
+  const translateY = float.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -10],
+  });
+  const rotate = float.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ["-4deg", "0deg", "4deg"],
+  });
 
   return (
     <Animated.View
@@ -454,19 +740,36 @@ const Illustration = ({ page, scaleAnim, opacityAnim }) => {
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(ringAnim, { toValue: 1, duration: 2200, useNativeDriver: true }),
-        Animated.timing(ringAnim, { toValue: 0, duration: 2200, useNativeDriver: true }),
+        Animated.timing(ringAnim, {
+          toValue: 1,
+          duration: 2200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(ringAnim, {
+          toValue: 0,
+          duration: 2200,
+          useNativeDriver: true,
+        }),
       ]),
     ).start();
   }, []);
 
-  const ringScale   = ringAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
-  const ringOpacity = ringAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.12, 0.28, 0.12] });
+  const ringScale = ringAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.06],
+  });
+  const ringOpacity = ringAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.12, 0.28, 0.12],
+  });
 
   const renderMock = () => {
-    if (page.mockCard === "bills")    return <MockBillsCard    accentColor={page.accentColor} />;
-    if (page.mockCard === "split")    return <MockSplitCard    accentColor={page.accentColor} />;
-    if (page.mockCard === "property") return <MockPropertyCard accentColor={page.accentColor} />;
+    if (page.mockCard === "bills")
+      return <MockBillsCard accentColor={page.accentColor} />;
+    if (page.mockCard === "split")
+      return <MockSplitCard accentColor={page.accentColor} />;
+    if (page.mockCard === "property")
+      return <MockPropertyCard accentColor={page.accentColor} />;
     return null;
   };
 
@@ -571,7 +874,12 @@ const OnboardingPage = ({ item, index, scrollX, panelHeight }) => {
       ))}
 
       {/* Illustration zone (top portion) */}
-      <View style={[pageStyles.illustrationZone, { paddingBottom: panelHeight - 24 }]}>
+      <View
+        style={[
+          pageStyles.illustrationZone,
+          { paddingBottom: panelHeight - 24 },
+        ]}
+      >
         <Illustration
           page={item}
           scaleAnim={illustrationScale}
@@ -604,7 +912,10 @@ const FeatureItem = ({ feature, delay }) => {
     }).start();
   }, [feature.text]);
 
-  const translateX = anim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] });
+  const translateX = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-20, 0],
+  });
   const iconBg = feature.color + "20";
 
   return (
@@ -614,7 +925,12 @@ const FeatureItem = ({ feature, delay }) => {
         { opacity: anim, transform: [{ translateX }] },
       ]}
     >
-      <View style={[featureStyles.iconWrap, { backgroundColor: iconBg, borderColor: feature.color + "30" }]}>
+      <View
+        style={[
+          featureStyles.iconWrap,
+          { backgroundColor: iconBg, borderColor: feature.color + "30" },
+        ]}
+      >
         <Ionicons name={feature.icon} size={15} color={feature.color} />
       </View>
       <Text style={featureStyles.text}>{feature.text}</Text>
@@ -640,7 +956,7 @@ const featureStyles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     letterSpacing: 0.1,
-    color: "rgba(234,241,255,0.78)",  // colors.darkColors.text at ~78% opacity
+    color: "rgba(234,241,255,0.78)", // colors.darkColors.text at ~78% opacity
   },
 });
 
@@ -674,7 +990,10 @@ const OnboardingScreen = ({ onComplete }) => {
 
   const goToNext = useCallback(() => {
     if (currentPage < pages.length - 1) {
-      flatListRef.current?.scrollToIndex({ index: currentPage + 1, animated: true });
+      flatListRef.current?.scrollToIndex({
+        index: currentPage + 1,
+        animated: true,
+      });
     } else {
       handleComplete();
     }
@@ -692,8 +1011,8 @@ const OnboardingScreen = ({ onComplete }) => {
   // Derive CTA accent from current page (always a forest-green tone)
   const accentColor = currentPageData.accentColor;
   // Panel background: almost-opaque version of the darkest forest green
-  const panelBg = "rgba(0,27,25,0.97)";          // near #001b19 — deeper than #002b29
-  const skipColor = "rgba(158,208,205,0.40)";     // inverse-primary at low opacity
+  const panelBg = "rgba(0,27,25,0.97)"; // near #001b19 — deeper than #002b29
+  const skipColor = "rgba(158,208,205,0.40)"; // inverse-primary at low opacity
 
   return (
     <Animated.View style={[styles.root, { opacity: fadeAnim }]}>
@@ -707,7 +1026,12 @@ const OnboardingScreen = ({ onComplete }) => {
         bounces={false}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
-          <OnboardingPage item={item} index={index} scrollX={scrollX} panelHeight={panelHeight} />
+          <OnboardingPage
+            item={item}
+            index={index}
+            scrollX={scrollX}
+            panelHeight={panelHeight}
+          />
         )}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
@@ -730,14 +1054,26 @@ const OnboardingScreen = ({ onComplete }) => {
         ]}
       >
         {/* Thin accent top bar */}
-        <View style={[styles.panelAccentBar, { backgroundColor: accentColor }]} />
+        <View
+          style={[styles.panelAccentBar, { backgroundColor: accentColor }]}
+        />
 
         {/* Badge + title + description + features */}
         <View style={styles.panelContent}>
           {/* Badge */}
-          <View style={[styles.badge, { backgroundColor: accentColor + "20", borderColor: accentColor + "40" }]}>
+          <View
+            style={[
+              styles.badge,
+              {
+                backgroundColor: accentColor + "20",
+                borderColor: accentColor + "40",
+              },
+            ]}
+          >
             <Ionicons name="leaf-outline" size={9} color={accentColor} />
-            <Text style={[styles.badgeText, { color: accentColor }]}>{currentPageData.badge}</Text>
+            <Text style={[styles.badgeText, { color: accentColor }]}>
+              {currentPageData.badge}
+            </Text>
           </View>
 
           {/* Title */}
@@ -749,7 +1085,11 @@ const OnboardingScreen = ({ onComplete }) => {
           {/* Features */}
           <View style={styles.featureList}>
             {currentPageData.features.map((f, i) => (
-              <FeatureItem key={`${currentPage}-${i}`} feature={f} delay={i * 80} />
+              <FeatureItem
+                key={`${currentPage}-${i}`}
+                feature={f}
+                delay={i * 80}
+              />
             ))}
           </View>
         </View>
@@ -758,7 +1098,11 @@ const OnboardingScreen = ({ onComplete }) => {
         <View style={styles.navBar}>
           {/* Skip / spacer */}
           {!isLast ? (
-            <TouchableOpacity style={styles.skipBtn} onPress={handleComplete} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.skipBtn}
+              onPress={handleComplete}
+              activeOpacity={0.7}
+            >
               <Text style={[styles.skipText, { color: skipColor }]}>Skip</Text>
             </TouchableOpacity>
           ) : (
@@ -775,7 +1119,7 @@ const OnboardingScreen = ({ onComplete }) => {
               });
               const dotOpacity = scrollX.interpolate({
                 inputRange: [(i - 1) * width, i * width, (i + 1) * width],
-                outputRange: [0.30, 1, 0.30],
+                outputRange: [0.3, 1, 0.3],
                 extrapolate: "clamp",
               });
               return (
@@ -783,7 +1127,11 @@ const OnboardingScreen = ({ onComplete }) => {
                   key={i}
                   style={[
                     styles.dot,
-                    { width: dotWidth, opacity: dotOpacity, backgroundColor: p.accentColor },
+                    {
+                      width: dotWidth,
+                      opacity: dotOpacity,
+                      backgroundColor: p.accentColor,
+                    },
                   ]}
                 />
               );
@@ -799,19 +1147,22 @@ const OnboardingScreen = ({ onComplete }) => {
             {isLast ? (
               <LinearGradient
                 // Green-to-emerald gradient using forest palette
-                colors={["#036d41", "#81d8a3"]}   // secondary → secondary-fixed-dim
+                colors={["#036d41", "#81d8a3"]} // secondary → secondary-fixed-dim
                 style={styles.getStartedGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <Text style={styles.getStartedText}>Get Started</Text>
+                <Text style={styles.getStartedText}>Continue</Text>
                 <Ionicons name="arrow-forward" size={16} color="#002b29" />
               </LinearGradient>
             ) : (
               <View
                 style={[
                   styles.nextCircle,
-                  { backgroundColor: accentColor + "20", borderColor: accentColor + "50" },
+                  {
+                    backgroundColor: accentColor + "20",
+                    borderColor: accentColor + "50",
+                  },
                 ]}
               >
                 <Ionicons name="arrow-forward" size={20} color={accentColor} />
@@ -885,13 +1236,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 27,
     fontWeight: "800",
-    color: "#eaf1ff",             // colors.darkColors.text
+    color: "#eaf1ff", // colors.darkColors.text
     lineHeight: 33,
     letterSpacing: -0.5,
   },
   description: {
     fontSize: 13,
-    color: "rgba(158,208,205,0.60)",  // inverse-primary dimmed
+    color: "rgba(158,208,205,0.60)", // inverse-primary dimmed
     lineHeight: 19,
     letterSpacing: 0.1,
   },
@@ -932,7 +1283,7 @@ const styles = StyleSheet.create({
   getStartedText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#002b29",           // dark text on bright green CTA — high contrast
+    color: "#002b29", // dark text on bright green CTA — high contrast
   },
 
   // Counter
@@ -940,7 +1291,7 @@ const styles = StyleSheet.create({
   counterText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "rgba(158,208,205,0.22)",   // inverse-primary very dim
+    color: "rgba(158,208,205,0.22)", // inverse-primary very dim
     letterSpacing: 0.5,
   },
 });

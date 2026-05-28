@@ -10,6 +10,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { useTheme } from "../theme/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View,
   Text,
@@ -18,6 +19,7 @@ import {
   Animated,
   Modal,
   TouchableOpacity,
+  StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -172,9 +174,11 @@ const inlineStyles = StyleSheet.create({
 const TOAST_DURATION = 3400; // ms before auto-dismiss
 
 export const Toast = ({ visible, type = "success", message, onHide }) => {
+  const insets = useSafeAreaInsets();
   const slideY = useRef(new Animated.Value(-70)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const timerRef = useRef(null);
+  const topInset = Math.max(insets.top || 0, StatusBar.currentHeight || 0);
 
   const hide = () => {
     Animated.parallel([
@@ -221,32 +225,43 @@ export const Toast = ({ visible, type = "success", message, onHide }) => {
   const c = TYPE_CONFIG[type] ?? TYPE_CONFIG.info;
 
   return (
-    <Animated.View
-      style={[
-        toastStyles.container,
-        {
-          backgroundColor: c.toastBg,
-          opacity,
-          transform: [{ translateY: slideY }],
-        },
-      ]}
-      pointerEvents="box-none"
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={hide}
+      statusBarTranslucent
     >
-      <View
-        style={[
-          toastStyles.iconBadge,
-          { backgroundColor: "rgba(255,255,255,0.15)" },
-        ]}
-      >
-        <Ionicons name={c.icon} size={18} color={c.toastIcon} />
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <Animated.View
+          style={[
+            toastStyles.container,
+            {
+              backgroundColor: c.toastBg,
+              top: topInset + 10,
+              opacity,
+              transform: [{ translateY: slideY }],
+            },
+          ]}
+          pointerEvents="box-none"
+        >
+          <View
+            style={[
+              toastStyles.iconBadge,
+              { backgroundColor: "rgba(255,255,255,0.15)" },
+            ]}
+          >
+            <Ionicons name={c.icon} size={18} color={c.toastIcon} />
+          </View>
+          <Text style={toastStyles.message} numberOfLines={2}>
+            {message}
+          </Text>
+          <Pressable onPress={hide} hitSlop={12} style={toastStyles.closeBtn}>
+            <Ionicons name="close" size={17} color="rgba(255,255,255,0.6)" />
+          </Pressable>
+        </Animated.View>
       </View>
-      <Text style={toastStyles.message} numberOfLines={2}>
-        {message}
-      </Text>
-      <Pressable onPress={hide} hitSlop={12} style={toastStyles.closeBtn}>
-        <Ionicons name="close" size={17} color="rgba(255,255,255,0.6)" />
-      </Pressable>
-    </Animated.View>
+    </Modal>
   );
 };
 

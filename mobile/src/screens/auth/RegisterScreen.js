@@ -8,7 +8,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
-  Image,
   KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -144,18 +143,11 @@ const RegisterScreen = ({ navigation }) => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <View style={styles.iconGlow}>
-            <Image
-              source={require("../../assets/icon.png")}
-              style={styles.icon}
-            />
-          </View>
           <View style={styles.brandPill}>
-            <Ionicons name="sparkles-outline" size={14} color={colors.accent} />
-            <Text style={styles.brandPillText}>Start your account</Text>
+            <Text style={styles.brandPillText}>Apartment Bill Tracker</Text>
           </View>
-          <Text style={styles.title}>PropFlow</Text>
-          <Text style={styles.subtitle}>Create Account</Text>
+          <Text style={styles.title}>Create account</Text>
+          <Text style={styles.subtitle}>Get set up in a minute.</Text>
           <Text style={styles.headerCaption}>
             Set up your space to manage rooms, bills, payments, and updates in
             one place.
@@ -284,11 +276,7 @@ const RegisterScreen = ({ navigation }) => {
             disabled={!request || loading}
             activeOpacity={0.7}
           >
-            <Image
-              source={require("../../assets/google-icon.png")}
-              style={{ width: 18, height: 18 }}
-            />
-            <Text style={styles.socialButtonText}>Google</Text>
+            <Text style={styles.socialButtonText}>Continue with Google</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -296,8 +284,7 @@ const RegisterScreen = ({ navigation }) => {
             onPress={() => showToast("Facebook sign-up is coming soon.", "info")}
             activeOpacity={0.7}
           >
-            <Ionicons name="logo-facebook" size={18} color="#1877F2" />
-            <Text style={styles.socialButtonText}>Facebook</Text>
+            <Text style={styles.socialButtonText}>Continue with Facebook</Text>
           </TouchableOpacity>
         </View>
 
@@ -355,7 +342,6 @@ const createStyles = (colors) => {
     brandPill: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 999,
@@ -371,33 +357,8 @@ const createStyles = (colors) => {
       textTransform: "uppercase",
       letterSpacing: 0.7,
     },
-    iconGlow: {
-      width: 108,
-      height: 108,
-      borderRadius: 32,
-      backgroundColor: glassPanel,
-      justifyContent: "center",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: glassBorder,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.12,
-      shadowRadius: 18,
-      elevation: 5,
-      marginBottom: 18,
-    },
-    title: {
-      fontSize: 26,
-      fontWeight: "900",
-      color: colors.text,
-      marginBottom: 4,
-    },
-    subtitle: {
-      fontSize: 16,
-      color: colors.textSecondary,
-      fontWeight: "700",
-    },
+    title: { fontSize: 24, fontWeight: "900", color: colors.text, marginBottom: 6 },
+    subtitle: { fontSize: 14, color: colors.textSecondary, fontWeight: "700" },
     headerCaption: {
       fontSize: 13,
       color: colors.textSecondary,
@@ -573,12 +534,7 @@ const createStyles = (colors) => {
       shadowRadius: 14,
       elevation: 3,
     },
-    socialButtonText: {
-      marginLeft: 8,
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.text,
-    },
+    socialButtonText: { fontSize: 14, fontWeight: "600", color: colors.text },
     footer: {
       flexDirection: "row",
       justifyContent: "center",
@@ -605,11 +561,6 @@ const createStyles = (colors) => {
       fontSize: 12,
       color: colors.textTertiary,
       fontStyle: "italic",
-    },
-    icon: {
-      width: 76,
-      height: 76,
-      resizeMode: "contain",
     },
   });
 };
