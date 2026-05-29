@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme/ThemeContext";
 import Constants from "expo-constants";
@@ -28,6 +29,7 @@ import { apiService, authService } from "../services/apiService";
 import { getAPIBaseURL } from "../config/config";
 import { Toast } from "../components/CustomAlert";
 import savedAccountsService from "../services/savedAccountsService";
+import { validateEmail } from "../utils/helpers";
 
 const { width, height } = Dimensions.get("window");
 
@@ -418,30 +420,26 @@ const AuthModal = ({
   const [bioEnabledByEmail, setBioEnabledByEmail] = useState({});
   const [bioLoadingEmail, setBioLoadingEmail] = useState(null);
   const [removeLoadingEmail, setRemoveLoadingEmail] = useState(null);
-  const inputBorderAnim = useRef(new Animated.Value(0)).current;
+  const [focusedInput, setFocusedInput] = useState(null);
+  const [emailError, setEmailError] = useState("");
 
-  const handleFocus = () =>
-    Animated.timing(inputBorderAnim, {
-      toValue: 1,
-      duration: 220,
-      useNativeDriver: false,
-    }).start();
-  const handleBlur = () =>
-    Animated.timing(inputBorderAnim, {
-      toValue: 0,
-      duration: 220,
-      useNativeDriver: false,
-    }).start();
+  const getEmailValidationError = (value) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "Please enter your email address";
+    if (!validateEmail(trimmed)) return "Please enter a valid email address";
+    return "";
+  };
+
+  const validateEmailField = () => {
+    const error = getEmailValidationError(email);
+    setEmailError(error);
+    return !error;
+  };
 
   const handleCloseModal = () => {
     Keyboard.dismiss();
     setTimeout(() => onClose?.(), 40);
   };
-
-  const inputBorderColor = inputBorderAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [CARD_BORDER, CARD_BORDER_HI],
-  });
 
   const handleRemoveSavedAccount = async (accountEmail) => {
     try {
@@ -484,6 +482,8 @@ const AuthModal = ({
   useEffect(() => {
     if (visible) {
       setMounted(true);
+      setFocusedInput(null);
+      setEmailError("");
       setAuthMode("login");
       setStep("start");
       setSignUpStep(1);
@@ -543,6 +543,7 @@ const AuthModal = ({
         ]).start();
       });
     } else if (mounted) {
+      setFocusedInput(null);
       logoAnim.setValue(0);
       formAnim.setValue(0);
       Animated.parallel([
@@ -569,9 +570,8 @@ const AuthModal = ({
       animationType="none"
       onRequestClose={handleCloseModal}
       statusBarTranslucent
-      hardwareAccelerated
     >
-      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <View style={ms.modalRoot}>
       {/* ── Backdrop ── */}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdrop }]}>
         <TouchableOpacity
@@ -586,10 +586,8 @@ const AuthModal = ({
 
       {/* ── Sheet ── */}
       <Animated.View
-        style={[
-          ms.sheet,
-          { transform: [{ translateY }] },
-        ]}
+        style={[ms.sheet, { transform: [{ translateY }] }]}
+        renderToHardwareTextureAndroid={false}
       >
         {/* ── Forest-green ambient texture inside the sheet ── */}
         <View style={ms.sheetBg} pointerEvents="none">
@@ -656,7 +654,9 @@ const AuthModal = ({
             ms.sheetScrollContent,
             { paddingBottom: insets.bottom + 20 },
           ]}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
+          nestedScrollEnabled
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
@@ -809,26 +809,13 @@ const AuthModal = ({
         )}
 
         {/* ── Email input + Continue ── */}
-        <Animated.View
-          style={{
-            opacity: formAnim,
-            transform: [
-              {
-                translateY: formAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [10, 0],
-                }),
-              },
-            ],
-          }}
-        >
+        <Animated.View style={{ opacity: formAnim }}>
           {(authMode === "login" ||
             (authMode === "forgot" && forgotStep === 1) ||
             signUpStep === 1) &&
             !(authMode === "login" && step === "email" && selectedAccount) && (
-            <Animated.View
-              style={[ms.inputWrap, { borderColor: inputBorderColor }]}
-            >
+            <>
+            <AuthInputWrap focused={focusedInput === "email"} error={!!emailError}>
               <Ionicons
                 name="mail-outline"
                 size={16}
@@ -840,23 +827,43 @@ const AuthModal = ({
                 placeholder="Email address"
                 placeholderTextColor="rgba(158,208,205,0.34)"
                 value={email}
-                onChangeText={setEmail}
-                onFocus={handleFocus}
-                onBlur={handleBlur}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (emailError) {
+                    setEmailError(getEmailValidationError(text));
+                  }
+                }}
+                onFocus={() => setFocusedInput("email")}
+                onBlur={() => {
+                  setFocusedInput((current) =>
+                    current === "email" ? null : current,
+                  );
+                  if (email.trim()) {
+                    setEmailError(getEmailValidationError(email));
+                  }
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!loading}
               />
               {email.length > 0 && (
                 <TouchableOpacity
-                  onPress={() => setEmail("")}
+                  onPress={() => {
+                    setEmail("");
+                    setEmailError("");
+                  }}
                   activeOpacity={0.7}
                   style={ms.inputClearBtn}
                 >
                   <Ionicons name="close-circle" size={16} color={TEXT_SEC} />
                 </TouchableOpacity>
               )}
-            </Animated.View>
+            </AuthInputWrap>
+            {!!emailError && (
+              <Text style={ms.inputErrorText}>{emailError}</Text>
+            )}
+            </>
           )}
 
           {authMode === "login" && step === "start" && savedAccounts.length > 0 && (
@@ -876,6 +883,7 @@ const AuthModal = ({
                       onPress={() => {
                         setSelectedAccount(account);
                         setEmail(account.email);
+                        setEmailError("");
                         setPassword("");
                         setStep("email");
                       }}
@@ -924,7 +932,7 @@ const AuthModal = ({
           )}
 
           {authMode === "signup" && signUpStep === 1 && (
-            <Animated.View style={[ms.inputWrap, { borderColor: CARD_BORDER }]}>
+            <AuthInputWrap focused={focusedInput === "fullName"}>
               <Ionicons
                 name="person-outline"
                 size={16}
@@ -937,40 +945,48 @@ const AuthModal = ({
                 placeholderTextColor="rgba(158,208,205,0.34)"
                 value={fullName}
                 onChangeText={setFullName}
+                onFocus={() => setFocusedInput("fullName")}
+                onBlur={() =>
+                  setFocusedInput((current) =>
+                    current === "fullName" ? null : current,
+                  )
+                }
                 autoCapitalize="words"
+                editable={!loading}
               />
-            </Animated.View>
+            </AuthInputWrap>
           )}
 
           {authMode === "signup" && signUpStep === 2 && (
-            <>
-              <Animated.View
-                style={[ms.inputWrap, { borderColor: CARD_BORDER }]}
-              >
-                <Ionicons
-                  name="keypad-outline"
-                  size={16}
-                  color={TEAL_MUTED}
-                  style={ms.inputIcon}
-                />
-                <TextInput
-                  style={ms.input}
-                  placeholder="6-digit code"
-                  placeholderTextColor="rgba(158,208,205,0.34)"
-                  value={code}
-                  onChangeText={setCode}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                />
-              </Animated.View>
-            </>
+            <AuthInputWrap focused={focusedInput === "code"}>
+              <Ionicons
+                name="keypad-outline"
+                size={16}
+                color={TEAL_MUTED}
+                style={ms.inputIcon}
+              />
+              <TextInput
+                style={ms.input}
+                placeholder="6-digit code"
+                placeholderTextColor="rgba(158,208,205,0.34)"
+                value={code}
+                onChangeText={setCode}
+                onFocus={() => setFocusedInput("code")}
+                onBlur={() =>
+                  setFocusedInput((current) =>
+                    current === "code" ? null : current,
+                  )
+                }
+                keyboardType="number-pad"
+                maxLength={6}
+                editable={!loading}
+              />
+            </AuthInputWrap>
           )}
 
           {authMode === "signup" && signUpStep === 3 && (
             <>
-              <Animated.View
-                style={[ms.inputWrap, { borderColor: CARD_BORDER }]}
-              >
+              <AuthInputWrap focused={focusedInput === "password"}>
                 <Ionicons
                   name="lock-closed-outline"
                   size={16}
@@ -983,8 +999,15 @@ const AuthModal = ({
                   placeholderTextColor="rgba(158,208,205,0.34)"
                   value={password}
                   onChangeText={setPassword}
+                  onFocus={() => setFocusedInput("password")}
+                  onBlur={() =>
+                    setFocusedInput((current) =>
+                      current === "password" ? null : current,
+                    )
+                  }
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  editable={!loading}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword((v) => !v)}
@@ -997,10 +1020,8 @@ const AuthModal = ({
                     color={TEXT_SEC}
                   />
                 </TouchableOpacity>
-              </Animated.View>
-              <Animated.View
-                style={[ms.inputWrap, { borderColor: CARD_BORDER }]}
-              >
+              </AuthInputWrap>
+              <AuthInputWrap focused={focusedInput === "confirmPassword"}>
                 <Ionicons
                   name="lock-closed"
                   size={16}
@@ -1013,8 +1034,15 @@ const AuthModal = ({
                   placeholderTextColor="rgba(158,208,205,0.34)"
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
+                  onFocus={() => setFocusedInput("confirmPassword")}
+                  onBlur={() =>
+                    setFocusedInput((current) =>
+                      current === "confirmPassword" ? null : current,
+                    )
+                  }
                   secureTextEntry={!showConfirmPassword}
                   autoCapitalize="none"
+                  editable={!loading}
                 />
                 <TouchableOpacity
                   onPress={() => setShowConfirmPassword((v) => !v)}
@@ -1029,7 +1057,7 @@ const AuthModal = ({
                     color={TEXT_SEC}
                   />
                 </TouchableOpacity>
-              </Animated.View>
+              </AuthInputWrap>
             </>
           )}
 
@@ -1042,6 +1070,7 @@ const AuthModal = ({
                     (!email.trim() || loading) && { opacity: 0.45 },
                   ]}
                   onPress={async () => {
+                    if (!validateEmailField()) return;
                     const ok = await onForgotPasswordRequest?.(email);
                     if (ok) setForgotStep(2);
                   }}
@@ -1073,7 +1102,7 @@ const AuthModal = ({
 
               {forgotStep === 2 && (
                 <>
-                  <Animated.View style={[ms.inputWrap, { borderColor: CARD_BORDER }]}>
+                  <AuthInputWrap focused={focusedInput === "forgotCode"}>
                     <Ionicons name="keypad-outline" size={16} color={TEAL_MUTED} style={ms.inputIcon} />
                     <TextInput
                       style={ms.input}
@@ -1081,10 +1110,17 @@ const AuthModal = ({
                       placeholderTextColor="rgba(158,208,205,0.34)"
                       value={code}
                       onChangeText={setCode}
+                      onFocus={() => setFocusedInput("forgotCode")}
+                      onBlur={() =>
+                        setFocusedInput((current) =>
+                          current === "forgotCode" ? null : current,
+                        )
+                      }
                       keyboardType="number-pad"
                       maxLength={6}
+                      editable={!loading}
                     />
-                  </Animated.View>
+                  </AuthInputWrap>
                   <TouchableOpacity
                     style={[
                       ms.continueBtn,
@@ -1117,7 +1153,7 @@ const AuthModal = ({
 
               {forgotStep === 3 && (
                 <>
-                  <Animated.View style={[ms.inputWrap, { borderColor: CARD_BORDER }]}>
+                  <AuthInputWrap focused={focusedInput === "forgotPassword"}>
                     <Ionicons name="lock-closed-outline" size={16} color={TEAL_MUTED} style={ms.inputIcon} />
                     <TextInput
                       style={ms.input}
@@ -1125,14 +1161,21 @@ const AuthModal = ({
                       placeholderTextColor="rgba(158,208,205,0.34)"
                       value={password}
                       onChangeText={setPassword}
+                      onFocus={() => setFocusedInput("forgotPassword")}
+                      onBlur={() =>
+                        setFocusedInput((current) =>
+                          current === "forgotPassword" ? null : current,
+                        )
+                      }
                       secureTextEntry={!showPassword}
                       autoCapitalize="none"
+                      editable={!loading}
                     />
                     <TouchableOpacity onPress={() => setShowPassword((v) => !v)} activeOpacity={0.7} style={ms.inputClearBtn}>
                       <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={16} color={TEXT_SEC} />
                     </TouchableOpacity>
-                  </Animated.View>
-                  <Animated.View style={[ms.inputWrap, { borderColor: CARD_BORDER }]}>
+                  </AuthInputWrap>
+                  <AuthInputWrap focused={focusedInput === "forgotConfirmPassword"}>
                     <Ionicons name="lock-closed" size={16} color={TEAL_MUTED} style={ms.inputIcon} />
                     <TextInput
                       style={ms.input}
@@ -1140,13 +1183,20 @@ const AuthModal = ({
                       placeholderTextColor="rgba(158,208,205,0.34)"
                       value={confirmPassword}
                       onChangeText={setConfirmPassword}
+                      onFocus={() => setFocusedInput("forgotConfirmPassword")}
+                      onBlur={() =>
+                        setFocusedInput((current) =>
+                          current === "forgotConfirmPassword" ? null : current,
+                        )
+                      }
                       secureTextEntry={!showConfirmPassword}
                       autoCapitalize="none"
+                      editable={!loading}
                     />
                     <TouchableOpacity onPress={() => setShowConfirmPassword((v) => !v)} activeOpacity={0.7} style={ms.inputClearBtn}>
                       <Ionicons name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} size={16} color={TEXT_SEC} />
                     </TouchableOpacity>
-                  </Animated.View>
+                  </AuthInputWrap>
                   <TouchableOpacity
                     style={[
                       ms.continueBtn,
@@ -1177,7 +1227,10 @@ const AuthModal = ({
           ) : authMode === "login" && step === "start" ? (
             <TouchableOpacity
               style={[ms.continueBtn, !email.length && { opacity: 0.45 }]}
-              onPress={() => email && setStep("email")}
+              onPress={() => {
+                if (!validateEmailField()) return;
+                setStep("email");
+              }}
               activeOpacity={0.85}
               disabled={!email.length}
             >
@@ -1231,9 +1284,7 @@ const AuthModal = ({
                 </View>
               )}
 
-              <Animated.View
-                style={[ms.inputWrap, { borderColor: CARD_BORDER }]}
-              >
+              <AuthInputWrap focused={focusedInput === "loginPassword"}>
                 <Ionicons
                   name="lock-closed-outline"
                   size={16}
@@ -1246,9 +1297,16 @@ const AuthModal = ({
                   placeholderTextColor="rgba(158,208,205,0.34)"
                   value={password}
                   onChangeText={setPassword}
+                  onFocus={() => setFocusedInput("loginPassword")}
+                  onBlur={() =>
+                    setFocusedInput((current) =>
+                      current === "loginPassword" ? null : current,
+                    )
+                  }
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!loading}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword((v) => !v)}
@@ -1261,7 +1319,7 @@ const AuthModal = ({
                     color={TEXT_SEC}
                   />
                 </TouchableOpacity>
-              </Animated.View>
+              </AuthInputWrap>
 
               <TouchableOpacity
                 style={[
@@ -1303,6 +1361,7 @@ const AuthModal = ({
                 ]}
                 onPress={async () => {
                   if (signUpStep === 1) {
+                    if (!validateEmailField()) return;
                     const result = await onSignUpCreate?.(fullName, email);
                     if (result?.ok || result?.resumeAtStep2) {
                       setSignUpStep(2);
@@ -1376,6 +1435,7 @@ const AuthModal = ({
                 setSignUpStep(1);
                 setStep("start");
                 setSelectedAccount(null);
+                setEmailError("");
                 setPassword("");
                 setConfirmPassword("");
                 setCode("");
@@ -1384,6 +1444,7 @@ const AuthModal = ({
                 setAuthMode("login");
                 setStep("start");
                 setSelectedAccount(null);
+                setEmailError("");
                 setPassword("");
                 setConfirmPassword("");
                 setCode("");
@@ -1408,6 +1469,7 @@ const AuthModal = ({
               onPress={() => {
                 setAuthMode("forgot");
                 setForgotStep(1);
+                setEmailError("");
                 setCode("");
                 setPassword("");
                 setConfirmPassword("");
@@ -1443,6 +1505,10 @@ const AuthModal = ({
 
 // ── Modal Styles ──────────────────────────────────────────────────────────────
 const ms = StyleSheet.create({
+  modalRoot: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
   sheet: {
     position: "absolute",
     bottom: 0,
@@ -1454,7 +1520,6 @@ const ms = StyleSheet.create({
     borderWidth: 1,
     borderColor: CARD_BORDER,
     borderBottomWidth: 0,
-    overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.55,
@@ -1663,7 +1728,6 @@ const ms = StyleSheet.create({
     backgroundColor: CARD_BG,
     marginBottom: 12,
     paddingHorizontal: 14,
-    overflow: "hidden",
   },
   inputIcon: { marginRight: 10 },
   input: {
@@ -1674,6 +1738,14 @@ const ms = StyleSheet.create({
     letterSpacing: 0.1,
   },
   inputClearBtn: { padding: 4 },
+  inputErrorText: {
+    fontSize: 11,
+    color: "#ff8c94",
+    marginTop: -6,
+    marginBottom: 10,
+    marginLeft: 4,
+    fontWeight: "600",
+  },
   selectedAccountPill: {
     alignSelf: "flex-start",
     backgroundColor: "rgba(129,216,163,0.10)",
@@ -1752,6 +1824,24 @@ const ms = StyleSheet.create({
   },
 });
 
+const AuthInputWrap = ({ focused, error = false, children }) => (
+  <View
+    style={[
+      ms.inputWrap,
+      {
+        borderColor: error
+          ? "#ff8c94"
+          : focused
+            ? CARD_BORDER_HI
+            : CARD_BORDER,
+      },
+    ]}
+    collapsable={false}
+  >
+    {children}
+  </View>
+);
+
 // ── Main Landing Screen ────────────────────────────────────────────────────────
 const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
   // eslint-disable-next-line no-unused-vars
@@ -1759,6 +1849,8 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
   const insets = useSafeAreaInsets();
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [screenAuthenticating, setScreenAuthenticating] = useState(false);
+  const [authLoadingMessage, setAuthLoadingMessage] = useState("Signing you in...");
   const [toast, setToast] = useState({
     visible: false,
     type: "info",
@@ -1768,6 +1860,15 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
   const showToast = (message, type = "info") =>
     setToast({ visible: true, type, message });
   const hideToast = () => setToast((t) => ({ ...t, visible: false }));
+
+  const beginScreenAuth = (message = "Signing you in...") => {
+    setAuthLoadingMessage(message);
+    setScreenAuthenticating(true);
+  };
+
+  const endScreenAuth = () => {
+    setScreenAuthenticating(false);
+  };
 
   const {
     signIn,
@@ -1797,13 +1898,17 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
     if (response?.type === "success") {
       const accessToken =
         response.authentication?.accessToken || response.params?.access_token;
-      if (accessToken) handleGoogleLogin(accessToken);
+      if (accessToken) {
+        handleGoogleLogin(accessToken);
+      }
     }
   }, [response]);
 
   const handleGoogleLogin = async (accessToken) => {
+    let succeeded = false;
     try {
       setLoading(true);
+      beginScreenAuth("Completing Google sign in...");
       const userResponse = await fetch(
         `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`,
       );
@@ -1817,6 +1922,7 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       if (!result.success) {
         showToast(result.error || "Google login failed", "error");
       } else {
+        succeeded = true;
         await registerPushToken();
         onAuthSuccess?.("google");
       }
@@ -1825,6 +1931,7 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       showToast("Google login failed", "error");
     } finally {
       setLoading(false);
+      if (!succeeded) endScreenAuth();
     }
   };
 
@@ -1841,8 +1948,10 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
 
   // ── Facebook OAuth (server-side flow) ────────────────────────────────────────
   const handleFacebookServerLogin = async () => {
+    let succeeded = false;
     try {
       setLoading(true);
+      beginScreenAuth("Completing Facebook sign in...");
       const baseUrl = getAPIBaseURL();
       const authUrl = `${baseUrl}/api/v2/user/auth/facebook`;
       const result = await WebBrowser.openAuthSessionAsync(
@@ -1871,6 +1980,7 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
           if (!loginResult.success) {
             showToast(loginResult.error || "Facebook login failed", "error");
           } else {
+            succeeded = true;
             await registerPushToken();
             onAuthSuccess?.("facebook");
           }
@@ -1887,6 +1997,7 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       showToast("Facebook login failed", "error");
     } finally {
       setLoading(false);
+      if (!succeeded) endScreenAuth();
     }
   };
 
@@ -2039,6 +2150,7 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
   };
 
   const handleEmailSignIn = async (email, password) => {
+    let succeeded = false;
     try {
       setLoading(true);
       const result = await signIn(email, password, true);
@@ -2046,6 +2158,8 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
         showToast(result?.error || "Login failed", "error");
         return;
       }
+      succeeded = true;
+      beginScreenAuth("Signing you in...");
       await registerPushToken();
       setShowModal(false);
       onAuthSuccess?.("email", email);
@@ -2053,10 +2167,12 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       showToast(e?.message || "Login failed", "error");
     } finally {
       setLoading(false);
+      if (!succeeded) endScreenAuth();
     }
   };
 
   const handleBiometricLogin = async (emailForBiometric) => {
+    let succeeded = false;
     try {
       setLoading(true);
       const result = await signInWithBiometric(true, emailForBiometric);
@@ -2064,6 +2180,8 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
         showToast(result?.error || "Biometric login failed", "error");
         return;
       }
+      succeeded = true;
+      beginScreenAuth("Signing you in...");
       await registerPushToken();
       setShowModal(false);
       onAuthSuccess?.("biometric", emailForBiometric);
@@ -2071,6 +2189,7 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       showToast(e?.message || "Biometric login failed", "error");
     } finally {
       setLoading(false);
+      if (!succeeded) endScreenAuth();
     }
   };
 
@@ -2081,6 +2200,10 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
     }
     if (!email?.trim()) {
       showToast("Please enter your email", "error");
+      return false;
+    }
+    if (!validateEmail(email.trim())) {
+      showToast("Please enter a valid email address", "error");
       return false;
     }
     try {
@@ -2191,6 +2314,7 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       showToast("Passwords do not match", "error");
       return false;
     }
+    let succeeded = false;
     try {
       setLoading(true);
       const response = await authService.setPassword({
@@ -2207,6 +2331,8 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
         showToast("Account created. Please sign in.", "info");
         return true;
       }
+      succeeded = true;
+      beginScreenAuth("Creating your account...");
       await registerPushToken();
       setShowModal(false);
       onAuthSuccess?.("signup", email);
@@ -2216,12 +2342,17 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       return false;
     } finally {
       setLoading(false);
+      if (!succeeded) endScreenAuth();
     }
   };
 
   const handleForgotPasswordRequest = async (email) => {
     if (!email?.trim()) {
       showToast("Please enter your email address", "error");
+      return false;
+    }
+    if (!validateEmail(email.trim())) {
+      showToast("Please enter a valid email address", "error");
       return false;
     }
     try {
@@ -2630,6 +2761,28 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
         message={toast.message}
         onHide={hideToast}
       />
+
+      {screenAuthenticating && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+        >
+          <View style={ls.authLoadingRoot}>
+            <BlurView
+              intensity={Platform.OS === "android" ? 28 : 45}
+              tint="dark"
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={ls.authLoadingDimmer} />
+            <View style={ls.authLoadingCard}>
+              <ActivityIndicator size="large" color={ACCENT_EMERALD} />
+              <Text style={ls.authLoadingText}>{authLoadingMessage}</Text>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -2773,6 +2926,32 @@ const ls = StyleSheet.create({
     fontSize: 11,
     color: "rgba(158,208,205,0.32)",
     letterSpacing: 0.3,
+  },
+  authLoadingRoot: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  authLoadingDimmer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,30,28,0.42)",
+  },
+  authLoadingCard: {
+    alignItems: "center",
+    gap: 14,
+    paddingHorizontal: 28,
+    paddingVertical: 24,
+    borderRadius: 20,
+    backgroundColor: "rgba(7,26,24,0.88)",
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    minWidth: 220,
+  },
+  authLoadingText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: TEXT_PRI,
+    textAlign: "center",
   },
 });
 
