@@ -20,6 +20,8 @@ import {
   Platform,
   Linking,
   TextInput,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -56,6 +58,18 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const ACTION_CARD_WIDTH = (SCREEN_WIDTH - 44) / 2;
 const ROOMMATE_ONBOARDING_KEY = "@roommate_onboarding_seen";
 
+// Enable LayoutAnimation on Android (Old Architecture only).
+// In the New Architecture, LayoutAnimation is enabled by default and
+// setLayoutAnimationEnabledExperimental is a no-op that emits a warning,
+// so we guard with `global.RN$Bridgeless` (true on New Arch) to skip the call.
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental &&
+  !global.RN$Bridgeless
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 // Same amenity map used by host — maps key to icon+label
 const AMENITY_MAP = {
   wifi: { icon: "wifi", label: "WiFi", color: "#1976d2" },
@@ -87,6 +101,8 @@ const ClientHomeScreen = ({ navigation, route }) => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expandedStats, setExpandedStats] = useState(false);
+  const [balanceBreakdownExpanded, setBalanceBreakdownExpanded] =
+    useState(false);
   const [activeCycle, setActiveCycle] = useState(null);
   const [outstandingBalance, setOutstandingBalance] = useState({
     totalOutstanding: 0,
@@ -126,6 +142,24 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
   const showToast = (message, type = "success") =>
     setToast({ visible: true, type, message });
+
+  const toggleBreakdown = useCallback(() => {
+    LayoutAnimation.configureNext({
+      duration: 280,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+      },
+      delete: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
+    setBalanceBreakdownExpanded((prev) => !prev);
+  }, []);
 
   const userId = state?.user?.id || state?.user?._id;
   const userName = state?.user?.name || "User";
@@ -359,6 +393,71 @@ const ClientHomeScreen = ({ navigation, route }) => {
     }
 
     return Math.max(0, totalDue - totalPaid);
+  };
+
+  const getCycleDaysRemaining = () => {
+    if (!activeCycle) return null;
+    return Math.max(
+      0,
+      Math.ceil(
+        (new Date(activeCycle.end_date || activeCycle.endDate).getTime() -
+          Date.now()) /
+          (1000 * 60 * 60 * 24),
+      ),
+    );
+  };
+
+  const getIndividualBills = () => {
+    const breakdown = getExpenseBreakdown();
+    const paymentStatus = getPaymentStatus();
+    const daysRemaining = getCycleDaysRemaining() ?? 0;
+
+    const bills = [
+      {
+        name: "Rent",
+        icon: "home",
+        color: "#e65100",
+        iconBg: "#fff3e0",
+        amount: breakdown?.rent?.amount || 0,
+        status: paymentStatus?.status?.rentStatus || "unpaid",
+      },
+      {
+        name: "Electricity",
+        icon: "flash",
+        color: colors.electricityColor,
+        iconBg: "#fffde7",
+        amount: breakdown?.electricity?.amount || 0,
+        status: paymentStatus?.status?.electricityStatus || "unpaid",
+      },
+      {
+        name: "Water",
+        icon: "water",
+        color: colors.waterColor,
+        iconBg: "#e3f2fd",
+        amount: breakdown?.water?.amount || 0,
+        status: paymentStatus?.status?.waterStatus || "unpaid",
+      },
+      {
+        name: "Internet",
+        icon: "wifi",
+        color: colors.internetColor,
+        iconBg: "#f3e5f5",
+        amount: breakdown?.internet?.amount || 0,
+        status: paymentStatus?.status?.internetStatus || "unpaid",
+      },
+      ...(breakdown?.customCharges && breakdown.customCharges.length > 0
+        ? breakdown.customCharges.map((charge) => ({
+            name: charge.name || "Charge",
+            icon: "pricetag",
+            color: colors.accent,
+            iconBg: colors.accentSurface,
+            amount: charge.amount || 0,
+            status: paymentStatus?.status?.customChargesStatus || "unpaid",
+          }))
+        : []),
+    ].filter((bill) => bill.amount > 0);
+
+    return { bills, daysRemaining };
   };
 
   // Calculate remaining amount for a specific bill type
@@ -1755,15 +1854,22 @@ const ClientHomeScreen = ({ navigation, route }) => {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modal}>
+          {/* Drag handle pill */}
+          <View style={styles.modalDragHandle} />
+
           <View style={styles.modalHeader}>
             <View style={styles.modalHeaderLeft}>
               <View
                 style={[
                   styles.modalIconBg,
-                  { backgroundColor: colors.warningBg },
+                  { backgroundColor: colors.breakdownHeaderBg },
                 ]}
               >
-                <Ionicons name="pie-chart" size={18} color={colors.accent} />
+                <Ionicons
+                  name="pie-chart"
+                  size={18}
+                  color={colors.breakdownHeaderIcon}
+                />
               </View>
               <Text style={styles.modalTitle}>Expense Breakdown</Text>
             </View>
@@ -1778,6 +1884,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
           <ScrollViewWithDetection style={styles.modalBody}>
             {getExpenseBreakdown() && (
               <View>
+                {/* ── Summary hero card ── */}
                 <View style={styles.expenseSummaryCard}>
                   <Text style={styles.expenseSummaryLabel}>
                     Your Monthly Total
@@ -1799,11 +1906,14 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     {getExpenseBreakdown().payorCount !== 1 ? "s" : ""})
                   </Text>
                 </View>
+
+                {/* ── Bill rows ── */}
                 {[
                   {
                     name: "Rent",
                     icon: "home",
                     color: "#e65100",
+                    iconBg: "rgba(230,81,0,0.10)",
                     data: getExpenseBreakdown().rent,
                     billType: "rent",
                   },
@@ -1811,6 +1921,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     name: "Electricity",
                     icon: "flash",
                     color: colors.electricityColor,
+                    iconBg: "rgba(122,89,0,0.10)",
                     data: getExpenseBreakdown().electricity,
                     billType: "electricity",
                   },
@@ -1822,6 +1933,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                         : "Water",
                     icon: "water",
                     color: colors.waterColor,
+                    iconBg: "rgba(27,78,76,0.12)",
                     data: getExpenseBreakdown().water,
                     billType: "water",
                   },
@@ -1829,6 +1941,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     name: "Internet",
                     icon: "wifi",
                     color: colors.internetColor,
+                    iconBg: "rgba(0,82,48,0.10)",
                     data: getExpenseBreakdown().internet,
                     billType: "internet",
                   },
@@ -1838,6 +1951,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                         name: charge.name,
                         icon: "pricetag",
                         color: colors.accent,
+                        iconBg: colors.accentLight,
                         data: {
                           amount: charge.amount,
                           percentage: charge.percentage,
@@ -1845,74 +1959,76 @@ const ClientHomeScreen = ({ navigation, route }) => {
                         billType: "customCharges",
                       }))
                     : []),
-                ].map((item, idx) => {
-                  const remainingAmount = getRemainingAmountForBill(
-                    item.billType,
-                  );
-                  const isPaid = isBillPaid(item.billType);
-                  return (
-                    <View key={idx} style={styles.expenseRow}>
-                      <View style={styles.expenseRowLeft}>
-                        <View
-                          style={[
-                            styles.expenseDot,
-                            { backgroundColor: item.color },
-                          ]}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.expenseRowName}>{item.name}</Text>
-                          <View style={styles.expenseBarBg}>
-                            <View
-                              style={[
-                                styles.expenseBarFill,
-                                {
-                                  width: `${item.data.percentage}%`,
-                                  backgroundColor: item.color,
-                                },
-                              ]}
+                ]
+                  .filter((item) => item.data?.amount > 0)
+                  .map((item, idx) => {
+                    const isPaid = isBillPaid(item.billType);
+                    return (
+                      <View key={idx} style={styles.expenseRow}>
+                        <View style={styles.expenseRowLeft}>
+                          {/* Icon with themed background */}
+                          <View
+                            style={[
+                              styles.expenseIconBg,
+                              { backgroundColor: item.iconBg },
+                            ]}
+                          >
+                            <Ionicons
+                              name={item.icon}
+                              size={15}
+                              color={item.color}
                             />
                           </View>
-                        </View>
-                      </View>
-                      <View style={styles.expenseRowRight}>
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            justifyContent: "flex-end",
-                            gap: 6,
-                          }}
-                        >
-                          <Text style={styles.expenseRowAmount}>
-                            {"\u20B1"}
-                            {item.data.amount.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </Text>
-                          {isPaid && (
-                            <Text
-                              style={{
-                                fontSize: 10,
-                                fontWeight: "600",
-                                color: "#22c55e",
-                                backgroundColor: "rgba(34, 197, 94, 0.15)",
-                                paddingHorizontal: 6,
-                                paddingVertical: 2,
-                                borderRadius: 10,
-                              }}
-                            >
-                              ✓ Paid
+
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.expenseRowName}>
+                              {item.name}
                             </Text>
-                          )}
+                            <View style={styles.expenseBarBg}>
+                              <View
+                                style={[
+                                  styles.expenseBarFill,
+                                  {
+                                    width: `${Math.max(
+                                      item.data.percentage,
+                                      2,
+                                    )}%`,
+                                    backgroundColor: item.color,
+                                    opacity: isPaid ? 0.4 : 1,
+                                  },
+                                ]}
+                              />
+                            </View>
+                          </View>
                         </View>
-                        <Text style={styles.expenseRowPct}>
-                          {item.data.percentage.toFixed(0)}%
-                        </Text>
+
+                        <View style={styles.expenseRowRight}>
+                          <View style={styles.expenseRowAmountRow}>
+                            <Text
+                              style={[
+                                styles.expenseRowAmount,
+                                isPaid && styles.expenseRowAmountPaid,
+                              ]}
+                            >
+                              {"\u20B1"}
+                              {item.data.amount.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </Text>
+                            {isPaid && (
+                              <Text style={styles.expensePaidBadge}>
+                                ✓ Paid
+                              </Text>
+                            )}
+                          </View>
+                          <Text style={styles.expenseRowPct}>
+                            {item.data.percentage.toFixed(0)}%
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                  );
-                })}
+                    );
+                  })}
               </View>
             )}
             <ModalBottomSpacer />
@@ -2383,69 +2499,248 @@ const ClientHomeScreen = ({ navigation, route }) => {
               const breakdown = getExpenseBreakdown();
               const remaining = getRemainingDue();
               const totalBills = breakdown?.perPayor || 0;
-              const pendingCount = getPaymentStatus()?.pendingCount || 0;
+              const paymentStatus = getPaymentStatus();
+              const pendingCount = paymentStatus?.pendingCount || 0;
               const memberCount = userJoinedRoom.members?.length || 0;
-              const cycleDaysRemaining = activeCycle
-                ? Math.max(
-                    0,
-                    Math.ceil(
-                      (new Date(
-                        activeCycle.end_date || activeCycle.endDate,
-                      ).getTime() -
-                        Date.now()) /
-                        (1000 * 60 * 60 * 24),
-                    ),
-                  )
-                : null;
+              const cycleDaysRemaining = getCycleDaysRemaining();
+              const allPaid =
+                paymentStatus?.allPaid ||
+                userJoinedRoom.cycleStatus === "completed";
+              const { bills, daysRemaining: breakdownDaysRemaining } =
+                getIndividualBills();
+              const paidBillCount = bills.filter(
+                (bill) => bill.status === "paid",
+              ).length;
+
               return (
                 <View style={styles.balanceCardWrap}>
-                  <View style={styles.balanceCard}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.balanceLabel}>Total Balance</Text>
-                      <AnimatedAmount
-                        value={remaining}
-                        formatter={(val) => `PHP ${val.toFixed(2)}`}
-                        style={styles.balanceAmount}
-                      />
-                      <Text style={styles.balanceSubLabel}>
-                        You owe this cycle
-                      </Text>
-                      <View style={styles.balanceMetaRow}>
-                        <View style={styles.balanceMetaChip}>
-                          <Ionicons
-                            name="document-text-outline"
-                            size={13}
-                            color="#0c7364"
-                          />
-                          <Text style={styles.balanceMetaChipText}>
-                            {pendingCount} pending
-                          </Text>
-                        </View>
-                        <View style={styles.balanceMetaChip}>
-                          <Ionicons
-                            name="time-outline"
-                            size={13}
-                            color="#0c7364"
-                          />
-                          <Text style={styles.balanceMetaChipText}>
-                            {cycleDaysRemaining != null
-                              ? `${cycleDaysRemaining} days left`
-                              : "Current cycle"}
-                          </Text>
+                  <View
+                    style={[
+                      styles.balanceCard,
+                      allPaid && styles.balanceCardPaid,
+                    ]}
+                  >
+                    <View style={styles.balanceCardTopRow}>
+                      <View style={{ flex: 1 }}>
+                        {allPaid ? (
+                          <>
+                            <View style={styles.balancePaidStatusRow}>
+                              <Ionicons
+                                name="checkmark-circle"
+                                size={18}
+                                color={colors.success || "#4caf50"}
+                              />
+                              <Text style={styles.balancePaidStatusText}>
+                                All bills paid
+                              </Text>
+                            </View>
+                            <Text style={styles.balanceAmount}>₱0.00</Text>
+                            <Text style={styles.balanceSubLabel}>
+                              You&apos;re up to date for this billing cycle
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={styles.balanceLabel}>
+                              Total Balance
+                            </Text>
+                            <AnimatedAmount
+                              value={remaining}
+                              formatter={(val) => `₱${val.toFixed(2)}`}
+                              style={styles.balanceAmount}
+                            />
+                            <Text style={styles.balanceSubLabel}>
+                              You owe this cycle
+                            </Text>
+                          </>
+                        )}
+                        <View style={styles.balanceMetaRow}>
+                          <View
+                            style={[
+                              styles.balanceMetaChip,
+                              allPaid && styles.balanceMetaChipPaid,
+                            ]}
+                          >
+                            <Ionicons
+                              name={
+                                allPaid
+                                  ? "checkmark-done-outline"
+                                  : "document-text-outline"
+                              }
+                              size={13}
+                              color={allPaid ? "#2e7d32" : "#0c7364"}
+                            />
+                            <Text
+                              style={[
+                                styles.balanceMetaChipText,
+                                allPaid && styles.balanceMetaChipTextPaid,
+                              ]}
+                            >
+                              {allPaid
+                                ? `${paidBillCount}/${bills.length || paidBillCount} paid`
+                                : `${pendingCount} pending`}
+                            </Text>
+                          </View>
+                          <View style={styles.balanceMetaChip}>
+                            <Ionicons
+                              name="time-outline"
+                              size={13}
+                              color="#0c7364"
+                            />
+                            <Text style={styles.balanceMetaChipText}>
+                              {cycleDaysRemaining != null
+                                ? `${cycleDaysRemaining} days left`
+                                : "Current cycle"}
+                            </Text>
+                          </View>
                         </View>
                       </View>
+                      <View style={styles.balanceIconWrap}>
+                        <View
+                          style={[
+                            styles.balanceIconInner,
+                            allPaid && styles.balanceIconInnerPaid,
+                          ]}
+                        >
+                          <Ionicons
+                            name={allPaid ? "checkmark-done" : "wallet-outline"}
+                            size={30}
+                            color={
+                              allPaid ? colors.success || "#4caf50" : "#00847B"
+                            }
+                          />
+                        </View>
+                        <Text style={styles.balanceIconCaption}>
+                          {allPaid ? "Paid in full" : "This month"}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.balanceIconWrap}>
-                      <View style={styles.balanceIconInner}>
+
+                    {activeCycle && bills.length > 0 && (
+                      <>
+                        <TouchableOpacity
+                          style={styles.balanceExpandRow}
+                          onPress={toggleBreakdown}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={styles.balanceExpandLabel}>
+                            {balanceBreakdownExpanded
+                              ? "Hide bill breakdown"
+                              : "View bill breakdown"}
+                          </Text>
+                          <Ionicons
+                            name={
+                              balanceBreakdownExpanded
+                                ? "chevron-up"
+                                : "chevron-down"
+                            }
+                            size={18}
+                            color="#00847B"
+                          />
+                        </TouchableOpacity>
+
+                        {balanceBreakdownExpanded && (
+                          <View style={styles.balanceBreakdownSection}>
+                            <View style={styles.balanceBreakdownHeader}>
+                              <Text style={styles.balanceBreakdownTitle}>
+                                {breakdownDaysRemaining === 0
+                                  ? "Due Today"
+                                  : breakdownDaysRemaining === 1
+                                    ? "Due Tomorrow"
+                                    : "Bill Breakdown"}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => setShowExpenseModal(true)}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.upcomingBillsViewAll}>
+                                  View all
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                            {bills.map((bill, idx) => (
+                              <TouchableOpacity
+                                key={`${bill.name}-${idx}`}
+                                style={styles.balanceBreakdownBillCard}
+                                onPress={() => setShowExpenseModal(true)}
+                                activeOpacity={0.7}
+                              >
+                                <View
+                                  style={[
+                                    styles.upcomingBillIconWrap,
+                                    { backgroundColor: "rgba(3,109,65,0.1)" },
+                                  ]}
+                                >
+                                  <Ionicons
+                                    name={bill.icon}
+                                    size={20}
+                                    color={bill.color}
+                                  />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.upcomingBillName}>
+                                    {bill.name}
+                                  </Text>
+                                  <Text style={styles.upcomingBillDue}>
+                                    {bill.status === "paid"
+                                      ? "Paid this cycle"
+                                      : breakdownDaysRemaining === 0
+                                        ? "Due Today"
+                                        : breakdownDaysRemaining === 1
+                                          ? "Due Tomorrow"
+                                          : `Due in ${breakdownDaysRemaining} day${breakdownDaysRemaining !== 1 ? "s" : ""}`}
+                                  </Text>
+                                </View>
+                                <View style={styles.upcomingBillRight}>
+                                  <Text style={styles.upcomingBillAmount}>
+                                    {fmt(bill.amount)}
+                                  </Text>
+                                  {bill.status === "paid" ? (
+                                    <Text style={styles.upcomingBillPaidBadge}>
+                                      ✓ Paid
+                                    </Text>
+                                  ) : breakdownDaysRemaining <= 5 ? (
+                                    <Text
+                                      style={styles.upcomingBillDueSoonBadge}
+                                    >
+                                      Due Soon
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                      </>
+                    )}
+
+                    {allPaid && (
+                      <TouchableOpacity
+                        style={styles.balancePaidHistoryBtn}
+                        onPress={() =>
+                          navigation.navigate("BillsStack", {
+                            screen: "BillsMain",
+                          })
+                        }
+                        activeOpacity={0.8}
+                      >
                         <Ionicons
-                          name="wallet-outline"
-                          size={30}
-                          color="#00847B"
+                          name="receipt-outline"
+                          size={16}
+                          color={colors.success || "#4caf50"}
                         />
-                      </View>
-                      <Text style={styles.balanceIconCaption}>This month</Text>
-                    </View>
+                        <Text style={styles.balancePaidHistoryText}>
+                          View payment history
+                        </Text>
+                        <Ionicons
+                          name="chevron-forward"
+                          size={16}
+                          color={colors.success || "#4caf50"}
+                        />
+                      </TouchableOpacity>
+                    )}
                   </View>
+
                   {/* Quick Stats Row */}
                   <View style={styles.quickStatsRow}>
                     <View style={styles.quickStatCell}>
@@ -2479,7 +2774,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                         />
                       </View>
                       <Text style={styles.quickStatValue} numberOfLines={1}>
-                        PHP {totalBills.toFixed(0)}
+                        ₱{totalBills.toFixed(2)}
                       </Text>
                       <Text style={styles.quickStatLabel}>Total Bills</Text>
                       <Text style={styles.quickStatHint}>
@@ -2595,164 +2890,8 @@ const ClientHomeScreen = ({ navigation, route }) => {
                 <>
                   {/* ─── BILLING OVERVIEW (payors only) ─── */}
                   {(() => {
-                    const breakdownDaysRemaining = activeCycle
-                      ? Math.max(
-                          0,
-                          Math.ceil(
-                            (new Date(
-                              activeCycle.end_date || activeCycle.endDate,
-                            ).getTime() -
-                              Date.now()) /
-                              (1000 * 60 * 60 * 24),
-                          ),
-                        )
-                      : 0;
-
                     return (
                       <>
-                        {/* {userJoinedRoom.billing &&
-                        isCurrentUserPayor() &&
-                        !getPaymentStatus()?.allPaid &&
-                        userJoinedRoom.cycleStatus !== "completed" && (
-                          <TouchableOpacity
-                            style={styles.billingCard}
-                            onPress={() => {
-                              if (userJoinedRoom?.id || userJoinedRoom?._id) {
-                                fetchActiveBillingCycle(
-                                  userJoinedRoom.id || userJoinedRoom._id,
-                                );
-                              }
-                              setShowExpenseModal(true);
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <View style={styles.billingBreakdownRow}>
-                              {(() => {
-                                const paymentStatus = getPaymentStatus();
-                                return [
-                                  {
-                                    label: "Rent",
-                                    icon: "home",
-                                    amount: getExpenseBreakdown()?.rent?.amount,
-                                    color: "#e65100",
-                                    status:
-                                      paymentStatus?.status?.rentStatus ||
-                                      "unpaid",
-                                    billType: "rent",
-                                  },
-                                  {
-                                    label: "Elec",
-                                    icon: "flash",
-                                    amount:
-                                      getExpenseBreakdown()?.electricity
-                                        ?.amount,
-                                    color: colors.electricityColor,
-                                    status:
-                                      paymentStatus?.status
-                                        ?.electricityStatus || "unpaid",
-                                    billType: "electricity",
-                                  },
-                                  {
-                                    label:
-                                      userJoinedRoom?.waterBillingMode ===
-                                        "fixed_monthly" ||
-                                      userJoinedRoom?.water_billing_mode ===
-                                        "fixed_monthly"
-                                        ? "Fixed"
-                                        : "Water",
-                                    icon: "water",
-                                    amount:
-                                      getExpenseBreakdown()?.water?.amount,
-                                    color: colors.waterColor,
-                                    status:
-                                      paymentStatus?.status?.waterStatus ||
-                                      "unpaid",
-                                    billType: "water",
-                                  },
-                                  {
-                                    label: "Net",
-                                    icon: "wifi",
-                                    amount:
-                                      getExpenseBreakdown()?.internet?.amount,
-                                    color: colors.internetColor,
-                                    status:
-                                      paymentStatus?.status?.internetStatus ||
-                                      "unpaid",
-                                    billType: "internet",
-                                  },
-                                  ...(getExpenseBreakdown().customCharges &&
-                                  getExpenseBreakdown().customCharges.length > 0
-                                    ? [
-                                        {
-                                          label: "Others",
-                                          icon: "pricetag",
-                                          amount:
-                                            getExpenseBreakdown().customCharges.reduce(
-                                              (sum, c) => sum + c.amount,
-                                              0,
-                                            ),
-                                          color: colors.accent,
-                                          status:
-                                            paymentStatus?.status
-                                              ?.customChargesStatus || "unpaid",
-                                          billType: "customCharges",
-                                        },
-                                      ]
-                                    : []),
-                                ].map((item, idx) => {
-                                  const remainingAmount =
-                                    getRemainingAmountForBill(item.billType);
-                                  return (
-                                    <View
-                                      key={idx}
-                                      style={styles.billingMiniCell}
-                                    >
-                                      <Ionicons
-                                        name={item.icon}
-                                        size={14}
-                                        color={item.color}
-                                      />
-                                      <Text style={styles.billingMiniLabel}>
-                                        {item.label}
-                                      </Text>
-                                      {item.status === "paid" && (
-                                        <View
-                                          style={{
-                                            position: "absolute",
-                                            top: 4,
-                                            right: 4,
-                                            backgroundColor: colors.success,
-                                            borderRadius: 8,
-                                            width: 16,
-                                            height: 16,
-                                            justifyContent: "center",
-                                            alignItems: "center",
-                                          }}
-                                        >
-                                          <Text
-                                            style={{
-                                              color: colors.textOnAccent,
-                                              fontSize: 9,
-                                              fontWeight: "700",
-                                            }}
-                                          >
-                                            ✓
-                                          </Text>
-                                        </View>
-                                      )}
-                                      <AnimatedAmount
-                                        value={item.amount || 0}
-                                        formatter={fmtShort}
-                                        style={styles.billingMiniAmount}
-                                      />
-                                    </View>
-                                  );
-                                });
-                              })()}
-                            </View>
-                          </TouchableOpacity>
-                        )} */}
-
                         {/* ─── QUICK ACTIONS ─── */}
                         <View style={styles.actionsSection}>
                           <View style={styles.sectionHeaderRow}>
@@ -2912,81 +3051,6 @@ const ClientHomeScreen = ({ navigation, route }) => {
                           </View>
                         </View>
 
-                        {/* ─── ALL BILLS PAID BANNER ─── */}
-                        {isCurrentUserPayor() &&
-                          (getPaymentStatus()?.allPaid ||
-                            userJoinedRoom.cycleStatus === "completed") && (
-                            <View
-                              style={{
-                                marginHorizontal: 16,
-                                marginTop: 12,
-                                paddingHorizontal: 16,
-                                paddingVertical: 16,
-                                backgroundColor: colors.successBg || "#e8f5e9",
-                                borderRadius: 14,
-                                borderWidth: 1,
-                                borderColor: colors.success || "#4caf50",
-                                borderLeftWidth: 4,
-                                alignItems: "center",
-                              }}
-                            >
-                              <Ionicons
-                                name="checkmark-done-circle"
-                                size={36}
-                                color={colors.success || "#4caf50"}
-                              />
-                              <Text
-                                style={{
-                                  color: colors.success || "#2e7d32",
-                                  fontWeight: "700",
-                                  fontSize: 15,
-                                  marginTop: 8,
-                                  textAlign: "center",
-                                }}
-                              >
-                                All bills paid!
-                              </Text>
-                              <Text
-                                style={{
-                                  color: colors.textSecondary,
-                                  fontSize: 12,
-                                  marginTop: 4,
-                                  textAlign: "center",
-                                  lineHeight: 18,
-                                }}
-                              >
-                                Please wait for the host to create a new billing
-                                cycle. You can review your payments in the Bills
-                                screen.
-                              </Text>
-                              <TouchableOpacity
-                                style={{
-                                  marginTop: 10,
-                                  paddingHorizontal: 16,
-                                  paddingVertical: 8,
-                                  backgroundColor: colors.success || "#4caf50",
-                                  borderRadius: 8,
-                                }}
-                                onPress={() =>
-                                  navigation.navigate("BillsStack", {
-                                    screen: "BillsMain",
-                                  })
-                                }
-                                activeOpacity={0.7}
-                              >
-                                <Text
-                                  style={{
-                                    color: "#fff",
-                                    fontWeight: "600",
-                                    fontSize: 13,
-                                  }}
-                                >
-                                  View Payment History
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          )}
-
                         {/* ─── NON-PAYER: ALL PAYORS PAID BANNER ─── */}
                         {!isCurrentUserPayor() &&
                           userJoinedRoom?.billing &&
@@ -3120,151 +3184,6 @@ const ClientHomeScreen = ({ navigation, route }) => {
                               />
                             </TouchableOpacity>
                           )}
-
-                        {/* BILL BREAKDOWN - INDIVIDUAL BILLS */}
-                        {isCurrentUserPayor() && activeCycle && (
-                          <View style={styles.upcomingBillsSection}>
-                            {/* Section Header */}
-                            <View style={styles.upcomingBillsHeader}>
-                              <Text style={styles.upcomingBillsTitle}>
-                                {breakdownDaysRemaining === 0
-                                  ? "Due Today"
-                                  : breakdownDaysRemaining === 1
-                                    ? "Due Tomorrow"
-                                    : "Upcoming Bills"}
-                              </Text>
-                              <TouchableOpacity
-                                onPress={() => setShowExpenseModal(true)}
-                                activeOpacity={0.7}
-                              >
-                                <Text style={styles.upcomingBillsViewAll}>
-                                  View all
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-
-                            {/* Individual Bill Cards */}
-                            {(() => {
-                              const breakdown = getExpenseBreakdown();
-                              const paymentStatus = getPaymentStatus();
-
-                              const bills = [
-                                {
-                                  name: "Rent",
-                                  icon: "home",
-                                  color: "#e65100",
-                                  iconBg: "#fff3e0",
-                                  amount: breakdown?.rent?.amount || 0,
-                                  status:
-                                    paymentStatus?.status?.rentStatus ||
-                                    "unpaid",
-                                },
-                                {
-                                  name: "Electricity",
-                                  icon: "flash",
-                                  color: colors.electricityColor,
-                                  iconBg: "#fffde7",
-                                  amount: breakdown?.electricity?.amount || 0,
-                                  status:
-                                    paymentStatus?.status?.electricityStatus ||
-                                    "unpaid",
-                                },
-                                {
-                                  name: "Water",
-                                  icon: "water",
-                                  color: colors.waterColor,
-                                  iconBg: "#e3f2fd",
-                                  amount: breakdown?.water?.amount || 0,
-                                  status:
-                                    paymentStatus?.status?.waterStatus ||
-                                    "unpaid",
-                                },
-                                {
-                                  name: "Internet",
-                                  icon: "wifi",
-                                  color: colors.internetColor,
-                                  iconBg: "#f3e5f5",
-                                  amount: breakdown?.internet?.amount || 0,
-                                  status:
-                                    paymentStatus?.status?.internetStatus ||
-                                    "unpaid",
-                                },
-                                ...(breakdown?.customCharges &&
-                                breakdown.customCharges.length > 0
-                                  ? breakdown.customCharges.map((charge) => ({
-                                      name: charge.name || "Charge",
-                                      icon: "pricetag",
-                                      color: colors.accent,
-                                      iconBg: colors.accentSurface,
-                                      amount: charge.amount || 0,
-                                      status:
-                                        paymentStatus?.status
-                                          ?.customChargesStatus || "unpaid",
-                                    }))
-                                  : []),
-                              ].filter((bill) => bill.amount > 0);
-
-                              return bills.map((bill, idx) => (
-                                <TouchableOpacity
-                                  key={idx}
-                                  style={styles.upcomingBillCard}
-                                  onPress={() => setShowExpenseModal(true)}
-                                  activeOpacity={0.7}
-                                >
-                                  {/* Icon */}
-                                  <View
-                                    style={[
-                                      styles.upcomingBillIconWrap,
-                                      { backgroundColor: bill.iconBg },
-                                    ]}
-                                  >
-                                    <Ionicons
-                                      name={bill.icon}
-                                      size={22}
-                                      color={bill.color}
-                                    />
-                                  </View>
-
-                                  {/* Name + Due date */}
-                                  <View style={{ flex: 1 }}>
-                                    <Text style={styles.upcomingBillName}>
-                                      {bill.name}
-                                    </Text>
-                                    <Text style={styles.upcomingBillDue}>
-                                      {bill.status === "paid"
-                                        ? "Paid this cycle"
-                                        : breakdownDaysRemaining === 0
-                                          ? "Due Today"
-                                          : breakdownDaysRemaining === 1
-                                            ? "Due Tomorrow"
-                                            : `Due in ${breakdownDaysRemaining} day${breakdownDaysRemaining !== 1 ? "s" : ""}`}
-                                    </Text>
-                                  </View>
-
-                                  {/* Amount + badge */}
-                                  <View style={styles.upcomingBillRight}>
-                                    <Text style={styles.upcomingBillAmount}>
-                                      {fmt(bill.amount)}
-                                    </Text>
-                                    {bill.status === "paid" ? (
-                                      <Text
-                                        style={styles.upcomingBillPaidBadge}
-                                      >
-                                        ✓ Paid
-                                      </Text>
-                                    ) : breakdownDaysRemaining <= 5 ? (
-                                      <Text
-                                        style={styles.upcomingBillDueSoonBadge}
-                                      >
-                                        Due Soon
-                                      </Text>
-                                    ) : null}
-                                  </View>
-                                </TouchableOpacity>
-                              ));
-                            })()}
-                          </View>
-                        )}
                       </>
                     );
                   })()}
@@ -3746,8 +3665,11 @@ const ClientHomeScreen = ({ navigation, route }) => {
   );
 };
 
-const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
-  StyleSheet.create({
+const createStyles = (colors, insets = { top: 0, bottom: 0 }) => {
+  // Detect dark mode from the status bar style token
+  const isDark = colors.statusBarStyle === "light-content";
+
+  return StyleSheet.create({
     // ─── LAYOUT ───
     container: { flex: 1, backgroundColor: colors.background },
     centerLoader: {
@@ -3926,19 +3848,22 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       zIndex: 10,
     },
     balanceCard: {
-      backgroundColor: colors.card,
+      backgroundColor: isDark ? colors.card : "#d4ece2",
       borderRadius: 24,
       paddingHorizontal: 20,
       paddingVertical: 20,
+      flexDirection: "column",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(129,216,163,0.18)" : "rgba(3,109,65,0.15)",
+      shadowColor: isDark ? "#000" : "#0a4240",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.14,
+      shadowRadius: 14,
+      elevation: 6,
+    },
+    balanceCardTopRow: {
       flexDirection: "row",
       alignItems: "flex-start",
-      borderWidth: 1,
-      borderColor: "rgba(6,109,65,0.08)",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.12,
-      shadowRadius: 12,
-      elevation: 6,
     },
     balanceLabel: {
       fontSize: 11,
@@ -3971,7 +3896,7 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       paddingHorizontal: 10,
       paddingVertical: 7,
       borderRadius: 999,
-      backgroundColor: "#edf8f5",
+      backgroundColor: isDark ? "rgba(129,216,163,0.12)" : "rgba(3,109,65,0.1)",
     },
     balanceMetaChipText: {
       fontSize: 11,
@@ -3987,7 +3912,9 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       width: 62,
       height: 62,
       borderRadius: 18,
-      backgroundColor: "#e6f4f3",
+      backgroundColor: isDark
+        ? "rgba(129,216,163,0.12)"
+        : "rgba(3,109,65,0.12)",
       justifyContent: "center",
       alignItems: "center",
     },
@@ -3995,6 +3922,101 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontSize: 11,
       fontWeight: "600",
       color: colors.textTertiary,
+    },
+    balanceCardPaid: {
+      backgroundColor: isDark ? colors.cardElevated : "#c2e4d0",
+      borderColor: isDark ? "rgba(129,216,163,0.30)" : "#036d41",
+    },
+    balancePaidStatusRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 4,
+    },
+    balancePaidStatusText: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.success || "#2e7d32",
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    balanceMetaChipPaid: {
+      backgroundColor: isDark
+        ? "rgba(129,216,163,0.15)"
+        : "rgba(3,109,65,0.12)",
+    },
+    balanceMetaChipTextPaid: {
+      color: isDark ? "#81d8a3" : "#036d41",
+    },
+    balanceIconInnerPaid: {
+      backgroundColor: isDark
+        ? "rgba(129,216,163,0.15)"
+        : "rgba(3,109,65,0.12)",
+    },
+    balanceExpandRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight || "rgba(6,109,65,0.08)",
+    },
+    balanceExpandLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#00847B",
+    },
+    balanceBreakdownSection: {
+      marginTop: 4,
+      paddingTop: 4,
+      paddingBottom: 4,
+    },
+    balanceBreakdownHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 10,
+      paddingHorizontal: 2,
+    },
+    balanceBreakdownTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    balanceBreakdownBillCard: {
+      backgroundColor: "rgba(3,109,65,0.1)",
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 8,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      borderWidth: 1,
+      borderColor: isDark ? colors.borderLight : "rgba(3,109,65,0.10)",
+    },
+    balancePaidHistoryBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      marginTop: 10,
+      paddingVertical: 11,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      backgroundColor: isDark
+        ? "rgba(129,216,163,0.10)"
+        : "rgba(3,109,65,0.08)",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(129,216,163,0.30)" : "#036d41",
+    },
+    balancePaidHistoryText: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "700",
+      color: isDark ? "#81d8a3" : "#036d41",
     },
 
     // Searchbar
@@ -5892,62 +5914,105 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     statusPillText: { fontSize: 12, fontWeight: "700" },
 
     // ─── EXPENSE MODAL ───
+    // Drag handle (shared across all bottom-sheet modals)
+    modalDragHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.border,
+      alignSelf: "center",
+      marginTop: 10,
+      marginBottom: 4,
+    },
     expenseSummaryCard: {
-      backgroundColor: colors.accentSurface,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
+      backgroundColor: colors.breakdownHeaderBg,
+      borderRadius: 16,
+      padding: 18,
+      marginBottom: 20,
       borderWidth: 1,
-      borderColor: "#f0e6c8",
+      borderColor: isDark ? "rgba(129,216,163,0.20)" : "rgba(3,109,65,0.14)",
     },
     expenseSummaryLabel: {
-      fontSize: 12,
+      fontSize: 11,
       color: colors.textTertiary,
-      fontWeight: "500",
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
     },
     expenseSummaryAmount: {
-      fontSize: 28,
-      fontWeight: "800",
+      fontSize: 30,
+      fontWeight: "900",
       color: colors.accent,
       marginTop: 4,
+      letterSpacing: -0.5,
     },
     expenseSummaryNote: {
       fontSize: 12,
       color: colors.textTertiary,
-      marginTop: 6,
+      marginTop: 8,
     },
     expenseRow: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
       paddingVertical: 14,
-      marginBottom: 14,
+      marginBottom: 2,
       borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      borderBottomColor: colors.borderLight,
     },
     expenseRowLeft: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 10,
+      gap: 12,
       flex: 1,
     },
+    // Icon badge replacing the old plain dot
+    expenseIconBg: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    // kept for legacy usage elsewhere in the file
     expenseDot: { width: 8, height: 8, borderRadius: 4 },
     expenseRowName: {
       fontSize: 13,
       fontWeight: "600",
       color: colors.text,
-      marginBottom: 4,
+      marginBottom: 6,
     },
     expenseBarBg: {
-      height: 4,
-      backgroundColor: colors.inputBg,
-      borderRadius: 2,
+      height: 5,
+      backgroundColor: colors.borderLight,
+      borderRadius: 3,
       overflow: "hidden",
-      width: 100,
+      width: 120,
     },
-    expenseBarFill: { height: "100%", borderRadius: 2 },
+    expenseBarFill: { height: "100%", borderRadius: 3 },
     expenseRowRight: { alignItems: "flex-end" },
+    expenseRowAmountRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-end",
+      gap: 6,
+    },
     expenseRowAmount: { fontSize: 14, fontWeight: "700", color: colors.text },
+    expenseRowAmountPaid: {
+      color: colors.textTertiary,
+      textDecorationLine: "line-through",
+    },
+    // ✓ Paid badge — uses design-system tokens instead of hardcoded #22c55e
+    expensePaidBadge: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.breakdownPaidBadge,
+      backgroundColor: colors.breakdownPaidBadgeBg,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 10,
+      overflow: "hidden",
+    },
     expenseRowPct: {
       fontSize: 11,
       color: colors.textTertiary,
@@ -6165,5 +6230,6 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontWeight: "600",
     },
   });
+};
 
 export default ClientHomeScreen;
