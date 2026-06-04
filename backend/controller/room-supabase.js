@@ -1413,6 +1413,7 @@ router.put(
           .filter((m) => m.is_payer !== false)
           .map((m) => String(m.user_id)),
       );
+      const allPayorIds = [...validPayorIds];
       const selectedPayorIds = [
         ...new Set(rawPayorIds.map((id) => String(id)).filter(Boolean)),
       ].filter((id) => validPayorIds.has(id));
@@ -1434,6 +1435,46 @@ router.put(
             mode === "specific_payors" ? selectedPayorIds : [],
         },
       );
+
+      const oldMode = currentMember.water_split_mode || "all_payors";
+      const oldIds = Array.isArray(currentMember.water_split_payor_ids)
+        ? currentMember.water_split_payor_ids.map(String).sort()
+        : [];
+      const newIds = mode === "specific_payors" ? [...selectedPayorIds].sort() : [];
+      const preferenceChanged =
+        oldMode !== mode || oldIds.join("|") !== newIds.join("|");
+
+      if (preferenceChanged) {
+        const targetPayorIds =
+          mode === "specific_payors" ? selectedPayorIds : allPayorIds;
+
+        await Promise.all(
+          targetPayorIds.map(async (payorId) => {
+            try {
+              await createNotification(payorId, {
+                type: "water_payor_selected",
+                title: "You've been chosen for water bill",
+                message: `${req.user.name || currentMember.name || "A non-payor"} selected you to cover their water bill in ${room.name}.`,
+                relatedData: {
+                  roomId: room.id,
+                  roomName: room.name,
+                  nonPayorId: req.user.id,
+                  nonPayorName: req.user.name || currentMember.name || "",
+                  mode,
+                  selectedPayorIds: targetPayorIds,
+                  action: "water_payor_selected",
+                },
+              });
+              cache.del(`badges:${payorId}`);
+            } catch (notificationError) {
+              console.error(
+                "Water payor notification failed:",
+                notificationError.message,
+              );
+            }
+          }),
+        );
+      }
 
       res.status(200).json({
         success: true,

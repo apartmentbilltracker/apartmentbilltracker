@@ -31,7 +31,7 @@ export default function App() {
   const [updateStatus, setUpdateStatus] = React.useState(null);
 
   React.useEffect(() => {
-    checkAppVersion();
+    initializeUpdates();
     // Android 8+ requires a notification channel for push notifications to display
     if (Platform.OS === "android") {
       Notifications.setNotificationChannelAsync("default", {
@@ -43,6 +43,13 @@ export default function App() {
       });
     }
   }, []);
+
+  const initializeUpdates = async () => {
+    const status = await checkAppVersion();
+    if (!status?.isForced) {
+      updateService.checkForOtaUpdate();
+    }
+  };
 
   const checkAppVersion = async () => {
     const backendURL = getAPIBaseURL();
@@ -63,6 +70,8 @@ export default function App() {
         status.updateMessage,
       );
     }
+
+    return status;
   };
 
   // If forced update is required, show blocking screen

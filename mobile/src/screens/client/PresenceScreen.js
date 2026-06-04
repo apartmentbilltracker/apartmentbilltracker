@@ -143,7 +143,6 @@ const PresenceScreen = () => {
           setRooms(fetchedRooms);
           if (fetchedRooms.length > 0) {
             setSelectedRoom(fetchedRooms[0]);
-            await loadMarkedDates();
           }
         } catch (error) {
           console.error("Error refreshing rooms:", error);
@@ -322,7 +321,11 @@ const PresenceScreen = () => {
       }
 
       try {
-        const payRes = await paymentService.getPaymentHistory(roomId);
+        const payRes = await paymentService.getPaymentHistory(roomId, {
+          status: "pending",
+          limit: 1,
+          includeUser: false,
+        });
         const payments = payRes?.payments || [];
         const pending = payments.some(
           (p) => p.status === "submitted" || p.status === "pending",

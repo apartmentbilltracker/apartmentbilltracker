@@ -22,6 +22,7 @@ import {
   TextInput,
   LayoutAnimation,
   UIManager,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -57,6 +58,42 @@ import { Toast, ConfirmModal } from "../../components/CustomAlert";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const ACTION_CARD_WIDTH = (SCREEN_WIDTH - 44) / 2;
 const ROOMMATE_ONBOARDING_KEY = "@roommate_onboarding_seen";
+
+const AmountSkeleton = ({ style, colors }) => {
+  const opacity = useRef(new Animated.Value(0.45)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.9,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.45,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          backgroundColor: colors.skeleton || colors.borderLight,
+          borderRadius: 999,
+          opacity,
+        },
+        style,
+      ]}
+    />
+  );
+};
 
 // Enable LayoutAnimation on Android (Old Architecture only).
 // In the New Architecture, LayoutAnimation is enabled by default and
@@ -104,6 +141,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
   const [balanceBreakdownExpanded, setBalanceBreakdownExpanded] =
     useState(false);
   const [activeCycle, setActiveCycle] = useState(null);
+  const [billingDataLoading, setBillingDataLoading] = useState(false);
   const [outstandingBalance, setOutstandingBalance] = useState({
     totalOutstanding: 0,
     unpaidCycles: [],
@@ -139,6 +177,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
   });
   const initialLoadDone = useRef(false);
   const lastFocusFetch = useRef(0);
+  const joinedRoomIdRef = useRef(null);
 
   const showToast = (message, type = "success") =>
     setToast({ visible: true, type, message });
@@ -162,6 +201,8 @@ const ClientHomeScreen = ({ navigation, route }) => {
   }, []);
 
   const userId = state?.user?.id || state?.user?._id;
+  const joinedRoomId = userJoinedRoom?.id || userJoinedRoom?._id;
+  joinedRoomIdRef.current = joinedRoomId;
   const userName = state?.user?.name || "User";
   const userEmail = state?.user?.email || "";
   const verifiedRoommateProfiles = useMemo(
@@ -906,26 +947,8 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
   const fetchActiveBillingCycle = async (roomId) => {
     try {
-      // Try to fetch all cycles and find active or most recent completed
-      const response = await billingCycleService.getBillingCycles(roomId);
-      let cycles = Array.isArray(response)
-        ? response
-        : response?.billingCycles || response?.data || [];
-
-      // Prefer active cycle, but fall back to most recent completed cycle
-      const active = cycles.find((c) => c.status === "active");
-      if (active) {
-        setActiveCycle(active);
-      } else {
-        const mostRecent = cycles
-          .filter((c) => c.status === "completed" || c.status === "closed")
-          .sort(
-            (a, b) =>
-              new Date(b.closedAt || b.closed_at || b.endDate || b.end_date) -
-              new Date(a.closedAt || a.closed_at || a.endDate || a.end_date),
-          )[0];
-        setActiveCycle(mostRecent || null);
-      }
+      const response = await billingCycleService.getCurrentCycle(roomId);
+      setActiveCycle(response?.billingCycle || response?.data || null);
     } catch (error) {
       console.error("Error fetching active billing cycle:", error);
       setActiveCycle(null);
@@ -1056,37 +1079,48 @@ const ClientHomeScreen = ({ navigation, route }) => {
   useEffect(() => {
     if (route.params?.refresh && userJoinedRoom) {
       const roomId = userJoinedRoom.id || userJoinedRoom._id;
-      fetchOutstandingBalance(roomId);
-      fetchActiveBillingCycle(roomId); // NEWLY ADDED - refreshes memberPayments with customChargesStatus
+      setBillingDataLoading(true);
+      Promise.all([fetchOutstandingBalance(roomId), fetchActiveBillingCycle(roomId)])
+        .catch(() => {})
+        .finally(() => setBillingDataLoading(false));
       // Clear the param so repeated navigation doesn't trigger multiple refreshes
       route.params.refresh = false;
     }
   }, [route.params?.refresh, userJoinedRoom]);
 
-  // Refresh room data when screen comes into focus (throttled: max once per 30s)
-  // + start 30s status polling while screen is focused
+  // Refresh room data when screen comes into focus (throttled: max once per 30s).
+  // Keep this independent from userJoinedRoom so setting the room does not
+  // immediately trigger a second refetch and restart the balance skeleton.
   useFocusEffect(
     useCallback(() => {
       const now = Date.now();
       if (!initialLoadDone.current) {
+        lastFocusFetch.current = now;
         fetchRooms(true);
       } else if (now - lastFocusFetch.current > 30000) {
         lastFocusFetch.current = now;
         fetchRooms(false);
       }
 
-      // Start lightweight status polling (no DB egress)
-      const roomId = userJoinedRoom?.id || userJoinedRoom?._id;
       fetchRoommateProfiles();
       fetchStatusChangeNotifications();
-      if (roomId) fetchChatBadge(roomId);
-      const interval = roomId
-        ? setInterval(() => pollMemberStatus(roomId), 30000)
-        : null;
+    }, [userId]),
+  );
+
+  // Start lightweight status polling while screen is focused.
+  useFocusEffect(
+    useCallback(() => {
+      if (!joinedRoomId) return undefined;
+
+      fetchChatBadge(joinedRoomId);
+      const interval = setInterval(
+        () => pollMemberStatus(joinedRoomId),
+        30000,
+      );
       return () => {
-        if (interval) clearInterval(interval);
+        clearInterval(interval);
       };
-    }, [userJoinedRoom]),
+    }, [joinedRoomId]),
   );
 
   useEffect(() => {
@@ -1111,6 +1145,26 @@ const ClientHomeScreen = ({ navigation, route }) => {
       const userRoomsData = userRoomsResponse.data || userRoomsResponse;
       const userRooms = userRoomsData.rooms || userRoomsData || [];
       const firstRoom = userRooms[0] || null;
+      const roomId = firstRoom?.id || firstRoom?._id;
+      const currentJoinedRoomId = joinedRoomIdRef.current;
+      const isSameRoom =
+        roomId &&
+        currentJoinedRoomId &&
+        String(roomId) === String(currentJoinedRoomId);
+      const shouldResetBillingData =
+        !!roomId && (!initialLoadDone.current || !isSameRoom);
+
+      if (!roomId) {
+        setActiveCycle(null);
+        setOutstandingBalance({ totalOutstanding: 0, unpaidCycles: [] });
+        setHasPendingPayment(false);
+        setBillingDataLoading(false);
+      } else if (shouldResetBillingData) {
+        setActiveCycle(null);
+        setOutstandingBalance({ totalOutstanding: 0, unpaidCycles: [] });
+        setHasPendingPayment(false);
+        setBillingDataLoading(true);
+      }
       setUserJoinedRoom(firstRoom);
 
       // Process available rooms
@@ -1131,34 +1185,43 @@ const ClientHomeScreen = ({ navigation, route }) => {
       initialLoadDone.current = true;
 
       // ── Wave 2 (background, non-blocking): billing, notifications, chat ──
-      const roomId = firstRoom?.id || firstRoom?._id;
+      if (roomId) {
+        Promise.all([
+          fetchActiveBillingCycle(roomId),
+          fetchOutstandingBalance(roomId),
+          paymentService
+            .getPaymentHistory(roomId, {
+              status: "pending",
+              limit: 1,
+              includeUser: false,
+            })
+            .then((res) => {
+              const payments =
+                res?.payments || res?.transactions || res?.data || [];
+              setHasPendingPayment(
+                payments.some(
+                  (p) => p.status === "pending" || p.status === "submitted",
+                ),
+              );
+            })
+            .catch(() => {}),
+        ])
+          .catch(() => {})
+          .finally(() => setBillingDataLoading(false));
+      }
+
       Promise.all([
-        roomId ? fetchActiveBillingCycle(roomId) : Promise.resolve(),
         fetchStatusChangeNotifications(),
         fetchRoommateProfiles(),
         roomId ? fetchChatBadge(roomId) : Promise.resolve(),
         roomId ? fetchAnnouncementBanner(roomId) : Promise.resolve(),
-        roomId ? fetchOutstandingBalance(roomId) : Promise.resolve(),
         roomId ? fetchMemberActivity(roomId) : Promise.resolve(),
-        roomId
-          ? paymentService
-              .getPaymentHistory(roomId)
-              .then((res) => {
-                const payments =
-                  res?.payments || res?.transactions || res?.data || [];
-                setHasPendingPayment(
-                  payments.some(
-                    (p) => p.status === "pending" || p.status === "submitted",
-                  ),
-                );
-              })
-              .catch(() => {})
-          : Promise.resolve(),
       ]).catch(() => {});
     } catch (error) {
       console.error("Error fetching rooms:", error);
       setUserJoinedRoom(null);
       setUnjoinedRooms([]);
+      setBillingDataLoading(false);
       setLoading(false);
     }
   };
@@ -2179,7 +2242,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
             onPress={() => navigation.navigate("Roomies")}
             activeOpacity={0.75}
           >
-            <Text style={styles.roommateViewText}>View</Text>
+            <Text style={styles.roommateViewText}>All</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.roommateCreateBtn}
@@ -2496,6 +2559,43 @@ const ClientHomeScreen = ({ navigation, route }) => {
           {/* ─── BALANCE CARD (overlaps header) ─── */}
           {userJoinedRoom && isCurrentUserPayor() ? (
             (() => {
+              if (billingDataLoading) {
+                return (
+                  <View style={styles.balanceCardWrap}>
+                    <View style={styles.balanceCard}>
+                      <View style={styles.balanceCardTopRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.balanceLabel}>Total Balance</Text>
+                          <AmountSkeleton
+                            colors={colors}
+                            style={styles.balanceAmountSkeleton}
+                          />
+                          <Text style={styles.balanceSubLabel}>
+                            Checking your latest balance...
+                          </Text>
+                          <View style={styles.balanceMetaRow}>
+                            <AmountSkeleton
+                              colors={colors}
+                              style={styles.balanceMetaSkeleton}
+                            />
+                            <AmountSkeleton
+                              colors={colors}
+                              style={styles.balanceMetaSkeleton}
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.balanceIconWrap}>
+                          <View style={styles.balanceIconInner}>
+                            <ActivityIndicator size="small" color="#00847B" />
+                          </View>
+                          <Text style={styles.balanceIconCaption}>Syncing</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                );
+              }
+
               const breakdown = getExpenseBreakdown();
               const remaining = getRemainingDue();
               const totalBills = breakdown?.perPayor || 0;
@@ -2548,6 +2648,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                               value={remaining}
                               formatter={(val) => `₱${val.toFixed(2)}`}
                               style={styles.balanceAmount}
+                              animateOnMount={false}
                             />
                             <Text style={styles.balanceSubLabel}>
                               You owe this cycle
@@ -3109,6 +3210,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
                         {/* ─── OUTSTANDING BALANCE BANNER ─── */}
                         {isCurrentUserPayor() &&
+                          !billingDataLoading &&
                           outstandingBalance.totalOutstanding > 0 && (
                             <TouchableOpacity
                               style={{
@@ -3878,6 +3980,12 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) => {
       color: colors.text,
       marginTop: 4,
     },
+    balanceAmountSkeleton: {
+      width: 150,
+      height: 34,
+      marginTop: 8,
+      marginBottom: 2,
+    },
     balanceSubLabel: {
       fontSize: 11,
       color: colors.textTertiary,
@@ -3902,6 +4010,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) => {
       fontSize: 11,
       fontWeight: "700",
       color: "#0c7364",
+    },
+    balanceMetaSkeleton: {
+      width: 104,
+      height: 28,
     },
     balanceIconWrap: {
       alignItems: "center",

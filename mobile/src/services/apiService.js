@@ -178,6 +178,29 @@ export const billingCycleService = {
     api
       .get(`/api/v2/billing-cycles/room/${roomId}/outstanding`)
       .then(extractData),
+  getCurrentCycle: async (roomId) => {
+    const activeResponse = await api
+      .get(`/api/v2/billing-cycles/room/${roomId}/active`)
+      .then(extractData);
+
+    if (activeResponse?.billingCycle) return activeResponse;
+
+    const cyclesResponse = await api
+      .get(`/api/v2/billing-cycles/room/${roomId}`)
+      .then(extractData);
+    const cycles = Array.isArray(cyclesResponse)
+      ? cyclesResponse
+      : cyclesResponse?.billingCycles || cyclesResponse?.data || [];
+    const mostRecent = cycles
+      .filter((cycle) => cycle.status === "completed" || cycle.status === "closed")
+      .sort(
+        (a, b) =>
+          new Date(b.closedAt || b.closed_at || b.endDate || b.end_date) -
+          new Date(a.closedAt || a.closed_at || a.endDate || a.end_date),
+      )[0];
+
+    return { success: true, billingCycle: mostRecent || null };
+  },
   getBillingCycleById: (cycleId) =>
     api.get(`/api/v2/billing-cycles/${cycleId}`).then(extractData),
   getActiveCycle: (roomId) =>
@@ -231,8 +254,16 @@ export const paymentService = {
       })
       .then(extractData),
 
-  getPaymentHistory: (roomId) =>
-    api.get(`/api/v2/payments/payment-history/${roomId}`).then(extractData),
+  getPaymentHistory: (roomId, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.status) query.append("status", params.status);
+    if (params.limit) query.append("limit", params.limit);
+    if (params.includeUser === false) query.append("includeUser", "false");
+    const qs = query.toString();
+    return api
+      .get(`/api/v2/payments/payment-history/${roomId}${qs ? `?${qs}` : ""}`)
+      .then(extractData);
+  },
 
   getMemberPaymentHistory: (roomId, memberId) =>
     api
@@ -419,7 +450,8 @@ export const apiService = {
   patch: (url, data = {}) => api.patch(url, data).then(extractData),
   delete: (url) => api.delete(url).then(extractData),
   // Payment methods
-  getPaymentHistory: (roomId) => paymentService.getPaymentHistory(roomId),
+  getPaymentHistory: (roomId, params) =>
+    paymentService.getPaymentHistory(roomId, params),
   getMemberPaymentHistory: (roomId, memberId) =>
     paymentService.getMemberPaymentHistory(roomId, memberId),
   getSettlements: (roomId, status) =>
@@ -500,6 +532,8 @@ export const supportService = {
       .get("/api/v2/support/my-tickets")
       .then(extractData)
       .then((r) => r?.tickets || []),
+  getUnreadCounts: () =>
+    api.get("/api/v2/support/unread-counts").then(extractData),
   getTicketDetails: (ticketId) =>
     api
       .get(`/api/v2/support/ticket/${ticketId}`)

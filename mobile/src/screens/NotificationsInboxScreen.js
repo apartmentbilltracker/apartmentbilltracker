@@ -133,6 +133,8 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
       return { icon: "checkmark-circle", color: "#2e7d32" };
     if (type === "payment_rejected")
       return { icon: "close-circle", color: "#c62828" };
+    if (type === "water_payor_selected")
+      return { icon: "water-outline", color: "#00847B" };
     if (
       t.includes("verified") ||
       t.includes("approved") ||

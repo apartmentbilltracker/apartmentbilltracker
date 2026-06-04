@@ -1,5 +1,5 @@
 const SupabaseService = require("../db/SupabaseService");
-const sendPushNotification = require("./sendPushNotification");
+const { sendPushNotification } = require("./sendPushNotification");
 
 /**
  * Create a notification for a user
@@ -16,13 +16,12 @@ const createNotification = async (recipientId, notificationData) => {
       relatedData = {},
     } = notificationData;
 
-    // Create notification log in Supabase
-    const notification = await SupabaseService.createNotification({
-      user_id: recipientId,
+    const notification = await SupabaseService.insert("notifications", {
+      recipient_id: recipientId,
       notification_type: type,
       title,
       message,
-      data: relatedData,
+      related_data: relatedData,
       is_read: false,
     });
 
@@ -31,10 +30,9 @@ const createNotification = async (recipientId, notificationData) => {
     // Try to send push notification if user has a push token
     try {
       const user = await SupabaseService.findUserById(recipientId);
-      if (user && user.twofactortoken) {
-        const pushTokens = Array.isArray(user.twofactortoken)
-          ? user.twofactortoken
-          : [user.twofactortoken];
+      const pushSource = user?.expo_push_token || user?.twofactortoken;
+      if (pushSource) {
+        const pushTokens = Array.isArray(pushSource) ? pushSource : [pushSource];
 
         for (const token of pushTokens) {
           if (token) {
@@ -44,15 +42,16 @@ const createNotification = async (recipientId, notificationData) => {
               data: {
                 notificationType: type,
                 notificationId: notification?.id?.toString(),
+                ...relatedData,
               },
             });
 
             if (pushResult && notification?.id) {
               await SupabaseService.update(
-                "notification_logs",
+                "notifications",
                 notification.id,
                 {
-                  push_notification_sent: true,
+                  push_sent: true,
                 },
               );
               console.log(`📱 Push notification sent for ${title}`);

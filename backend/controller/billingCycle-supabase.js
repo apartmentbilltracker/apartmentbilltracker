@@ -447,6 +447,46 @@ router.get("/room/:roomId/active", isAuthenticated, async (req, res, next) => {
 });
 
 // ============================================================
+// GET ACTIVE OR LATEST CLOSED BILLING CYCLE FOR ROOM
+// Small client summary endpoint: avoids returning every historical cycle.
+// ============================================================
+router.get("/room/:roomId/current", isAuthenticated, async (req, res, next) => {
+  try {
+    const { roomId } = req.params;
+
+    const [room, cycle] = await Promise.all([
+      SupabaseService.findById(
+        "rooms",
+        roomId,
+        "id, water_billing_mode, water_fixed_amount, water_fixed_type",
+      ),
+      SupabaseService.getCurrentOrLatestBillingCycle(roomId),
+    ]);
+
+    if (!room) {
+      return next(new ErrorHandler("Room not found", 404));
+    }
+
+    if (!cycle) {
+      return res.status(200).json({
+        success: true,
+        billingCycle: null,
+        message: "No billing cycle",
+      });
+    }
+
+    await enrichBillingCycle(cycle, null, room);
+
+    res.status(200).json({
+      success: true,
+      billingCycle: normalizeBillingCycle(cycle),
+    });
+  } catch (error) {
+    next(new ErrorHandler(error.message, 500));
+  }
+});
+
+// ============================================================
 // GET ALL BILLING CYCLES FOR A ROOM
 // ============================================================
 router.get("/room/:roomId", isAuthenticated, async (req, res, next) => {

@@ -237,23 +237,9 @@ const ProfileScreen = ({ navigation }) => {
   React.useEffect(() => {
     const fetchUnreadCounts = async () => {
       try {
-        const ticketsResponse = await supportService.getUserTickets();
-        const tickets = Array.isArray(ticketsResponse)
-          ? ticketsResponse
-          : ticketsResponse?.data || [];
-        const unreadTicketCount = tickets.filter(
-          (t) => !t.isReadByUser && t.replies && t.replies.length > 0,
-        ).length;
-        setUnreadTickets(unreadTicketCount);
-
-        const bugsResponse = await supportService.getUserBugReports();
-        const bugs = Array.isArray(bugsResponse)
-          ? bugsResponse
-          : bugsResponse?.data || [];
-        const unreadBugCount = bugs.filter(
-          (b) => !b.isReadByUser && b.responses && b.responses.length > 0,
-        ).length;
-        setUnreadBugReports(unreadBugCount);
+        const counts = await supportService.getUnreadCounts();
+        setUnreadTickets(counts?.unreadTickets || 0);
+        setUnreadBugReports(counts?.unreadBugReports || 0);
       } catch (error) {
         console.error("Error fetching unread counts:", error);
       }

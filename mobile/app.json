@@ -7,6 +7,13 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "aptbilltracker",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/72a4be98-f7c2-4e5c-8d5a-5b7a8fd1a75c",
+      "fallbackToCacheTimeout": 0
+    },
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
