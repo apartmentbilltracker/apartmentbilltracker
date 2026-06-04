@@ -120,6 +120,21 @@ const normalizeSettlement = (s) => ({
   settlementDate: s.settlement_date,
 });
 
+const PAYMENT_GATEWAY_CLOSED_MESSAGE =
+  "Payments are not open for this billing cycle yet. Please wait for your host to open the payment gateway.";
+
+const getOpenPaymentCycleOrError = async (roomId) => {
+  const cycles = await SupabaseService.getRoomBillingCycles(roomId);
+  const activeCycle = (cycles || []).find((c) => c.status === "active");
+  if (!activeCycle) {
+    throw new ErrorHandler("No active billing cycle", 400);
+  }
+  if (activeCycle.payment_gateway_open !== true) {
+    throw new ErrorHandler(PAYMENT_GATEWAY_CLOSED_MESSAGE, 403);
+  }
+  return activeCycle;
+};
+
 // ============================================================
 // 1. MARK BILL AS PAID
 // ============================================================
@@ -166,13 +181,15 @@ router.post("/mark-bill-paid", isAuthenticated, async (req, res, next) => {
       return next(new ErrorHandler("Room not found", 404));
     }
 
+    const activeCycle = await getOpenPaymentCycleOrError(roomId);
+
     // Record payment in payments table
     const payment = await SupabaseService.createPayment({
       room_id: roomId,
       paid_by: memberId,
       amount,
-      billing_cycle_start: room.start,
-      billing_cycle_end: room.end,
+      billing_cycle_start: activeCycle.start_date,
+      billing_cycle_end: activeCycle.end_date,
       bill_type: normalizedBillType,
       payment_method: paymentMethod || "cash",
       reference,
@@ -189,7 +206,11 @@ router.post("/mark-bill-paid", isAuthenticated, async (req, res, next) => {
       payment,
     });
   } catch (error) {
-    next(new ErrorHandler(error.message, 500));
+    next(
+      error instanceof ErrorHandler
+        ? error
+        : new ErrorHandler(error.message, 500),
+    );
   }
 });
 
@@ -225,6 +246,8 @@ router.post(
         return next(new ErrorHandler("Room not found", 404));
       }
 
+      const activeCycle = await getOpenPaymentCycleOrError(roomId);
+
       // Create one payment record per bill type
       const payments = [];
       for (const billType of billTypes) {
@@ -256,8 +279,8 @@ router.post(
           room_id: roomId,
           paid_by: memberId,
           amount, // Full amount paid in one transaction for all bills
-          billing_cycle_start: room.start,
-          billing_cycle_end: room.end,
+          billing_cycle_start: activeCycle.start_date,
+          billing_cycle_end: activeCycle.end_date,
           bill_type: normalizedBillType,
           payment_method: paymentMethod || "cash",
           reference,
@@ -278,7 +301,11 @@ router.post(
         payments,
       });
     } catch (error) {
-      next(new ErrorHandler(error.message, 500));
+      next(
+        error instanceof ErrorHandler
+          ? error
+          : new ErrorHandler(error.message, 500),
+      );
     }
   },
 );

@@ -209,6 +209,14 @@ export const billingCycleService = {
     api.put(`/api/v2/billing-cycles/${cycleId}`, data).then(extractData),
   closeBillingCycle: (cycleId) =>
     api.post(`/api/v2/billing-cycles/${cycleId}/close`).then(extractData),
+  openPaymentGateway: (cycleId) =>
+    api
+      .post(`/api/v2/billing-cycles/${cycleId}/payment-gateway/open`)
+      .then(extractData),
+  closePaymentGateway: (cycleId) =>
+    api
+      .post(`/api/v2/billing-cycles/${cycleId}/payment-gateway/close`)
+      .then(extractData),
   deleteBillingCycle: (cycleId) =>
     api.delete(`/api/v2/billing-cycles/${cycleId}`).then(extractData),
 };

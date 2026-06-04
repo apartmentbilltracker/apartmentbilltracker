@@ -56,6 +56,12 @@ const getMaintenanceMessage = async (method, hostUserId, roomId) => {
   return "";
 };
 
+const isPaymentGatewayOpen = (cycle) =>
+  cycle?.status !== "active" || cycle.payment_gateway_open === true;
+
+const PAYMENT_GATEWAY_CLOSED_MESSAGE =
+  "Payments are not open for this billing cycle yet. Please wait for your host to open the payment gateway.";
+
 // Helper: Calculate water charges from presence marking
 const recalculateWaterFromPresence = (members) => {
   if (!members || members.length === 0) {
@@ -432,6 +438,9 @@ router.post(
       if (!targetCycle) {
         return next(new ErrorHandler("No active billing cycle", 400));
       }
+      if (!isPaymentGatewayOpen(targetCycle)) {
+        return next(new ErrorHandler(PAYMENT_GATEWAY_CLOSED_MESSAGE, 403));
+      }
 
       const referenceNumber = generateReferenceNumber("GC");
       const batchReference = paymentBatchId || batchId;
@@ -599,6 +608,9 @@ router.post(
       if (!targetCycle) {
         return next(new ErrorHandler("No active billing cycle", 400));
       }
+      if (!isPaymentGatewayOpen(targetCycle)) {
+        return next(new ErrorHandler(PAYMENT_GATEWAY_CLOSED_MESSAGE, 403));
+      }
 
       const referenceNumber = generateReferenceNumber("BT");
       const batchReference = paymentBatchId || batchId;
@@ -754,6 +766,9 @@ router.post(
         : cycles.find((c) => c.status === "active");
       if (!targetCycle) {
         return next(new ErrorHandler("No active billing cycle", 400));
+      }
+      if (!isPaymentGatewayOpen(targetCycle)) {
+        return next(new ErrorHandler(PAYMENT_GATEWAY_CLOSED_MESSAGE, 403));
       }
 
       const referenceNumber = receiptNumber || generateReferenceNumber("CASH");

@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const SupabaseService = require("../db/SupabaseService");
 const ErrorHandler = require("../utils/ErrorHandler");
-const { isAuthenticated } = require("../middleware/auth");
+const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const {
   enrichBillingCycle,
   enrichBillingCycles,
@@ -66,6 +66,11 @@ const normalizeBillingCycle = (cycle) => {
     cycleNumber: cycle.cycle_number,
     previousMeterReading: cycle.previous_meter_reading ?? null,
     currentMeterReading: cycle.current_meter_reading ?? null,
+    paymentGatewayOpen: cycle.payment_gateway_open === true,
+    paymentGatewayOpenedAt: cycle.payment_gateway_opened_at ?? null,
+    paymentGatewayOpenedBy: cycle.payment_gateway_opened_by ?? null,
+    paymentGatewayClosedAt: cycle.payment_gateway_closed_at ?? null,
+    paymentGatewayClosedBy: cycle.payment_gateway_closed_by ?? null,
     customCharges: customCharges || [],
     memberCharges: (memberCharges || []).map(normalizeCharge),
   };
@@ -333,6 +338,7 @@ router.post("/", isAuthenticated, async (req, res, next) => {
         currentMeterReading != null ? currentMeterReading : null,
       total_billed_amount: totalAmount,
       status: "active",
+      payment_gateway_open: false,
       created_by: req.user.id,
     });
 
@@ -1021,6 +1027,119 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
 //            for all existing billing cycles in the DB
 // POST /api/v1/billing-cycles/backfill-stats
 // ============================================================
+// ============================================================
+// OPEN/CLOSE ACTIVE PAYMENT GATEWAY
+// ============================================================
+const ensureCycleManager = async (cycle, user) => {
+  const role = (user.role || "").toLowerCase();
+  if (role === "admin" || user.is_admin) return;
+
+  const room = await SupabaseService.findRoomById(cycle.room_id);
+  if (String(room?.created_by) !== String(user.id)) {
+    throw new ErrorHandler("You can only manage your own rooms", 403);
+  }
+};
+
+router.post(
+  "/:cycleId/payment-gateway/open",
+  isAuthenticated,
+  isAdminOrHost,
+  async (req, res, next) => {
+    try {
+      const { cycleId } = req.params;
+      const cycle = await SupabaseService.selectByColumn(
+        "billing_cycles",
+        "id",
+        cycleId,
+      );
+
+      if (!cycle) return next(new ErrorHandler("Billing cycle not found", 404));
+      if (cycle.status !== "active") {
+        return next(
+          new ErrorHandler("Only active billing cycles can open payments", 400),
+        );
+      }
+
+      await ensureCycleManager(cycle, req.user);
+
+      const updatedCycle = await SupabaseService.update(
+        "billing_cycles",
+        cycleId,
+        {
+          payment_gateway_open: true,
+          payment_gateway_opened_at: new Date().toISOString(),
+          payment_gateway_opened_by: req.user.id,
+          payment_gateway_closed_at: null,
+          payment_gateway_closed_by: null,
+        },
+      );
+
+      cache.del(`roomlist:${req.user.id}:host`);
+
+      res.status(200).json({
+        success: true,
+        message: "Payment gateway opened",
+        billingCycle: normalizeBillingCycle(updatedCycle),
+      });
+    } catch (error) {
+      next(
+        error instanceof ErrorHandler
+          ? error
+          : new ErrorHandler(error.message, 500),
+      );
+    }
+  },
+);
+
+router.post(
+  "/:cycleId/payment-gateway/close",
+  isAuthenticated,
+  isAdminOrHost,
+  async (req, res, next) => {
+    try {
+      const { cycleId } = req.params;
+      const cycle = await SupabaseService.selectByColumn(
+        "billing_cycles",
+        "id",
+        cycleId,
+      );
+
+      if (!cycle) return next(new ErrorHandler("Billing cycle not found", 404));
+      if (cycle.status !== "active") {
+        return next(
+          new ErrorHandler("Only active billing cycles can close payments", 400),
+        );
+      }
+
+      await ensureCycleManager(cycle, req.user);
+
+      const updatedCycle = await SupabaseService.update(
+        "billing_cycles",
+        cycleId,
+        {
+          payment_gateway_open: false,
+          payment_gateway_closed_at: new Date().toISOString(),
+          payment_gateway_closed_by: req.user.id,
+        },
+      );
+
+      cache.del(`roomlist:${req.user.id}:host`);
+
+      res.status(200).json({
+        success: true,
+        message: "Payment gateway closed",
+        billingCycle: normalizeBillingCycle(updatedCycle),
+      });
+    } catch (error) {
+      next(
+        error instanceof ErrorHandler
+          ? error
+          : new ErrorHandler(error.message, 500),
+      );
+    }
+  },
+);
+
 router.post("/backfill-stats", isAuthenticated, async (req, res, next) => {
   try {
     const allCycles =

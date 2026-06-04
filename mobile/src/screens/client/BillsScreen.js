@@ -789,12 +789,10 @@ const BillsScreen = ({ navigation, route }) => {
   const isPaymentAllowed = () => {
     if (activeCycle?.status === "completed") return false;
     if (activeCycle?.status === "closed") return true;
-    if (!selectedRoom?.billing?.end) return true;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endDate = new Date(selectedRoom.billing.end);
-    endDate.setHours(0, 0, 0, 0);
-    return today >= endDate;
+    return (
+      activeCycle?.paymentGatewayOpen === true ||
+      activeCycle?.payment_gateway_open === true
+    );
   };
 
   const getFormattedEndDate = () => {
@@ -946,9 +944,7 @@ const BillsScreen = ({ navigation, route }) => {
         ? "Under review"
         : isPaymentAllowed()
           ? "Open now"
-          : billing?.end
-            ? "Locked"
-            : "Waiting";
+          : "Host locked";
   const cycleStatusMeta = billingDataLoading
     ? {
         label: "Syncing",
@@ -1008,9 +1004,7 @@ const BillsScreen = ({ navigation, route }) => {
         ? "Your latest payment has been submitted and is waiting for host verification."
         : isPaymentAllowed()
           ? "Your billing window is open. You can settle the remaining balance now."
-          : billing?.end
-            ? `Payment unlocks on ${getFormattedEndDate()}.`
-            : "Waiting for your host to set the billing period."
+          : "Waiting for your host to open the payment gateway after charges are finalized."
       : "You can review totals here while the assigned payors handle payment.";
   const summaryStats = [
     { label: "Members", value: totalMembers || "--" },
@@ -1991,10 +1985,10 @@ const BillsScreen = ({ navigation, route }) => {
                         />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.paymentLockedText}>
-                            Payment opens on {getFormattedEndDate()}
+                            Payment gateway closed
                           </Text>
                           <Text style={styles.paymentLockedSubtext}>
-                            Return on the billing end date to pay
+                            Your host will open payments once charges are final
                           </Text>
                         </View>
                       </View>

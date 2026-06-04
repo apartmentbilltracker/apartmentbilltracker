@@ -245,7 +245,7 @@ class SupabaseService {
 
   /** Specific columns for billing_cycles — avoids fetching unused metadata. */
   static BILLING_CYCLE_COLS =
-    "id, room_id, start_date, end_date, status, cycle_number, rent, electricity, internet, water_bill_amount, total_billed_amount, custom_charges, previous_meter_reading, current_meter_reading, closed_at, created_at, created_by, updated_at, member_charges";
+    "id, room_id, start_date, end_date, status, cycle_number, rent, electricity, internet, water_bill_amount, total_billed_amount, custom_charges, previous_meter_reading, current_meter_reading, payment_gateway_open, payment_gateway_opened_at, payment_gateway_opened_by, payment_gateway_closed_at, payment_gateway_closed_by, closed_at, created_at, created_by, updated_at, member_charges";
 
   /** Specific columns for payments — avoids fetching unused metadata. */
   static PAYMENT_COLS =
@@ -788,7 +788,9 @@ class SupabaseService {
       .select(
         "id, room_id, status, start_date, end_date, cycle_number, " +
           "rent, electricity, water_bill_amount, internet, " +
-          "previous_meter_reading, current_meter_reading, closed_at",
+          "previous_meter_reading, current_meter_reading, payment_gateway_open, " +
+          "payment_gateway_opened_at, payment_gateway_opened_by, " +
+          "payment_gateway_closed_at, payment_gateway_closed_by, closed_at",
       )
       .eq("room_id", roomId)
       .order("start_date", { ascending: false });
