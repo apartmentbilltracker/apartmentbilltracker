@@ -15,7 +15,11 @@ import {
   RefreshControl,
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { apiService, announcementService } from "../../services/apiService";
+import {
+  apiService,
+  announcementService,
+  billingCycleService,
+} from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 
@@ -202,6 +206,51 @@ const AdminBillingCycleScreen = ({ route }) => {
             } catch (error) {
               console.error("Error closing cycle:", error);
               Alert.alert("Error", "Failed to close billing cycle");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleTogglePaymentGateway = (cycle) => {
+    const cycleId = cycle.id || cycle._id;
+    const isOpen =
+      cycle.paymentGatewayOpen === true || cycle.payment_gateway_open === true;
+    Alert.alert(
+      isOpen ? "Close Payment Gateway" : "Open Payment Gateway",
+      isOpen
+        ? "Payors will no longer be able to start new payments for this active cycle."
+        : "Payors will be able to pay this cycle using the enabled payment methods.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: isOpen ? "Close Payments" : "Open Payments",
+          style: isOpen ? "destructive" : "default",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = isOpen
+                ? await billingCycleService.closePaymentGateway(cycleId)
+                : await billingCycleService.openPaymentGateway(cycleId);
+              if (response.success) {
+                Alert.alert(
+                  "Success",
+                  isOpen
+                    ? "Payment gateway closed"
+                    : "Payment gateway opened",
+                );
+                fetchCycles();
+              }
+            } catch (error) {
+              console.error("Error updating payment gateway:", error);
+              Alert.alert(
+                "Error",
+                error.response?.data?.message ||
+                  "Failed to update payment gateway",
+              );
             } finally {
               setLoading(false);
             }
@@ -446,6 +495,9 @@ const AdminBillingCycleScreen = ({ route }) => {
               prevReading != null && currReading != null
                 ? currReading - prevReading
                 : null;
+            const paymentGatewayOpen =
+              cycle.paymentGatewayOpen === true ||
+              cycle.payment_gateway_open === true;
 
             return (
               <View key={cycle.id || cycle._id} style={styles.cycleCard}>
@@ -619,18 +671,87 @@ const AdminBillingCycleScreen = ({ route }) => {
 
                 {/* Actions */}
                 {cycle.status === "active" && (
-                  <TouchableOpacity
-                    style={styles.closeCycleBtn}
-                    onPress={() => handleCloseCycle(cycle.id || cycle._id)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name="checkmark-circle-outline"
-                      size={18}
-                      color={colors.electricityColor}
-                    />
-                    <Text style={styles.closeCycleBtnText}>Close Cycle</Text>
-                  </TouchableOpacity>
+                  <>
+                    <View
+                      style={[
+                        styles.gatewayStrip,
+                        {
+                          backgroundColor: paymentGatewayOpen
+                            ? colors.successBg
+                            : colors.cardAlt,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={paymentGatewayOpen ? "lock-open" : "lock-closed"}
+                        size={16}
+                        color={
+                          paymentGatewayOpen
+                            ? colors.success
+                            : colors.textSecondary
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.gatewayStripText,
+                          {
+                            color: paymentGatewayOpen
+                              ? colors.success
+                              : colors.textSecondary,
+                          },
+                        ]}
+                      >
+                        Payments {paymentGatewayOpen ? "Open" : "Closed"}
+                      </Text>
+                    </View>
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity
+                        style={styles.gatewayToggleBtn}
+                        onPress={() => handleTogglePaymentGateway(cycle)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name={
+                            paymentGatewayOpen ? "lock-closed" : "lock-open"
+                          }
+                          size={18}
+                          color={
+                            paymentGatewayOpen
+                              ? colors.error
+                              : colors.success
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.gatewayToggleBtnText,
+                            {
+                              color: paymentGatewayOpen
+                                ? colors.error
+                                : colors.success,
+                            },
+                          ]}
+                        >
+                          {paymentGatewayOpen
+                            ? "Close Payments"
+                            : "Open Payments"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.closeCycleBtn}
+                        onPress={() => handleCloseCycle(cycle.id || cycle._id)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name="checkmark-circle-outline"
+                          size={18}
+                          color={colors.electricityColor}
+                        />
+                        <Text style={styles.closeCycleBtnText}>
+                          Close Cycle
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
                 )}
 
                 {cycle.status === "completed" && (
@@ -1304,14 +1425,42 @@ const createStyles = (colors) =>
     },
 
     // CARD ACTIONS
-    closeCycleBtn: {
+    gatewayStrip: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: 9,
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+    },
+    gatewayStripText: { fontSize: 12, fontWeight: "700" },
+    actionRow: {
+      flexDirection: "row",
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+    },
+    gatewayToggleBtn: {
+      flex: 1,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 11,
       gap: 6,
-      borderTopWidth: 1,
-      borderTopColor: colors.borderLight,
+      borderRightWidth: 1,
+      borderRightColor: colors.borderLight,
+    },
+    gatewayToggleBtnText: {
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    closeCycleBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 11,
+      gap: 6,
     },
     closeCycleBtnText: { fontSize: 13, fontWeight: "700", color: "#ef6c00" },
     completedStrip: {
