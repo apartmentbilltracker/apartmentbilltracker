@@ -25,15 +25,16 @@ const AnimatedAmount = ({
   formatter,
   style,
   duration = 700,
+  animateOnMount = true,
   ...rest
 }) => {
-  const fromRef = useRef(0); // always count from 0 on first mount
+  const fmt = formatter || ((n) => String(Math.round(n)));
+  const initialValue = animateOnMount ? 0 : value;
+  const fromRef = useRef(initialValue);
   const animVal = useRef(new Animated.Value(0));
   const animRef = useRef(null);
 
-  const fmt = formatter || ((n) => String(Math.round(n)));
-
-  const [display, setDisplay] = useState(fmt(0));
+  const [display, setDisplay] = useState(() => fmt(initialValue));
 
   useEffect(() => {
     const from = fromRef.current;

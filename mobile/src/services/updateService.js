@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import * as Updates from "expo-updates";
 import { Alert, Linking, Platform } from "react-native";
 
 /**
@@ -118,7 +119,32 @@ export const showUpdateAlert = (
   );
 };
 
+/**
+ * Check EAS Update for a newer JS/assets bundle.
+ * Native code changes still require a new APK/IPA, but JS-only fixes can arrive OTA.
+ */
+export const checkForOtaUpdate = async () => {
+  if (__DEV__ || !Updates.isEnabled) {
+    return { checked: false, updated: false };
+  }
+
+  try {
+    const update = await Updates.checkForUpdateAsync();
+    if (!update.isAvailable) {
+      return { checked: true, updated: false };
+    }
+
+    await Updates.fetchUpdateAsync();
+    await Updates.reloadAsync();
+    return { checked: true, updated: true };
+  } catch (error) {
+    console.error("Error checking OTA update:", error);
+    return { checked: true, updated: false, error };
+  }
+};
+
 export default {
   checkForUpdate,
+  checkForOtaUpdate,
   showUpdateAlert,
 };

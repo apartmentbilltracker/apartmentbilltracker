@@ -191,6 +191,80 @@ router.get("/my-tickets", isAuthenticated, async (req, res, next) => {
 });
 
 // ============================================================
+// GET LIGHTWEIGHT UNREAD SUPPORT COUNTS FOR CURRENT USER
+// Used by Profile; avoids loading every ticket/report with full replies.
+// ============================================================
+router.get("/unread-counts", isAuthenticated, async (req, res, next) => {
+  try {
+    const [tickets, bugs] = await Promise.all([
+      SupabaseService.selectAll(
+        "support_tickets",
+        "user_id",
+        req.user.id,
+        "id, is_read",
+      ),
+      SupabaseService.selectAll(
+        "bug_reports",
+        "user_id",
+        req.user.id,
+        "id, is_read",
+      ),
+    ]);
+
+    const [ticketResponses, bugResponses] = await Promise.all([
+      tickets?.length
+        ? SupabaseService.getClient()
+            .from("support_ticket_responses")
+            .select("ticket_id")
+            .in(
+              "ticket_id",
+              tickets.map((ticket) => ticket.id),
+            )
+        : Promise.resolve({ data: [] }),
+      bugs?.length
+        ? SupabaseService.getClient()
+            .from("bug_report_responses")
+            .select("report_id")
+            .in(
+              "report_id",
+              bugs.map((report) => report.id),
+            )
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    if (ticketResponses.error) {
+      throw new Error(ticketResponses.error.message);
+    }
+    if (bugResponses.error) {
+      throw new Error(bugResponses.error.message);
+    }
+
+    const ticketIdsWithReplies = new Set(
+      (ticketResponses.data || []).map((response) => response.ticket_id),
+    );
+    const bugIdsWithReplies = new Set(
+      (bugResponses.data || []).map((response) => response.report_id),
+    );
+
+    const unreadTickets = (tickets || []).filter(
+      (ticket) => !ticket.is_read && ticketIdsWithReplies.has(ticket.id),
+    ).length;
+    const unreadBugReports = (bugs || []).filter(
+      (report) => !report.is_read && bugIdsWithReplies.has(report.id),
+    ).length;
+
+    res.status(200).json({
+      success: true,
+      unreadTickets,
+      unreadBugReports,
+      unreadSupport: unreadTickets + unreadBugReports,
+    });
+  } catch (error) {
+    next(new ErrorHandler(error.message, 500));
+  }
+});
+
+// ============================================================
 // GET SINGLE TICKET
 // ============================================================
 router.get("/ticket/:ticketId", isAuthenticated, async (req, res, next) => {

@@ -573,12 +573,21 @@ class SupabaseService {
     return this.selectByColumn("payments", "id", id);
   }
 
-  static async getRoomPayments(roomId) {
-    const { data, error } = await supabase
+  static async getRoomPayments(roomId, options = {}) {
+    const { paidBy, statuses, limit } = options || {};
+    let query = supabase
       .from("payments")
       .select(this.PAYMENT_COLS)
       .eq("room_id", roomId)
       .order("payment_date", { ascending: false });
+
+    if (paidBy) query = query.eq("paid_by", paidBy);
+    if (Array.isArray(statuses) && statuses.length > 0) {
+      query = query.in("status", statuses);
+    }
+    if (limit) query = query.limit(limit);
+
+    const { data, error } = await query;
     if (error) throw new Error(`Select error: ${error.message}`);
     return data || [];
   }
@@ -785,6 +794,30 @@ class SupabaseService {
       .order("start_date", { ascending: false });
     if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
     return data || [];
+  }
+
+  /**
+   * Get only the active cycle, or the latest completed/closed cycle.
+   * This avoids returning/enriching every historical cycle for client summary UI.
+   */
+  static async getCurrentOrLatestBillingCycle(roomId) {
+    const { data, error } = await supabase
+      .from("billing_cycles")
+      .select(this.BILLING_CYCLE_COLS)
+      .eq("room_id", roomId)
+      .in("status", ["active", "completed", "closed"])
+      .order("start_date", { ascending: false })
+      .limit(12);
+    if (error) throw new Error(`Select error: ${sanitizeError(error.message)}`);
+
+    const cycles = data || [];
+    return (
+      cycles.find((cycle) => cycle.status === "active") ||
+      cycles.find(
+        (cycle) => cycle.status === "completed" || cycle.status === "closed",
+      ) ||
+      null
+    );
   }
 }
 

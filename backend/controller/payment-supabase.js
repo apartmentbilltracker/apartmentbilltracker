@@ -292,20 +292,31 @@ router.get(
   async (req, res, next) => {
     try {
       const { roomId } = req.params;
-
-      const allPayments = await SupabaseService.getRoomPayments(roomId);
-
-      // Non-admin/host users only see their own payments
+      const { status, limit, includeUser = "true" } = req.query;
       const role = (req.user.role || "").toLowerCase();
-      const payments =
-        req.user.is_admin || role === "host"
-          ? allPayments
-          : (allPayments || []).filter((p) => p.paid_by === req.user.id);
+      const canSeeAll = req.user.is_admin || role === "host";
+      const statusList =
+        status === "pending"
+          ? ["pending", "submitted", "rejected"]
+          : status
+            ? String(status)
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean)
+            : null;
 
-      // Enrich with user details
-      for (let payment of payments) {
-        const paidByUser = await SupabaseService.findUserById(payment.paid_by);
-        payment.paidBy = paidByUser;
+      const payments = await SupabaseService.getRoomPayments(roomId, {
+        paidBy: canSeeAll ? null : req.user.id,
+        statuses: statusList,
+        limit: limit ? Number(limit) : null,
+      });
+
+      if (includeUser !== "false") {
+        const paidByIds = [...new Set((payments || []).map((p) => p.paid_by))];
+        const userMap = await SupabaseService.findUsersByIds(paidByIds);
+        for (let payment of payments) {
+          payment.paidBy = userMap.get(payment.paid_by) || null;
+        }
       }
 
       res.status(200).json({

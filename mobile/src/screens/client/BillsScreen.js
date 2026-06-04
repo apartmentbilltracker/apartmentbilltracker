@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { useIsFocused, useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View,
@@ -12,6 +12,7 @@ import {
   Modal,
   Image,
   Dimensions,
+  Animated,
 } from "react-native";
 import { MaterialIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
 import ViewShot from "react-native-view-shot";
@@ -35,6 +36,42 @@ import {
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const WATER_BILL_PER_DAY = 5;
 
+const AmountSkeleton = ({ style, colors }) => {
+  const opacity = useRef(new Animated.Value(0.45)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.9,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.45,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          backgroundColor: colors.skeleton || colors.borderLight,
+          borderRadius: 999,
+          opacity,
+        },
+        style,
+      ]}
+    />
+  );
+};
+
 const filterPresenceByDates = (presenceArr, start, end) => {
   if (!presenceArr || !Array.isArray(presenceArr)) return [];
   if (!start || !end) return presenceArr;
@@ -54,11 +91,11 @@ const BillsScreen = ({ navigation, route }) => {
   const styles = createStyles(colors, insets);
 
   const { state } = useContext(AuthContext);
-  const isFocused = useIsFocused();
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [activeCycle, setActiveCycle] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [billingDataLoading, setBillingDataLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [memberPresence, setMemberPresence] = useState({});
   const [receiptData, setReceiptData] = useState(null);
@@ -81,27 +118,46 @@ const BillsScreen = ({ navigation, route }) => {
   const [showBillingStmt, setShowBillingStmt] = useState(false);
   const [showSelectivePaymentModal, setShowSelectivePaymentModal] =
     useState(false);
+  const [showNonPayorWaterModal, setShowNonPayorWaterModal] = useState(false);
   const [toast, setToast] = useState({
     visible: false,
     type: "success",
     message: "",
   });
+  const lastRoomsFetchRef = useRef(0);
 
   const showToast = (message, type = "success") =>
     setToast({ visible: true, type, message });
 
   const userId = state?.user?.id || state?.user?._id;
 
-  useEffect(() => {
-    if (isFocused) {
-      setSelectedRoom(null);
-      fetchRooms(false);
+  const loadBillingData = async (roomId, showSkeleton = true) => {
+    if (!roomId) {
+      setBillingDataLoading(false);
+      return;
     }
-  }, [isFocused]);
 
-  useEffect(() => {
-    fetchRooms();
-  }, [state.user?.name, state.user?.avatar?.url]);
+    if (showSkeleton) setBillingDataLoading(true);
+    try {
+      await Promise.all([
+        fetchActiveBillingCycle(roomId),
+        fetchUserPendingPayment(roomId),
+        fetchOutstandingBalance(roomId),
+      ]);
+    } finally {
+      if (showSkeleton) setBillingDataLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const now = Date.now();
+      if (now - lastRoomsFetchRef.current > 30000) {
+        lastRoomsFetchRef.current = now;
+        fetchRooms(false);
+      }
+    }, [selectedRoom, userId]),
+  );
 
   useEffect(() => {
     if (selectedRoom) {
@@ -110,31 +166,19 @@ const BillsScreen = ({ navigation, route }) => {
       setUserPendingPayment(null);
       setOutstandingBalance({ totalOutstanding: 0, unpaidCycles: [] });
       extractMemberPresence(selectedRoom);
-      fetchActiveBillingCycle(roomId);
-      fetchUserPendingPayment(roomId);
-      fetchOutstandingBalance(roomId);
+      loadBillingData(roomId);
+    } else {
+      setBillingDataLoading(false);
     }
   }, [selectedRoom]);
 
   useEffect(() => {
     if (route.params?.refresh && selectedRoom) {
       const roomId = selectedRoom.id || selectedRoom._id;
-      fetchOutstandingBalance(roomId);
-      fetchActiveBillingCycle(roomId);
+      loadBillingData(roomId);
       route.params.refresh = false;
     }
   }, [route.params?.refresh, selectedRoom]);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      if (selectedRoom) {
-        const roomId = selectedRoom.id || selectedRoom._id;
-        fetchActiveBillingCycle(roomId);
-        fetchUserPendingPayment(roomId);
-        fetchOutstandingBalance(roomId);
-      }
-    }, [selectedRoom]),
-  );
 
   const extractMemberPresence = (room) => {
     if (room?.members) {
@@ -148,23 +192,8 @@ const BillsScreen = ({ navigation, route }) => {
 
   const fetchActiveBillingCycle = async (roomId) => {
     try {
-      const cycleResponse = await billingCycleService.getBillingCycles(roomId);
-      let cycles = Array.isArray(cycleResponse)
-        ? cycleResponse
-        : cycleResponse?.billingCycles || cycleResponse?.data || [];
-      const active = cycles.find((c) => c.status === "active");
-      if (active) {
-        setActiveCycle(active);
-      } else {
-        const mostRecent = cycles
-          .filter((c) => c.status === "completed" || c.status === "closed")
-          .sort(
-            (a, b) =>
-              new Date(b.closedAt || b.closed_at || b.endDate || b.end_date) -
-              new Date(a.closedAt || a.closed_at || a.endDate || a.end_date),
-          )[0];
-        setActiveCycle(mostRecent || null);
-      }
+      const cycleResponse = await billingCycleService.getCurrentCycle(roomId);
+      setActiveCycle(cycleResponse?.billingCycle || cycleResponse?.data || null);
     } catch (error) {
       setActiveCycle(null);
     }
@@ -172,7 +201,11 @@ const BillsScreen = ({ navigation, route }) => {
 
   const fetchUserPendingPayment = async (roomId) => {
     try {
-      const response = await paymentService.getPaymentHistory(roomId);
+      const response = await paymentService.getPaymentHistory(roomId, {
+        status: "pending",
+        limit: 1,
+        includeUser: false,
+      });
       const payments = response?.payments || [];
       const pending = payments.find(
         (p) => p.status === "submitted" || p.status === "rejected",
@@ -202,6 +235,9 @@ const BillsScreen = ({ navigation, route }) => {
       const data = response.data || response;
       const fetchedRooms = data.rooms || data || [];
       setRooms(fetchedRooms);
+      if (fetchedRooms.length === 0) {
+        setBillingDataLoading(false);
+      }
 
       if (!skipAutoSelect) {
         if (selectedRoom && fetchedRooms.length > 0) {
@@ -210,9 +246,11 @@ const BillsScreen = ({ navigation, route }) => {
               (room.id || room._id) === (selectedRoom.id || selectedRoom._id),
           );
           if (updatedSelectedRoom) {
+            setBillingDataLoading(true);
             setSelectedRoom(updatedSelectedRoom);
           }
         } else if (fetchedRooms.length > 0) {
+          setBillingDataLoading(true);
           setSelectedRoom(fetchedRooms[0]);
         }
       }
@@ -656,6 +694,98 @@ const BillsScreen = ({ navigation, route }) => {
     };
   };
 
+  const getMemberUserId = (member) =>
+    String(
+      member?.user?.id ||
+        member?.user?._id ||
+        member?.user ||
+        member?.userId ||
+        member?.user_id ||
+        "",
+    );
+
+  const getNonPayorWaterContributions = () => {
+    if (!selectedRoom?.members || !userId) return [];
+
+    const members = selectedRoom.members;
+    const payorIds = members
+      .filter((member) => member.isPayer)
+      .map(getMemberUserId)
+      .filter(Boolean);
+    const validPayorIds = new Set(payorIds);
+    const currentUserId = String(userId);
+    const isFixedWater =
+      selectedRoom.waterBillingMode === "fixed_monthly" ||
+      selectedRoom.water_billing_mode === "fixed_monthly";
+    const isPerPersonWater =
+      (selectedRoom.waterFixedType || selectedRoom.water_fixed_type) ===
+      "per_person";
+    const fixedWaterAmount =
+      parseFloat(
+        selectedRoom.waterFixedAmount || selectedRoom.water_fixed_amount || 0,
+      ) || 0;
+
+    return members
+      .filter((member) => !member.isPayer)
+      .map((member) => {
+        const memberUserId = getMemberUserId(member);
+        const preferredPayorIds = Array.isArray(
+          member.waterSplitPayorIds || member.water_split_payor_ids,
+        )
+          ? (member.waterSplitPayorIds || member.water_split_payor_ids).map(
+              String,
+            )
+          : [];
+        const usesSpecificPayors =
+          (member.waterSplitMode || member.water_split_mode) ===
+            "specific_payors" && preferredPayorIds.length > 0;
+        const splitPayorIds = usesSpecificPayors
+          ? [...new Set(preferredPayorIds)].filter((id) =>
+              validPayorIds.has(id),
+            )
+          : payorIds;
+        const effectivePayorIds =
+          splitPayorIds.length > 0 ? splitPayorIds : payorIds;
+        const mySplitIndex = effectivePayorIds.indexOf(currentUserId);
+
+        if (mySplitIndex === -1 || effectivePayorIds.length === 0) return null;
+
+        const userCharge = findUserCharge(
+          activeCycle?.memberCharges || [],
+          memberUserId,
+        );
+        const presenceDays = getFilteredPresence(member.id || member._id).length;
+        const memberWaterTotal = r2(
+          Number(userCharge?.waterOwn ?? userCharge?.water_own) ||
+            (isFixedWater && isPerPersonWater
+              ? fixedWaterAmount
+              : isFixedWater
+                ? 0
+                : presenceDays * WATER_BILL_PER_DAY),
+        );
+
+        if (memberWaterTotal <= 0) return null;
+
+        const baseShare = r2(memberWaterTotal / effectivePayorIds.length);
+        const assignedBeforeMe = r2(baseShare * mySplitIndex);
+        const amount =
+          mySplitIndex === effectivePayorIds.length - 1
+            ? r2(memberWaterTotal - assignedBeforeMe)
+            : baseShare;
+
+        return {
+          id: member.id || member._id || memberUserId,
+          name: member.user?.name || member.name || "Non-payor",
+          amount,
+          presenceDays,
+          memberWaterTotal,
+          splitWithCount: effectivePayorIds.length,
+          usesSpecificPayors,
+        };
+      })
+      .filter(Boolean);
+  };
+
   const isPaymentAllowed = () => {
     if (activeCycle?.status === "completed") return false;
     if (activeCycle?.status === "closed") return true;
@@ -759,7 +889,7 @@ const BillsScreen = ({ navigation, route }) => {
   const currentUserMember = selectedRoom?.members?.find(
     (m) => String(m.user?.id || m.user?._id || m.user) === String(userId),
   );
-  const billShare = calculateBillShare();
+  const billShare = billingDataLoading ? null : calculateBillShare();
   const billing = selectedRoom?.billing || {};
   const isUserPayor = currentUserMember?.isPayer || false;
   const previousReading =
@@ -772,18 +902,20 @@ const BillsScreen = ({ navigation, route }) => {
     activeCycle?.currentMeterReading ??
     activeCycle?.current_meter_reading ??
     null;
-  const currentPaymentStatus = getUserPaymentStatus();
-  const allBillsPaid = hasUserPaidAllBills();
-  const remainingDue = getRemainingDue();
+  const currentPaymentStatus = billingDataLoading ? null : getUserPaymentStatus();
+  const allBillsPaid = !billingDataLoading && hasUserPaidAllBills();
+  const remainingDue = billingDataLoading ? 0 : getRemainingDue();
   const totalMembers = selectedRoom?.members?.length || 0;
   const totalPayors =
     selectedRoom?.members?.filter((member) => member.isPayer).length || 0;
-  const totalWaterBill = calculateTotalWaterBill();
+  const totalWaterBill = billingDataLoading ? 0 : calculateTotalWaterBill();
   const customChargesTotal = r2(
-    (activeCycle?.customCharges || []).reduce(
-      (sum, charge) => sum + parseFloat(charge.amount || 0),
-      0,
-    ),
+    billingDataLoading
+      ? 0
+      : (activeCycle?.customCharges || []).reduce(
+          (sum, charge) => sum + parseFloat(charge.amount || 0),
+          0,
+        ),
   );
   const totalRoomBills = r2(
     (billing.rent || 0) +
@@ -806,17 +938,24 @@ const BillsScreen = ({ navigation, route }) => {
     userPendingPayment?.status === "submitted" &&
     userPendingPayment.billing_cycle_start === activeCycle?.start_date;
   const isCycleClosed = selectedRoom?.cycleStatus === "cycle_closed";
-  const paymentStateLabel = !isUserPayor
-    ? "View only"
-    : hasPendingSubmission
-      ? "Under review"
-      : isPaymentAllowed()
-        ? "Open now"
-        : billing?.end
-          ? "Locked"
-          : "Waiting";
-  const cycleStatusMeta =
-    !billing.start || !billing.end
+  const paymentStateLabel = billingDataLoading
+    ? "Syncing"
+    : !isUserPayor
+      ? "View only"
+      : hasPendingSubmission
+        ? "Under review"
+        : isPaymentAllowed()
+          ? "Open now"
+          : billing?.end
+            ? "Locked"
+            : "Waiting";
+  const cycleStatusMeta = billingDataLoading
+    ? {
+        label: "Syncing",
+        backgroundColor: colors.cardAlt,
+        color: colors.textSecondary,
+      }
+    : !billing.start || !billing.end
       ? {
           label: "Waiting",
           backgroundColor: colors.cardAlt,
@@ -862,15 +1001,17 @@ const BillsScreen = ({ navigation, route }) => {
     : allBillsPaid
       ? "Settled"
       : "View only";
-  const summaryDescription = isUserPayor
-    ? hasPendingSubmission
-      ? "Your latest payment has been submitted and is waiting for host verification."
-      : isPaymentAllowed()
-        ? "Your billing window is open. You can settle the remaining balance now."
-        : billing?.end
-          ? `Payment unlocks on ${getFormattedEndDate()}.`
-          : "Waiting for your host to set the billing period."
-    : "You can review totals here while the assigned payors handle payment.";
+  const summaryDescription = billingDataLoading
+    ? "Loading the latest billing amounts for this room."
+    : isUserPayor
+      ? hasPendingSubmission
+        ? "Your latest payment has been submitted and is waiting for host verification."
+        : isPaymentAllowed()
+          ? "Your billing window is open. You can settle the remaining balance now."
+          : billing?.end
+            ? `Payment unlocks on ${getFormattedEndDate()}.`
+            : "Waiting for your host to set the billing period."
+      : "You can review totals here while the assigned payors handle payment.";
   const summaryStats = [
     { label: "Members", value: totalMembers || "--" },
     { label: "Payors", value: totalPayors || "--" },
@@ -975,6 +1116,7 @@ const BillsScreen = ({ navigation, route }) => {
   }
 
   const waterShareBreakdown = getWaterShareBreakdown();
+  const nonPayorWaterContributions = getNonPayorWaterContributions();
 
   return (
     <View style={styles.container}>
@@ -984,6 +1126,93 @@ const BillsScreen = ({ navigation, route }) => {
         message={toast.message}
         onHide={() => setToast((t) => ({ ...t, visible: false }))}
       />
+      <Modal
+        visible={showNonPayorWaterModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNonPayorWaterModal(false)}
+      >
+        <View style={styles.waterModalOverlay}>
+          <View style={styles.waterModalCard}>
+            <View style={styles.waterModalHeader}>
+              <View style={styles.waterModalTitleWrap}>
+                <View style={styles.waterModalIcon}>
+                  <MaterialIcons
+                    name="water-drop"
+                    size={20}
+                    color={colors.waterColor}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.waterModalTitle}>Shared water</Text>
+                  <Text style={styles.waterModalSubtitle}>
+                    Non-payors assigned to your share
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.waterModalClose}
+                onPress={() => setShowNonPayorWaterModal(false)}
+                activeOpacity={0.75}
+              >
+                <MaterialIcons name="close" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.waterModalTotalRow}>
+              <Text style={styles.waterModalTotalLabel}>Your shared portion</Text>
+              <Text style={styles.waterModalTotalAmount}>
+                {fmt(waterShareBreakdown?.sharedNonPayorWater || 0)}
+              </Text>
+            </View>
+
+            {nonPayorWaterContributions.length > 0 ? (
+              <ScrollView
+                style={styles.waterModalList}
+                showsVerticalScrollIndicator={false}
+              >
+                {nonPayorWaterContributions.map((item) => (
+                  <View key={item.id} style={styles.waterModalPersonRow}>
+                    <View style={styles.waterModalAvatar}>
+                      <Text style={styles.waterModalAvatarText}>
+                        {item.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.waterModalPersonName}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.waterModalPersonMeta}>
+                        {item.presenceDays} day
+                        {item.presenceDays !== 1 ? "s" : ""} water total{" "}
+                        {fmt(item.memberWaterTotal)} split with{" "}
+                        {item.splitWithCount} payor
+                        {item.splitWithCount !== 1 ? "s" : ""} -{" "}
+                        {item.usesSpecificPayors
+                          ? "selected you"
+                          : "all payors"}
+                      </Text>
+                    </View>
+                    <Text style={styles.waterModalPersonAmount}>
+                      {fmt(item.amount)}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.waterModalEmpty}>
+                <Text style={styles.waterModalEmptyTitle}>
+                  No non-payor split details
+                </Text>
+                <Text style={styles.waterModalEmptyText}>
+                  There are no non-payor water amounts assigned to you in this
+                  cycle.
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
       <ScrollViewWithDetection
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
@@ -1034,6 +1263,8 @@ const BillsScreen = ({ navigation, route }) => {
                     key={room.id || room._id}
                     style={[styles.roomPill, isActive && styles.roomPillActive]}
                     onPress={() => {
+                      if (isActive) return;
+                      setBillingDataLoading(true);
                       setSelectedRoom(room);
                       extractMemberPresence(room);
                     }}
@@ -1095,9 +1326,16 @@ const BillsScreen = ({ navigation, route }) => {
                 <View style={styles.summaryCopy}>
                   <Text style={styles.summaryEyebrow}>Current snapshot</Text>
                   <Text style={styles.summaryTitle}>{summaryTitle}</Text>
-                  <Text style={styles.summaryPrimaryValue}>
-                    {summaryPrimaryValue}
-                  </Text>
+                  {billingDataLoading ? (
+                    <AmountSkeleton
+                      colors={colors}
+                      style={styles.summaryValueSkeleton}
+                    />
+                  ) : (
+                    <Text style={styles.summaryPrimaryValue}>
+                      {summaryPrimaryValue}
+                    </Text>
+                  )}
                   <Text style={styles.summarySubtext}>
                     {summaryDescription}
                   </Text>
@@ -1167,7 +1405,76 @@ const BillsScreen = ({ navigation, route }) => {
           </View>
         )}
 
-        {selectedRoom && (
+        {selectedRoom && billingDataLoading && (
+          <View style={styles.contentPadding}>
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={styles.cardIconBg}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                </View>
+                <Text style={styles.cardTitle}>Loading bill amounts</Text>
+              </View>
+              <View style={styles.billGrid}>
+                {["Rent", "Electricity", "Water", "Internet"].map((label) => (
+                  <View key={label} style={styles.billGridItem}>
+                    <AmountSkeleton
+                      colors={colors}
+                      style={styles.billIconSkeleton}
+                    />
+                    <Text style={styles.billGridLabel}>{label}</Text>
+                    <AmountSkeleton
+                      colors={colors}
+                      style={styles.billAmountSkeleton}
+                    />
+                  </View>
+                ))}
+              </View>
+              <View style={styles.grandTotalStrip}>
+                <Text style={styles.grandTotalLabel}>Room Total</Text>
+                <AmountSkeleton
+                  colors={colors}
+                  style={styles.totalAmountSkeleton}
+                />
+              </View>
+            </View>
+
+            {isUserPayor && (
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIconBg}>
+                    <ActivityIndicator size="small" color={colors.accent} />
+                  </View>
+                  <Text style={styles.cardTitle}>Preparing your share</Text>
+                </View>
+                <View style={styles.shareList}>
+                  {["Rent", "Electricity", "Water"].map((label) => (
+                    <View key={label} style={styles.shareItem}>
+                      <View style={styles.shareItemLeft}>
+                        <AmountSkeleton
+                          colors={colors}
+                          style={styles.shareIconSkeleton}
+                        />
+                        <View style={styles.shareItemTextWrap}>
+                          <Text style={styles.shareItemLabel}>{label}</Text>
+                          <AmountSkeleton
+                            colors={colors}
+                            style={styles.shareNoteSkeleton}
+                          />
+                        </View>
+                      </View>
+                      <AmountSkeleton
+                        colors={colors}
+                        style={styles.shareAmountSkeleton}
+                      />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {selectedRoom && !billingDataLoading && (
           <>
             {/* ─── OUTSTANDING BALANCE BANNER ─── */}
             {isUserPayor && outstandingBalance.totalOutstanding > 0 && (
@@ -1608,14 +1915,30 @@ const BillsScreen = ({ navigation, route }) => {
                             {fmt(waterShareBreakdown.ownWater)}
                           </Text>
                         </View>
-                        <View style={styles.helperStatCard}>
+                        <TouchableOpacity
+                          style={[
+                            styles.helperStatCard,
+                            styles.helperStatCardPressable,
+                          ]}
+                          onPress={() => setShowNonPayorWaterModal(true)}
+                          activeOpacity={0.78}
+                        >
                           <Text style={styles.helperStatLabel}>
                             Shared from non-payors
                           </Text>
-                          <Text style={styles.helperStatValue}>
-                            {fmt(waterShareBreakdown.sharedNonPayorWater || 0)}
-                          </Text>
-                        </View>
+                          <View style={styles.helperStatValueRow}>
+                            <Text style={styles.helperStatValue}>
+                              {fmt(
+                                waterShareBreakdown.sharedNonPayorWater || 0,
+                              )}
+                            </Text>
+                            <MaterialIcons
+                              name="chevron-right"
+                              size={20}
+                              color={colors.accent}
+                            />
+                          </View>
+                        </TouchableOpacity>
                       </View>
                     )}
                     <View style={styles.totalDueStrip}>
@@ -1984,6 +2307,12 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       letterSpacing: -1,
       marginTop: 8,
     },
+    summaryValueSkeleton: {
+      width: 170,
+      height: 36,
+      marginTop: 10,
+      marginBottom: 2,
+    },
     summarySubtext: {
       fontSize: 13,
       color: colors.textSecondary,
@@ -2350,6 +2679,12 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       alignItems: "center",
       marginBottom: 12,
     },
+    billIconSkeleton: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      marginBottom: 12,
+    },
     billGridLabel: {
       fontSize: 12,
       fontWeight: "700",
@@ -2360,6 +2695,11 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontSize: 18,
       fontWeight: "800",
       color: colors.text,
+    },
+    billAmountSkeleton: {
+      width: 88,
+      height: 20,
+      marginTop: 4,
     },
     grandTotalStrip: {
       flexDirection: "row",
@@ -2378,6 +2718,11 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontSize: 22,
       fontWeight: "900",
       color: colors.success,
+    },
+    totalAmountSkeleton: {
+      width: 120,
+      height: 26,
+      backgroundColor: colors.card,
     },
     shareList: {
       paddingHorizontal: 18,
@@ -2406,6 +2751,11 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       borderRadius: 13,
       justifyContent: "center",
       alignItems: "center",
+    },
+    shareIconSkeleton: {
+      width: 40,
+      height: 40,
+      borderRadius: 13,
     },
     shareItemTextWrap: {
       flex: 1,
@@ -2441,6 +2791,16 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontWeight: "600",
       color: colors.textTertiary,
       marginTop: 2,
+    },
+    shareNoteSkeleton: {
+      width: 128,
+      height: 12,
+      marginTop: 8,
+    },
+    shareAmountSkeleton: {
+      width: 92,
+      height: 22,
+      marginLeft: 12,
     },
     shareIntroRow: {
       flexDirection: "row",
@@ -2490,6 +2850,10 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       paddingHorizontal: 14,
       paddingVertical: 12,
     },
+    helperStatCardPressable: {
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
     helperStatLabel: {
       fontSize: 11,
       fontWeight: "700",
@@ -2502,6 +2866,143 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
       fontWeight: "800",
       color: colors.accent,
       marginTop: 8,
+    },
+    helperStatValueRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 4,
+    },
+    waterModalOverlay: {
+      flex: 1,
+      justifyContent: "center",
+      paddingHorizontal: 20,
+      backgroundColor: "rgba(0,0,0,0.45)",
+    },
+    waterModalCard: {
+      maxHeight: "78%",
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      overflow: "hidden",
+    },
+    waterModalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 18,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    waterModalTitleWrap: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    waterModalIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.infoBg,
+    },
+    waterModalTitle: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    waterModalSubtitle: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    waterModalClose: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.cardAlt,
+      marginLeft: 10,
+    },
+    waterModalTotalRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 18,
+      paddingVertical: 14,
+      backgroundColor: colors.accentSurface,
+    },
+    waterModalTotalLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+    waterModalTotalAmount: {
+      fontSize: 20,
+      fontWeight: "900",
+      color: colors.accent,
+    },
+    waterModalList: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    waterModalPersonRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    waterModalAvatar: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.infoBg,
+    },
+    waterModalAvatarText: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.waterColor,
+    },
+    waterModalPersonName: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    waterModalPersonMeta: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      lineHeight: 17,
+      marginTop: 3,
+    },
+    waterModalPersonAmount: {
+      fontSize: 15,
+      fontWeight: "900",
+      color: colors.text,
+      marginLeft: 8,
+    },
+    waterModalEmpty: {
+      paddingHorizontal: 22,
+      paddingVertical: 28,
+      alignItems: "center",
+    },
+    waterModalEmptyTitle: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    waterModalEmptyText: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      textAlign: "center",
+      lineHeight: 20,
+      marginTop: 6,
     },
     totalDueStrip: {
       flexDirection: "row",
