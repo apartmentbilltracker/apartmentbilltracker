@@ -1,77 +1,68 @@
+const {
+  emailTheme,
+  escapeHtml,
+  renderEmailLayout,
+} = require("./emailTheme");
+
 const WelcomeRoomContent = ({ userName, roomName, roomCode }) => {
-  return `
-      <div style="max-width: 600px; margin: auto; font-family: Arial, sans-serif; color: #333;">
-        <!-- Preheader and Header -->
-        <div style="text-align: center; padding: 20px 0; font-size: 12px; color: #888;">
-            Welcome to ${roomName}!
-        </div>
-        <div style="background-color: #b38604; padding: 30px 0; text-align: center;">
-            <h2 style="color: white; margin: 0;">PropFlow</h2>
-        </div>
-  
-        <!-- Main Content -->
-        <div style="background-color: #ffffff; padding: 30px; text-align: center; border-radius: 8px; margin: 20px 0;">
-            <div style="font-size: 48px; margin-bottom: 10px;">🎉</div>
-            <h1 style="color: #b38604; margin-bottom: 5px;">Welcome, ${userName}!</h1>
-            <p style="font-size: 16px; color: #555; margin-top: 0;">Your request has been approved</p>
+  const safeName = escapeHtml(userName || "there");
+  const safeRoomName = escapeHtml(roomName || "your room");
+  const safeRoomCode = roomCode ? escapeHtml(roomCode) : null;
 
-            <div style="background: linear-gradient(135deg, #fdf6e3 0%, #fff8e7 100%); padding: 25px; border-radius: 10px; margin: 25px 0; border: 1px solid #e8d5a3;">
-                <p style="margin: 0 0 8px 0; font-size: 14px; color: #888; text-transform: uppercase; letter-spacing: 1px;">You are now a member of</p>
-                <h2 style="margin: 0; color: #1a1a2e; font-size: 24px;">${roomName}</h2>
-                ${roomCode ? `<p style="margin: 10px 0 0 0; font-size: 13px; color: #999;">Room Code: <strong style="color: #b38604; letter-spacing: 2px;">${roomCode}</strong></p>` : ""}
-            </div>
+  return renderEmailLayout({
+    preheader: `Your request to join ${roomName || "your room"} was approved.`,
+    eyebrow: "Room Approved",
+    title: "Welcome to Your Room",
+    footerNote:
+      "You received this email because your room join request was approved.",
+    children: `
+      <p style="margin: 0 0 16px; font-size: 15px; color: ${emailTheme.text}; line-height: 1.6;">Hi <strong>${safeName}</strong>,</p>
+      <p style="margin: 0 0 22px; font-size: 14px; color: ${emailTheme.textSecondary}; line-height: 1.7;">
+        Great news. Your request has been approved, and you are now a member of this room.
+      </p>
 
-            <div style="text-align: left; margin: 25px 0;">
-                <h3 style="color: #b38604; margin-bottom: 15px;">What you can do now:</h3>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                        <td style="padding: 10px 15px; background: #f9f9f9; border-radius: 6px; margin-bottom: 8px;">
-                            <span style="font-size: 18px; margin-right: 10px;">📊</span>
-                            <strong>View Bills</strong> — See all shared bills and your share of expenses
-                        </td>
-                    </tr>
-                    <tr><td style="height: 8px;"></td></tr>
-                    <tr>
-                        <td style="padding: 10px 15px; background: #f9f9f9; border-radius: 6px;">
-                            <span style="font-size: 18px; margin-right: 10px;">💳</span>
-                            <strong>Make Payments</strong> — Track and submit your payments easily
-                        </td>
-                    </tr>
-                    <tr><td style="height: 8px;"></td></tr>
-                    <tr>
-                        <td style="padding: 10px 15px; background: #f9f9f9; border-radius: 6px;">
-                            <span style="font-size: 18px; margin-right: 10px;">📢</span>
-                            <strong>Stay Updated</strong> — Receive announcements and notifications from your room admin
-                        </td>
-                    </tr>
-                    <tr><td style="height: 8px;"></td></tr>
-                    <tr>
-                        <td style="padding: 10px 15px; background: #f9f9f9; border-radius: 6px;">
-                            <span style="font-size: 18px; margin-right: 10px;">👥</span>
-                            <strong>Connect</strong> — Collaborate with your fellow room members
-                        </td>
-                    </tr>
-                </table>
-            </div>
-
-            <p style="text-align: left; color: #333;">Open the PropFlow app to get started and explore your new room.</p>
-            <p style="text-align: left; color: #333; font-weight: bold;">Best regards,<br>PropFlow Team</p>
-        </div>
-  
-        <!-- Help Section -->
-        <div style="background-color: #f0f0f0; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
-            <h3 style="color: #333;">Need help?</h3>
-            <p>If you have any questions about your room or billing, contact your room admin or <a href="mailto:support@propflow.com" style="color: #b38604; text-decoration: underline;">reach out to our support team</a>.</p>
-        </div>
-  
-        <!-- Footer -->
-        <div style="font-size: 12px; text-align: left; color: #888; padding: 20px;">
-            <p style="color: #888;">PropFlow - Making shared billing simple and transparent</p>
-            <p style="color: #888;">You received this email because your room join request was approved. If this wasn't you, please contact support.</p>
-            <p style="color: #888;">© 2026 PropFlow. All rights reserved.</p>
-        </div>
+      <div style="background-color: ${emailTheme.mint}; border: 1px solid #d6ede3; border-radius: 12px; padding: 22px; margin: 0 0 24px; text-align: center;">
+        <p style="margin: 0 0 8px; font-size: 12px; color: ${emailTheme.emerald}; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase;">You are now a member of</p>
+        <h2 style="margin: 0; color: ${emailTheme.forest}; font-size: 24px; line-height: 1.3;">${safeRoomName}</h2>
+        ${
+          safeRoomCode
+            ? `<p style="margin: 12px 0 0; font-size: 13px; color: ${emailTheme.textSecondary};">Room Code: <strong style="color: ${emailTheme.emerald}; letter-spacing: 2px;">${safeRoomCode}</strong></p>`
+            : ""
+        }
       </div>
-    `;
+
+      <p style="margin: 0 0 12px; font-size: 13px; color: ${emailTheme.forest}; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">What you can do now</p>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+        <tr>
+          <td style="padding: 12px 14px; background-color: ${emailTheme.background}; border: 1px solid ${emailTheme.borderLight}; border-radius: 8px;">
+            <strong style="color: ${emailTheme.text};">View bills</strong><br />
+            <span style="font-size: 13px; color: ${emailTheme.textSecondary};">See shared bills and your share of expenses.</span>
+          </td>
+        </tr>
+        <tr><td style="height: 8px;"></td></tr>
+        <tr>
+          <td style="padding: 12px 14px; background-color: ${emailTheme.background}; border: 1px solid ${emailTheme.borderLight}; border-radius: 8px;">
+            <strong style="color: ${emailTheme.text};">Make payments</strong><br />
+            <span style="font-size: 13px; color: ${emailTheme.textSecondary};">Track and submit payments from the app.</span>
+          </td>
+        </tr>
+        <tr><td style="height: 8px;"></td></tr>
+        <tr>
+          <td style="padding: 12px 14px; background-color: ${emailTheme.background}; border: 1px solid ${emailTheme.borderLight}; border-radius: 8px;">
+            <strong style="color: ${emailTheme.text};">Stay updated</strong><br />
+            <span style="font-size: 13px; color: ${emailTheme.textSecondary};">Receive announcements and room notifications.</span>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin: 0 0 20px; font-size: 14px; color: ${emailTheme.textSecondary}; line-height: 1.7;">
+        Open the PropFlow app to explore your room and get started.
+      </p>
+      <p style="margin: 0; font-size: 14px; color: ${emailTheme.textSecondary}; line-height: 1.6;">
+        Best regards,<br /><strong style="color: ${emailTheme.emerald};">PropFlow Team</strong>
+      </p>
+    `,
+  });
 };
 
 module.exports = WelcomeRoomContent;

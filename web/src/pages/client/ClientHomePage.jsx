@@ -90,7 +90,7 @@ function MobilePayModal({ onClose }) {
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-sm rounded-[32px] shadow-2xl overflow-hidden"
         style={{ background: "#fff" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -107,7 +107,7 @@ function MobilePayModal({ onClose }) {
             <X size={14} />
           </button>
           <div
-            className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center"
+            className="w-14 h-14 rounded-[32px] mx-auto mb-3 flex items-center justify-center"
             style={{ background: "rgba(255,255,255,0.15)" }}
           >
             <Smartphone size={28} color="#9af2bb" />
@@ -445,14 +445,14 @@ export default function ClientHomePage() {
     );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 min-h-screen pb-10" style={{ background: "#F4F7F5" }}>
       {showPayModal && <MobilePayModal onClose={() => setShowPayModal(false)} />}
 
       {/* ── Join payer-choice modal ─────────────────────────────────────────── */}
       {joinPayerChoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "rgba(0,0,0,0.55)" }}>
-          <div className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl bg-white dark:bg-[#0a4240]">
+          <div className="w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl bg-white dark:bg-[#0a4240]">
             {/* Header strip */}
             <div className="px-6 py-5" style={{ background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryContainer} 100%)` }}>
               <h3 className="font-bold text-white text-lg">Join Room</h3>
@@ -489,7 +489,7 @@ export default function ClientHomePage() {
 
       {/* ── Greeting card — forest green header ─────────────────────────────── */}
       <div
-        className="relative rounded-2xl overflow-hidden p-5"
+        className="relative rounded-[32px] overflow-hidden p-5"
         style={{ background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryContainer} 100%)` }}
       >
         {/* Decorative circles */}
@@ -529,7 +529,7 @@ export default function ClientHomePage() {
 
       {/* ── Outstanding balance banner ──────────────────────────────────────── */}
       {outstandingBalance > 0 && (
-        <div className="rounded-2xl p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/10 flex items-center gap-3">
+        <div className="rounded-[32px] p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/10 flex items-center gap-3">
           <AlertTriangle size={18} className="text-red-500 shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-red-700 dark:text-red-400">
@@ -551,7 +551,7 @@ export default function ClientHomePage() {
       {/* ── Payment status card ─────────────────────────────────────────────── */}
       {room && isPayer && myPayment && (
         <div
-          className="rounded-2xl bg-white dark:bg-[#0a4240] border p-4 flex items-center gap-4"
+          className="rounded-[32px] bg-white dark:bg-[#0a4240] border p-4 flex items-center gap-4"
           style={{
             borderLeftWidth: 4,
             borderLeftColor: allPaid ? C.accent : "#f59e0b",
@@ -605,7 +605,7 @@ export default function ClientHomePage() {
 
       {/* ── Billing countdown ───────────────────────────────────────────────── */}
       {billingCountdown && (
-        <div className="rounded-2xl bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-4">
+        <div className="rounded-[32px] bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div
@@ -651,7 +651,7 @@ export default function ClientHomePage() {
           <Link
             key={to}
             to={to}
-            className="relative bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 rounded-2xl p-3 flex flex-col items-center gap-2 hover:shadow-md transition-all text-center hover:-translate-y-0.5 duration-200"
+            className="relative bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 rounded-[32px] p-3 flex flex-col items-center gap-2 hover:shadow-md transition-all text-center hover:-translate-y-0.5 duration-200"
           >
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -675,7 +675,7 @@ export default function ClientHomePage() {
       <div className="grid md:grid-cols-2 gap-5">
 
         {/* Current Bill card */}
-        <div className="rounded-2xl bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-5">
+        <div className="rounded-[32px] bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-5">
           {/* Card header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -836,7 +836,7 @@ export default function ClientHomePage() {
         </div>
 
         {/* Announcements card */}
-        <div className="rounded-2xl bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-5">
+        <div className="rounded-[32px] bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div
@@ -911,7 +911,7 @@ export default function ClientHomePage() {
 
       {/* ── Room Payment Summary ─────────────────────────────────────────────── */}
       {room?.memberPayments?.length > 0 && cycle && (
-        <div className="rounded-2xl bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-5">
+        <div className="rounded-[32px] bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-5">
           <div className="flex items-center gap-2 mb-4">
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -989,7 +989,7 @@ export default function ClientHomePage() {
             const rid = r.id || r._id;
             const isPending = pendingRoomIds.includes(rid);
             return (
-              <div key={rid} className="rounded-2xl bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-4 flex items-start gap-4">
+              <div key={rid} className="rounded-[32px] bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-4 flex items-start gap-4">
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                   style={{ background: C.tintA }}

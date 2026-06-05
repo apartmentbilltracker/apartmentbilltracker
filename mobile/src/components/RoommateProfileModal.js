@@ -16,6 +16,57 @@ import { roommateService } from "../services/apiService";
 import { useTheme } from "../theme/ThemeContext";
 import ModalBottomSpacer from "./ModalBottomSpacer";
 
+const SOCIAL_OPTIONS = [
+  { platform: "facebook", label: "Facebook", icon: "logo-facebook" },
+  { platform: "instagram", label: "Instagram", icon: "logo-instagram" },
+  { platform: "telegram", label: "Telegram", icon: "paper-plane" },
+  { platform: "whatsapp", label: "WhatsApp", icon: "logo-whatsapp" },
+  { platform: "tiktok", label: "TikTok", icon: "logo-tiktok" },
+  { platform: "twitter", label: "X", icon: "logo-twitter" },
+  { platform: "linkedin", label: "LinkedIn", icon: "logo-linkedin" },
+  { platform: "email", label: "Email", icon: "mail-outline" },
+  { platform: "phone", label: "Phone", icon: "call-outline" },
+  { platform: "link", label: "Link", icon: "link-outline" },
+];
+
+const newSocial = (platform = "facebook") => {
+  const option =
+    SOCIAL_OPTIONS.find((item) => item.platform === platform) ||
+    SOCIAL_OPTIONS[0];
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    platform: option.platform,
+    label: option.label,
+    url: "",
+  };
+};
+
+const normalizeInitialSocials = (profile) => {
+  const socials = Array.isArray(profile?.socials) ? profile.socials : [];
+  const normalized = socials
+    .map((item) => {
+      const platform = item?.platform || "link";
+      const option =
+        SOCIAL_OPTIONS.find((social) => social.platform === platform) ||
+        SOCIAL_OPTIONS.find((social) => social.platform === "link");
+      return {
+        id: `${platform}-${item?.url || Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`,
+        platform: option.platform,
+        label: item?.label || option.label,
+        url: item?.url || item?.value || "",
+      };
+    })
+    .filter((item) => item.url);
+
+  if (normalized.length === 0 && profile?.facebookAccount) {
+    return [{ ...newSocial("facebook"), url: profile.facebookAccount }];
+  }
+
+  return normalized.length > 0 ? normalized : [newSocial()];
+};
+
 const emptyForm = {
   displayName: "",
   age: "",
@@ -24,7 +75,6 @@ const emptyForm = {
   preferredLocations: "",
   budget: "",
   moveInDate: "",
-  facebookAccount: "",
   bio: "",
 };
 
@@ -38,6 +88,7 @@ const RoommateProfileModal = ({
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const [form, setForm] = useState(emptyForm);
+  const [socials, setSocials] = useState([newSocial()]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -52,13 +103,43 @@ const RoommateProfileModal = ({
         : "",
       budget: initialProfile?.budget ? String(initialProfile.budget) : "",
       moveInDate: initialProfile?.moveInDate || "",
-      facebookAccount: initialProfile?.facebookAccount || "",
       bio: initialProfile?.bio || "",
     });
+    setSocials(normalizeInitialSocials(initialProfile));
   }, [initialProfile, user, visible]);
 
   const updateField = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
+
+  const updateSocial = (id, updates) => {
+    setSocials((current) =>
+      current.map((item) => {
+        if (item.id !== id) return item;
+        const next = { ...item, ...updates };
+        if (updates.platform) {
+          const option =
+            SOCIAL_OPTIONS.find(
+              (social) => social.platform === updates.platform,
+            ) || SOCIAL_OPTIONS[0];
+          next.platform = option.platform;
+          next.label = option.label;
+        }
+        return next;
+      }),
+    );
+  };
+
+  const addSocial = () => {
+    setSocials((current) => [...current, newSocial()]);
+  };
+
+  const removeSocial = (id) => {
+    setSocials((current) =>
+      current.length > 1
+        ? current.filter((item) => item.id !== id)
+        : [newSocial()],
+    );
+  };
 
   const handleSave = async () => {
     if (!form.displayName.trim()) {
@@ -75,7 +156,13 @@ const RoommateProfileModal = ({
         preferredLocations: form.preferredLocations,
         budget: form.budget.trim(),
         moveInDate: form.moveInDate.trim(),
-        facebookAccount: form.facebookAccount.trim(),
+        socials: socials
+          .map((item) => ({
+            platform: item.platform,
+            label: item.label,
+            url: item.url.trim(),
+          }))
+          .filter((item) => item.url),
         bio: form.bio.trim(),
       });
       onSaved?.(response?.profile || null);
@@ -180,14 +267,102 @@ const RoommateProfileModal = ({
                 styles={styles}
               />
             </View>
-            <Field
-              label="Facebook / Messenger"
-              value={form.facebookAccount}
-              onChangeText={(value) => updateField("facebookAccount", value)}
-              placeholder="m.me/username or facebook.com/username"
-              autoCapitalize="none"
-              styles={styles}
-            />
+            <View style={styles.socialsSection}>
+              <View style={styles.socialsHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Socials / Contact</Text>
+                  <Text style={styles.helperText}>
+                    Add any profile, handle, email, phone, or custom link.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.addSocialButton}
+                  onPress={addSocial}
+                  disabled={saving}
+                >
+                  <Ionicons name="add" size={18} color={colors.textOnAccent} />
+                </TouchableOpacity>
+              </View>
+
+              {socials.map((social) => (
+                <View key={social.id} style={styles.socialCard}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.platformRow}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {SOCIAL_OPTIONS.map((option) => {
+                      const selected = social.platform === option.platform;
+                      return (
+                        <TouchableOpacity
+                          key={option.platform}
+                          style={[
+                            styles.platformChip,
+                            selected && styles.platformChipSelected,
+                          ]}
+                          onPress={() =>
+                            updateSocial(social.id, {
+                              platform: option.platform,
+                            })
+                          }
+                          disabled={saving}
+                        >
+                          <Ionicons
+                            name={option.icon}
+                            size={15}
+                            color={
+                              selected
+                                ? colors.textOnAccent
+                                : colors.textSecondary
+                            }
+                          />
+                          <Text
+                            style={[
+                              styles.platformChipText,
+                              selected && styles.platformChipTextSelected,
+                            ]}
+                          >
+                            {option.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+
+                  <View style={styles.socialInputRow}>
+                    <TextInput
+                      style={[styles.input, styles.socialUrlInput]}
+                      value={social.url}
+                      onChangeText={(value) =>
+                        updateSocial(social.id, { url: value })
+                      }
+                      placeholder="URL, @handle, email, or phone"
+                      placeholderTextColor="#8aa39d"
+                      autoCapitalize="none"
+                      keyboardType={
+                        social.platform === "phone"
+                          ? "phone-pad"
+                          : social.platform === "email"
+                            ? "email-address"
+                            : "url"
+                      }
+                    />
+                    <TouchableOpacity
+                      style={styles.removeSocialButton}
+                      onPress={() => removeSocial(social.id)}
+                      disabled={saving}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color={colors.error || "#B3261E"}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
             <Field
               label="About"
               value={form.bio}
@@ -340,6 +515,12 @@ const createStyles = (colors) =>
       fontWeight: "800",
       color: colors.textSecondary,
     },
+    helperText: {
+      marginTop: 3,
+      fontSize: 11,
+      lineHeight: 15,
+      color: colors.textTertiary,
+    },
     input: {
       minHeight: 46,
       borderRadius: 14,
@@ -355,6 +536,76 @@ const createStyles = (colors) =>
       minHeight: 96,
       paddingTop: 12,
       lineHeight: 20,
+    },
+    socialsSection: {
+      gap: 10,
+    },
+    socialsHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    addSocialButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#063F39",
+    },
+    socialCard: {
+      gap: 10,
+      padding: 10,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      backgroundColor: colors.inputBg,
+    },
+    platformRow: {
+      gap: 8,
+      paddingRight: 4,
+    },
+    platformChip: {
+      height: 34,
+      paddingHorizontal: 10,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    platformChipSelected: {
+      borderColor: "#063F39",
+      backgroundColor: "#063F39",
+    },
+    platformChipText: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: colors.textSecondary,
+    },
+    platformChipTextSelected: {
+      color: colors.textOnAccent,
+    },
+    socialInputRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    socialUrlInput: {
+      flex: 1,
+      backgroundColor: colors.card,
+    },
+    removeSocialButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
     footer: {
       flexDirection: "row",

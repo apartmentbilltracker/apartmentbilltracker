@@ -48,11 +48,78 @@ const getLocationLabel = (profile) => {
   return locations.length > 0 ? locations.join(", ") : "Location flexible";
 };
 
-const getMessengerUrl = (facebookAccount) => {
-  const raw = String(facebookAccount || "").trim();
+const SOCIAL_CONFIG = {
+  facebook: {
+    icon: "logo-facebook",
+    color: "#1877F2",
+    label: "Facebook",
+  },
+  instagram: {
+    icon: "logo-instagram",
+    color: "#C13584",
+    label: "Instagram",
+  },
+  telegram: {
+    icon: "paper-plane",
+    color: "#229ED9",
+    label: "Telegram",
+  },
+  whatsapp: {
+    icon: "logo-whatsapp",
+    color: "#25D366",
+    label: "WhatsApp",
+  },
+  tiktok: {
+    icon: "logo-tiktok",
+    color: "#111111",
+    label: "TikTok",
+  },
+  twitter: {
+    icon: "logo-twitter",
+    color: "#1DA1F2",
+    label: "X",
+  },
+  linkedin: {
+    icon: "logo-linkedin",
+    color: "#0A66C2",
+    label: "LinkedIn",
+  },
+  email: {
+    icon: "mail-outline",
+    color: "#7C3AED",
+    label: "Email",
+  },
+  phone: {
+    icon: "call-outline",
+    color: "#0F766E",
+    label: "Phone",
+  },
+  link: {
+    icon: "link-outline",
+    color: "#063F39",
+    label: "Social",
+  },
+};
+
+const getSocialUrl = (value, platformHint = "facebook") => {
+  const raw = String(value || "").trim();
   if (!raw) return null;
 
+  if (/^(mailto:|tel:|sms:)/i.test(raw)) return raw;
+  if (platformHint === "email") {
+    const email = raw.replace(/^mailto:/i, "").trim();
+    return email.includes("@") ? `mailto:${email}` : null;
+  }
+  if (platformHint === "phone") {
+    const phone = raw.replace(/[^\d+]/g, "");
+    return phone ? `tel:${phone}` : null;
+  }
+
   const withoutAt = raw.replace(/^@/, "");
+  const hasUrlShape =
+    /^https?:\/\//i.test(withoutAt) ||
+    withoutAt.includes(".") ||
+    withoutAt.includes("/");
   const withProtocol = /^https?:\/\//i.test(withoutAt)
     ? withoutAt
     : `https://${withoutAt}`;
@@ -76,6 +143,10 @@ const getMessengerUrl = (facebookAccount) => {
         return `https://m.me/${encodeURIComponent(profileId)}`;
       }
     }
+
+    if (hasUrlShape) {
+      return parsed.toString();
+    }
   } catch (_) {
     // Free-form values are treated as usernames.
   }
@@ -87,7 +158,105 @@ const getMessengerUrl = (facebookAccount) => {
     .trim();
   if (!handle) return null;
 
-  return `https://m.me/${encodeURIComponent(handle)}`;
+  switch (platformHint) {
+    case "instagram":
+      return `https://instagram.com/${encodeURIComponent(handle)}`;
+    case "telegram":
+      return `https://t.me/${encodeURIComponent(handle)}`;
+    case "whatsapp": {
+      const phone = handle.replace(/[^\d+]/g, "");
+      return phone ? `https://wa.me/${phone.replace(/^\+/, "")}` : null;
+    }
+    case "tiktok":
+      return `https://www.tiktok.com/@${encodeURIComponent(handle)}`;
+    case "twitter":
+      return `https://x.com/${encodeURIComponent(handle)}`;
+    case "linkedin":
+      return `https://www.linkedin.com/in/${encodeURIComponent(handle)}`;
+    case "facebook":
+    default:
+      return `https://m.me/${encodeURIComponent(handle)}`;
+  }
+};
+
+const getSocialPlatform = (value) => {
+  const raw = String(value || "").toLowerCase();
+  if (raw.includes("instagram.com")) return "instagram";
+  if (raw.includes("t.me") || raw.includes("telegram")) return "telegram";
+  if (raw.includes("wa.me") || raw.includes("whatsapp")) return "whatsapp";
+  if (raw.includes("tiktok.com")) return "tiktok";
+  if (raw.includes("twitter.com") || raw.includes("x.com")) return "twitter";
+  if (raw.includes("linkedin.com")) return "linkedin";
+  if (raw.includes("@") && !raw.startsWith("@") && !raw.includes("/")) {
+    return "email";
+  }
+  if (/^\+?[\d\s().-]{7,}$/.test(raw.trim())) return "phone";
+  if (
+    raw.includes("facebook.com") ||
+    raw.includes("fb.com") ||
+    raw.includes("m.me")
+  ) {
+    return "facebook";
+  }
+  if (raw.trim().startsWith("@")) return "facebook";
+  if (raw.trim() && !raw.includes(".") && !raw.includes("/")) return "facebook";
+  return "link";
+};
+
+const getSocialLinks = (profile) => {
+  const configured = [];
+  const rawSocials = profile?.socials;
+
+  if (Array.isArray(rawSocials)) {
+    rawSocials.forEach((item) => {
+      const value = item?.url || item?.value || item;
+      const platform = item?.platform || getSocialPlatform(value);
+      const url = getSocialUrl(value, platform);
+      if (!url) return;
+      configured.push({
+        platform,
+        url,
+        ...(SOCIAL_CONFIG[platform] || SOCIAL_CONFIG.link),
+        label:
+          item?.label ||
+          SOCIAL_CONFIG[platform]?.label ||
+          SOCIAL_CONFIG.link.label,
+      });
+    });
+  } else if (rawSocials && typeof rawSocials === "object") {
+    Object.entries(rawSocials).forEach(([platformKey, value]) => {
+      const platform = SOCIAL_CONFIG[platformKey] ? platformKey : "link";
+      const url = getSocialUrl(value, platform);
+      if (!url) return;
+      configured.push({
+        platform,
+        url,
+        ...(SOCIAL_CONFIG[platform] || SOCIAL_CONFIG.link),
+      });
+    });
+  }
+
+  const primarySocialPlatform = getSocialPlatform(profile?.facebookAccount);
+  const primarySocialUrl = getSocialUrl(
+    profile?.facebookAccount,
+    primarySocialPlatform,
+  );
+  if (primarySocialUrl) {
+    const config = SOCIAL_CONFIG[primarySocialPlatform] || SOCIAL_CONFIG.link;
+    configured.push({
+      platform: primarySocialPlatform,
+      url: primarySocialUrl,
+      ...config,
+    });
+  }
+
+  const seen = new Set();
+  return configured.filter((item) => {
+    const key = `${item.platform}:${item.url}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 };
 
 const ClientRoomieDetailsScreen = ({ navigation, route }) => {
@@ -96,13 +265,19 @@ const ClientRoomieDetailsScreen = ({ navigation, route }) => {
   const styles = createStyles(colors, insets);
   const [profile, setProfile] = useState(route.params?.profile || null);
   const [loading, setLoading] = useState(!!route.params?.profileId);
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
+  const [openingSocialKey, setOpeningSocialKey] = useState(null);
 
   const showToast = (message, type = "info") =>
     setToast({ visible: true, type, message });
 
   const profileId = route.params?.profileId || profile?.id || profile?._id;
   const avatarSource = getAvatarSource(profile);
+  const socialLinks = useMemo(() => getSocialLinks(profile), [profile]);
   const stats = useMemo(
     () => [
       {
@@ -154,16 +329,28 @@ const ClientRoomieDetailsScreen = ({ navigation, route }) => {
     };
   }, [profileId]);
 
-  const openMessenger = () => {
-    const url = getMessengerUrl(profile?.facebookAccount);
+  const getSocialKey = (social) => `${social.platform}-${social.url}`;
+
+  const openSocial = async (social) => {
+    const url = social?.url;
     if (!url) {
-      showToast("This roomie's profile has no Facebook or Messenger account yet.", "warning");
+      showToast("This roomie has not configured socials yet.", "warning");
       return;
     }
 
-    Linking.openURL(url).catch(() => {
-      showToast("Could not open this Messenger profile. Please check their Facebook account.", "error");
-    });
+    const socialKey = getSocialKey(social);
+    setOpeningSocialKey(socialKey);
+
+    try {
+      await Linking.openURL(url);
+    } catch (_) {
+      showToast(
+        `Could not open this ${social.label || "social"} profile.`,
+        "error",
+      );
+    } finally {
+      setOpeningSocialKey((current) => (current === socialKey ? null : current));
+    }
   };
 
   if (loading && !profile) {
@@ -252,24 +439,41 @@ const ClientRoomieDetailsScreen = ({ navigation, route }) => {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Messenger</Text>
-            <Text style={styles.bioText}>
-              {profile?.facebookAccount || "No Facebook account provided."}
-            </Text>
+            <Text style={styles.sectionTitle}>Socials</Text>
+            {socialLinks.length > 0 ? (
+              <View style={styles.socialRow}>
+                {socialLinks.map((social) => {
+                  const socialKey = getSocialKey(social);
+                  const isOpening = openingSocialKey === socialKey;
+
+                  return (
+                    <TouchableOpacity
+                      key={socialKey}
+                      style={[
+                        styles.socialButton,
+                        { backgroundColor: social.color },
+                        isOpening && styles.socialButtonLoading,
+                      ]}
+                      onPress={() => openSocial(social)}
+                      activeOpacity={0.82}
+                      accessibilityLabel={`Open ${social.label}`}
+                      disabled={!!openingSocialKey}
+                    >
+                      {isOpening ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name={social.icon} size={22} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={styles.bioText}>No socials provided yet.</Text>
+            )}
           </View>
         </View>
       </ScrollView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.messageBtn}
-          onPress={openMessenger}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="logo-facebook" size={18} color="#fff" />
-          <Text style={styles.messageBtnText}>Message on Messenger</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
@@ -403,6 +607,21 @@ const createStyles = (colors, insets) =>
       lineHeight: 20,
       color: colors.textSecondary,
     },
+    socialRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    socialButton: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    socialButtonLoading: {
+      opacity: 0.78,
+    },
     statsGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
@@ -450,19 +669,34 @@ const createStyles = (colors, insets) =>
       borderTopWidth: 1,
       borderTopColor: colors.borderLight || colors.border,
     },
-    messageBtn: {
-      height: 50,
+    contactGateway: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 12,
+    },
+    contactIconBtn: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    contactGatewayEmpty: {
+      minHeight: 50,
       borderRadius: 15,
-      backgroundColor: "#1877F2",
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      backgroundColor: colors.cardAlt,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: 8,
     },
-    messageBtnText: {
-      fontSize: 15,
-      fontWeight: "900",
-      color: "#fff",
+    contactGatewayEmptyText: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: colors.textTertiary,
     },
   });
 
