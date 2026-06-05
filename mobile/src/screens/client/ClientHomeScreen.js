@@ -131,6 +131,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
   const { state } = useContext(AuthContext);
   const [userJoinedRoom, setUserJoinedRoom] = useState(null);
   const [unjoinedRooms, setUnjoinedRooms] = useState([]);
+  const [roomSearchQuery, setRoomSearchQuery] = useState("");
   const [pendingRoomIds, setPendingRoomIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -213,6 +214,36 @@ const ClientHomeScreen = ({ navigation, route }) => {
       ),
     [roommateProfiles],
   );
+  const visibleUnjoinedRooms = useMemo(() => {
+    const query = roomSearchQuery.trim().toLowerCase();
+    if (!query) return unjoinedRooms;
+
+    return unjoinedRooms.filter((room) => {
+      const creator = room.creator || room.createdBy || {};
+      const searchText = [
+        room.name,
+        room.code,
+        room.roomCode,
+        room.room_code,
+        room.description,
+        room.address,
+        room.city,
+        room.barangay,
+        creator.name,
+        creator.email,
+        creator.username,
+        ...(Array.isArray(room.amenities) ? room.amenities : []),
+        ...(Array.isArray(room.houseRules || room.house_rules)
+          ? room.houseRules || room.house_rules
+          : []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchText.includes(query);
+    });
+  }, [roomSearchQuery, unjoinedRooms]);
 
   const getAvatarSource = () => {
     if (avatarError) return require("../../assets/default-avatar.png");
@@ -2329,6 +2360,51 @@ const ClientHomeScreen = ({ navigation, route }) => {
     </View>
   );
 
+  const renderRoomSearchCard = (inline = false) => (
+    <View
+      style={[
+        styles.searchBarCardWrap,
+        inline && styles.searchBarCardWrapInline,
+      ]}
+    >
+      <View style={styles.searchIntroCard}>
+        <View style={styles.searchIntroHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.searchIntroLabel}>Discover available rooms</Text>
+            <Text style={styles.searchHelperText}>
+              Search by room name, code, owner, location, or amenities.
+            </Text>
+          </View>
+          <View style={styles.searchIntroChip}>
+            <Text style={styles.searchIntroChipText}>
+              {visibleUnjoinedRooms.length}/{unjoinedRooms.length}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.searchBar}>
+          <Feather name="search" size={22} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search rooms, codes, owners..."
+            placeholderTextColor={colors.textTertiary}
+            value={roomSearchQuery}
+            onChangeText={setRoomSearchQuery}
+            returnKeyType="search"
+          />
+          {roomSearchQuery.trim().length > 0 && (
+            <TouchableOpacity
+              style={styles.searchClearBtn}
+              onPress={() => setRoomSearchQuery("")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather name="x" size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
   return (
     <>
       <StatusModal />
@@ -2903,34 +2979,9 @@ const ClientHomeScreen = ({ navigation, route }) => {
                 </View>
               );
             })()
-          ) : (
-            // Searchbar
-            <View style={styles.searchBarCardWrap}>
-              <View style={styles.searchIntroCard}>
-                <View style={styles.searchIntroHeader}>
-                  <View>
-                    <Text style={styles.searchIntroLabel}>
-                      Discover available rooms
-                    </Text>
-                    <Text style={styles.searchHelperText}>
-                      Search by room name, code, or owner.
-                    </Text>
-                  </View>
-                  <View style={styles.searchIntroChip}>
-                    <Text style={styles.searchIntroChipText}>Guest View</Text>
-                  </View>
-                </View>
-                <View style={styles.searchBar}>
-                  <Feather name="search" size={22} style={styles.searchIcon} />
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search rooms, codes, or owners..."
-                    placeholderTextColor={colors.textTertiary}
-                  />
-                </View>
-              </View>
-            </View>
-          )}
+          ) : !userJoinedRoom ? (
+            renderRoomSearchCard()
+          ) : null}
 
           {/* ─── HOST BANNER ─── */}
           {announcementBanner && (
@@ -3292,6 +3343,10 @@ const ClientHomeScreen = ({ navigation, route }) => {
                 </>
               )}
 
+              {userJoinedRoom &&
+                unjoinedRooms.length > 0 &&
+                renderRoomSearchCard(true)}
+
               {/* ─── AVAILABLE ROOMS CAROUSEL ─── */}
               {unjoinedRooms.length > 0 && (
                 <View style={styles.availSection}>
@@ -3300,7 +3355,9 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     <View>
                       <Text style={styles.sectionLabel}>Stays You'll Love</Text>
                       <Text style={styles.sectionDescription}>
-                        Handpicked rentals matched to your style and needs.
+                        {roomSearchQuery.trim()
+                          ? `${visibleUnjoinedRooms.length} room${visibleUnjoinedRooms.length !== 1 ? "s" : ""} match your search.`
+                          : "Handpicked rentals matched to your style and needs."}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -3314,16 +3371,32 @@ const ClientHomeScreen = ({ navigation, route }) => {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Horizontal carousel */}
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.availCarouselContent}
-                    decelerationRate="fast"
-                    snapToInterval={styles.availCarouselCard.width + 12}
-                    snapToAlignment="start"
-                  >
-                    {unjoinedRooms.map((room, index) => {
+                  {visibleUnjoinedRooms.length === 0 ? (
+                    <View style={styles.searchEmptyCard}>
+                      <Ionicons
+                        name="search-outline"
+                        size={24}
+                        color={colors.textTertiary}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.searchEmptyTitle}>
+                          No rooms found
+                        </Text>
+                        <Text style={styles.searchEmptyText}>
+                          Try another room name, code, owner, or location.
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.availCarouselContent}
+                      decelerationRate="fast"
+                      snapToInterval={styles.availCarouselCard.width + 12}
+                      snapToAlignment="start"
+                    >
+                      {visibleUnjoinedRooms.map((room, index) => {
                       const roomId = room.id || room._id;
                       const isPending = pendingRoomIds.includes(roomId);
                       const hasLoc =
@@ -3339,7 +3412,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
                           key={roomId}
                           style={[
                             styles.availCarouselCard,
-                            index === unjoinedRooms.length - 1 &&
+                            index === visibleUnjoinedRooms.length - 1 &&
                               styles.availCarouselCardLast,
                           ]}
                           activeOpacity={0.85}
@@ -3540,7 +3613,8 @@ const ClientHomeScreen = ({ navigation, route }) => {
                         </TouchableOpacity>
                       );
                     })}
-                  </ScrollView>
+                    </ScrollView>
+                  )}
                 </View>
               )}
 
@@ -4143,6 +4217,11 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) => {
       marginTop: -52,
       zIndex: 10,
     },
+    searchBarCardWrapInline: {
+      marginTop: 18,
+      marginBottom: 4,
+      zIndex: 1,
+    },
     searchIntroCard: {
       backgroundColor: colors.card,
       borderRadius: 24,
@@ -4204,6 +4283,37 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) => {
       fontSize: 14,
       color: colors.text,
       fontWeight: "500",
+    },
+    searchClearBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.card,
+    },
+    searchEmptyCard: {
+      marginHorizontal: 16,
+      marginTop: 4,
+      padding: 16,
+      borderRadius: 16,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    searchEmptyTitle: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    searchEmptyText: {
+      marginTop: 3,
+      fontSize: 12,
+      color: colors.textTertiary,
+      lineHeight: 17,
     },
 
     // ─── NEW USERS FEATURE SECTION ───
