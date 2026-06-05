@@ -1080,7 +1080,10 @@ const ClientHomeScreen = ({ navigation, route }) => {
     if (route.params?.refresh && userJoinedRoom) {
       const roomId = userJoinedRoom.id || userJoinedRoom._id;
       setBillingDataLoading(true);
-      Promise.all([fetchOutstandingBalance(roomId), fetchActiveBillingCycle(roomId)])
+      Promise.all([
+        fetchOutstandingBalance(roomId),
+        fetchActiveBillingCycle(roomId),
+      ])
         .catch(() => {})
         .finally(() => setBillingDataLoading(false));
       // Clear the param so repeated navigation doesn't trigger multiple refreshes
@@ -1113,10 +1116,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
       if (!joinedRoomId) return undefined;
 
       fetchChatBadge(joinedRoomId);
-      const interval = setInterval(
-        () => pollMemberStatus(joinedRoomId),
-        30000,
-      );
+      const interval = setInterval(() => pollMemberStatus(joinedRoomId), 30000);
       return () => {
         clearInterval(interval);
       };
@@ -3303,7 +3303,13 @@ const ClientHomeScreen = ({ navigation, route }) => {
                         Handpicked rentals matched to your style and needs.
                       </Text>
                     </View>
-                    <TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() =>
+                        navigation.navigate("RoomsStack", {
+                          screen: "RoomsMain",
+                        })
+                      }
+                    >
                       <Text style={styles.viewAllText}>View All</Text>
                     </TouchableOpacity>
                   </View>

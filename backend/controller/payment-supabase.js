@@ -8,40 +8,8 @@ const { checkAndAutoCloseCycle } = require("../utils/autoCloseCycle");
 const sendMail = require("../utils/sendMail");
 const cache = require("../utils/MemoryCache");
 const { sendPushNotification } = require("../utils/sendPushNotification");
+const PaymentStatusEmail = require("../utils/PaymentStatusEmail");
 
-/**
- * Build a styled HTML email for payment status notifications
- */
-const buildPaymentEmail = ({
-  userName,
-  status,
-  billType,
-  amount,
-  note,
-  reason,
-}) => {
-  const isVerified = status === "completed";
-  const accentColor = isVerified ? "#2e7d32" : "#c62828";
-  const icon = isVerified ? "✅" : "❌";
-  const headline = isVerified ? "Payment Verified" : "Payment Rejected";
-  const bodyText = isVerified
-    ? `Your <strong>${(billType || "").toUpperCase()}</strong> payment of <strong>₱${Number(amount || 0).toFixed(2)}</strong> has been <strong style="color:${accentColor}">verified and confirmed</strong> by your host.${note ? `<br/><br/>Note from host: <em>${note}</em>` : ""}`
-    : `Your <strong>${(billType || "").toUpperCase()}</strong> payment of <strong>₱${Number(amount || 0).toFixed(2)}</strong> has been <strong style="color:${accentColor}">rejected</strong> by your host.${reason ? `<br/><br/>Reason: <em>${reason}</em>` : ""}<br/><br/>Please resubmit your payment with the correct details.`;
-
-  return `
-    <div style="max-width:600px;margin:auto;font-family:Arial,sans-serif;color:#333;">
-      <div style="background-color:${accentColor};padding:30px 0;text-align:center;">
-        <h2 style="color:white;margin:0;">${icon} ${headline}</h2>
-      </div>
-      <div style="background-color:#ffffff;padding:30px;border-radius:8px;margin:20px 0;border:1px solid #eee;">
-        <p style="font-size:16px;">Hi <strong>${userName}</strong>,</p>
-        <p style="font-size:15px;line-height:1.6;">${bodyText}</p>
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;"/>
-        <p style="color:#888;font-size:13px;">Sent by PropFlow</p>
-      </div>
-    </div>
-  `;
-};
 
 /**
  * Send in-app notification + optional email to a user about their payment status
@@ -84,7 +52,7 @@ const sendPaymentStatusNotification = async ({
     // 2) Email + push notification (non-blocking)
     const user = await SupabaseService.findUserById(userId);
     if (user?.email) {
-      const html = buildPaymentEmail({
+      const html = PaymentStatusEmail({
         userName: user.name || "Tenant",
         status,
         billType,
@@ -92,9 +60,11 @@ const sendPaymentStatusNotification = async ({
         note,
         reason,
       });
-      sendMail({ email: user.email, subject: title, message: html }).catch(
-        () => {},
-      );
+      sendMail({
+        email: user.email,
+        subject: isVerified ? "Payment Verified" : "Payment Rejected",
+        message: html,
+      }).catch(() => {});
     }
     // 3) Push notification to tenant's device
     if (user?.expo_push_token) {

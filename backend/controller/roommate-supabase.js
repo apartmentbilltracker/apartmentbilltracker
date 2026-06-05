@@ -24,6 +24,39 @@ const asLocations = (value) => {
   return [];
 };
 
+const asSocials = (value) => {
+  if (!value) return [];
+
+  let source = value;
+  if (typeof source === "string") {
+    try {
+      source = JSON.parse(source);
+    } catch {
+      source = [];
+    }
+  }
+
+  if (!Array.isArray(source)) return [];
+
+  return source
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const platform = String(item.platform || "link")
+        .trim()
+        .toLowerCase();
+      const label = String(item.label || item.platform || "Social").trim();
+      const url = String(item.url || item.value || "").trim();
+      if (!url) return null;
+      return {
+        platform: platform || "link",
+        label: label || "Social",
+        url,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 12);
+};
+
 const approvedMemberships = (rows = []) =>
   rows.filter((row) => String(row.status || "").toLowerCase() === "approved");
 
@@ -66,6 +99,7 @@ const normalizeProfile = (profile, user, roomSets, currentUserId) => {
     budget: profile.budget,
     moveInDate: profile.move_in_date,
     facebookAccount: profile.facebook_account || "",
+    socials: asSocials(profile.socials),
     bio: profile.bio,
     avatar: user.avatar || null,
     isVerified: true,
@@ -153,6 +187,12 @@ router.post("/me", isAuthenticated, async (req, res, next) => {
       return next(new ErrorHandler("Please enter a valid budget", 400));
     }
 
+    const socials = asSocials(req.body.socials);
+    const facebookFallback =
+      String(req.body.facebookAccount || "").trim() ||
+      socials.find((social) => social.platform === "facebook")?.url ||
+      "";
+
     const payload = {
       user_id: req.user.id,
       display_name: String(req.body.displayName || req.user.name || "").trim(),
@@ -162,7 +202,8 @@ router.post("/me", isAuthenticated, async (req, res, next) => {
       preferred_locations: asLocations(req.body.preferredLocations),
       budget,
       move_in_date: toIsoDate(req.body.moveInDate),
-      facebook_account: String(req.body.facebookAccount || "").trim(),
+      facebook_account: facebookFallback,
+      socials,
       bio: String(req.body.bio || "").trim(),
       is_active: true,
       updated_at: new Date().toISOString(),

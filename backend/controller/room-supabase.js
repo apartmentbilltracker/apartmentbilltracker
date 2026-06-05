@@ -1578,7 +1578,7 @@ router.post(
           });
           await sendMail({
             email: memberUser.email,
-            subject: `Welcome to ${room.name}! Your join request has been approved 🎉`,
+            subject: `Welcome to ${room.name}! Your join request has been approved`,
             message: emailContent,
           });
         } catch (emailErr) {

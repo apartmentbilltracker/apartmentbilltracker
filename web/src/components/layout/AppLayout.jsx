@@ -64,7 +64,7 @@ export default function AppLayout() {
                 className="w-8 h-8 rounded-lg object-cover"
               />
               <span className="font-bold text-gray-900 dark:text-white hidden sm:block">
-                Apt Bill Tracker
+                Property Flow
               </span>
             </Link>
 

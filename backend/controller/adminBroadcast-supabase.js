@@ -7,41 +7,39 @@ const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../utils/ErrorHandler");
 const { isAuthenticated, isAdminOrHost } = require("../middleware/auth");
 const sendMail = require("../utils/sendMail");
+const {
+  emailTheme,
+  escapeHtml,
+  nl2br,
+  renderEmailLayout,
+} = require("../utils/emailTheme");
 
 /**
  * Build a styled HTML email for broadcast notifications
  */
 const buildBroadcastEmail = ({ title, message, senderName }) => {
-  return `
-    <div style="max-width: 600px; margin: auto; font-family: Arial, sans-serif; color: #333;">
-      <div style="text-align: center; padding: 20px 0; font-size: 12px; color: #888;">
-        Notification from PropFlow
+  return renderEmailLayout({
+    preheader: `New announcement from ${senderName || "PropFlow"}.`,
+    eyebrow: "Announcement",
+    title,
+    footerNote: "You received this because you have an account on PropFlow.",
+    children: `
+      <div style="background-color: ${emailTheme.background}; border: 1px solid ${emailTheme.borderLight}; border-radius: 10px; padding: 18px 20px; margin-bottom: 22px;">
+        <div style="line-height: 1.7; color: ${emailTheme.textSecondary}; font-size: 15px;">${nl2br(message)}</div>
       </div>
-      <div style="background-color: #b38604; padding: 30px 0; text-align: center;">
-        <h2 style="color: white; margin: 0;">📢 ${title}</h2>
-      </div>
-      <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; margin: 20px 0; border: 1px solid #eee;">
-        <div style="white-space: pre-wrap; line-height: 1.6; color: #333; font-size: 15px;">${message}</div>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #888; font-size: 13px;">
-          Sent by <strong>${senderName}</strong> via PropFlow
-        </p>
-      </div>
-      <div style="text-align: center; padding: 16px; font-size: 11px; color: #aaa;">
-        You received this because you have an account on PropFlow.
-      </div>
-    </div>
-  `;
+      <p style="margin: 0; color: ${emailTheme.textTertiary}; font-size: 13px;">
+        Sent by <strong style="color: ${emailTheme.emerald};">${escapeHtml(senderName || "Admin")}</strong> via PropFlow.
+      </p>
+    `,
+  });
 };
 
-// ─────────────────────────────────────────────
-// POST / — Send broadcast notification
+// POST / - Send broadcast notification
 // Body: { title, message, target, roomId, userIds, sendEmail }
 //   target: "all" | "room" | "user"
 //   roomId: required when target === "room"
 //   userIds: array of user IDs, required when target === "user"
 //   sendEmail: boolean (default false)
-// ─────────────────────────────────────────────
 router.post(
   "/",
   isAuthenticated,
@@ -64,11 +62,9 @@ router.post(
       let recipients = [];
 
       if (target === "user" && userIds && userIds.length > 0) {
-        // Send to specific user(s)
         const userMap = await SupabaseService.findUsersByIds(userIds);
         recipients = [...userMap.values()];
       } else if (target === "room" && roomId) {
-        // Send to members of a specific room
         const members = await SupabaseService.getRoomMembers(roomId);
         const userIds = (members || []).map((m) => m.user_id);
         if (userIds.length > 0) {
@@ -76,7 +72,6 @@ router.post(
           recipients = [...userMap.values()];
         }
       } else {
-        // Send to all users
         const allUsers = await SupabaseService.selectAllRecords(
           "users",
           "id, name, email",
@@ -93,7 +88,6 @@ router.post(
         });
       }
 
-      // 1) Create in-app notifications for all recipients (batch insert)
       const notificationRows = recipients.map((user) => ({
         recipient_id: user.id,
         notification_type: "admin_broadcast",
@@ -112,7 +106,6 @@ router.post(
 
       await SupabaseService.insertMany("notifications", notificationRows);
 
-      // 2) Send emails if requested (non-blocking, don't fail the request)
       let emailedCount = 0;
       if (sendEmail) {
         const htmlBody = buildBroadcastEmail({
@@ -121,7 +114,6 @@ router.post(
           senderName: req.user.name || "Admin",
         });
 
-        // Send emails in parallel batches of 5
         const BATCH_SIZE = 5;
         for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
           const batch = recipients.slice(i, i + BATCH_SIZE);
@@ -129,7 +121,7 @@ router.post(
             batch.map((user) =>
               sendMail({
                 email: user.email,
-                subject: `📢 ${title}`,
+                subject: `Announcement - ${title}`,
                 message: htmlBody,
               }),
             ),
@@ -152,9 +144,7 @@ router.post(
   }),
 );
 
-// ─────────────────────────────────────────────
-// GET /users — Get all users (for single-user picker)
-// ─────────────────────────────────────────────
+// GET /users - Get all users (for single-user picker)
 router.get(
   "/users",
   isAuthenticated,
@@ -172,9 +162,7 @@ router.get(
   }),
 );
 
-// ─────────────────────────────────────────────
-// GET /history — Get broadcast history (last 50)
-// ─────────────────────────────────────────────
+// GET /history - Get broadcast history (last 50)
 router.get(
   "/history",
   isAuthenticated,
@@ -191,7 +179,6 @@ router.get(
 
       if (error) throw error;
 
-      // Deduplicate by title+timestamp (broadcasts create N rows, one per recipient)
       const seen = new Set();
       const unique = (data || []).filter((row) => {
         const key = `${row.title}|${row.created_at}`;

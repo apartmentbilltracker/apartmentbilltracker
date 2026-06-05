@@ -1,3 +1,10 @@
+const {
+  emailTheme,
+  escapeHtml,
+  nl2br,
+  renderEmailLayout,
+} = require("./emailTheme");
+
 /**
  * Plain-text notification content for in-app display.
  *
@@ -5,7 +12,7 @@
  * @param {string} opts.recipientName   - Member name
  * @param {string} opts.roomName        - Room name
  * @param {string[]} opts.unpaidBills   - e.g. ["Rent", "Electricity"]
- * @param {string} opts.billingPeriod   - e.g. "January 1, 2026 – January 31, 2026"
+ * @param {string} opts.billingPeriod   - e.g. "January 1, 2026 - January 31, 2026"
  * @param {number} opts.daysOverdue     - Negative or zero means "due now"
  * @param {string} [opts.customMessage] - Optional extra note from admin
  */
@@ -26,7 +33,7 @@ const PaymentReminderTextContent = ({
 
   let text = `Payment Reminder for ${roomName}\n\n`;
   text += `Dear ${recipientName},\n\n`;
-  text += `You have outstanding payment(s) that need your attention:\n\n`;
+  text += "You have outstanding payment(s) that need your attention:\n\n";
   text += `Unpaid Bills: ${billsList}\n`;
   text += `Billing Period: ${billingPeriod}\n`;
   text += `Status: ${urgencyLabel}\n\n`;
@@ -35,21 +42,21 @@ const PaymentReminderTextContent = ({
     text += `Note from admin:\n${customMessage}\n\n`;
   }
 
-  text += `Please settle the above balance at your earliest convenience.\n`;
-  text += `If you have already made this payment, please disregard this notice.\n\n`;
+  text += "Please settle the above balance at your earliest convenience.\n";
+  text += "If you have already made this payment, please disregard this notice.\n\n";
   text += `Regards,\n${roomName} Management`;
 
   return text;
 };
 
 /**
- * Professional HTML email template for payment reminders.
+ * Forest-themed HTML email template for payment reminders.
  *
  * @param {Object} opts
  * @param {string} opts.recipientName   - Member name
  * @param {string} opts.roomName        - Room name
  * @param {string[]} opts.unpaidBills   - e.g. ["Rent", "Electricity"]
- * @param {string} opts.billingPeriod   - e.g. "January 1, 2026 – January 31, 2026"
+ * @param {string} opts.billingPeriod   - e.g. "January 1, 2026 - January 31, 2026"
  * @param {number} opts.daysOverdue     - Negative or zero means "due now"
  * @param {string} [opts.customMessage] - Optional extra note from admin
  */
@@ -62,7 +69,8 @@ const PaymentReminderContent = ({
   customMessage,
 }) => {
   const isOverdue = daysOverdue > 0;
-  const urgencyColor = isOverdue ? "#dc2626" : "#b38604";
+  const statusColor = isOverdue ? emailTheme.error : emailTheme.emerald;
+  const statusBg = isOverdue ? emailTheme.errorBg : emailTheme.mintStrong;
   const urgencyLabel = isOverdue
     ? `${daysOverdue} day${daysOverdue !== 1 ? "s" : ""} overdue`
     : "Due now";
@@ -71,102 +79,77 @@ const PaymentReminderContent = ({
     .map(
       (bill) => `
         <tr>
-          <td style="padding: 10px 16px; border-bottom: 1px solid #f0f0f0;">
-            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${urgencyColor}; margin-right: 10px; vertical-align: middle;"></span>
-            <span style="font-size: 14px; color: #1a1a2e; font-weight: 600;">${bill}</span>
+          <td style="padding: 12px 16px; border-bottom: 1px solid ${emailTheme.borderLight};">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusColor}; margin-right: 10px; vertical-align: middle;"></span>
+            <span style="font-size: 14px; color: ${emailTheme.text}; font-weight: 700;">${escapeHtml(bill)}</span>
           </td>
-          <td style="padding: 10px 16px; border-bottom: 1px solid #f0f0f0; text-align: right;">
-            <span style="font-size: 12px; color: ${urgencyColor}; font-weight: 700; text-transform: uppercase;">Unpaid</span>
+          <td style="padding: 12px 16px; border-bottom: 1px solid ${emailTheme.borderLight}; text-align: right;">
+            <span style="font-size: 12px; color: ${statusColor}; font-weight: 800; text-transform: uppercase;">Unpaid</span>
           </td>
         </tr>`,
     )
     .join("");
 
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Payment Reminder</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f5f6fa; font-family: 'Segoe UI', Arial, sans-serif; -webkit-font-smoothing: antialiased;">
-  <div style="max-width: 600px; margin: 0 auto;">
-
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, #b38604 0%, #d4a017 100%); border-radius: 12px 12px 0 0; padding: 22px 20px; text-align: center;">
-      <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px;">PropFlow</h1>
-      <p style="margin: 6px 0 0; color: rgba(255,255,255,0.85); font-size: 13px;">Payment Reminder</p>
-    </div>
-
-    <!-- Body Card -->
-    <div style="background-color: #ffffff; padding: 22px 20px; border-radius: 0 0 12px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-
-      <!-- Greeting -->
-      <p style="margin: 0 0 20px; font-size: 15px; color: #333; line-height: 1.6;">
-        Dear <strong>${recipientName}</strong>,
-      </p>
-      <p style="margin: 0 0 24px; font-size: 14px; color: #555; line-height: 1.7;">
-        This is a formal reminder regarding your outstanding payment for <strong style="color: #1a1a2e;">${roomName}</strong>. Our records indicate that the following bill(s) remain unpaid:
+  return renderEmailLayout({
+    preheader: `Outstanding payment reminder for ${roomName || "your room"}.`,
+    eyebrow: "Payment Reminder",
+    title: "Outstanding Payment",
+    footerNote:
+      "You received this email because your room admin sent a payment reminder.",
+    children: `
+      <p style="margin: 0 0 16px; font-size: 15px; color: ${emailTheme.text}; line-height: 1.6;">Dear <strong>${escapeHtml(recipientName || "Resident")}</strong>,</p>
+      <p style="margin: 0 0 22px; font-size: 14px; color: ${emailTheme.textSecondary}; line-height: 1.7;">
+        This is a reminder regarding outstanding payment item(s) for <strong style="color: ${emailTheme.forest};">${escapeHtml(roomName || "your room")}</strong>.
       </p>
 
-      <!-- Unpaid Bills Table -->
-      <div style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; margin-bottom: 24px;">
-        <div style="background-color: #fafafa; padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
-          <span style="font-size: 12px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Outstanding Items</span>
+      <div style="border: 1px solid ${emailTheme.border}; border-radius: 10px; overflow: hidden; margin-bottom: 22px;">
+        <div style="background-color: ${emailTheme.mint}; padding: 12px 16px; border-bottom: 1px solid ${emailTheme.border};">
+          <span style="font-size: 12px; color: ${emailTheme.forest}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Outstanding Items</span>
         </div>
         <table style="width: 100%; border-collapse: collapse;">
-          ${billRows}
+          ${
+            billRows ||
+            `<tr><td style="padding: 14px 16px; color: ${emailTheme.textSecondary}; font-size: 14px;">No bill details were provided.</td></tr>`
+          }
         </table>
       </div>
 
-      <!-- Billing Details Strip -->
-      <div style="display: flex; border-radius: 10px; overflow: hidden; margin-bottom: 24px; border: 1px solid #e5e7eb;">
-        <div style="flex: 1; padding: 16px; background-color: #fdf6e3; text-align: center; border-right: 1px solid #e5e7eb;">
-          <p style="margin: 0 0 4px; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Billing Period</p>
-          <p style="margin: 0; font-size: 13px; color: #1a1a2e; font-weight: 700;">${billingPeriod}</p>
-        </div>
-        <div style="flex: 0 0 140px; padding: 16px; background-color: ${isOverdue ? "#fef2f2" : "#fdf6e3"}; text-align: center;">
-          <p style="margin: 0 0 4px; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">Status</p>
-          <p style="margin: 0; font-size: 13px; color: ${urgencyColor}; font-weight: 700;">${urgencyLabel}</p>
-        </div>
-      </div>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 22px;">
+        <tr>
+          <td style="padding: 16px; background-color: ${emailTheme.mint}; border: 1px solid ${emailTheme.borderLight}; border-radius: 10px 0 0 10px; text-align: center; width: 60%;">
+            <p style="margin: 0 0 4px; font-size: 11px; color: ${emailTheme.textTertiary}; text-transform: uppercase; letter-spacing: 0.5px;">Billing Period</p>
+            <p style="margin: 0; font-size: 13px; color: ${emailTheme.text}; font-weight: 700;">${escapeHtml(billingPeriod || "Current billing period")}</p>
+          </td>
+          <td style="padding: 16px; background-color: ${statusBg}; border: 1px solid ${emailTheme.borderLight}; border-left: 0; border-radius: 0 10px 10px 0; text-align: center;">
+            <p style="margin: 0 0 4px; font-size: 11px; color: ${emailTheme.textTertiary}; text-transform: uppercase; letter-spacing: 0.5px;">Status</p>
+            <p style="margin: 0; font-size: 13px; color: ${statusColor}; font-weight: 800;">${escapeHtml(urgencyLabel)}</p>
+          </td>
+        </tr>
+      </table>
 
       ${
         customMessage
           ? `
-      <!-- Custom Note from Admin -->
-      <div style="background-color: #f9fafb; border-left: 3px solid #b38604; border-radius: 0 8px 8px 0; padding: 14px 16px; margin-bottom: 24px;">
-        <p style="margin: 0 0 4px; font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase;">Note from your admin</p>
-        <p style="margin: 0; font-size: 14px; color: #333; line-height: 1.6;">${customMessage}</p>
+      <div style="background-color: ${emailTheme.background}; border-left: 4px solid ${emailTheme.emerald}; border-radius: 0 8px 8px 0; padding: 14px 16px; margin-bottom: 22px;">
+        <p style="margin: 0 0 4px; font-size: 11px; color: ${emailTheme.textTertiary}; font-weight: 800; text-transform: uppercase;">Note from your admin</p>
+        <p style="margin: 0; font-size: 14px; color: ${emailTheme.textSecondary}; line-height: 1.6;">${nl2br(customMessage)}</p>
       </div>`
           : ""
       }
 
-      <!-- Action Message -->
-      <p style="margin: 0 0 8px; font-size: 14px; color: #555; line-height: 1.7;">
-        Please settle the above balance at your earliest convenience. Timely payments help maintain quality services for all residents.
+      <p style="margin: 0 0 8px; font-size: 14px; color: ${emailTheme.textSecondary}; line-height: 1.7;">
+        Please settle the above balance at your earliest convenience. Timely payments help keep shared bills transparent for everyone.
       </p>
-      <p style="margin: 0 0 24px; font-size: 13px; color: #6b7280; line-height: 1.6;">
-        If you have already made this payment, please disregard this notice. For any questions, contact your room administrator.
+      <p style="margin: 0 0 22px; font-size: 13px; color: ${emailTheme.textTertiary}; line-height: 1.6;">
+        If you have already made this payment, please disregard this notice.
       </p>
 
-      <!-- Sign-off -->
-      <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 8px;">
-        <p style="margin: 0 0 4px; font-size: 14px; color: #333;">Warm regards,</p>
-        <p style="margin: 0; font-size: 14px; color: #b38604; font-weight: 700;">${roomName} Management</p>
+      <div style="border-top: 1px solid ${emailTheme.borderLight}; padding-top: 18px;">
+        <p style="margin: 0 0 4px; font-size: 14px; color: ${emailTheme.textSecondary};">Regards,</p>
+        <p style="margin: 0; font-size: 14px; color: ${emailTheme.emerald}; font-weight: 800;">${escapeHtml(roomName || "Room")} Management</p>
       </div>
-    </div>
-
-    <!-- Footer -->
-    <div style="padding: 24px 8px; text-align: center;">
-      <p style="margin: 0 0 6px; font-size: 12px; color: #9ca3af;">PropFlow &mdash; Making shared billing simple and transparent</p>
-      <p style="margin: 0; font-size: 11px; color: #9ca3af;">&copy; ${new Date().getFullYear()} PropFlow. All rights reserved.</p>
-    </div>
-
-  </div>
-</body>
-</html>`;
+    `,
+  });
 };
 
 module.exports = PaymentReminderContent;

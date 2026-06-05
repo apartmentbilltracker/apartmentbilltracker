@@ -92,7 +92,7 @@ router.post(
       // Send activation email
       await sendMail({
         email,
-        subject: "Verify Your ProFlow Account",
+        subject: "Verify Your PropFlow Account",
         message: ActivationContent({
           userName: name,
           activationCode,
@@ -201,7 +201,7 @@ router.post(
       // Send email
       await sendMail({
         email,
-        subject: "Your New Verification Code - ProFlow",
+        subject: "Your New Verification Code - PropFlow",
         message: ActivationContent({
           userName: pending.name,
           activationCode: newCode,
