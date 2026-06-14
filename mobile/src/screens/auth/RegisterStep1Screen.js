@@ -26,8 +26,13 @@ const RegisterStep1Screen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
-  const showToast = (message, type = "success") => setToast({ visible: true, type, message });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
   const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   const validateEmail = (email) => {
@@ -191,7 +196,7 @@ const RegisterStep1Screen = ({ navigation }) => {
         <View style={styles.creditRow}>
           <Text style={styles.creditText}>
             v{Constants.expoConfig?.version || "1.0.0"} (
-            {Application.nativeBuildVersion || "1"})
+            {Application.nativeBuildVersion || "42"})
           </Text>
         </View>
       </ScrollView>

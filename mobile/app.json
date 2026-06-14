@@ -3,7 +3,7 @@
     "name": "Property Flow",
     "slug": "apartment-bill-tracker",
     "icon": "./src/assets/icon.png",
-    "version": "1.2.7",
+    "version": "1.2.8",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "aptbilltracker",

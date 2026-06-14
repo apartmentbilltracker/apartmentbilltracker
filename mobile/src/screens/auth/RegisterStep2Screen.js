@@ -29,8 +29,13 @@ const RegisterStep2Screen = ({ navigation, route }) => {
   const [error, setError] = useState("");
   const [resendTimer, setResendTimer] = useState(0);
   const timerRef = useRef(null);
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
-  const showToast = (message, type = "success") => setToast({ visible: true, type, message });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
   const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   React.useEffect(() => {
@@ -234,7 +239,7 @@ const RegisterStep2Screen = ({ navigation, route }) => {
         <View style={styles.creditRow}>
           <Text style={styles.creditText}>
             v{Constants.expoConfig?.version || "1.0.0"} (
-            {Application.nativeBuildVersion || "1"})
+            {Application.nativeBuildVersion || "42"})
           </Text>
         </View>
       </ScrollView>

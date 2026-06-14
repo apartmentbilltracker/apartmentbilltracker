@@ -6,27 +6,67 @@ import {
   billingCycleService,
   paymentService,
 } from "../../services/apiService";
-import { Spinner, StatusBadge, Alert, EmptyState } from "../../components/ui";
-import { ChevronDown, ChevronRight, Calendar } from "lucide-react";
+import { Alert, EmptyState } from "../../components/ui";
+import {
+  ChevronDown,
+  ChevronUp,
+  Calendar,
+  Home,
+  Zap,
+  Droplets,
+  Wifi,
+  HelpCircle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Activity,
+  History,
+  ArrowUpRight,
+} from "lucide-react";
+
+// Helper for friendly custom tracking badges
+function HumanizedStatus({ status }) {
+  const norm = String(status).toLowerCase();
+  if (["completed", "verified", "approved", "settled", "paid"].includes(norm)) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10">
+        <CheckCircle size={10} /> Cleared
+      </span>
+    );
+  }
+  if (["pending", "submitted", "processing"].includes(norm)) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/10 animate-pulse">
+        <Clock size={10} /> Reviewing
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+      {status}
+    </span>
+  );
+}
 
 function CycleCard({ cycle, myPayments, userId }) {
   const [open, setOpen] = useState(false);
+
   const totalPaid = myPayments
-    .filter(
-      (p) =>
-        p.status === "completed" ||
-        p.status === "verified" ||
-        p.status === "approved" ||
-        p.status === "settled",
+    .filter((p) =>
+      ["completed", "verified", "approved", "settled"].includes(
+        String(p.status).toLowerCase(),
+      ),
     )
     .reduce((s, p) => s + Number(p.amount), 0);
-  // Use memberCharges for accurate per-user share if available
+
   const userCharge = cycle.memberCharges?.find(
     (mc) => String(mc.userId) === String(userId),
   );
+
   const share = userCharge
     ? Number(userCharge.totalDue || 0)
     : Number(cycle.share_per_member || cycle.per_member_share || 0);
+
   const balance = Math.max(0, share - totalPaid);
   const isPaid = balance === 0 && share > 0;
 
@@ -36,146 +76,251 @@ function CycleCard({ cycle, myPayments, userId }) {
   const totalAmount = cycle.totalBilledAmount || cycle.total_billed_amount;
 
   return (
-    <div className="card overflow-hidden">
+    <div
+      className={`rounded-2xl border transition-all duration-300 overflow-hidden ${
+        open
+          ? "bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 shadow-md scale-[1.01]"
+          : "bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border-slate-200/60 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 shadow-sm"
+      }`}
+    >
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full p-4 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+        className="w-full p-5 flex items-center justify-between gap-4 text-left transition-colors group"
       >
-        <Calendar size={16} className="text-accent shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-            {new Date(startDate).toLocaleDateString("en-PH", {
-              month: "short",
-              day: "numeric",
-            })}
-            {" \u2013 "}
-            {new Date(endDate).toLocaleDateString("en-PH", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-white/40 mt-0.5">
-            Total: ₱{Number(totalAmount || 0).toLocaleString()} •{" "}
-            {share > 0 ? `Your share: ₱${share.toLocaleString()}` : "Non-payer"}
-          </p>
+        <div className="flex items-center gap-4 min-w-0">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-colors shrink-0 shadow-sm ${
+              isPaid
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                : "bg-[#1a7a52]/10 border-[#1a7a52]/10 text-[#1a7a52] dark:text-[#7ee8a2]"
+            }`}
+          >
+            <Calendar size={18} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-black text-slate-900 dark:text-white tracking-tight group-hover:text-[#1a7a52] dark:group-hover:text-[#7ee8a2] transition-colors">
+              {new Date(startDate).toLocaleDateString("en-PH", {
+                month: "short",
+                day: "numeric",
+              })}
+              {" – "}
+              {new Date(endDate).toLocaleDateString("en-PH", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </p>
+            <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">
+              Household Total:{" "}
+              <span className="font-bold text-slate-700 dark:text-slate-300">
+                ₱{Number(totalAmount || 0).toLocaleString()}
+              </span>
+              {" • "}
+              {share > 0 ? (
+                <>
+                  Your Split:{" "}
+                  <span className="font-bold text-slate-700 dark:text-slate-300">
+                    ₱{share.toLocaleString()}
+                  </span>
+                </>
+              ) : (
+                <span className="italic">Room Expense Split Only</span>
+              )}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <StatusBadge status={isPaid ? "paid" : cycle.status} />
-          {open ? (
-            <ChevronDown size={14} className="text-gray-400" />
-          ) : (
-            <ChevronRight size={14} className="text-gray-400" />
-          )}
+
+        <div className="flex items-center gap-3 shrink-0">
+          <HumanizedStatus status={isPaid ? "paid" : cycle.status} />
+          <div className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors">
+            {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </div>
         </div>
       </button>
 
       {open && (
-        <div className="border-t border-gray-100 dark:border-white/8 p-4 bg-gray-50/50 dark:bg-white/3 space-y-3">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            {Number(cycle.rent) > 0 && (
-              <div>
-                <span className="text-gray-500 dark:text-white/40">Rent</span>
-                <p className="font-medium">
-                  ₱{Number(cycle.rent).toLocaleString()}
-                  {userCharge
-                    ? ` (₱${Number(userCharge.rentShare || 0).toLocaleString()} yours)`
-                    : ""}
-                </p>
-              </div>
-            )}
-            {Number(cycle.electricity) > 0 && (
-              <div>
-                <span className="text-gray-500 dark:text-white/40">
-                  Electricity
-                </span>
-                <p className="font-medium">
-                  ₱{Number(cycle.electricity).toLocaleString()}
-                  {userCharge
-                    ? ` (₱${Number(userCharge.electricityShare || 0).toLocaleString()} yours)`
-                    : ""}
-                </p>
-              </div>
-            )}
-            {Number(waterAmount) > 0 && (
-              <div>
-                <span className="text-gray-500 dark:text-white/40">Water</span>
-                <p className="font-medium">
-                  ₱{Number(waterAmount).toLocaleString()}
-                  {userCharge
-                    ? ` (₱${Number(userCharge.waterBillShare || 0).toLocaleString()} yours)`
-                    : ""}
-                </p>
-              </div>
-            )}
-            {Number(cycle.internet) > 0 && (
-              <div>
-                <span className="text-gray-500 dark:text-white/40">
-                  Internet
-                </span>
-                <p className="font-medium">
-                  ₱{Number(cycle.internet).toLocaleString()}
-                  {userCharge
-                    ? ` (₱${Number(userCharge.internetShare || 0).toLocaleString()} yours)`
-                    : ""}
-                </p>
-              </div>
-            )}
-            {Number(cycle.miscellaneous) > 0 && (
-              <div>
-                <span className="text-gray-500 dark:text-white/40">Misc</span>
-                <p className="font-medium">
-                  ₱{Number(cycle.miscellaneous).toLocaleString()}
-                </p>
-              </div>
-            )}
+        <div className="border-t border-slate-100 dark:border-slate-800/80 p-6 bg-slate-50/40 dark:bg-slate-950/20 space-y-6 animate-fadeIn">
+          {/* Sub-Bento Dynamic Breakdown Cards */}
+          <div>
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
+              Itemized Statement Details
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Number(cycle.rent) > 0 && (
+                <div className="p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800/40 bg-white dark:bg-slate-900 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-orange-500/10 text-orange-500 flex items-center justify-center shrink-0">
+                    <Home size={14} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 block">
+                      House Rent
+                    </span>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                      ₱{Number(cycle.rent).toLocaleString()}{" "}
+                      {userCharge && (
+                        <span className="text-[10px] font-normal text-slate-400">
+                          (₱{Number(userCharge.rentShare || 0).toLocaleString()}{" "}
+                          yours)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {Number(cycle.electricity) > 0 && (
+                <div className="p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800/40 bg-white dark:bg-slate-900 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                    <Zap size={14} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 block">
+                      Electricity
+                    </span>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                      ₱{Number(cycle.electricity).toLocaleString()}{" "}
+                      {userCharge && (
+                        <span className="text-[10px] font-normal text-slate-400">
+                          (₱
+                          {Number(
+                            userCharge.electricityShare || 0,
+                          ).toLocaleString()}{" "}
+                          yours)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {Number(waterAmount) > 0 && (
+                <div className="p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800/40 bg-white dark:bg-slate-900 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+                    <Droplets size={14} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 block">
+                      Water Utilities
+                    </span>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                      ₱{Number(waterAmount).toLocaleString()}{" "}
+                      {userCharge && (
+                        <span className="text-[10px] font-normal text-slate-400">
+                          (₱
+                          {Number(
+                            userCharge.waterBillShare || 0,
+                          ).toLocaleString()}{" "}
+                          yours)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {Number(cycle.internet) > 0 && (
+                <div className="p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800/40 bg-white dark:bg-slate-900 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
+                    <Wifi size={14} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 block">
+                      Internet Set
+                    </span>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                      ₱{Number(cycle.internet).toLocaleString()}{" "}
+                      {userCharge && (
+                        <span className="text-[10px] font-normal text-slate-400">
+                          (₱
+                          {Number(
+                            userCharge.internetShare || 0,
+                          ).toLocaleString()}{" "}
+                          yours)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {Number(cycle.miscellaneous) > 0 && (
+                <div className="p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800/40 bg-white dark:bg-slate-900 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-slate-500/10 text-slate-500 flex items-center justify-center shrink-0">
+                    <HelpCircle size={14} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 block">
+                      Miscellaneous
+                    </span>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                      ₱{Number(cycle.miscellaneous).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Quick Ledger Snapshot */}
           {share > 0 && (
-            <div className="border-t border-gray-200 dark:border-white/10 pt-3 grid grid-cols-3 gap-2 text-center text-sm">
-              <div>
-                <p className="font-semibold text-gray-900 dark:text-white">
-                  ₱{share.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-400 dark:text-white/30">
-                  Your Share
-                </p>
-              </div>
-              <div>
-                <p className="font-semibold text-green-600">
-                  ₱{totalPaid.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-400 dark:text-white/30">Paid</p>
-              </div>
-              <div>
-                <p
-                  className={`font-semibold ${balance > 0 ? "text-red-500" : "text-green-600"}`}
-                >
-                  ₱{balance.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-400 dark:text-white/30">
-                  Balance
-                </p>
+            <div className="border-t border-slate-200/60 dark:border-slate-800/60 pt-5">
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/50">
+                  <p className="text-xs font-black text-slate-800 dark:text-slate-200">
+                    ₱{share.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-wider">
+                    Your Split
+                  </p>
+                </div>
+                <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/50">
+                  <p className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                    ₱{totalPaid.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-wider">
+                    Cleared
+                  </p>
+                </div>
+                <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/50">
+                  <p
+                    className={`text-xs font-black ${balance > 0 ? "text-rose-500" : "text-emerald-500"}`}
+                  >
+                    ₱{balance.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-wider">
+                    Remaining
+                  </p>
+                </div>
               </div>
             </div>
           )}
+
+          {/* Past Payments History Sublist */}
           {myPayments.length > 0 && (
-            <div className="border-t border-gray-200 dark:border-white/10 pt-3">
-              <p className="text-xs font-semibold text-gray-500 dark:text-white/40 mb-2">
-                PAYMENT HISTORY
-              </p>
-              <div className="space-y-2">
+            <div className="border-t border-slate-200/60 dark:border-slate-800/60 pt-5">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3 flex items-center gap-1.5">
+                <History size={11} /> Transaction Activity Logs
+              </h4>
+              <div className="rounded-2xl border border-slate-200/50 dark:border-slate-800/40 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/40">
                 {myPayments.map((p) => (
                   <div
                     key={p.id || p._id}
-                    className="flex justify-between text-xs"
+                    className="flex justify-between items-center py-3 px-4 bg-white dark:bg-slate-900/40 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors"
                   >
-                    <span className="text-gray-600 dark:text-white/60 capitalize">
-                      {p.payment_method || p.paymentMethod || "unknown"}
-                    </span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      ₱{Number(p.amount).toLocaleString()}
-                    </span>
-                    <StatusBadge status={p.status} />
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ArrowUpRight
+                        size={14}
+                        className="text-slate-400 shrink-0"
+                      />
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-400 capitalize truncate">
+                        Via{" "}
+                        {p.payment_method ||
+                          p.paymentMethod ||
+                          "Direct Channel"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <span className="text-xs font-black text-slate-800 dark:text-slate-200 tracking-tight">
+                        ₱{Number(p.amount).toLocaleString()}
+                      </span>
+                      <HumanizedStatus status={p.status} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -191,6 +336,7 @@ export default function BillingHistoryPage() {
   const { state } = useAuth();
   const { user } = state;
   const userId = user?.id || user?._id;
+
   const [cycles, setCycles] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -239,43 +385,77 @@ export default function BillingHistoryPage() {
               [],
           );
       } catch (e) {
-        setError(e?.message || "Failed to load billing history");
+        setError(
+          e?.message ||
+            "We couldn't pull up your billing records. Give the page a quick refresh.",
+        );
       }
       setLoading(false);
     };
     if (userId) load();
   }, [userId]);
 
+  /* Signature Homepage Glowing Loading Loop Animation Copy */
   if (loading)
     return (
-      <div className="flex items-center justify-center py-24">
-        <Spinner size="lg" className="text-accent" />
+      <div className="flex flex-col items-center justify-center py-48 space-y-4">
+        <div className="relative flex items-center justify-center">
+          {/* Glassmorphic outer glowing ripple */}
+          <div className="absolute w-16 h-16 rounded-2xl bg-[#1a7a52]/20 dark:bg-[#7ee8a2]/10 animate-ping duration-1000" />
+          {/* Main spinning element */}
+          <div className="w-12 h-12 rounded-2xl border-2 border-slate-200 dark:border-slate-800 border-t-[#1a7a52] dark:border-t-[#7ee8a2] animate-spin" />
+          {/* Inner brand identity accent */}
+          <div className="absolute w-5 h-5 rounded-xl bg-gradient-to-br from-[#1a7a52] to-[#135c3d] dark:from-[#7ee8a2] dark:to-[#64d08b] shadow-md flex items-center justify-center">
+            <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-[#02302e] animate-pulse" />
+          </div>
+        </div>
+        <p className="text-xs font-black tracking-widest text-slate-400 dark:text-slate-500 uppercase animate-pulse pt-2">
+          Retrieving datas...
+        </p>
       </div>
     );
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-        Billing History
-      </h1>
+    <div className="space-y-6 max-w-6xl mx-auto pb-16 px-4 animate-fadeIn">
+      {/* Dynamic Glassmatic Header Banner */}
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/60 dark:border-slate-800/80 p-6 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl shadow-sm flex items-center justify-between group">
+        <div className="absolute -right-20 -top-20 w-48 h-48 rounded-full bg-[#1a7a52]/5 dark:bg-[#7ee8a2]/5 blur-3xl group-hover:scale-110 transition-transform duration-700" />
+
+        <div>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#1a7a52]/10 dark:bg-[#7ee8a2]/10 text-xs font-black text-[#1a7a52] dark:text-[#7ee8a2] tracking-wide mb-2 uppercase">
+            <Activity size={12} /> Account Records
+          </span>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+            Statement History
+          </h1>
+          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1 max-w-xl">
+            Take a look back at your room's previous utility statements, cleared
+            payments, and historical share distributions.
+          </p>
+        </div>
+      </div>
+
       {error && <Alert type="error" message={error} />}
+
       {cycles.length === 0 ? (
         <EmptyState
           icon="📋"
-          title="No billing history"
-          subtitle="No billing cycles found for your room"
+          title="All clear here"
+          subtitle="No archived billing statements were found for your assigned property room yet."
         />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           {cycles.map((cycle) => {
             const cycleId = cycle.id || cycle._id;
             const cycleStart = cycle.startDate || cycle.start_date;
             const cycleEnd = cycle.endDate || cycle.end_date;
+
             const myP = payments.filter(
               (p) =>
                 p.billingCycleStart === cycleStart &&
                 p.billingCycleEnd === cycleEnd,
             );
+
             return (
               <CycleCard
                 key={cycleId}

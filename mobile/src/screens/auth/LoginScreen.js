@@ -62,8 +62,15 @@ const LoginScreen = ({ navigation }) => {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricStoredEmail, setBiometricStoredEmail] = useState(null);
   const [accountsWithBiometric, setAccountsWithBiometric] = useState(new Set()); // Track which accounts have biometric
-  const [toast, setToast] = useState({ visible: false, type: "info", message: "" });
-  const [removeConfirm, setRemoveConfirm] = useState({ visible: false, email: null });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "info",
+    message: "",
+  });
+  const [removeConfirm, setRemoveConfirm] = useState({
+    visible: false,
+    email: null,
+  });
 
   const showToast = (message, type = "info") =>
     setToast({ visible: true, type, message });
@@ -198,7 +205,10 @@ const LoginScreen = ({ navigation }) => {
 
   const handleGooglePress = () => {
     if (IS_EXPO_GO) {
-      showToast("Google login isn't available in Expo Go. Use the installed app.", "info");
+      showToast(
+        "Google login isn't available in Expo Go. Use the installed app.",
+        "info",
+      );
       return;
     }
     promptAsync();
@@ -298,11 +308,17 @@ const LoginScreen = ({ navigation }) => {
 
   const handleFacebookPress = () => {
     if (IS_EXPO_GO) {
-      showToast("Facebook login isn't available in Expo Go. Use the installed app.", "info");
+      showToast(
+        "Facebook login isn't available in Expo Go. Use the installed app.",
+        "info",
+      );
       return;
     }
     if (!FB_ENABLED) {
-      showToast("Facebook login isn't configured yet. Use Google or email/password.", "warning");
+      showToast(
+        "Facebook login isn't configured yet. Use Google or email/password.",
+        "warning",
+      );
       return;
     }
     handleFacebookServerLogin();
@@ -838,7 +854,7 @@ const LoginScreen = ({ navigation }) => {
         <View style={styles.creditRow}>
           <Text style={styles.creditText}>
             v{Constants.expoConfig?.version || "1.0.0"} (
-            {Application.nativeBuildVersion || "1"})
+            {Application.nativeBuildVersion || "42"})
           </Text>
         </View>
       </ScrollView>
