@@ -45,8 +45,13 @@ const RegisterStep3Screen = ({ navigation, route }) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
-  const showToast = (message, type = "success") => setToast({ visible: true, type, message });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
+  const showToast = (message, type = "success") =>
+    setToast({ visible: true, type, message });
   const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   const getPasswordStrength = () => {
@@ -97,7 +102,10 @@ const RegisterStep3Screen = ({ navigation, route }) => {
         showToast("Account created successfully!", "success");
         const loginResult = await signIn(email, password);
         if (!loginResult.success) {
-          showToast("Account created! Please log in with your credentials.", "info");
+          showToast(
+            "Account created! Please log in with your credentials.",
+            "info",
+          );
           navigation.navigate("Login");
         }
       } else {
@@ -350,7 +358,7 @@ const RegisterStep3Screen = ({ navigation, route }) => {
         <View style={styles.creditRow}>
           <Text style={styles.creditText}>
             v{Constants.expoConfig?.version || "1.0.0"} (
-            {Application.nativeBuildVersion || "1"})
+            {Application.nativeBuildVersion || "42"})
           </Text>
         </View>
       </ScrollView>

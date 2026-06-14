@@ -38,8 +38,13 @@ const RegisterScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { signUp, signInWithGoogle } = useContext(AuthContext);
-  const [toast, setToast] = useState({ visible: false, type: "info", message: "" });
-  const showToast = (message, type = "info") => setToast({ visible: true, type, message });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "info",
+    message: "",
+  });
+  const showToast = (message, type = "info") =>
+    setToast({ visible: true, type, message });
   const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
   // Google Auth Request - Using Expo's configuration
@@ -172,24 +177,40 @@ const RegisterScreen = ({ navigation }) => {
           </Text>
 
           <View style={styles.inputWrap}>
-            <Ionicons name="person-outline" size={18} color={colors.accent} style={styles.inputIcon} />
+            <Ionicons
+              name="person-outline"
+              size={18}
+              color={colors.accent}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={styles.input}
               placeholder="Full Name"
               value={name}
-              onChangeText={(t) => { setName(t); setError(""); }}
+              onChangeText={(t) => {
+                setName(t);
+                setError("");
+              }}
               editable={!loading}
               placeholderTextColor={colors.placeholder}
             />
           </View>
 
           <View style={styles.inputWrap}>
-            <Ionicons name="mail-outline" size={18} color={colors.accent} style={styles.inputIcon} />
+            <Ionicons
+              name="mail-outline"
+              size={18}
+              color={colors.accent}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={styles.input}
               placeholder="Email address"
               value={email}
-              onChangeText={(t) => { setEmail(t); setError(""); }}
+              onChangeText={(t) => {
+                setEmail(t);
+                setError("");
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               editable={!loading}
@@ -198,12 +219,20 @@ const RegisterScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.inputWrap}>
-            <Ionicons name="lock-closed-outline" size={18} color={colors.accent} style={styles.inputIcon} />
+            <Ionicons
+              name="lock-closed-outline"
+              size={18}
+              color={colors.accent}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={styles.input}
               placeholder="Password"
               value={password}
-              onChangeText={(t) => { setPassword(t); setError(""); }}
+              onChangeText={(t) => {
+                setPassword(t);
+                setError("");
+              }}
               secureTextEntry={!showPassword}
               editable={!loading}
               placeholderTextColor={colors.placeholder}
@@ -222,12 +251,20 @@ const RegisterScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.inputWrap}>
-            <Ionicons name="lock-closed" size={18} color={colors.accent} style={styles.inputIcon} />
+            <Ionicons
+              name="lock-closed"
+              size={18}
+              color={colors.accent}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={styles.input}
               placeholder="Confirm Password"
               value={confirmPassword}
-              onChangeText={(t) => { setConfirmPassword(t); setError(""); }}
+              onChangeText={(t) => {
+                setConfirmPassword(t);
+                setError("");
+              }}
               secureTextEntry={!showConfirmPassword}
               editable={!loading}
               placeholderTextColor={colors.placeholder}
@@ -271,7 +308,10 @@ const RegisterScreen = ({ navigation }) => {
 
         <View style={styles.socialSection}>
           <TouchableOpacity
-            style={[styles.socialButton, (!request || loading) && { opacity: 0.5 }]}
+            style={[
+              styles.socialButton,
+              (!request || loading) && { opacity: 0.5 },
+            ]}
             onPress={() => promptAsync()}
             disabled={!request || loading}
             activeOpacity={0.7}
@@ -281,7 +321,9 @@ const RegisterScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={[styles.socialButton, { opacity: 0.45 }]}
-            onPress={() => showToast("Facebook sign-up is coming soon.", "info")}
+            onPress={() =>
+              showToast("Facebook sign-up is coming soon.", "info")
+            }
             activeOpacity={0.7}
           >
             <Text style={styles.socialButtonText}>Continue with Facebook</Text>
@@ -303,7 +345,7 @@ const RegisterScreen = ({ navigation }) => {
         <View style={styles.developerFooter}>
           <Text style={styles.developerText}>
             v{Constants.expoConfig?.version || "1.0.0"} (
-            {Application.nativeBuildVersion || "1"})
+            {Application.nativeBuildVersion || "42"})
           </Text>
         </View>
       </ScrollView>
@@ -357,7 +399,12 @@ const createStyles = (colors) => {
       textTransform: "uppercase",
       letterSpacing: 0.7,
     },
-    title: { fontSize: 24, fontWeight: "900", color: colors.text, marginBottom: 6 },
+    title: {
+      fontSize: 24,
+      fontWeight: "900",
+      color: colors.text,
+      marginBottom: 6,
+    },
     subtitle: { fontSize: 14, color: colors.textSecondary, fontWeight: "700" },
     headerCaption: {
       fontSize: 13,

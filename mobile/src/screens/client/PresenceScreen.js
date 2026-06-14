@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,6 +20,186 @@ import { AuthContext } from "../../context/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { Toast, ConfirmModal } from "../../components/CustomAlert";
+
+const AmountSkeleton = ({ style, colors }) => {
+  const opacity = useRef(new Animated.Value(0.45)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.9,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.45,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          backgroundColor: colors.skeleton || colors.borderLight,
+          borderRadius: 999,
+          opacity,
+        },
+        style,
+      ]}
+    />
+  );
+};
+
+const PresenceLoadingSkeleton = ({ colors, styles }) => (
+  <ScrollViewWithDetection
+    style={styles.container}
+    contentContainerStyle={styles.loadingScrollContent}
+    showsVerticalScrollIndicator={false}
+  >
+    <View style={styles.header}>
+      <View style={styles.headerContent}>
+        <View style={styles.headerTitleRow}>
+          <AmountSkeleton
+            colors={colors}
+            style={[styles.loadingHeaderIcon, styles.loadingOnHeader]}
+          />
+          <View style={{ flex: 1 }}>
+            <AmountSkeleton
+              colors={colors}
+              style={[styles.loadingHeaderTitle, styles.loadingOnHeader]}
+            />
+            <AmountSkeleton
+              colors={colors}
+              style={[styles.loadingHeaderSubtitle, styles.loadingOnHeader]}
+            />
+          </View>
+        </View>
+        <AmountSkeleton
+          colors={colors}
+          style={[styles.loadingHeaderFootnote, styles.loadingOnHeader]}
+        />
+        <AmountSkeleton
+          colors={colors}
+          style={[styles.loadingHeaderFootnoteShort, styles.loadingOnHeader]}
+        />
+        <View style={styles.headerStatusRow}>
+          <AmountSkeleton
+            colors={colors}
+            style={[styles.loadingStatusChip, styles.loadingOnHeader]}
+          />
+          <AmountSkeleton
+            colors={colors}
+            style={[styles.loadingStatusChipWide, styles.loadingOnHeader]}
+          />
+        </View>
+      </View>
+    </View>
+
+    <View style={styles.roomSelectorContainer}>
+      <ScrollViewWithDetection
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.roomPillsRow}
+      >
+        {[0, 1, 2].map((item) => (
+          <AmountSkeleton
+            key={item}
+            colors={colors}
+            style={styles.loadingRoomPill}
+          />
+        ))}
+      </ScrollViewWithDetection>
+    </View>
+
+    <View style={styles.contentPadding}>
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryTopRow}>
+          <View style={styles.summaryCopy}>
+            <AmountSkeleton
+              colors={colors}
+              style={styles.loadingSummaryEyebrow}
+            />
+            <AmountSkeleton
+              colors={colors}
+              style={styles.loadingSummaryTitle}
+            />
+            <AmountSkeleton
+              colors={colors}
+              style={styles.loadingSummaryValue}
+            />
+            <AmountSkeleton
+              colors={colors}
+              style={styles.loadingSummaryText}
+            />
+          </View>
+          <View style={styles.summaryBadgeStack}>
+            <AmountSkeleton colors={colors} style={styles.loadingBadge} />
+            <AmountSkeleton colors={colors} style={styles.loadingBadgeWide} />
+          </View>
+        </View>
+
+        <View style={styles.summaryStatsRow}>
+          {[0, 1, 2, 3].map((item) => (
+            <View key={item} style={styles.summaryStatCard}>
+              <AmountSkeleton
+                colors={colors}
+                style={styles.loadingStatValue}
+              />
+              <AmountSkeleton
+                colors={colors}
+                style={styles.loadingStatLabel}
+              />
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <AmountSkeleton colors={colors} style={styles.loadingCardIcon} />
+        <AmountSkeleton colors={colors} style={styles.loadingCardTitle} />
+      </View>
+      <AmountSkeleton colors={colors} style={styles.loadingPrimaryButton} />
+      <View style={styles.bulkRow}>
+        <AmountSkeleton colors={colors} style={styles.loadingBulkButton} />
+        <AmountSkeleton colors={colors} style={styles.loadingBulkButton} />
+      </View>
+      <AmountSkeleton colors={colors} style={styles.loadingTipLine} />
+    </View>
+
+    <View style={styles.card}>
+      <View style={styles.calendarNav}>
+        <AmountSkeleton colors={colors} style={styles.loadingNavButton} />
+        <AmountSkeleton colors={colors} style={styles.loadingMonthLabel} />
+        <AmountSkeleton colors={colors} style={styles.loadingNavButton} />
+      </View>
+      <View style={styles.weekRow}>
+        {[0, 1, 2, 3, 4, 5, 6].map((item) => (
+          <View key={item} style={styles.weekCell}>
+            <AmountSkeleton colors={colors} style={styles.loadingWeekLabel} />
+          </View>
+        ))}
+      </View>
+      <View style={styles.dayGrid}>
+        {Array.from({ length: 42 }).map((_, index) => (
+          <View key={index} style={styles.dayCell}>
+            <AmountSkeleton colors={colors} style={styles.loadingDayCell} />
+          </View>
+        ))}
+      </View>
+    </View>
+
+    <View style={{ height: 36 }} />
+  </ScrollViewWithDetection>
+);
 
 const PresenceScreen = () => {
   const { colors } = useTheme();
@@ -38,6 +219,7 @@ const PresenceScreen = () => {
   const outOfCycleDatesRef = useRef([]);
   const inFlightRef = useRef(false);
   const pendingDatesRef = useRef(null);
+  const detailsLoadingRoomIdRef = useRef(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [waterSplitMode, setWaterSplitMode] = useState("all_payors");
   const [selectedWaterPayorIds, setSelectedWaterPayorIds] = useState([]);
@@ -58,6 +240,8 @@ const PresenceScreen = () => {
     setToast({ visible: true, type, message });
 
   const showConfirm = (config) => setConfirmModal({ visible: true, config });
+
+  const getRoomId = (room) => room?.id || room?._id;
 
   const hasActiveCycle = Boolean(
     selectedRoom?.currentCycleId ||
@@ -137,15 +321,38 @@ const PresenceScreen = () => {
     React.useCallback(() => {
       const refresh = async () => {
         try {
+          setLoading(true);
           const response = await roomService.getClientRooms();
           const data = response.data || response;
           const fetchedRooms = data.rooms || data || [];
           setRooms(fetchedRooms);
           if (fetchedRooms.length > 0) {
-            setSelectedRoom(fetchedRooms[0]);
+            const nextRoom = fetchedRooms[0];
+            const nextRoomId = getRoomId(nextRoom);
+            detailsLoadingRoomIdRef.current = nextRoomId;
+            setSelectedRoom(nextRoom);
+            await loadMarkedDates(nextRoom);
+            detailsLoadingRoomIdRef.current = null;
+            if (nextRoom?.billing?.start) {
+              const billingStart = new Date(nextRoom.billing.start);
+              setCurrentMonth(
+                new Date(
+                  billingStart.getFullYear(),
+                  billingStart.getMonth(),
+                  1,
+                ),
+              );
+            }
+          } else {
+            setSelectedRoom(null);
+            setMarkedDates([]);
+            setHasPendingPayment(false);
+            memberRecordIdRef.current = null;
+            outOfCycleDatesRef.current = [];
           }
         } catch (error) {
           console.error("Error refreshing rooms:", error);
+          detailsLoadingRoomIdRef.current = null;
         } finally {
           setLoading(false);
         }
@@ -155,14 +362,38 @@ const PresenceScreen = () => {
   );
 
   useEffect(() => {
-    if (selectedRoom && (selectedRoom.id || selectedRoom._id)) {
-      loadMarkedDates();
+    const roomId = getRoomId(selectedRoom);
+    if (selectedRoom && roomId) {
+      if (detailsLoadingRoomIdRef.current === roomId) {
+        return;
+      }
+
+      let cancelled = false;
+      const syncSelectedRoomDetails = async () => {
+        try {
+          setLoading(true);
+          detailsLoadingRoomIdRef.current = roomId;
+          await loadMarkedDates(selectedRoom);
+        } finally {
+          if (detailsLoadingRoomIdRef.current === roomId) {
+            detailsLoadingRoomIdRef.current = null;
+          }
+          if (!cancelled) setLoading(false);
+        }
+      };
+
+      syncSelectedRoomDetails();
+
       if (selectedRoom?.billing?.start) {
         const billingStart = new Date(selectedRoom.billing.start);
         setCurrentMonth(
           new Date(billingStart.getFullYear(), billingStart.getMonth(), 1),
         );
       }
+
+      return () => {
+        cancelled = true;
+      };
     }
   }, [selectedRoom?.id || selectedRoom?._id]);
 
@@ -201,13 +432,33 @@ const PresenceScreen = () => {
       const data = response.data || response;
       const fetchedRooms = data.rooms || data || [];
       setRooms(fetchedRooms);
-      if (!skipAutoSelect && fetchedRooms.length > 0 && !selectedRoom) {
-        setSelectedRoom(fetchedRooms[0]);
+
+      if (fetchedRooms.length === 0) {
+        setSelectedRoom(null);
+        setMarkedDates([]);
+        setHasPendingPayment(false);
+        memberRecordIdRef.current = null;
+        outOfCycleDatesRef.current = [];
+        return;
+      }
+
+      if (!skipAutoSelect) {
+        const selectedRoomId = getRoomId(selectedRoom);
+        const nextRoom =
+          fetchedRooms.find(
+            (room) => String(getRoomId(room)) === String(selectedRoomId),
+          ) || fetchedRooms[0];
+        const nextRoomId = getRoomId(nextRoom);
+        detailsLoadingRoomIdRef.current = nextRoomId;
+        setSelectedRoom(nextRoom);
+        await loadMarkedDates(nextRoom);
+        detailsLoadingRoomIdRef.current = null;
       }
     } catch (error) {
       console.error("Error fetching rooms:", error);
       showToast("Failed to load rooms", "error");
     } finally {
+      detailsLoadingRoomIdRef.current = null;
       setLoading(false);
     }
   };
@@ -282,10 +533,10 @@ const PresenceScreen = () => {
     }
   };
 
-  const loadMarkedDates = async () => {
-    if (!selectedRoom || !userId) return;
+  const loadMarkedDates = async (roomToLoad = selectedRoom) => {
+    if (!roomToLoad || !userId) return;
     try {
-      const roomId = selectedRoom.id || selectedRoom._id;
+      const roomId = getRoomId(roomToLoad);
       const roomResponse = await roomService.getRoomById(roomId);
       const roomData = roomResponse.data || roomResponse;
       const room = roomData.room || roomData;
@@ -788,11 +1039,7 @@ const PresenceScreen = () => {
   ];
 
   if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
+    return <PresenceLoadingSkeleton colors={colors} styles={styles} />;
   }
 
   return (
@@ -1605,14 +1852,149 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) =>
     contentPadding: {
       paddingHorizontal: 16,
     },
-    // scrollContent: {
-    //   paddingBottom: insets.bottom + 48,
-    // },
+    loadingScrollContent: {
+      paddingBottom: insets.bottom + 48,
+    },
     centerContainer: {
       flex: 1,
       justifyContent: "center",
       alignItems: "center",
       backgroundColor: colors.background,
+    },
+    loadingOnHeader: {
+      backgroundColor: "rgba(255,255,255,0.22)",
+    },
+    loadingHeaderIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+    },
+    loadingHeaderTitle: {
+      width: 116,
+      height: 24,
+      borderRadius: 8,
+    },
+    loadingHeaderSubtitle: {
+      width: "62%",
+      height: 13,
+      marginTop: 8,
+      borderRadius: 7,
+    },
+    loadingHeaderFootnote: {
+      width: "92%",
+      height: 13,
+      marginTop: 18,
+      borderRadius: 7,
+    },
+    loadingHeaderFootnoteShort: {
+      width: "68%",
+      height: 13,
+      marginTop: 8,
+      borderRadius: 7,
+    },
+    loadingStatusChip: {
+      width: 94,
+      height: 30,
+      borderRadius: 999,
+    },
+    loadingStatusChipWide: {
+      width: 128,
+      height: 30,
+      borderRadius: 999,
+    },
+    loadingRoomPill: {
+      width: 118,
+      height: 40,
+      borderRadius: 20,
+    },
+    loadingSummaryEyebrow: {
+      width: 118,
+      height: 11,
+      borderRadius: 6,
+      marginBottom: 12,
+    },
+    loadingSummaryTitle: {
+      width: 156,
+      height: 18,
+      borderRadius: 7,
+    },
+    loadingSummaryValue: {
+      width: 118,
+      height: 34,
+      borderRadius: 11,
+      marginTop: 12,
+    },
+    loadingSummaryText: {
+      width: "92%",
+      height: 14,
+      borderRadius: 7,
+      marginTop: 12,
+    },
+    loadingBadge: {
+      width: 82,
+      height: 30,
+      borderRadius: 999,
+    },
+    loadingBadgeWide: {
+      width: 110,
+      height: 30,
+      borderRadius: 999,
+    },
+    loadingStatValue: {
+      width: 52,
+      height: 20,
+      borderRadius: 8,
+    },
+    loadingStatLabel: {
+      width: 76,
+      height: 11,
+      borderRadius: 6,
+      marginTop: 9,
+    },
+    loadingCardIcon: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+    },
+    loadingCardTitle: {
+      width: 128,
+      height: 18,
+      borderRadius: 7,
+    },
+    loadingPrimaryButton: {
+      height: 52,
+      borderRadius: 16,
+    },
+    loadingBulkButton: {
+      flex: 1,
+      height: 64,
+      borderRadius: 16,
+    },
+    loadingTipLine: {
+      width: "100%",
+      height: 34,
+      borderRadius: 14,
+      marginTop: 12,
+    },
+    loadingNavButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+    },
+    loadingMonthLabel: {
+      width: 132,
+      height: 18,
+      borderRadius: 8,
+    },
+    loadingWeekLabel: {
+      width: 20,
+      height: 11,
+      borderRadius: 6,
+    },
+    loadingDayCell: {
+      width: 28,
+      height: 28,
+      borderRadius: 10,
     },
     header: {
       paddingHorizontal: 20,

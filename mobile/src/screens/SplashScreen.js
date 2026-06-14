@@ -424,7 +424,7 @@ const SplashScreen = () => {
       <Animated.View style={[styles.versionRow, { opacity: versionOpacity }]}>
         <Text style={[styles.versionText, { color: versionC }]}>
           Version {Constants.expoConfig?.version || "1.0.0"} (
-          {Application.nativeBuildVersion || "1"})
+          {Application.nativeBuildVersion || "42"})
         </Text>
         <View
           style={[styles.versionDivider, { backgroundColor: versionDivC }]}

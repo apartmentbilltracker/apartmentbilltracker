@@ -28,37 +28,42 @@ import {
   BookOpen,
   Smartphone,
   X,
+  Target,
+  Shield,
+  Activity,
+  ArrowUpRight,
+  Layers,
+  Sparkles,
+  ArrowRight,
+  Users,
 } from "lucide-react";
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 
 const APP_DEEP_LINK = "aptbilltracker://bills";
-
 function tryOpenApp() {
   window.location.href = APP_DEEP_LINK;
 }
 
-// ── Forest Green palette tokens (mirrors colors.js light theme) ──────────────
+// ── Palette — Forest Green #02302e theme ─────────────────────────────────────
 const C = {
-  primary:         "#002b29",   // headerBg / deepest canvas
-  primaryContainer:"#0a4240",   // card (dark)
-  accent:          "#036d41",   // secondary / Emerald Green
-  accentDark:      "#025535",   // actionPresenceIcon
-  accentSurface:   "#9af2bb",   // secondary-container
-  accentLight:     "rgba(3,109,65,0.08)",
-  accentMid:       "rgba(3,109,65,0.12)",
-
-  // action-card tints
-  tintA: "#d6ede3",  // actionPayBillsBg / statPendingBg / breakdownHeaderBg
-  tintB: "#b3dece",  // actionPresenceBg / statTotalBillsBg
-  tintC: "#e8f5ef",  // actionRoomInfoBg / statMembersBg
-  tintD: "#c8e8d8",  // actionChatBg
-
-  // bill-type semantic
+  primary: "#02302e", // deep forest base
+  primaryContainer: "#08403c", // slightly lighter forest
+  accent: "#1a7a52", // vibrant forest green
+  accentDark: "#0f5c3a", // deep emerald
+  accentSurface: "#7ee8a2", // fresh mint highlight
+  accentLight: "rgba(26,122,82,0.08)",
+  accentMid: "rgba(26,122,82,0.14)",
+  tintA: "#d0ead9", // soft sage
+  tintB: "#a8d8bc", // muted mint
+  tintC: "#e4f3eb", // pale green
+  tintD: "#bfe6cf", // cool leaf
   electricity: "#7a5900",
-  water:       "#1b4e4c",
-  internet:    "#005230",
+  water: "#0e4a47",
+  internet: "#0a4a2e",
 };
+
+const heroBg = `linear-gradient(135deg, #02302e 0%, #053b38 50%, #032623 100%)`;
 
 function MobilePayModal({ onClose }) {
   const [apkUrl, setApkUrl] = useState(null);
@@ -85,65 +90,67 @@ function MobilePayModal({ onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 backdrop-blur-md bg-black/60 transition-all duration-300 animate-fadeIn"
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-sm rounded-[32px] shadow-2xl overflow-hidden"
-        style={{ background: "#fff" }}
+        className="relative w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden transform scale-100 transition-transform duration-300 border border-white/10 bg-white"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal header strip */}
+        {/* Modal Banner Header */}
         <div
-          className="px-6 pt-6 pb-5 text-center"
-          style={{ background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryContainer} 100%)` }}
+          className="px-8 pt-10 pb-8 text-center relative overflow-hidden text-white"
+          style={{ background: heroBg }}
         >
+          <div className="absolute -top-12 -left-12 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl" />
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center transition-colors"
-            style={{ background: "rgba(255,255,255,0.15)", color: "#fff" }}
+            className="absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center transition-all bg-white/10 text-white/80 hover:bg-white/20 hover:text-white active:scale-90"
           >
-            <X size={14} />
+            <X size={18} />
           </button>
-          <div
-            className="w-14 h-14 rounded-[32px] mx-auto mb-3 flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-          >
-            <Smartphone size={28} color="#9af2bb" />
+
+          <div className="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg relative z-10 bg-white/10 border border-white/20 backdrop-blur-sm">
+            <Smartphone size={36} color={C.accentSurface} />
           </div>
-          <h2 className="text-lg font-bold text-white">Pay via Mobile App</h2>
-          <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.65)" }}>
-            Payments are made through the{" "}
-            <span className="font-semibold text-white">PropFlow</span> mobile app.
+          <h2 className="text-2xl font-black tracking-tight">
+            Pay via Mobile Ecosystem
+          </h2>
+          <p className="text-xs mt-2 px-4 text-white/70 font-medium leading-relaxed">
+            Transactions are encrypted and routed directly to the centralized{" "}
+            <span className="font-extrabold text-emerald-300">PropFlow</span>{" "}
+            payment gateway.
           </p>
         </div>
 
-        <div className="p-5 space-y-4">
-          {/* Primary CTA */}
+        {/* Modal Content / Actions */}
+        <div className="p-8 space-y-5 bg-slate-50/50">
           <button
             onClick={handleOpenApp}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm text-white transition-opacity hover:opacity-90"
-            style={{ background: `linear-gradient(135deg, ${C.accent} 0%, ${C.accentDark} 100%)` }}
+            className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl font-bold text-sm text-white transition-all duration-200 hover:opacity-95 shadow-lg shadow-emerald-950/20 active:scale-[0.99]"
+            style={{
+              background: `linear-gradient(135deg, ${C.accent} 0%, ${C.accentDark} 100%)`,
+            }}
           >
-            <Smartphone size={16} />
-            {justTried ? "Open App Again" : "Open App"}
+            <Smartphone size={18} />
+            {justTried ? "Re-launch Mobile Terminal" : "Launch Mobile App"}
           </button>
 
           {justTried && (
-            <p className="text-xs text-center text-gray-400 -mt-1">
-              If the app didn&apos;t open, download it below.
+            <p className="text-[11px] text-center text-slate-400 font-semibold tracking-wide">
+              App didn&apos;t clear? Choose a secondary distribution vector
+              below.
             </p>
           )}
 
-          {/* Divider */}
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-xs text-gray-400">Don&apos;t have the app?</span>
-            <div className="flex-1 h-px bg-gray-100" />
+          <div className="flex items-center gap-3 py-1">
+            <div className="flex-1 h-px bg-slate-200" />
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              Platform Mirrors
+            </span>
+            <div className="flex-1 h-px bg-slate-200" />
           </div>
 
-          {/* Store buttons */}
           <div className="grid grid-cols-2 gap-3">
             {[
               {
@@ -157,18 +164,23 @@ function MobilePayModal({ onClose }) {
             ].map(({ label, path }) => (
               <div
                 key={label}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-xl opacity-50 cursor-not-allowed select-none"
-                style={{ background: C.primaryContainer }}
-                title="Coming soon"
+                className="flex items-center gap-2.5 px-4 py-3 rounded-xl opacity-50 bg-slate-100 border border-slate-200 cursor-not-allowed select-none"
+                title="Deploying shortly"
               >
-                <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" fill="white">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-4 h-4 flex-shrink-0 text-slate-500"
+                  fill="currentColor"
+                >
                   <path d={path} />
                 </svg>
                 <div>
-                  <p className="text-[9px] leading-none" style={{ color: C.accentSurface }}>
-                    COMING SOON
+                  <p className="text-[8px] font-black tracking-widest text-slate-400 leading-none">
+                    UPCOMING
                   </p>
-                  <p className="text-xs font-semibold leading-tight text-white">{label}</p>
+                  <p className="text-xs font-bold leading-tight text-slate-700 mt-0.5">
+                    {label}
+                  </p>
                 </div>
               </div>
             ))}
@@ -179,26 +191,31 @@ function MobilePayModal({ onClose }) {
               href={apkUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl transition-opacity hover:opacity-90"
-              style={{ background: C.primary }}
+              className="flex items-center justify-center gap-3.5 w-full px-5 py-3.5 rounded-2xl transition-all duration-200 bg-[#02302e] hover:bg-[#05403c] shadow-md active:scale-[0.99]"
             >
-              <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0 text-white" fill="currentColor">
+              <svg
+                viewBox="0 0 24 24"
+                className="w-5 h-5 flex-shrink-0 text-white"
+                fill="currentColor"
+              >
                 <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.75-1.33-1.75-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.78.42-1.3.76-1.6-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.82.58C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z" />
               </svg>
-              <div>
-                <p className="text-[9px] leading-none" style={{ color: C.accentSurface }}>
-                  DOWNLOAD APK FROM
+              <div className="text-left">
+                <p className="text-[8px] font-black tracking-widest text-emerald-400 leading-none">
+                  LOCAL DISTRIBUTABLE
                 </p>
-                <p className="text-xs font-semibold text-white leading-tight">GitHub Releases</p>
+                <p className="text-xs font-bold text-white mt-0.5">
+                  Download Android APK Package
+                </p>
               </div>
             </a>
           )}
 
           <button
             onClick={onClose}
-            className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
+            className="w-full text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors py-1 tracking-wide"
           >
-            Maybe later
+            Dismiss Verification
           </button>
         </div>
       </div>
@@ -256,7 +273,6 @@ export default function ClientHomePage() {
         roomService.getClientRooms(),
         roomService.getAvailableRooms(),
       ]);
-
       const myRooms =
         myRoomsRes.status === "fulfilled"
           ? Array.isArray(myRoomsRes.value)
@@ -265,7 +281,6 @@ export default function ClientHomePage() {
           : [];
       const joined = myRooms[0] || null;
       setRoom(joined);
-
       if (availRes.status === "fulfilled") {
         const av = availRes.value;
         const allRooms = Array.isArray(av) ? av : av?.rooms || [];
@@ -276,9 +291,7 @@ export default function ClientHomePage() {
           allRooms.filter((r) => !myIds.includes(r.id || r._id)),
         );
       }
-
       setLoading(false);
-
       if (joined) {
         const roomId = joined.id || joined._id;
         setCycleLoading(true);
@@ -294,13 +307,15 @@ export default function ClientHomePage() {
             const cycles = Array.isArray(cycleRes.value)
               ? cycleRes.value
               : cycleRes.value?.billingCycles || cycleRes.value?.data || [];
-            const active = cycles.find((c) => c.status === "active") || null;
-            setCycle(active);
+            setCycle(cycles.find((c) => c.status === "active") || null);
           }
           setCycleLoading(false);
           if (annRes.status === "fulfilled")
             setAnnouncements(
-              (annRes.value?.announcements || annRes.value?.data || []).slice(0, 3),
+              (annRes.value?.announcements || annRes.value?.data || []).slice(
+                0,
+                3,
+              ),
             );
           setAnnLoading(false);
           if (badgeRes.status === "fulfilled") setBadges(badgeRes.value || {});
@@ -313,7 +328,9 @@ export default function ClientHomePage() {
               payRes.value?.data ||
               [];
             setHasPendingPayment(
-              txns.some((p) => p.status === "pending" || p.status === "submitted"),
+              txns.some(
+                (p) => p.status === "pending" || p.status === "submitted",
+              ),
             );
           }
         });
@@ -329,7 +346,6 @@ export default function ClientHomePage() {
   };
 
   const handleJoinRoom = (roomId) => setJoinPayerChoice({ roomId });
-
   const confirmJoin = async (isPayer) => {
     if (!joinPayerChoice) return;
     const roomId = joinPayerChoice.roomId;
@@ -355,10 +371,20 @@ export default function ClientHomePage() {
   );
   const allPaid = myPayment?.allPaid ?? false;
   const pendingBills = [
-    myPayment?.rentStatus === "unpaid" && Number(room?.billing?.rent) > 0 ? "Rent" : null,
-    myPayment?.electricityStatus === "unpaid" && Number(room?.billing?.electricity) > 0 ? "Electricity" : null,
-    myPayment?.waterStatus === "unpaid" && Number(room?.billing?.water) > 0 ? "Water" : null,
-    myPayment?.internetStatus === "unpaid" && Number(room?.billing?.internet) > 0 ? "Internet" : null,
+    myPayment?.rentStatus === "unpaid" && Number(room?.billing?.rent) > 0
+      ? "Rent"
+      : null,
+    myPayment?.electricityStatus === "unpaid" &&
+    Number(room?.billing?.electricity) > 0
+      ? "Electricity"
+      : null,
+    myPayment?.waterStatus === "unpaid" && Number(room?.billing?.water) > 0
+      ? "Water"
+      : null,
+    myPayment?.internetStatus === "unpaid" &&
+    Number(room?.billing?.internet) > 0
+      ? "Internet"
+      : null,
   ].filter(Boolean);
 
   const userCharge = cycle?.memberCharges?.find(
@@ -383,7 +409,8 @@ export default function ClientHomePage() {
             rent: r2(Number(cycle.rent || 0) / homePayorCount),
             electricity: r2(Number(cycle.electricity || 0) / homePayorCount),
             water: r2(
-              Number(cycle.waterBillAmount || cycle.water_bill_amount || 0) / homePayorCount,
+              Number(cycle.waterBillAmount || cycle.water_bill_amount || 0) /
+                homePayorCount,
             ),
             internet: r2(Number(cycle.internet || 0) / homePayorCount),
             total: r2(
@@ -413,638 +440,1068 @@ export default function ClientHomePage() {
       daysRemaining: diff,
       overdue: false,
       percentage: Math.min(100, (passed / total) * 100),
-      billingEnd: end.toLocaleDateString("en-PH", { month: "short", day: "numeric" }),
+      billingEnd: end.toLocaleDateString("en-PH", {
+        month: "short",
+        day: "numeric",
+      }),
     };
   })();
 
   const avatarSrc = (() => {
     const a = user?.avatar;
     if (!a) return null;
-    if (typeof a === "string") return a.startsWith("{") ? JSON.parse(a)?.url : a;
+    if (typeof a === "string")
+      return a.startsWith("{") ? JSON.parse(a)?.url : a;
     return a?.url;
   })();
 
-  // ── Quick links — assign forest-green tint per slot ──────────────────────────
-  const quickLinkTints = [C.tintA, C.tintB, C.tintC, C.tintD, C.tintA, C.tintB, C.tintC];
-  const quickLinkIconColors = [C.accent, C.accentDark, C.accent, C.accent, C.accent, C.accentDark, C.accent];
-  const quickLinks = [
-    { to: "/bills",         icon: FileText,    label: "Bills",         badge: 0 },
-    { to: "/room-details",  icon: Home,        label: "My Room",       badge: 0 },
-    { to: "/billing-history",icon: BookOpen,   label: "History",       badge: 0 },
-    { to: "/announcements", icon: Megaphone,   label: "Announcements", badge: badges.unreadAnnouncements },
-    { to: "/presence",      icon: CheckSquare, label: "Presence",      badge: 0 },
-    { to: "/notifications", icon: Bell,        label: "Notifications", badge: badges.unreadNotifications },
-    { to: "/profile",       icon: User,        label: "Profile",       badge: 0 },
+  const quickLinkTints = [
+    "#e6f4ea",
+    "#e0f2f1",
+    "#f0f4e8",
+    "#eaf6f0",
+    "#e1f5fe",
+    "#fff3e0",
+    "#f3e5f5",
   ];
+  const quickLinkIconColors = [
+    C.accent,
+    C.accentDark,
+    "#558b2f",
+    "#2e7d32",
+    "#0288d1",
+    "#e65100",
+    "#6a1b9a",
+  ];
+  const quickLinks = [
+    { to: "/bills", icon: FileText, label: "Bills", badge: 0 },
+    { to: "/room-details", icon: Home, label: "My Room", badge: 0 },
+    { to: "/billing-history", icon: BookOpen, label: "History", badge: 0 },
+    {
+      to: "/announcements",
+      icon: Megaphone,
+      label: "Broadcasts",
+      badge: badges.unreadAnnouncements,
+    },
+    { to: "/presence", icon: CheckSquare, label: "Presence", badge: 0 },
+    {
+      to: "/notifications",
+      icon: Bell,
+      label: "Alerts",
+      badge: badges.unreadNotifications,
+    },
+    { to: "/profile", icon: User, label: "Profile", badge: 0 },
+  ];
+
+  const memberCount = room?.members?.length ?? 0;
+  const payorCount = (room?.members || []).filter(
+    (m) => m.isPayer || m.is_payer,
+  ).length;
 
   if (loading)
     return (
-      <div className="flex items-center justify-center py-24">
-        <Spinner size="lg" style={{ color: C.accent }} />
+      <div className="flex flex-col items-center justify-center py-48 space-y-4">
+        <div className="relative flex items-center justify-center">
+          {/* Glassmorphic outer glowing ripple */}
+          <div className="absolute w-16 h-16 rounded-2xl bg-[#1a7a52]/20 dark:bg-[#7ee8a2]/10 animate-ping duration-1000" />
+          {/* Main spinning element */}
+          <div className="w-12 h-12 rounded-2xl border-2 border-slate-200 dark:border-slate-800 border-t-[#1a7a52] dark:border-t-[#7ee8a2] animate-spin" />
+          {/* Inner brand identity accent */}
+          <div className="absolute w-5 h-5 rounded-xl bg-gradient-to-br from-[#1a7a52] to-[#135c3d] dark:from-[#7ee8a2] dark:to-[#64d08b] shadow-md flex items-center justify-center">
+            <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-[#02302e] animate-pulse" />
+          </div>
+        </div>
+        <p className="text-xs font-black tracking-widest text-slate-400 dark:text-slate-500 uppercase animate-pulse pt-2">
+          Loading your data...
+        </p>
       </div>
     );
 
   return (
-    <div className="space-y-6 min-h-screen pb-10" style={{ background: "#F4F7F5" }}>
-      {showPayModal && <MobilePayModal onClose={() => setShowPayModal(false)} />}
+    <div className="min-h-screen pb-24 bg-[#f6f9f7] text-slate-800 antialiased">
+      {showPayModal && (
+        <MobilePayModal onClose={() => setShowPayModal(false)} />
+      )}
 
-      {/* ── Join payer-choice modal ─────────────────────────────────────────── */}
+      {/* ── Membership Allocation Modal ────────────────────────────────────── */}
       {joinPayerChoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.55)" }}>
-          <div className="w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl bg-white dark:bg-[#0a4240]">
-            {/* Header strip */}
-            <div className="px-6 py-5" style={{ background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryContainer} 100%)` }}>
-              <h3 className="font-bold text-white text-lg">Join Room</h3>
-              <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.65)" }}>
-                Will you be a billing <span className="font-semibold text-white">payer</span> for this room?
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl bg-white border border-slate-100 animate-slideUp">
+            <div
+              className="px-8 py-8 text-white relative"
+              style={{ background: heroBg }}
+            >
+              <h3 className="font-black text-xl tracking-tight">
+                Configure Ledger Association
+              </h3>
+              <p className="text-xs mt-2 text-white/70 font-medium leading-relaxed">
+                Choose your structural liability model. Assigning as a Payer
+                directly inserts your profile into utility pro-rata distribution
+                routines.
               </p>
             </div>
-            <div className="p-5 space-y-3">
-              <div className="flex gap-3">
+            <div className="p-8 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   onClick={() => confirmJoin(false)}
-                  className="flex-1 py-2.5 rounded-xl border text-sm font-medium text-gray-700 dark:text-white/80 dark:border-white/15 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                  className="p-4 rounded-2xl border-2 border-slate-100 text-left hover:border-slate-300 hover:bg-slate-50 transition-all group active:scale-[0.98]"
                 >
-                  No (Non-payer)
+                  <p className="font-black text-sm text-slate-800">
+                    Tenant Profile
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-1 leading-normal">
+                    Read-only structural access. Not responsible for general
+                    bill items.
+                  </p>
                 </button>
                 <button
                   onClick={() => confirmJoin(true)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                  style={{ background: `linear-gradient(135deg, ${C.accent} 0%, ${C.accentDark} 100%)` }}
+                  className="p-4 rounded-2xl text-left border-2 border-transparent text-white transition-all hover:opacity-95 active:scale-[0.98] flex flex-col justify-between"
+                  style={{
+                    background: `linear-gradient(135deg, ${C.accent} 0%, ${C.accentDark} 100%)`,
+                  }}
                 >
-                  Yes (Payer)
+                  <div>
+                    <p className="font-black text-sm text-emerald-200">
+                      Financial Payer
+                    </p>
+                    <p className="text-[11px] text-emerald-100/80 font-medium mt-1 leading-normal">
+                      Active ledger node. Splits property rent, water, power,
+                      and data line costs.
+                    </p>
+                  </div>
                 </button>
               </div>
               <button
                 onClick={() => setJoinPayerChoice(null)}
-                className="w-full text-xs text-gray-400 hover:text-gray-600 dark:hover:text-white/50 transition-colors"
+                className="w-full text-center text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors pt-2 uppercase tracking-wider"
               >
-                Cancel
+                Abort Operational Setup
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Greeting card — forest green header ─────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          HERO — Cinematic Bento Header
+      ══════════════════════════════════════════════════════════════════════ */}
       <div
-        className="relative rounded-[32px] overflow-hidden p-5"
-        style={{ background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryContainer} 100%)` }}
+        className="relative overflow-hidden shadow-2xl shadow-emerald-950/10"
+        style={{
+          background: heroBg,
+          borderBottomLeftRadius: 40,
+          borderBottomRightRadius: 40,
+        }}
       >
-        {/* Decorative circles */}
-        <div
-          className="absolute -top-8 -right-8 w-36 h-36 rounded-full opacity-10"
-          style={{ background: C.accentSurface }}
-        />
-        <div
-          className="absolute -bottom-10 -left-4 w-28 h-28 rounded-full opacity-10"
-          style={{ background: C.accentSurface }}
-        />
-
-        <div className="relative flex items-center gap-4">
+        {/* Dynamic Light Drops */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div
-            className="flex-shrink-0 rounded-full p-0.5"
-            style={{ background: `linear-gradient(135deg, ${C.accentSurface} 0%, ${C.accent} 100%)` }}
-          >
-            <Avatar src={avatarSrc} name={user?.name || ""} size="lg" className="ring-2 ring-white/20" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm" style={{ color: "rgba(255,255,255,0.60)" }}>
-              {getGreeting()},
-            </p>
-            <h1 className="text-xl font-bold text-white truncate">{user?.name}</h1>
-            {room ? (
-              <p className="text-xs font-medium mt-0.5" style={{ color: C.accentSurface }}>
-                🏠 {room.name}
-              </p>
-            ) : (
-              <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.40)" }}>
-                No room joined yet
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Outstanding balance banner ──────────────────────────────────────── */}
-      {outstandingBalance > 0 && (
-        <div className="rounded-[32px] p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/10 flex items-center gap-3">
-          <AlertTriangle size={18} className="text-red-500 shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-red-700 dark:text-red-400">
-              Outstanding Balance
-            </p>
-            <p className="text-xs text-red-600 dark:text-red-300">
-              You have ₱{r2(outstandingBalance).toLocaleString()} unpaid from previous cycles
-            </p>
-          </div>
-          <Link
-            to="/billing-history"
-            className="text-xs text-red-500 font-medium hover:underline shrink-0"
-          >
-            View
-          </Link>
-        </div>
-      )}
-
-      {/* ── Payment status card ─────────────────────────────────────────────── */}
-      {room && isPayer && myPayment && (
-        <div
-          className="rounded-[32px] bg-white dark:bg-[#0a4240] border p-4 flex items-center gap-4"
-          style={{
-            borderLeftWidth: 4,
-            borderLeftColor: allPaid ? C.accent : "#f59e0b",
-            borderColor: allPaid ? C.accent : "#f59e0b",
-          }}
-        >
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+            className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[100px]"
             style={{
-              background: allPaid ? C.tintA : "rgba(245,158,11,0.10)",
+              background:
+                "radial-gradient(circle, rgba(126,232,162,0.15) 0%, transparent 70%)",
             }}
-          >
-            {allPaid ? (
-              <CheckCircle size={24} style={{ color: C.accent }} />
-            ) : (
-              <Clock size={24} className="text-amber-500" />
-            )}
-          </div>
-          <div className="flex-1">
-            <p className="font-semibold text-sm text-gray-900 dark:text-white">
-              {allPaid
-                ? "All bills paid!"
-                : `${pendingBills.length} bill${pendingBills.length !== 1 ? "s" : ""} pending`}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-white/40 mt-0.5">
-              {allPaid
-                ? "You're up to date for this cycle"
-                : `Unpaid: ${pendingBills.join(", ")}`}
-            </p>
-          </div>
-          {!allPaid &&
-            (hasPendingPayment ? (
-              <span
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-amber-700 dark:text-amber-400 text-xs font-medium shrink-0 border border-amber-200"
-                style={{ background: "rgba(245,158,11,0.08)" }}
-              >
-                <Clock size={12} />
-                Awaiting Verification
-              </span>
-            ) : (
-              <button
-                onClick={() => setShowPayModal(true)}
-                className="text-xs px-4 py-2 rounded-xl font-semibold text-white shrink-0 transition-opacity hover:opacity-90"
-                style={{ background: `linear-gradient(135deg, ${C.accent} 0%, ${C.accentDark} 100%)` }}
-              >
-                Pay Now
-              </button>
-            ))}
+          />
+          <div
+            className="absolute bottom-[-30%] right-[10%] w-[600px] h-[600px] rounded-full blur-[120px]"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(234,179,8,0.08) 0%, transparent 60%)",
+            }}
+          />
         </div>
-      )}
 
-      {/* ── Billing countdown ───────────────────────────────────────────────── */}
-      {billingCountdown && (
-        <div className="rounded-[32px] bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: billingCountdown.overdue ? "rgba(239,68,68,0.10)" : C.tintA }}
-              >
-                <Clock
-                  size={14}
-                  style={{ color: billingCountdown.overdue ? "#ef4444" : C.accent }}
-                />
-              </div>
-              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                {billingCountdown.overdue
-                  ? "Billing cycle overdue!"
-                  : `${billingCountdown.daysRemaining} day${billingCountdown.daysRemaining !== 1 ? "s" : ""} remaining`}
-              </span>
-            </div>
-            {billingCountdown.billingEnd && (
-              <span className="text-xs text-gray-400 dark:text-white/30">
-                Due {billingCountdown.billingEnd}
-              </span>
-            )}
-          </div>
-          <div className="w-full h-2 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+        {/* Global Structural Header Action Strip */}
+        <div className="max-w-7xl mx-auto px-6 pt-6 pb-2 flex items-center justify-between relative z-10">
+          <div className="flex items-center gap-3.5">
             <div
-              className="h-2 rounded-full transition-all duration-500"
+              className="flex-shrink-0 rounded-2xl p-[2px] shadow-lg shadow-black/20"
               style={{
-                width: `${billingCountdown.percentage}%`,
-                background: billingCountdown.overdue
-                  ? "#ef4444"
-                  : billingCountdown.percentage > 75
-                    ? "#f59e0b"
-                    : `linear-gradient(90deg, ${C.accent} 0%, ${C.accentSurface} 100%)`,
+                background: `linear-gradient(135deg, ${C.accentSurface} 0%, ${C.accent} 100%)`,
               }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ── Quick links ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-        {quickLinks.map(({ to, icon: Icon, label, badge }, idx) => (
-          <Link
-            key={to}
-            to={to}
-            className="relative bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 rounded-[32px] p-3 flex flex-col items-center gap-2 hover:shadow-md transition-all text-center hover:-translate-y-0.5 duration-200"
-          >
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: quickLinkTints[idx] }}
             >
-              <Icon size={18} style={{ color: quickLinkIconColors[idx] }} />
+              <Avatar
+                src={avatarSrc}
+                name={user?.name || ""}
+                size="md"
+                className="ring-4 ring-[#02302e]"
+              />
             </div>
-            <span className="text-[11px] font-medium text-gray-700 dark:text-white/70 leading-tight line-clamp-2 w-full">
-              {label}
-            </span>
-            {badge > 0 && (
-              <span className="absolute top-2 right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                {badge > 9 ? "9+" : badge}
-              </span>
-            )}
-          </Link>
-        ))}
-      </div>
-
-      {/* ── Two-column main content ──────────────────────────────────────────── */}
-      <div className="grid md:grid-cols-2 gap-5">
-
-        {/* Current Bill card */}
-        <div className="rounded-[32px] bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-5">
-          {/* Card header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: C.tintA }}
-              >
-                <FileText size={13} style={{ color: C.accent }} />
-              </div>
-              <h2 className="font-semibold text-gray-900 dark:text-white">Current Bill</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              {room && (
-                <Link
-                  to="/room-details"
-                  className="text-xs font-medium hover:underline"
-                  style={{ color: C.accent }}
-                >
-                  Room Info
-                </Link>
-              )}
-              {cycle && <StatusBadge status={cycle.status} />}
+            <div>
+              <p className="text-[10px] font-black tracking-widest uppercase text-emerald-400/80 leading-none">
+                {getGreeting()}
+              </p>
+              <h2 className="text-lg font-black text-white tracking-tight mt-1">
+                {user?.name}
+              </h2>
             </div>
           </div>
 
-          {cycleLoading ? (
-            <div className="animate-pulse space-y-3">
-              {[3/4, 1/2, 2/3, 1/2].map((w, i) => (
-                <div key={i} className="h-3.5 bg-gray-100 dark:bg-white/10 rounded" style={{ width: `${w * 100}%` }} />
-              ))}
-              <div className="border-t border-gray-100 dark:border-white/8 pt-3 flex justify-between items-center">
-                <div className="h-4 bg-gray-100 dark:bg-white/10 rounded w-24" />
-                <div className="h-6 bg-gray-100 dark:bg-white/10 rounded w-20" />
-              </div>
-              <div className="h-9 bg-gray-100 dark:bg-white/10 rounded" />
-            </div>
-          ) : cycle ? (
-            <div className="space-y-2.5">
-              {/* Period row */}
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-white/50">Period</span>
-                <span className="font-medium text-gray-900 dark:text-white text-right">
-                  {new Date(cycle.startDate || cycle.start_date).toLocaleDateString("en-PH", {
-                    month: "short", day: "numeric",
-                  })}
-                  {" – "}
-                  {new Date(cycle.endDate || cycle.end_date).toLocaleDateString("en-PH", {
-                    month: "short", day: "numeric", year: "numeric",
-                  })}
-                </span>
-              </div>
-
-              {/* Bill rows — icons use semantic colors from colors.js */}
-              {isPayer && Number(cycle.rent) > 0 && (
-                <div className="flex justify-between text-sm items-center">
-                  <span className="text-gray-500 dark:text-white/50 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "rgba(122,89,0,0.10)" }}>
-                      <Home size={11} style={{ color: "#7a5900" }} />
-                    </span>
-                    Rent
-                  </span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    ₱{Number(displayShare?.rent ?? cycle.rent).toLocaleString()}
-                  </span>
-                </div>
-              )}
-              {isPayer && Number(cycle.electricity) > 0 && (
-                <div className="flex justify-between text-sm items-center">
-                  <span className="text-gray-500 dark:text-white/50 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "rgba(122,89,0,0.10)" }}>
-                      <Zap size={11} style={{ color: C.electricity }} />
-                    </span>
-                    Electricity
-                  </span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    ₱{Number(displayShare?.electricity ?? cycle.electricity).toLocaleString()}
-                  </span>
-                </div>
-              )}
-              {isPayer && Number(cycle.waterBillAmount || cycle.water_bill_amount) > 0 && (
-                <div className="flex justify-between text-sm items-center">
-                  <span className="text-gray-500 dark:text-white/50 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "rgba(27,78,76,0.10)" }}>
-                      <Droplets size={11} style={{ color: C.water }} />
-                    </span>
-                    Water
-                  </span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    ₱{Number(displayShare?.water ?? (cycle.waterBillAmount || cycle.water_bill_amount)).toLocaleString()}
-                  </span>
-                </div>
-              )}
-              {isPayer && Number(cycle.internet) > 0 && (
-                <div className="flex justify-between text-sm items-center">
-                  <span className="text-gray-500 dark:text-white/50 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "rgba(0,82,48,0.10)" }}>
-                      <Wifi size={11} style={{ color: C.internet }} />
-                    </span>
-                    Internet
-                  </span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    ₱{Number(displayShare?.internet ?? cycle.internet).toLocaleString()}
-                  </span>
-                </div>
-              )}
-
-              {isPayer && (
-                <>
-                  <div
-                    className="flex justify-between items-end pt-3"
-                    style={{ borderTop: `1px solid rgba(3,109,65,0.12)` }}
-                  >
-                    <div>
-                      <span className="font-semibold text-gray-900 dark:text-white text-sm">
-                        {displayShare ? "Your Share" : "Room Total"}
-                      </span>
-                      {displayShare && !displayShare.exact && (
-                        <p className="text-xs text-gray-400 dark:text-white/30">
-                          est. ÷ {homePayorCount} payers
-                        </p>
-                      )}
-                    </div>
-                    <span
-                      className="font-bold text-2xl"
-                      style={{ color: C.accent }}
-                    >
-                      ₱{Number(
-                        displayShare?.total ||
-                          cycle.totalBilledAmount ||
-                          cycle.total_billed_amount ||
-                          0,
-                      ).toLocaleString()}
-                    </span>
-                  </div>
-                  <Link
-                    to="/bills"
-                    className="w-full text-center text-sm block py-2.5 rounded-xl font-semibold text-white mt-1 transition-opacity hover:opacity-90"
-                    style={{ background: `linear-gradient(135deg, ${C.accent} 0%, ${C.accentDark} 100%)` }}
-                  >
-                    View My Bills
-                  </Link>
-                </>
-              )}
-
-              {!isPayer && (
-                <p className="text-sm text-gray-400 dark:text-white/30 pt-2">
-                  Bill amounts are only visible to paying members.
-                </p>
-              )}
-            </div>
-          ) : (
-            <EmptyState
-              icon="📃"
-              title="No active billing cycle"
-              subtitle="Your host hasn't opened a billing cycle yet"
-            />
-          )}
-        </div>
-
-        {/* Announcements card */}
-        <div className="rounded-[32px] bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: C.tintC }}
-              >
-                <Megaphone size={13} style={{ color: C.accent }} />
-              </div>
-              <h2 className="font-semibold text-gray-900 dark:text-white">Announcements</h2>
-            </div>
+          <div className="flex items-center gap-2">
             <Link
-              to="/announcements"
-              className="text-xs font-medium hover:underline flex items-center gap-0.5"
-              style={{ color: C.accent }}
+              to="/notifications"
+              className="relative w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-white/5 border border-white/10 text-white/90 hover:bg-white/10 hover:text-white active:scale-95"
             >
-              View all <ChevronRight size={12} />
+              <Bell size={18} />
+              {badges.unreadNotifications > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1.5 bg-rose-500 text-white text-[9px] rounded-full flex items-center justify-center font-black shadow-lg ring-2 ring-[#02302e]">
+                  {badges.unreadNotifications > 9
+                    ? "9+"
+                    : badges.unreadNotifications}
+                </span>
+              )}
             </Link>
           </div>
+        </div>
 
-          {annLoading ? (
-            <div className="animate-pulse space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="border-l-2 border-gray-200 dark:border-white/15 pl-3 space-y-1.5">
-                  <div className="h-3.5 bg-gray-100 dark:bg-white/10 rounded w-4/5" />
-                  <div className="h-3 bg-gray-100 dark:bg-white/10 rounded w-full" />
-                  <div className="h-3 bg-gray-100 dark:bg-white/10 rounded w-2/3" />
-                </div>
-              ))}
+        {/* Hero Structural Split Layout */}
+        <div className="max-w-7xl mx-auto px-6 pt-8 pb-16 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center relative z-10">
+          <div className="lg:col-span-7 space-y-6">
+            <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase backdrop-blur-md bg-white/5 border border-white/10">
+              {room ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+                  <span className="text-emerald-300 font-extrabold">
+                    {room.name}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-[0_0_10px_rgba(251,191,36,0.5)]" />
+                  <span className="text-amber-300 font-extrabold">
+                    Pending Infrastructure Sync
+                  </span>
+                </>
+              )}
             </div>
-          ) : announcements.length > 0 ? (
-            <div className="space-y-3">
-              {announcements.map((a) => (
-                <div
-                  key={a.id || a._id}
-                  className="pl-3"
-                  style={{
-                    borderLeft: `2px solid ${a.isPinned || a.is_pinned ? C.accent : "#e5e7eb"}`,
-                  }}
+
+            {room ? (
+              <div className="space-y-4">
+                <h1 className="text-white text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter leading-[1.05]">
+                  Property Flow <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-teal-200 to-mint-100">
+                    {room.name}
+                  </span>
+                </h1>
+                <p className="text-xs sm:text-sm leading-relaxed max-w-xl font-medium text-slate-300/80">
+                  The all-in-one tool for apartment tenants and landlords to
+                  track bills, split costs, and settle payments.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h1 className="text-white text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter leading-[1.05]">
+                  Centralized <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-200">
+                    Propflow Ledger
+                  </span>
+                </h1>
+                <p className="text-xs sm:text-sm leading-relaxed max-w-xl font-medium text-slate-300/80">
+                  Initialize terminal telemetry by syncing with a room instance
+                  below, or coordinate access with your assigned platform
+                  manager.
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 pt-3">
+              <Link
+                to="/bills"
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl text-xs font-black tracking-wide text-slate-900 bg-emerald-300 hover:bg-emerald-200 shadow-xl shadow-emerald-950/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                View Bills <ArrowUpRight size={14} className="stroke-[3]" />
+              </Link>
+              {room && (
+                <button
+                  onClick={() => setShowPayModal(true)}
+                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl text-xs font-black tracking-wide text-white transition-all bg-white/5 border border-white/15 hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-1">
-                    {a.title}
-                    {(a.isPinned || a.is_pinned) && (
-                      <span
-                        className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                        style={{ background: C.tintA, color: C.accent }}
-                      >
-                        Pinned
-                      </span>
-                    )}
+                  <Sparkles size={14} className="text-emerald-400" />
+                  Pay Now
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Right Bento Panel Block */}
+          <div className="lg:col-span-5 w-full">
+            <div className="rounded-[32px] overflow-hidden backdrop-blur-xl border border-white/10 shadow-2xl bg-gradient-to-b from-white/10 to-white/[0.02]">
+              <div className="p-6 flex items-center gap-4 border-b border-white/5 bg-white/[0.02]">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-white/5 border border-white/10 shadow-inner">
+                  <Target size={20} color={C.accentSurface} />
+                </div>
+                <div>
+                  <p className="text-3xl font-black text-white tracking-tight leading-none">
+                    {displayShare
+                      ? `₱${Number(displayShare.total).toLocaleString()}`
+                      : room
+                        ? "—"
+                        : "₱0"}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-white/40 mt-0.5 line-clamp-2">
-                    {a.content}
-                  </p>
-                  <p className="text-xs text-gray-400 dark:text-white/30 mt-1">
-                    {new Date(a.created_at || a.createdAt).toLocaleDateString("en-PH", {
-                      month: "short",
-                      day: "numeric",
-                    })}
+                  <p className="text-[11px] font-bold mt-1.5 text-slate-400 tracking-wide uppercase">
+                    {displayShare
+                      ? displayShare.exact
+                        ? "You owe this cycle"
+                        : "Estimated share this cycle"
+                      : "No Active billing Data"}
                   </p>
                 </div>
-              ))}
+              </div>
+
+              <div className="px-6 py-4 border-b border-white/5 bg-black/20">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Cycle Allocation Window
+                  </span>
+                  <span
+                    className="text-xs font-black tracking-tight"
+                    style={{
+                      color: billingCountdown?.overdue
+                        ? "#f87171"
+                        : billingCountdown
+                          ? C.accentSurface
+                          : "rgba(255,255,255,0.4)",
+                    }}
+                  >
+                    {billingCountdown?.overdue
+                      ? "Overdue"
+                      : billingCountdown
+                        ? `${Math.round(100 - billingCountdown.percentage)}% Time Unused`
+                        : "Inactive Window"}
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-white/5 border border-white/5 p-[1px]">
+                  <div
+                    className="h-full rounded-full transition-all duration-1000"
+                    style={{
+                      width: billingCountdown
+                        ? `${billingCountdown.percentage}%`
+                        : "0%",
+                      background: billingCountdown?.overdue
+                        ? "#f87171"
+                        : billingCountdown?.percentage > 80
+                          ? "#fbbf24"
+                          : `linear-gradient(90deg, ${C.accentSurface}, #10b981)`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 border-b border-white/5 bg-black/10">
+                <div className="p-4 text-center border-r border-white/5">
+                  <p className="text-2xl font-black text-white tracking-tight">
+                    {memberCount || "—"}
+                  </p>
+                  <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mt-1">
+                    Tenants
+                  </p>
+                </div>
+                <div className="p-4 text-center">
+                  <p className="text-2xl font-black text-white tracking-tight">
+                    {payorCount || "—"}
+                  </p>
+                  <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mt-1">
+                    Payors
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 text-center bg-black/20 border-b border-white/5">
+                <p className="text-lg font-black text-white tracking-tight flex items-center justify-center gap-2">
+                  {allPaid ? (
+                    <span className="text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle size={16} /> 100% Cleared
+                    </span>
+                  ) : pendingBills.length > 0 ? (
+                    <span className="text-amber-400 flex items-center gap-1.5">
+                      <Clock size={16} /> {pendingBills.length} Actions Required
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </p>
+                <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mt-1">
+                  Account Clearing Status
+                </p>
+              </div>
+
+              <div className="p-4 flex flex-wrap items-center justify-center gap-2 bg-black/30">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  <span className="w-1 h-1 rounded-full bg-emerald-400 animate-ping" />{" "}
+                  Payor
+                </span>
+                {isPayer && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    🛡️ Bills
+                  </span>
+                )}
+                {hasPendingPayment && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-sky-500/10 border border-sky-500/20 text-sky-400 animate-pulse">
+                    ⚡ Verification Pending
+                  </span>
+                )}
+              </div>
             </div>
-          ) : (
-            <EmptyState
-              icon="📢"
-              title="No announcements"
-              subtitle="Nothing from your host yet"
-            />
-          )}
+          </div>
         </div>
       </div>
 
-      {/* ── Room Payment Summary ─────────────────────────────────────────────── */}
-      {room?.memberPayments?.length > 0 && cycle && (
-        <div className="rounded-[32px] bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: C.tintB }}
-            >
-              <CheckSquare size={13} style={{ color: C.accentDark }} />
+      {/* ══════════════════════════════════════════════════════════════════════
+          MAIN BODY CONTAINER
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="max-w-7xl mx-auto px-6 -mt-6 relative z-20 space-y-8">
+        {/* ── SECTION 1: Critical System Discrepancy Warnings ───────────────── */}
+        {outstandingBalance > 0 && (
+          <div className="rounded-3xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border bg-rose-50 border-rose-200/70 shadow-lg shadow-rose-950/5 animate-fadeIn">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-md shadow-rose-500/20 shrink-0">
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-rose-700 uppercase tracking-widest">
+                  Arrears Flag Triggered
+                </p>
+                <h4 className="text-lg font-black text-rose-950 mt-0.5">
+                  ₱{r2(outstandingBalance).toLocaleString()} Overdue System
+                  Deficit
+                </h4>
+                <p className="text-xs text-rose-700/80 font-medium">
+                  Unsettled outstanding structural items remain on your profile
+                  node.
+                </p>
+              </div>
             </div>
-            <h2 className="font-semibold text-gray-900 dark:text-white">Room Payment Summary</h2>
+            <Link
+              to="/billing-history"
+              className="text-xs bg-rose-600 hover:bg-rose-700 text-white px-5 py-3 rounded-xl font-black text-center shadow-lg shadow-rose-600/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Remediate Arrears
+            </Link>
           </div>
-          <div className="space-y-2">
-            {room.memberPayments.map((mp, i) => (
+        )}
+
+        {/* ── SECTION 2: Settlement & Action Module ────────────────────────── */}
+        {room && isPayer && myPayment && (
+          <div
+            className="rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5 border bg-white shadow-xl shadow-slate-950/5 transition-all"
+            style={{
+              borderColor: allPaid
+                ? "rgba(22,163,74,0.15)"
+                : "rgba(217,119,6,0.15)",
+            }}
+          >
+            <div className="flex items-center gap-4">
               <div
-                key={i}
-                className="flex items-center justify-between py-2 last:border-none"
-                style={{ borderBottom: i < room.memberPayments.length - 1 ? `1px solid rgba(3,109,65,0.10)` : "none" }}
+                className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-inner transition-transform hover:rotate-3"
+                style={{
+                  background: allPaid
+                    ? "rgba(22,163,74,0.06)"
+                    : "rgba(217,119,6,0.06)",
+                }}
               >
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                {allPaid ? (
+                  <CheckCircle size={28} style={{ color: C.accent }} />
+                ) : (
+                  <Clock size={28} className="text-amber-600" />
+                )}
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-black text-base text-slate-900 tracking-tight">
+                  {allPaid
+                    ? "Billing Obligations Satisfied"
+                    : `${pendingBills.length} Unresolved Invoice Statements`}
+                </h4>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-xl">
+                  {allPaid
+                    ? "Your profile node contains zero pending liabilities for this active accounting loop."
+                    : `The active group cycle requires structural collection for: ${pendingBills.join(", ")}.`}
+                </p>
+              </div>
+            </div>
+
+            <div className="shrink-0 w-full lg:w-auto border-t lg:border-t-0 pt-4 lg:pt-0 border-slate-100 flex justify-end">
+              {!allPaid &&
+                (hasPendingPayment ? (
+                  <span className="inline-flex items-center justify-center w-full lg:w-auto gap-2 px-5 py-3.5 rounded-xl text-amber-800 bg-amber-50 border border-amber-200 text-xs font-black tracking-wide uppercase">
+                    <Activity size={14} className="animate-spin" /> Verification
+                    Protocol In Progress
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setShowPayModal(true)}
+                    className="w-full lg:w-auto text-xs px-6 py-3.5 rounded-xl font-black tracking-wide uppercase text-white shadow-xl shadow-emerald-950/10 transition-all hover:opacity-95 hover:scale-[1.01] active:scale-[0.99]"
                     style={{
-                      background: mp.allPaid ? C.tintA : "rgba(156,163,175,0.15)",
-                      color: mp.allPaid ? C.accent : "#9ca3af",
+                      background: `linear-gradient(135deg, ${C.accent} 0%, ${C.accentDark} 100%)`,
                     }}
                   >
-                    {(mp.memberName || "?").charAt(0).toUpperCase()}
+                    Pay Now
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── SECTION 3: Central Application Control Switchboard ───────────── */}
+        <div className="space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">
+            Quick Navigations
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3.5">
+            {quickLinks.map(({ to, icon: Icon, label, badge }, idx) => (
+              <Link
+                key={to}
+                to={to}
+                className="relative bg-white border border-slate-100/80 rounded-2xl p-5 flex flex-col items-center justify-center gap-3.5 transition-all duration-300 hover:shadow-xl hover:shadow-slate-950/5 hover:-translate-y-1 group text-center"
+              >
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center shadow-sm transition-all group-hover:scale-110 group-hover:rotate-3"
+                  style={{ background: quickLinkTints[idx] }}
+                >
+                  <Icon size={20} style={{ color: quickLinkIconColors[idx] }} />
+                </div>
+                <span className="text-xs font-black text-slate-700 tracking-tight leading-tight group-hover:text-slate-900 transition-colors">
+                  {label}
+                </span>
+                {badge > 0 && (
+                  <span className="absolute top-3 right-3 min-w-[20px] h-[20px] px-1.5 bg-rose-600 text-white text-[10px] rounded-full flex items-center justify-center font-black shadow-md ring-2 ring-white">
+                    {badge > 9 ? "9+" : badge}
+                  </span>
+                )}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* ── SECTION 4: Dual-Column Invoicing & Administration Modules ────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left Block: Modern Invoice Breakdown Card */}
+          <div className="lg:col-span-7 rounded-3xl bg-white border border-slate-100 shadow-xl shadow-slate-950/[0.03] overflow-hidden flex flex-col justify-between">
+            <div>
+              <div
+                className="px-6 py-5 flex items-center justify-between border-b border-slate-100"
+                style={{
+                  background: "linear-gradient(to right, #f4f8f5, #ffffff)",
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100/50 flex items-center justify-center text-emerald-800 shadow-inner">
+                    <FileText size={16} />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {mp.memberName || "Member"}
-                    </p>
-                    <p className="text-xs text-gray-400 dark:text-white/30">
-                      {mp.isPayer ? "Payor" : "Non-payor"}
+                    <h3 className="font-black text-sm text-slate-900 tracking-tight">
+                      Active Bill Breakdown
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                      Current statement cycle
                     </p>
                   </div>
                 </div>
-                {mp.isPayer && (
-                  <div className="flex gap-1 text-xs">
-                    {[
-                      { label: "R", status: mp.rentStatus,       show: Number(room.billing?.rent) > 0 },
-                      { label: "E", status: mp.electricityStatus, show: Number(room.billing?.electricity) > 0 },
-                      { label: "W", status: mp.waterStatus,      show: Number(room.billing?.water) > 0 },
-                      { label: "I", status: mp.internetStatus,   show: Number(room.billing?.internet) > 0 },
-                    ]
-                      .filter((b) => b.show)
-                      .map((b, j) => (
-                        <span
-                          key={j}
-                          className="w-6 h-6 rounded flex items-center justify-center font-semibold"
-                          style={{
-                            background: b.status === "paid" ? C.tintA : "rgba(239,68,68,0.08)",
-                            color:  b.status === "paid" ? C.accent : "#ef4444",
-                          }}
-                        >
-                          {b.label}
-                        </span>
+                <div className="flex items-center gap-3">
+                  {room && (
+                    <Link
+                      to="/room-details"
+                      className="text-xs font-bold text-emerald-700 hover:text-emerald-800 underline transition-colors"
+                    >
+                      Room Info
+                    </Link>
+                  )}
+                  {cycle && <StatusBadge status={cycle.status} />}
+                </div>
+              </div>
+
+              <div className="p-6">
+                {cycleLoading ? (
+                  <div className="animate-pulse space-y-4">
+                    <div className="h-5 bg-slate-100 rounded-lg w-1/4" />
+                    <div className="space-y-3">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div
+                          key={i}
+                          className="h-4 bg-slate-100 rounded-md w-full"
+                        />
                       ))}
+                    </div>
+                  </div>
+                ) : cycle ? (
+                  <div className="space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 border border-slate-100 p-3.5 rounded-2xl gap-2">
+                      <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">
+                        Accounting Window
+                      </span>
+                      <span className="font-black text-slate-800 text-xs sm:text-sm">
+                        {new Date(
+                          cycle.startDate || cycle.start_date,
+                        ).toLocaleDateString("en-PH", {
+                          month: "long",
+                          day: "numeric",
+                        })}
+                        <span className="text-slate-400 font-normal px-2">
+                          →
+                        </span>
+                        {new Date(
+                          cycle.endDate || cycle.end_date,
+                        ).toLocaleDateString("en-PH", {
+                          month: "long",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-slate-100">
+                      {[
+                        {
+                          label: "Base Facility Rental",
+                          amt: displayShare?.rent ?? cycle.rent,
+                          show: Number(cycle.rent) > 0,
+                          icon: Home,
+                          bg: "bg-amber-50 text-amber-700",
+                          desc: "Core fixed structural lease rate",
+                        },
+                        {
+                          label: "Power Grid Utility",
+                          amt: displayShare?.electricity ?? cycle.electricity,
+                          show: Number(cycle.electricity) > 0,
+                          icon: Zap,
+                          bg: "bg-orange-50 text-orange-700",
+                          desc: "Variable metered electric resource usage",
+                        },
+                        {
+                          label: "Fluid Logistics / Water",
+                          amt:
+                            displayShare?.water ??
+                            (cycle.waterBillAmount || cycle.water_bill_amount),
+                          show:
+                            Number(
+                              cycle.waterBillAmount || cycle.water_bill_amount,
+                            ) > 0,
+                          icon: Droplets,
+                          bg: "bg-teal-50 text-teal-700",
+                          desc: "Municipal fluid supply deployment",
+                        },
+                        {
+                          label: "High-Speed Infrastructure",
+                          amt: displayShare?.internet ?? cycle.internet,
+                          show: Number(cycle.internet) > 0,
+                          icon: Wifi,
+                          bg: "bg-sky-50 text-sky-700",
+                          desc: "Shared high-speed data architecture allocation",
+                        },
+                      ]
+                        .filter((b) => b.show)
+                        .map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between py-3.5 group first:pt-0 last:pb-0"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${item.bg}`}
+                              >
+                                <item.icon size={16} />
+                              </div>
+                              <div>
+                                <p className="text-xs font-black text-slate-800 leading-tight">
+                                  {item.label}
+                                </p>
+                                <p className="text-[10px] font-medium text-slate-400 mt-0.5">
+                                  {item.desc}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="font-black text-sm text-slate-900 bg-slate-50/50 group-hover:bg-slate-100/80 px-3 py-1.5 rounded-xl transition-colors">
+                              ₱
+                              {Number(item.amt).toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+
+                    {!isPayer && (
+                      <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/50 text-amber-800">
+                        <Shield size={16} className="shrink-0 mt-0.5" />
+                        <p className="text-[11px] font-medium leading-relaxed">
+                          Account configured under a Tenant Scope. Cost line
+                          ledger analytics are hidden; execution authority
+                          resides with primary payers.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-6">
+                    <EmptyState
+                      icon="📃"
+                      title="No active billing cycle"
+                      subtitle="Your host hasn't opened an active accounting loop for this space."
+                    />
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-          <p className="text-xs text-gray-400 dark:text-white/30 mt-3">
-            R=Rent · E=Electricity · W=Water · I=Internet
-          </p>
-        </div>
-      )}
+            </div>
 
-      {/* ── Available rooms to join ──────────────────────────────────────────── */}
-      {unjoinedRooms.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="font-semibold text-gray-900 dark:text-white">
-            {room ? "Other Available Rooms" : "Available Rooms"}
-          </h2>
-          {unjoinedRooms.map((r) => {
-            const rid = r.id || r._id;
-            const isPending = pendingRoomIds.includes(rid);
-            return (
-              <div key={rid} className="rounded-[32px] bg-white dark:bg-[#0a4240] border border-gray-100 dark:border-white/8 p-4 flex items-start gap-4">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: C.tintA }}
-                >
-                  <Home size={18} style={{ color: C.accent }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 dark:text-white">{r.name}</p>
-                  {r.description && (
-                    <p className="text-xs text-gray-500 dark:text-white/40 mt-0.5 line-clamp-2">
-                      {r.description}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-400 dark:text-white/30 mt-1">
-                    {r.memberCount ?? r.members?.length ?? 0} members
+            {cycle && isPayer && (
+              <div className="p-6 bg-slate-50/80 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="font-black text-slate-800 text-sm tracking-tight">
+                    {displayShare
+                      ? "Your Total Bill This Cycle"
+                      : "Your Estimated Bill This Cycle"}
+                  </h4>
+                  <p className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                    {displayShare
+                      ? displayShare.exact
+                        ? "Enforced explicit split parameters"
+                        : `Equalized division across ${homePayorCount} nodes`
+                      : "Aggregate space tracking"}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => navigate(`/room/${rid}`)}
-                    className="text-xs font-medium hover:underline"
-                    style={{ color: C.accent }}
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                  <span
+                    className="font-black text-2xl tracking-tighter text-right flex-1 sm:flex-none"
+                    style={{ color: C.accentDark }}
                   >
-                    View
-                  </button>
-                  {isPending ? (
-                    <span className="text-xs text-amber-700 px-3 py-1.5 rounded-lg font-medium"
-                      style={{ background: "rgba(245,158,11,0.10)" }}>
-                      Pending
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => handleJoinRoom(rid)}
-                      disabled={joiningRoomId === rid}
-                      className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
-                      style={{ background: C.accent }}
-                    >
-                      {joiningRoomId === rid && <Spinner size="sm" className="mr-1" />}
-                      Join
-                    </button>
-                  )}
+                    ₱
+                    {Number(
+                      displayShare?.total ||
+                        cycle.totalBilledAmount ||
+                        cycle.total_billed_amount ||
+                        0,
+                    ).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                  <Link
+                    to="/bills"
+                    className="px-5 py-3 rounded-xl font-black text-xs text-white text-center shadow-md shadow-emerald-950/10 transition-all hover:opacity-95"
+                    style={{ background: C.accent }}
+                  >
+                    View Bills
+                  </Link>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            )}
+          </div>
 
-      {!room && unjoinedRooms.length === 0 && (
-        <EmptyState
-          icon="🏠"
-          title="No rooms found"
-          subtitle="No rooms are available to join right now. Contact your admin for a room code."
-        />
-      )}
+          {/* Right Block: Dynamic Broadcast Terminal */}
+          <div className="lg:col-span-5 rounded-3xl bg-white border border-slate-100 shadow-xl shadow-slate-950/[0.03] overflow-hidden flex flex-col justify-between">
+            <div>
+              <div
+                className="px-6 py-5 flex items-center justify-between border-b border-slate-100"
+                style={{
+                  background: "linear-gradient(to right, #f4f8f7, #ffffff)",
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-100/50 flex items-center justify-center text-teal-800 shadow-inner">
+                    <Megaphone size={16} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900 tracking-tight">
+                      Host Announcements
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                      Operational Updates
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to="/announcements"
+                  className="text-xs font-black flex items-center gap-0.5 text-emerald-700 hover:text-emerald-800 transition-colors"
+                >
+                  All Logs <ChevronRight size={14} className="stroke-[3.5]" />
+                </Link>
+              </div>
+
+              <div className="p-6">
+                {annLoading ? (
+                  <div className="animate-pulse space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="space-y-2">
+                        <div className="h-4 bg-slate-100 rounded w-1/3" />
+                        <div className="h-3 bg-slate-100 rounded w-full" />
+                      </div>
+                    ))}
+                  </div>
+                ) : announcements.length > 0 ? (
+                  <div className="space-y-4">
+                    {announcements.map((a) => (
+                      <div
+                        key={a.id || a._id}
+                        className="p-4 rounded-2xl border border-slate-100 bg-slate-50/40 relative group hover:bg-slate-50 transition-all duration-200"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <h4 className="text-xs font-black text-slate-800 group-hover:text-emerald-900 transition-colors leading-snug">
+                            {a.title}
+                          </h4>
+                          {(a.isPinned || a.is_pinned) && (
+                            <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 shrink-0">
+                              Urgent
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium mt-1.5 line-clamp-2 leading-relaxed">
+                          {a.content}
+                        </p>
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mt-3 border-t border-slate-100/60 pt-2.5">
+                          <Clock size={10} />
+                          Issued{" "}
+                          {new Date(
+                            a.created_at || a.createdAt,
+                          ).toLocaleDateString("en-PH", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-4">
+                    <EmptyState
+                      icon="📢"
+                      title="Broadcast channel empty"
+                      subtitle="No announcements or site directives have been broadcasted yet."
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {announcements.length > 0 && (
+              <div className="p-4 bg-slate-50/50 border-t border-slate-100 text-center">
+                <Link
+                  to="/announcements"
+                  className="text-xs font-extrabold text-slate-500 hover:text-slate-800 transition-colors inline-flex items-center gap-1"
+                >
+                  Browse historical archive bulletin <ArrowRight size={12} />
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── SECTION 5: Immersive Room Membership Status Grid Matrix ───────── */}
+        {room?.memberPayments?.length > 0 && cycle && (
+          <div className="rounded-3xl bg-white border border-slate-100 shadow-xl shadow-slate-950/[0.03] overflow-hidden">
+            <div
+              className="px-6 py-5 flex items-center justify-between border-b border-slate-100"
+              style={{
+                background: "linear-gradient(to right, #f2f7f4, #ffffff)",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 shadow-inner">
+                  <CheckSquare size={16} />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900 tracking-tight">
+                    Payors Payment Status
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                    Real-time room payment activity and settlement records for
+                    the current cycle
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1.5 rounded-xl">
+                <Users size={12} /> {room.memberPayments.length} Active Payors
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {room.memberPayments.map((mp, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/30 hover:border-slate-200 transition-all duration-200 gap-3"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black shadow-inner tracking-wider shrink-0"
+                        style={{
+                          background: mp.allPaid
+                            ? "linear-gradient(135deg, #7ee8a2, #1a7a52)"
+                            : "linear-gradient(135deg, #f1f5f9, #e2e8f0)",
+                          color: mp.allPaid ? "#fff" : "#475569",
+                        }}
+                      >
+                        {(mp.memberName || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-slate-800">
+                          {mp.memberName || "System Occupant"}
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 tracking-wide mt-0.5 uppercase">
+                          {mp.isPayer ? "Primary Payor" : "Resident Occupant"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {mp.isPayer ? (
+                      <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                        {[
+                          {
+                            label: "Rent",
+                            status: mp.rentStatus,
+                            show: Number(room.billing?.rent) > 0,
+                          },
+                          {
+                            label: "Power",
+                            status: mp.electricityStatus,
+                            show: Number(room.billing?.electricity) > 0,
+                          },
+                          {
+                            label: "Water",
+                            status: mp.waterStatus,
+                            show: Number(room.billing?.water) > 0,
+                          },
+                          {
+                            label: "Net",
+                            status: mp.internetStatus,
+                            show: Number(room.billing?.internet) > 0,
+                          },
+                        ]
+                          .filter((b) => b.show)
+                          .map((b, j) => (
+                            <div
+                              key={j}
+                              className="px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider border shadow-sm"
+                              style={{
+                                backgroundColor:
+                                  b.status === "paid" ? "#f0fdf4" : "#fef2f2",
+                                borderColor:
+                                  b.status === "paid"
+                                    ? "rgba(34,197,94,0.2)"
+                                    : "rgba(239,68,68,0.2)",
+                                color:
+                                  b.status === "paid" ? "#15803d" : "#b91c1c",
+                              }}
+                            >
+                              <span
+                                className={`w-1 h-1 rounded-full ${b.status === "paid" ? "bg-emerald-500" : "bg-rose-500"}`}
+                              />
+                              {b.label}
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1 rounded-lg bg-slate-100 text-slate-400 border border-slate-200/40 select-none">
+                        Exempt Scope
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 p-4 rounded-2xl bg-slate-50 border border-slate-100 flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] font-black text-slate-400 tracking-widest uppercase">
+                <span className="text-slate-500 font-extrabold">
+                  Audit Registry Dictionary:
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{" "}
+                  Confirmed Settlement
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />{" "}
+                  Outstanding Liability
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── SECTION 6: External Available Network Architectural Spaces ────── */}
+        {unjoinedRooms.length > 0 && (
+          <div className="space-y-4">
+            <div className="px-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {room
+                  ? "Companion Facilities Directory"
+                  : "Available Spatial Registries"}
+              </p>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight mt-1">
+                Discover More Properties
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {unjoinedRooms.map((r) => {
+                const rid = r.id || r._id;
+                const isPending = pendingRoomIds.includes(rid);
+                return (
+                  <div
+                    key={rid}
+                    className="rounded-3xl bg-white border border-slate-100 p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 shadow-xl shadow-slate-950/[0.02] transition-all hover:shadow-xl hover:shadow-slate-950/5 group"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-emerald-50 border border-emerald-100/50 text-emerald-800 shadow-inner group-hover:scale-105 transition-transform duration-200">
+                        <Home size={24} />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="font-black text-base text-slate-900 tracking-tight leading-tight group-hover:text-emerald-950 transition-colors">
+                          {r.name}
+                        </h4>
+                        {r.description && (
+                          <p className="text-xs text-slate-500 font-medium max-w-2xl leading-relaxed">
+                            {r.description}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black tracking-wide text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200/30 uppercase">
+                            <Users size={11} />{" "}
+                            {r.memberCount ?? r.members?.length ?? 0} Tenants
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 justify-end border-t md:border-t-0 pt-4 md:pt-0 border-slate-100 shrink-0">
+                      <button
+                        onClick={() => navigate(`/room/${rid}`)}
+                        className="text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-800 px-4 py-3 rounded-xl transition-colors"
+                      >
+                        View Property
+                      </button>
+                      {isPending ? (
+                        <span className="text-xs text-amber-700 bg-amber-50 px-5 py-3 rounded-xl font-black border border-amber-200 text-center tracking-wide uppercase">
+                          Awaiting Cryptographic Entry Approval
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleJoinRoom(rid)}
+                          disabled={joiningRoomId === rid}
+                          className="text-xs px-5 py-3 rounded-xl font-black uppercase tracking-wide text-white transition-all shadow-lg hover:opacity-95 disabled:opacity-50 flex items-center gap-2"
+                          style={{
+                            background: C.accent,
+                            boxShadow: "0 10px 15px -3px rgba(26,122,82,0.2)",
+                          }}
+                        >
+                          {joiningRoomId === rid && <Spinner size="sm" />}
+                          Inquire
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!room && unjoinedRooms.length === 0 && (
+          <div className="py-12 bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-950/[0.02]">
+            <EmptyState
+              icon="🏠"
+              title="Zero network registries found"
+              subtitle="No room nodes are broadcasting availability. Secure explicit link criteria directly from your system manager."
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

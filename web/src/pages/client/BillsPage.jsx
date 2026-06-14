@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
   roomService,
@@ -6,7 +7,7 @@ import {
   paymentService,
   settingsService,
 } from "../../services/apiService";
-import { Spinner, StatusBadge, Alert, EmptyState } from "../../components/ui";
+import { Alert, EmptyState } from "../../components/ui";
 import {
   Zap,
   Droplets,
@@ -20,6 +21,10 @@ import {
   Clock,
   Smartphone,
   X,
+  ArrowRight,
+  ShieldCheck,
+  TrendingUp,
+  Activity,
 } from "lucide-react";
 
 const APP_DEEP_LINK = "aptbilltracker://bills";
@@ -43,7 +48,6 @@ function MobilePayModal({ onClose }) {
       })
       .catch(() => {});
 
-    // Auto-attempt deep link the moment the modal opens.
     tryOpenApp();
     setJustTried(true);
   }, []);
@@ -55,131 +59,128 @@ function MobilePayModal({ onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 animate-fadeIn"
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" />
       <div
-        className="relative w-full max-w-sm card p-6 shadow-2xl space-y-4"
+        className="relative w-full max-w-md rounded-3xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/50 dark:border-slate-800/50 p-6 shadow-2xl backdrop-blur-xl space-y-6 transform transition-all scale-100"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-white/60"
+          className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-600 dark:hover:text-slate-200 transition-all"
         >
-          <X size={18} />
+          <X size={16} />
         </button>
-        <div className="flex flex-col items-center text-center gap-3 pt-2">
-          <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center">
-            <Smartphone size={28} className="text-accent" />
+
+        <div className="flex flex-col items-center text-center gap-4 pt-2">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1a7a52]/20 to-[#1a7a52]/5 dark:from-[#7ee8a2]/20 dark:to-transparent flex items-center justify-center shadow-md border border-[#1a7a52]/10 dark:border-[#7ee8a2]/10">
+            <Smartphone
+              size={28}
+              className="text-[#1a7a52] dark:text-[#7ee8a2]"
+            />
           </div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-            Pay via Mobile App
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-white/50">
-            Payments must be made through the{" "}
-            <span className="font-semibold text-gray-700 dark:text-white/80">
-              PropFlow
-            </span>{" "}
-            mobile app.
-          </p>
+          <div>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+              Pay Safely on Mobile
+            </h2>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-2 max-w-sm leading-relaxed">
+              To process your secure payment, let's head right over to the{" "}
+              <span className="font-bold text-[#1a7a52] dark:text-[#7ee8a2]">
+                PropFlow
+              </span>{" "}
+              mobile app.
+            </p>
+          </div>
         </div>
 
-        {/* Primary action — open the app if already installed */}
         <button
           onClick={handleOpenApp}
-          className="btn-primary w-full flex items-center justify-center gap-2 py-3"
+          className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-sm font-bold transition-all duration-300 bg-[#1a7a52] text-white hover:bg-[#135c3d] dark:bg-[#7ee8a2] dark:text-[#02302e] dark:hover:bg-[#64d08b] active:scale-[0.99] shadow-lg shadow-[#1a7a52]/20 dark:shadow-none"
         >
-          <Smartphone size={16} />
-          {justTried ? "Open App Again" : "Open App"}
+          <ShieldCheck size={16} />
+          {justTried ? "Try Opening App Again" : "Open PropFlow App"}
         </button>
 
         {justTried && (
-          <p className="text-xs text-center text-gray-400 dark:text-white/30 -mt-1">
-            If the app didn&apos;t open, download it below.
+          <p className="text-xs text-center font-semibold text-slate-400 dark:text-slate-500">
+            App didn't open automatically? You can use the links below instead.
           </p>
         )}
 
-        {/* Divider */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-gray-100 dark:bg-white/8" />
-          <span className="text-xs text-gray-400 dark:text-white/30">
-            Don&apos;t have the app?
+        <div className="flex items-center gap-3 py-1">
+          <div className="flex-1 h-px bg-slate-200/60 dark:bg-slate-800/50" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+            Official App Stores
           </span>
-          <div className="flex-1 h-px bg-gray-100 dark:bg-white/8" />
+          <div className="flex-1 h-px bg-slate-200/60 dark:bg-slate-800/50" />
         </div>
 
-        {/* Store buttons — disabled until published on Play Store / App Store */}
         <div className="grid grid-cols-2 gap-3">
           <div
-            className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-700/40 dark:bg-white/5 opacity-50 cursor-not-allowed select-none"
-            title="Coming soon"
+            className="flex items-center gap-3 px-3.5 py-3 rounded-xl bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800/40 opacity-50 cursor-not-allowed select-none transition-all"
+            title="Google Play availability coming soon!"
           >
             <svg
               viewBox="0 0 24 24"
-              className="w-5 h-5 flex-shrink-0"
+              className="w-5 h-5 flex-shrink-0 text-slate-400"
               fill="currentColor"
             >
-              <path
-                className="text-white"
-                d="M3.18 23.76c.33.18.7.24 1.06.18L14.93 12 4.24.06A1.83 1.83 0 0 0 3 1.83v20.34c0 .6.06 1.18.18 1.59zM16.34 13.4l2.79-2.79-2.79-2.79-1.41 1.41L16.52 12l-1.59 1.59 1.41 1.41zm2.48 5.6-9.43-5.47L11.98 12l1.41-1.53 9.43-5.47c.76.44 1.18 1.18 1.18 2.01v10a2 2 0 0 1-1.18 1.99zM4.24 23.94l10.69-11.94-2.59-2.59L4.24.06"
-              />
+              <path d="M3.18 23.76c.33.18.7.24 1.06.18L14.93 12 4.24.06A1.83 1.83 0 0 0 3 1.83v20.34c0 .6.06 1.18.18 1.59zM16.34 13.4l2.79-2.79-2.79-2.79-1.41 1.41L16.52 12l-1.59 1.59 1.41 1.41zm2.48 5.6-9.43-5.47L11.98 12l1.41-1.53 9.43-5.47c.76.44 1.18 1.18 1.18 2.01v10a2 2 0 0 1-1.18 1.99zM4.24 23.94l10.69-11.94-2.59-2.59L4.24.06" />
             </svg>
             <div>
-              <p className="text-[9px] text-gray-400 dark:text-white/40 leading-none">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
                 COMING SOON
               </p>
-              <p className="text-xs font-semibold text-white/60 leading-tight">
+              <p className="text-xs font-bold text-slate-600 dark:text-slate-400 mt-0.5">
                 Google Play
               </p>
             </div>
           </div>
+
           <div
-            className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-700/40 dark:bg-white/5 opacity-50 cursor-not-allowed select-none"
-            title="Coming soon"
+            className="flex items-center gap-3 px-3.5 py-3 rounded-xl bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800/40 opacity-50 cursor-not-allowed select-none transition-all"
+            title="App Store version coming soon!"
           >
             <svg
               viewBox="0 0 24 24"
-              className="w-5 h-5 flex-shrink-0"
+              className="w-5 h-5 flex-shrink-0 text-slate-400"
               fill="currentColor"
             >
-              <path
-                className="text-white"
-                d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"
-              />
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
             </svg>
             <div>
-              <p className="text-[9px] text-gray-400 dark:text-white/40 leading-none">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
                 COMING SOON
               </p>
-              <p className="text-xs font-semibold text-white/60 leading-tight">
+              <p className="text-xs font-bold text-slate-600 dark:text-slate-400 mt-0.5">
                 App Store
               </p>
             </div>
           </div>
         </div>
 
-        {/* GitHub / direct APK download — synced with superadmin version control */}
         {apkUrl && (
           <a
             href={apkUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-gray-900 dark:bg-white/10 hover:bg-gray-800 dark:hover:bg-white/15 transition-colors"
+            className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-950 hover:bg-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700/90 transition-all shadow-md group"
           >
             <svg
               viewBox="0 0 24 24"
-              className="w-5 h-5 flex-shrink-0 text-white"
+              className="w-4 h-4 flex-shrink-0 text-white group-hover:scale-105 transition-transform"
               fill="currentColor"
             >
               <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.75-1.33-1.75-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.78.42-1.3.76-1.6-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.82.58C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z" />
             </svg>
-            <div>
-              <p className="text-[9px] text-gray-400 dark:text-white/40 leading-none">
-                DOWNLOAD APK FROM
+            <div className="text-left">
+              <p className="text-[9px] font-black text-slate-400 dark:text-slate-400 tracking-wide leading-none">
+                DIRECT DOWNLOAD
               </p>
-              <p className="text-xs font-semibold text-white leading-tight">
-                GitHub Releases
+              <p className="text-xs font-bold text-white mt-1 leading-none">
+                Get the Android APK
               </p>
             </div>
           </a>
@@ -187,9 +188,9 @@ function MobilePayModal({ onClose }) {
 
         <button
           onClick={onClose}
-          className="w-full text-sm text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/50 transition-colors py-1"
+          className="w-full text-center text-xs font-bold text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
         >
-          Maybe later
+          Back to dashboard
         </button>
       </div>
     </div>
@@ -206,35 +207,45 @@ function BillRow({
   note,
 }) {
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-gray-100 dark:border-white/8 last:border-none">
-      {Icon && (
-        <div
-          className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-            bgClass || "bg-gray-100 dark:bg-white/8"
-          }`}
-        >
-          <Icon size={16} className={iconClass || "text-gray-500"} />
+    <div className="flex items-center justify-between py-3.5 px-2 rounded-xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-200 group border-b border-slate-100 dark:border-slate-800/40 last:border-none">
+      <div className="flex items-center gap-3.5 min-w-0">
+        {Icon && (
+          <div
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all group-hover:scale-105 shadow-sm border border-slate-200/10 ${bgClass || "bg-slate-50 dark:bg-slate-800/40"}`}
+          >
+            <Icon size={16} className={iconClass || "text-slate-400"} />
+          </div>
+        )}
+        <div className="min-w-0">
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block truncate group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+            {label}
+          </span>
+          {note && (
+            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+              {note}
+            </p>
+          )}
         </div>
-      )}
-      <div className="flex-1">
-        <span className="text-sm text-gray-700 dark:text-white/70">
-          {label}
+      </div>
+
+      <div className="flex items-center gap-3 shrink-0 ml-4">
+        <span className="text-xs font-black text-slate-900 dark:text-white tracking-tight">
+          ₱{Number(amount || 0).toLocaleString()}
         </span>
-        {note && (
-          <p className="text-xs text-gray-400 dark:text-white/30 mt-0.5">
-            {note}
-          </p>
+        {status === "paid" && (
+          <div className="p-0.5 rounded-full bg-emerald-500/10 dark:bg-emerald-400/10">
+            <CheckCircle
+              size={14}
+              className="text-emerald-500 dark:text-emerald-400"
+            />
+          </div>
+        )}
+        {status === "unpaid" && (
+          <div className="p-0.5 rounded-full bg-rose-500/10 dark:bg-rose-400/10">
+            <XCircle size={14} className="text-rose-400" />
+          </div>
         )}
       </div>
-      <span className="text-sm font-semibold text-gray-900 dark:text-white mr-2">
-        ₱{Number(amount || 0).toLocaleString()}
-      </span>
-      {status === "paid" && (
-        <CheckCircle size={16} className="text-green-500 shrink-0" />
-      )}
-      {status === "unpaid" && (
-        <XCircle size={16} className="text-red-400 shrink-0" />
-      )}
     </div>
   );
 }
@@ -293,22 +304,20 @@ export default function BillsPage() {
       if (balRes.status === "fulfilled")
         setOutstandingBalance(balRes.value?.totalOutstanding || 0);
     } catch (e) {
-      setError(e?.message || "Failed to load bills");
+      setError(
+        e?.message ||
+          "We couldn't load your billing info. Please give the page a quick refresh.",
+      );
     }
     setLoading(false);
   };
 
-  // Per-category status from room.memberPayments
   const myPayment = room?.memberPayments?.find(
     (mp) => String(mp.member) === String(userId),
   );
-
-  // Per-user share from memberCharges
   const userCharge = cycle?.memberCharges?.find(
     (mc) => String(mc.userId) === String(userId),
   );
-
-  // Payer check
   const myMember = room?.members?.find(
     (m) => String(m.user?.id || m.user?._id) === String(userId),
   );
@@ -329,9 +338,6 @@ export default function BillsPage() {
     cycle?.totalBilledAmount || cycle?.total_billed_amount || 0,
   );
 
-  const payorCount =
-    cycle?.memberCharges?.filter((mc) => mc.isPayer)?.length || 1;
-
   const waterBreakdown = userCharge
     ? {
         ownWater: Number(userCharge.waterOwn || 0),
@@ -342,14 +348,9 @@ export default function BillsPage() {
   const waterNote =
     waterBreakdown &&
     (waterBreakdown.ownWater > 0 || waterBreakdown.sharedNonPayorWater > 0)
-      ? `Own: ₱${waterBreakdown.ownWater.toLocaleString()}${
-          waterBreakdown.sharedNonPayorWater > 0
-            ? ` + Shared: ₱${waterBreakdown.sharedNonPayorWater.toLocaleString()}`
-            : ""
-        }`
+      ? `Your usage: ₱${waterBreakdown.ownWater.toLocaleString()} + Comm split: ₱${waterBreakdown.sharedNonPayorWater.toLocaleString()}`
       : null;
 
-  const cycleId = cycle?.id || cycle?._id;
   const myRecentPayments = cycle
     ? payments.filter((p) => {
         const cycleStart = (cycle.startDate || cycle.start_date || "").slice(
@@ -364,24 +365,20 @@ export default function BillsPage() {
         return cycleStart && payStart && cycleStart === payStart;
       })
     : [];
+
   const totalPaid = (() => {
     const fromTx = myRecentPayments
       .filter((p) => p.status === "approved" || p.status === "settled")
       .reduce((s, p) => s + Number(p.amount), 0);
-    // When room data confirms allPaid but payment transactions aren't available
-    // (different API, date mismatch, etc.), trust the room record so the chips
-    // display correctly instead of showing ₱0 Paid.
     if (myPayment?.allPaid && fromTx === 0)
       return myShare?.total || fallbackTotal;
     return fromTx;
   })();
+
   const pendingPayments = myRecentPayments.filter(
     (p) => p.status === "pending" || p.status === "submitted",
   );
 
-  // Auto-refresh room + payments while a payment is awaiting verification
-  // so the Paid/Remaining chips and allPaid flag update without a manual reload.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (pendingPayments.length === 0) return;
     const roomId = room?.id || room?._id;
@@ -413,564 +410,495 @@ export default function BillsPage() {
     };
     const interval = setInterval(refresh, 30000);
     return () => clearInterval(interval);
-  }, [pendingPayments.length, room?.id, room?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pendingPayments.length, room?.id, room?._id]);
 
+  /* Main Glowing Homepage Loading Animation Copy */
   if (loading)
     return (
-      <div className="flex items-center justify-center py-24">
-        <Spinner size="lg" className="text-accent" />
+      <div className="flex flex-col items-center justify-center py-48 space-y-4">
+        <div className="relative flex items-center justify-center">
+          {/* Glassmorphic outer glowing ripple */}
+          <div className="absolute w-16 h-16 rounded-2xl bg-[#1a7a52]/20 dark:bg-[#7ee8a2]/10 animate-ping duration-1000" />
+          {/* Main spinning element */}
+          <div className="w-12 h-12 rounded-2xl border-2 border-slate-200 dark:border-slate-800 border-t-[#1a7a52] dark:border-t-[#7ee8a2] animate-spin" />
+          {/* Inner brand identity accent */}
+          <div className="absolute w-5 h-5 rounded-xl bg-gradient-to-br from-[#1a7a52] to-[#135c3d] dark:from-[#7ee8a2] dark:to-[#64d08b] shadow-md flex items-center justify-center">
+            <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-[#02302e] animate-pulse" />
+          </div>
+        </div>
+        <p className="text-xs font-black tracking-widest text-slate-400 dark:text-slate-500 uppercase animate-pulse pt-2">
+          Loading your data...
+        </p>
       </div>
     );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-6xl mx-auto pb-16 px-4 animate-fadeIn">
       {showPayModal && (
         <MobilePayModal onClose={() => setShowPayModal(false)} />
       )}
-      <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-        My Bills
-      </h1>
+
+      {/* Top Header Row */}
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/60 dark:border-slate-800/80 p-6 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 group">
+        <div className="absolute -right-20 -top-20 w-48 h-48 rounded-full bg-[#1a7a52]/5 dark:bg-[#7ee8a2]/5 blur-3xl group-hover:scale-110 transition-transform duration-700" />
+
+        <div>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#1a7a52]/10 dark:bg-[#7ee8a2]/10 text-xs font-black text-[#1a7a52] dark:text-[#7ee8a2] tracking-wide mb-2 uppercase">
+            <Activity size={12} /> Overview
+          </span>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+            Billing Statement
+          </h1>
+          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1 max-w-xl">
+            Check your shared room utilities, tracked rent periods, and safely
+            settle your split balances below.
+          </p>
+        </div>
+
+        {/* Current Active Timeline Card Segment */}
+        <div className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-slate-50/50 dark:bg-slate-800/30 border border-slate-200/40 dark:border-slate-800/50 backdrop-blur-sm self-start md:self-center">
+          <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 shadow-sm flex items-center justify-center text-slate-400 shrink-0 border border-slate-200/20">
+            <Calendar
+              size={18}
+              className="text-[#1a7a52] dark:text-[#7ee8a2]"
+            />
+          </div>
+          <div>
+            <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase leading-none">
+              Billing Period
+            </p>
+            <p className="text-xs font-black text-slate-800 dark:text-slate-200 mt-1.5 whitespace-nowrap">
+              {new Date(cycle.startDate || cycle.start_date).toLocaleDateString(
+                "en-PH",
+                { month: "short", day: "numeric" },
+              )}
+              {" – "}
+              {new Date(cycle.endDate || cycle.end_date).toLocaleDateString(
+                "en-PH",
+                { month: "short", day: "numeric", year: "numeric" },
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {error && <Alert type="error" message={error} />}
 
       {!room ? (
         <EmptyState
           icon="🏠"
-          title="No room joined"
-          subtitle="You haven't joined a room yet"
+          title="No property linked"
+          subtitle="You aren't assigned to an active rental unit yet. Please reach out to your property manager to link your profile."
         />
       ) : !cycle ? (
         <EmptyState
           icon="🧾"
-          title="No active billing cycle"
-          subtitle="Your host hasn't opened a billing cycle yet"
+          title="All caught up!"
+          subtitle="No new bills have been posted for this period. We'll notify you as soon as your statement is ready."
         />
       ) : (
-        <>
-          {/* Outstanding balance */}
-          {outstandingBalance > 0 && (
-            <div className="card p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/10 flex items-center gap-3">
-              <AlertTriangle size={18} className="text-red-500 shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-red-700 dark:text-red-400">
-                  Outstanding Balance
-                </p>
-                <p className="text-xs text-red-600 dark:text-red-300">
-                  ₱{Number(outstandingBalance).toLocaleString()} from previous
-                  cycles
-                </p>
-              </div>
-              <Link
-                to="/billing-history"
-                className="text-xs text-red-500 font-medium hover:underline shrink-0"
-              >
-                View
-              </Link>
-            </div>
-          )}
-
-          {/* Pending payment notice */}
-          {pendingPayments.length > 0 && (
-            <div className="card p-4 border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-900/10 flex items-center gap-3">
-              <Clock size={18} className="text-amber-500 shrink-0" />
-              <p className="text-sm text-amber-700 dark:text-amber-300">
-                {pendingPayments.length} payment
-                {pendingPayments.length > 1 ? "s" : ""} awaiting approval.
-              </p>
-            </div>
-          )}
-
-          <div className="card p-4 flex items-center gap-3 bg-accent/5">
-            <Calendar size={18} className="text-accent" />
-            <div>
-              <p className="text-xs text-gray-500 dark:text-white/40">
-                Billing Period
-              </p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                {new Date(
-                  cycle.startDate || cycle.start_date,
-                ).toLocaleDateString("en-PH", {
-                  month: "long",
-                  day: "numeric",
-                })}
-                {" \u2013 "}
-                {new Date(cycle.endDate || cycle.end_date).toLocaleDateString(
-                  "en-PH",
-                  { month: "long", day: "numeric", year: "numeric" },
-                )}
-              </p>
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              {myPayment?.allPaid && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold">
-                  <CheckCircle size={11} /> Paid
-                </span>
-              )}
-              <StatusBadge status={cycle.status} />
-            </div>
-          </div>
-
-          {/* Bills breakdown — room totals (payers only) */}
-          {!isPayer && (
-            <div className="card p-5 text-center py-8">
-              <p className="text-sm text-gray-500 dark:text-white/40">
-                Bill details are only visible to paying members.
-              </p>
-            </div>
-          )}
-          {isPayer && (
-            <div className="card p-5">
-              <h2 className="font-semibold text-gray-900 dark:text-white mb-1">
-                Bill Breakdown
-              </h2>
-              {Number(cycle.rent) > 0 && (
-                <BillRow
-                  label="Rent"
-                  amount={cycle.rent}
-                  icon={Home}
-                  iconClass="text-orange-500"
-                  bgClass="bg-orange-50 dark:bg-orange-900/20"
-                  status={myPayment?.rentStatus}
-                />
-              )}
-              {Number(cycle.electricity) > 0 && (
-                <BillRow
-                  label={`Electricity${cycle.electricity_units ? ` (${cycle.electricity_units} kWh)` : ""}`}
-                  amount={cycle.electricity}
-                  icon={Zap}
-                  iconClass="text-amber-500"
-                  bgClass="bg-amber-50 dark:bg-amber-900/20"
-                  status={myPayment?.electricityStatus}
-                />
-              )}
-              {Number(cycle.waterBillAmount || cycle.water_bill_amount) > 0 && (
-                <BillRow
-                  label="Water"
-                  amount={cycle.waterBillAmount || cycle.water_bill_amount}
-                  icon={Droplets}
-                  iconClass="text-blue-500"
-                  bgClass="bg-blue-50 dark:bg-blue-900/20"
-                  status={myPayment?.waterStatus}
-                />
-              )}
-              {Number(cycle.internet) > 0 && (
-                <BillRow
-                  label="Internet"
-                  amount={cycle.internet}
-                  icon={Wifi}
-                  iconClass="text-purple-500"
-                  bgClass="bg-purple-50 dark:bg-purple-900/20"
-                  status={myPayment?.internetStatus}
-                />
-              )}
-              <div className="flex justify-between items-center pt-4 mt-2 border-t-2 border-accent/30">
-                <span className="font-bold text-gray-900 dark:text-white">
-                  Room Total
-                </span>
-                <span className="text-xl font-extrabold text-accent">
-                  ₱{fallbackTotal.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Per-member water usage */}
-          {(() => {
-            const isPresenceBased =
-              room.waterBillingMode !== "fixed_monthly" &&
-              room.water_billing_mode !== "fixed_monthly";
-            const members = room.members || [];
-            const billingStart = room.billing?.start
-              ? new Date(room.billing.start)
-              : null;
-            const billingEnd = room.billing?.end
-              ? new Date(room.billing.end)
-              : null;
-            if (!isPresenceBased || members.length === 0) return null;
-
-            const memberRows = members.map((m) => {
-              const mId = m.id || m._id;
-              const name = m.user?.name || m.user?.email || "Member";
-              const rawPresence = Array.isArray(m.presence) ? m.presence : [];
-              const filteredDays =
-                billingStart && billingEnd
-                  ? rawPresence.filter((d) => {
-                      const dt = new Date(d);
-                      return dt >= billingStart && dt <= billingEnd;
-                    })
-                  : rawPresence;
-              const days = filteredDays.length;
-              const waterAmt = days * 5;
-              const isMe = String(mId) === String(userId);
-              return {
-                name,
-                days,
-                waterAmt,
-                isMe,
-                isPayer: m.isPayer || m.is_payer,
-              };
-            });
-
-            return (
-              <div className="card p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                    <Droplets size={15} className="text-blue-500" />
-                  </div>
-                  <h2 className="font-semibold text-gray-900 dark:text-white">
-                    Members' Water Usage
-                  </h2>
+        /* Bento Core Dashboard Structure Grid */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* LEFT-COLUMN: Primary Breakdown Actions Container */}
+          <div className="lg:col-span-7 space-y-6 flex flex-col h-full">
+            {/* Conditional Unpaid Balance Alert */}
+            {outstandingBalance > 0 && (
+              <div className="rounded-3xl p-5 border border-rose-100 dark:border-rose-950/40 bg-gradient-to-r from-rose-50/30 via-white/80 to-transparent dark:from-rose-950/5 dark:via-slate-900/40 backdrop-blur-md flex items-center gap-4 shadow-sm group">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500 shrink-0 shadow-inner">
+                  <AlertTriangle size={18} />
                 </div>
-                <div className="space-y-0">
-                  {memberRows.map((mr, i) => (
-                    <div
-                      key={i}
-                      className={`flex items-center justify-between py-2.5 border-b border-gray-100 dark:border-white/8 last:border-none ${mr.isMe ? "bg-blue-50/50 dark:bg-blue-900/10 -mx-2 px-2 rounded-lg" : ""}`}
-                    >
+                <div className="flex-1 min-w-0">
+                  <p className="text-[9px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                    Past Unpaid Balance
+                  </p>
+                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                    You have an outstanding balance of{" "}
+                    <span className="font-black text-rose-600 dark:text-rose-400">
+                      ₱{Number(outstandingBalance).toLocaleString()}
+                    </span>{" "}
+                    from previous months.
+                  </p>
+                </div>
+                <Link
+                  to="/billing-history"
+                  className="flex items-center gap-1.5 text-[11px] font-black text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shrink-0 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/80 px-3.5 py-2 rounded-xl transition-all shadow-sm hover:scale-[1.02]"
+                >
+                  View History <ArrowRight size={12} />
+                </Link>
+              </div>
+            )}
+
+            {/* Core Personal Split Bento Panel */}
+            {isPayer && myShare && (
+              <div
+                className={`rounded-3xl border p-6 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-sm relative overflow-hidden transition-all duration-300 flex-1 flex flex-col justify-between group ${
+                  myPayment?.allPaid
+                    ? "border-emerald-500/20 shadow-emerald-500/5 dark:shadow-none"
+                    : "border-slate-200/80 dark:border-slate-800/80"
+                }`}
+              >
+                <div className="absolute right-0 top-0 w-32 h-32 rounded-full bg-gradient-to-br from-[#1a7a52]/5 to-transparent blur-2xl group-hover:scale-125 transition-transform" />
+
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-sm ${myPayment?.allPaid ? "bg-emerald-500" : "bg-[#1a7a52]"}`}
+                      >
+                        <CreditCard size={14} />
+                      </div>
+                      <h2 className="text-sm font-black text-slate-900 dark:text-white tracking-tight">
+                        Your Share
+                      </h2>
+                    </div>
+                    {myPayment?.allPaid && (
+                      <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/10 px-2 py-0.5 rounded-md">
+                        All Settled
+                      </span>
+                    )}
+                  </div>
+
+                  {myPayment?.allPaid ? (
+                    <div className="py-6 flex flex-col items-center justify-center text-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/10">
+                        <CheckCircle size={24} />
+                      </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {mr.name}
-                          {mr.isMe && (
-                            <span className="ml-1 text-xs text-accent">
-                              (You)
-                            </span>
-                          )}
+                        <p className="text-sm font-black text-slate-900 dark:text-white">
+                          Account balance clear
                         </p>
-                        <p className="text-xs text-gray-400 dark:text-white/30">
-                          {mr.days} day{mr.days !== 1 ? "s" : ""} × ₱5
-                          {!mr.isPayer && " · non-payer"}
+                        <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1 max-w-xs leading-relaxed">
+                          Awesome! Your share of the bills has been fully paid
+                          and confirmed for this period.
                         </p>
                       </div>
-                      <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                        ₱{mr.waterAmt.toLocaleString()}
-                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Your Share — payers only */}
-          {isPayer && myShare && (
-            <div
-              className={`card p-5 border-2 ${myPayment?.allPaid ? "border-green-200 dark:border-green-800/40" : "border-accent/30"}`}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center ${myPayment?.allPaid ? "bg-green-500" : "bg-accent"}`}
-                >
-                  <CreditCard size={15} className="text-white" />
-                </div>
-                <h2 className="font-semibold text-gray-900 dark:text-white">
-                  Your Share
-                </h2>
-              </div>
-
-              {/* ── ALL BILLS PAID view ── */}
-              {myPayment?.allPaid ? (
-                <>
-                  <div className="flex flex-col items-center text-center py-5 gap-3">
-                    <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                      <CheckCircle size={40} className="text-green-500" />
-                    </div>
-                    <p className="text-lg font-bold text-green-700 dark:text-green-400">
-                      All Bills Paid!
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-white/40 max-w-xs">
-                      You have paid all bills for this billing period. Waiting
-                      for the admin to start a new billing cycle.
-                    </p>
-                  </div>
-
-                  {/* Billing Summary */}
-                  <div className="rounded-xl border border-green-200 dark:border-green-800/40 overflow-hidden">
-                    <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800/40">
-                      <CheckCircle
-                        size={14}
-                        className="text-green-500 shrink-0"
-                      />
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white flex-1">
-                        Billing Summary
-                      </span>
-                      <span className="text-xs font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-800/50 px-2 py-0.5 rounded-full">
-                        PAID
-                      </span>
-                    </div>
-                    <div className="px-3 py-2 space-y-2">
+                  ) : (
+                    <div className="space-y-1.5 my-4">
                       {Number(myShare.rent) > 0 && (
-                        <div className="flex items-center justify-between py-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-orange-500" />
-                            <span className="text-sm text-gray-700 dark:text-white/70">
-                              Rent
-                            </span>
-                          </div>
-                          <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-                            ₱{myShare.rent.toLocaleString()}
+                        <div className="flex items-center justify-between py-2.5 px-1.5 rounded-xl hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all">
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                            Rent
                           </span>
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xs font-black text-slate-900 dark:text-white">
+                              ₱{myShare.rent.toLocaleString()}
+                            </span>
+                            {myPayment?.rentStatus === "paid" ? (
+                              <CheckCircle
+                                size={14}
+                                className="text-emerald-500"
+                              />
+                            ) : (
+                              <XCircle size={14} className="text-rose-400" />
+                            )}
+                          </div>
                         </div>
                       )}
                       {Number(myShare.electricity) > 0 && (
-                        <div className="flex items-center justify-between py-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-amber-500" />
-                            <span className="text-sm text-gray-700 dark:text-white/70">
-                              Electricity
-                            </span>
-                          </div>
-                          <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-                            ₱{myShare.electricity.toLocaleString()}
+                        <div className="flex items-center justify-between py-2.5 px-1.5 rounded-xl hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all">
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                            Electricity
                           </span>
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xs font-black text-slate-900 dark:text-white">
+                              ₱{myShare.electricity.toLocaleString()}
+                            </span>
+                            {myPayment?.electricityStatus === "paid" ? (
+                              <CheckCircle
+                                size={14}
+                                className="text-emerald-500"
+                              />
+                            ) : (
+                              <XCircle size={14} className="text-rose-400" />
+                            )}
+                          </div>
                         </div>
                       )}
                       {Number(myShare.water) > 0 && (
-                        <div className="flex items-center justify-between py-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-500" />
-                            <span className="text-sm text-gray-700 dark:text-white/70">
+                        <div className="flex items-center justify-between py-2.5 px-1.5 rounded-xl hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all">
+                          <div>
+                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 block">
                               Water
                             </span>
+                            {waterNote && (
+                              <span className="text-[10px] font-semibold text-slate-400 block truncate max-w-xs">
+                                {waterNote}
+                              </span>
+                            )}
                           </div>
-                          <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-                            ₱{myShare.water.toLocaleString()}
-                          </span>
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xs font-black text-slate-900 dark:text-white">
+                              ₱{myShare.water.toLocaleString()}
+                            </span>
+                            {myPayment?.waterStatus === "paid" ? (
+                              <CheckCircle
+                                size={14}
+                                className="text-emerald-500"
+                              />
+                            ) : (
+                              <XCircle size={14} className="text-rose-400" />
+                            )}
+                          </div>
                         </div>
                       )}
                       {Number(myShare.internet) > 0 && (
-                        <div className="flex items-center justify-between py-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-purple-500" />
-                            <span className="text-sm text-gray-700 dark:text-white/70">
-                              Internet
-                            </span>
-                          </div>
-                          <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-                            ₱{myShare.internet.toLocaleString()}
+                        <div className="flex items-center justify-between py-2.5 px-1.5 rounded-xl hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all">
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                            Internet
                           </span>
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xs font-black text-slate-900 dark:text-white">
+                              ₱{myShare.internet.toLocaleString()}
+                            </span>
+                            {myPayment?.internetStatus === "paid" ? (
+                              <CheckCircle
+                                size={14}
+                                className="text-emerald-500"
+                              />
+                            ) : (
+                              <XCircle size={14} className="text-rose-400" />
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center justify-between px-3 py-2.5 bg-green-50 dark:bg-green-900/20">
-                      <span className="text-sm font-bold text-green-700 dark:text-green-400">
-                        Total Paid
-                      </span>
-                      <span className="text-base font-extrabold text-green-600 dark:text-green-400">
-                        ₱{myShare.total.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {Number(myShare.rent) > 0 && (
-                    <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 dark:border-white/8">
-                      <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center shrink-0">
-                        <Home size={14} className="text-orange-500" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-700 dark:text-white/70">
-                          Rent
-                        </p>
-                        <p className="text-xs text-gray-400 dark:text-white/30">
-                          ÷ {payorCount} payer{payorCount !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      <span className="text-sm font-bold text-gray-900 dark:text-white">
-                        ₱{myShare.rent.toLocaleString()}
-                      </span>
-                      {myPayment?.rentStatus === "paid" ? (
-                        <CheckCircle
-                          size={15}
-                          className="text-green-500 shrink-0"
-                        />
-                      ) : (
-                        <XCircle size={15} className="text-red-400 shrink-0" />
-                      )}
-                    </div>
                   )}
+                </div>
 
-                  {Number(myShare.electricity) > 0 && (
-                    <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 dark:border-white/8">
-                      <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
-                        <Zap size={14} className="text-amber-500" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-700 dark:text-white/70">
-                          Electricity
-                        </p>
-                        <p className="text-xs text-gray-400 dark:text-white/30">
-                          ÷ {payorCount} payer{payorCount !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      <span className="text-sm font-bold text-gray-900 dark:text-white">
-                        ₱{myShare.electricity.toLocaleString()}
-                      </span>
-                      {myPayment?.electricityStatus === "paid" ? (
-                        <CheckCircle
-                          size={15}
-                          className="text-green-500 shrink-0"
-                        />
-                      ) : (
-                        <XCircle size={15} className="text-red-400 shrink-0" />
-                      )}
-                    </div>
-                  )}
-
-                  {Number(myShare.water) > 0 && (
-                    <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 dark:border-white/8">
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shrink-0">
-                        <Droplets size={14} className="text-blue-500" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-700 dark:text-white/70">
-                          Water
-                        </p>
-                        {waterNote && (
-                          <p className="text-xs text-gray-400 dark:text-white/30">
-                            {waterNote}
-                          </p>
-                        )}
-                      </div>
-                      <span className="text-sm font-bold text-gray-900 dark:text-white">
-                        ₱{myShare.water.toLocaleString()}
-                      </span>
-                      {myPayment?.waterStatus === "paid" ? (
-                        <CheckCircle
-                          size={15}
-                          className="text-green-500 shrink-0"
-                        />
-                      ) : (
-                        <XCircle size={15} className="text-red-400 shrink-0" />
-                      )}
-                    </div>
-                  )}
-
-                  {Number(myShare.internet) > 0 && (
-                    <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 dark:border-white/8">
-                      <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center shrink-0">
-                        <Wifi size={14} className="text-purple-500" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-700 dark:text-white/70">
-                          Internet
-                        </p>
-                        <p className="text-xs text-gray-400 dark:text-white/30">
-                          ÷ {payorCount} payer{payorCount !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      <span className="text-sm font-bold text-gray-900 dark:text-white">
-                        ₱{myShare.internet.toLocaleString()}
-                      </span>
-                      {myPayment?.internetStatus === "paid" ? (
-                        <CheckCircle
-                          size={15}
-                          className="text-green-500 shrink-0"
-                        />
-                      ) : (
-                        <XCircle size={15} className="text-red-400 shrink-0" />
-                      )}
-                    </div>
-                  )}
-
-                  {/* Total Due */}
-                  <div className="flex justify-between items-center pt-4 mt-2 border-t-2 border-accent/30">
-                    <span className="font-bold text-gray-900 dark:text-white">
-                      Total Due
+                {/* Bottom Total / Action Footing */}
+                <div className="pt-4 border-t border-slate-200/50 dark:border-slate-800/60 mt-auto">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                      Total Amount Due
                     </span>
-                    <span className="text-2xl font-extrabold text-accent">
+                    <span className="text-xl font-black text-[#1a7a52] dark:text-[#7ee8a2] tracking-tight">
                       ₱{myShare.total.toLocaleString()}
                     </span>
                   </div>
 
-                  {/* Paid / Remaining summary */}
-                  <div className="grid grid-cols-2 gap-3 mt-4">
-                    <div className="rounded-xl bg-green-50 dark:bg-green-900/20 p-3 text-center">
-                      <p className="text-base font-bold text-green-600">
-                        ₱{totalPaid.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-green-600/70">Paid</p>
-                    </div>
-                    <div className="rounded-xl bg-red-50 dark:bg-red-900/20 p-3 text-center">
-                      <p className="text-base font-bold text-red-500">
-                        ₱
-                        {Math.max(
-                          0,
-                          myShare.total - totalPaid,
-                        ).toLocaleString()}
-                      </p>
-                      <p className="text-xs text-red-500/70">Remaining</p>
-                    </div>
-                  </div>
-
                   {!myPayment?.allPaid &&
                     (pendingPayments.length > 0 ? (
-                      <div className="mt-4 flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
-                        <Clock size={16} className="text-amber-500 shrink-0" />
-                        <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">
-                          Awaiting Host Verification
+                      <div className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
+                        <Clock
+                          size={14}
+                          className="text-amber-500 animate-pulse"
+                        />
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                          Payment sent! Waiting for manager approval.
                         </span>
                       </div>
                     ) : (
                       <button
                         onClick={() => setShowPayModal(true)}
-                        className="btn-primary w-full text-center flex items-center justify-center gap-2 mt-4"
+                        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black transition-all duration-300 bg-[#1a7a52] text-white hover:bg-[#135c3d] dark:bg-[#7ee8a2] dark:text-[#02302e] dark:hover:bg-[#64d08b] active:scale-[0.99] shadow-md shadow-[#1a7a52]/10"
                       >
-                        <CreditCard size={16} /> Pay Now
+                        <CreditCard size={14} /> Pay Securely via Mobile App
                       </button>
                     ))}
-                </>
-              )}
-            </div>
-          )}
+                </div>
+              </div>
+            )}
+          </div>
 
-          {/* Payment summary (non-payer / no share data) */}
-          {!myShare && (
-            <div className="card p-5">
-              <h2 className="font-semibold text-gray-900 dark:text-white mb-3">
-                Payment Status
+          {/* RIGHT-COLUMN: Secondary Summary Cards */}
+          <div className="lg:col-span-5 space-y-6 flex flex-col h-full">
+            {/* Quick Summary Bento Node */}
+            <div className="rounded-3xl border border-slate-200/60 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-5 shadow-sm group">
+              <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3.5 flex items-center gap-1.5">
+                <TrendingUp size={12} /> Quick Summary
               </h2>
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="rounded-xl bg-green-50 dark:bg-green-900/20 p-3">
-                  <p className="text-lg font-bold text-green-600">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-slate-50/50 dark:bg-slate-800/20 border border-slate-200/20 dark:border-slate-800/40 p-3.5 hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition-colors">
+                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500">
+                    Total Paid
+                  </p>
+                  <p className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-1 tracking-tight">
                     ₱{totalPaid.toLocaleString()}
                   </p>
-                  <p className="text-xs text-green-600/70">Paid</p>
                 </div>
-                <div className="rounded-xl bg-red-50 dark:bg-red-900/20 p-3">
-                  <p className="text-lg font-bold text-red-500">
-                    ₱{Math.max(0, fallbackTotal - totalPaid).toLocaleString()}
+                <div className="rounded-2xl bg-slate-50/50 dark:bg-slate-800/20 border border-slate-200/20 dark:border-slate-800/40 p-3.5 hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition-colors">
+                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500">
+                    Remaining
                   </p>
-                  <p className="text-xs text-red-500/70">Remaining</p>
-                </div>
-                <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-3">
-                  <p className="text-lg font-bold text-gray-700 dark:text-white">
-                    ₱{fallbackTotal.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-white/40">
-                    Total
+                  <p className="text-base font-black text-rose-500 dark:text-rose-400 mt-1 tracking-tight">
+                    ₱
+                    {Math.max(
+                      0,
+                      (myShare?.total || fallbackTotal) - totalPaid,
+                    ).toLocaleString()}
                   </p>
                 </div>
               </div>
-              {!myPayment?.allPaid &&
-                (pendingPayments.length > 0 ? (
-                  <div className="mt-4 flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
-                    <Clock size={16} className="text-amber-500 shrink-0" />
-                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">
-                      Awaiting Host Verification
+            </div>
+
+            {/* Full Collective Room Cost Bento Panel */}
+            {isPayer && (
+              <div className="rounded-3xl border border-slate-200/60 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-5 shadow-sm flex-1 flex flex-col justify-between">
+                <div>
+                  <h2 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+                    Total Household Bills
+                  </h2>
+                  <div className="divide-y divide-slate-100/80 dark:divide-slate-800/30">
+                    {Number(cycle.rent) > 0 && (
+                      <BillRow
+                        label="House Rent"
+                        amount={cycle.rent}
+                        icon={Home}
+                        iconClass="text-orange-500"
+                        bgClass="bg-orange-50 dark:bg-orange-950/20"
+                        status={myPayment?.rentStatus}
+                      />
+                    )}
+                    {Number(cycle.electricity) > 0 && (
+                      <BillRow
+                        label="Electricity Bill"
+                        amount={cycle.electricity}
+                        icon={Zap}
+                        iconClass="text-amber-500"
+                        bgClass="bg-amber-50 dark:bg-amber-950/20"
+                        status={myPayment?.electricityStatus}
+                        note={
+                          cycle.electricity_units
+                            ? `${cycle.electricity_units} kWh used`
+                            : null
+                        }
+                      />
+                    )}
+                    {Number(cycle.waterBillAmount || cycle.water_bill_amount) >
+                      0 && (
+                      <BillRow
+                        label="Water Bill"
+                        amount={
+                          cycle.waterBillAmount || cycle.water_bill_amount
+                        }
+                        icon={Droplets}
+                        iconClass="text-blue-500"
+                        bgClass="bg-blue-50 dark:bg-blue-950/20"
+                        status={myPayment?.waterStatus}
+                      />
+                    )}
+                    {Number(cycle.internet) > 0 && (
+                      <BillRow
+                        label="Internet Bill"
+                        amount={cycle.internet}
+                        icon={Wifi}
+                        iconClass="text-purple-500"
+                        bgClass="bg-purple-50 dark:bg-purple-950/20"
+                        status={myPayment?.internetStatus}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-4 border-t border-slate-200/50 dark:border-slate-800/60 mt-6">
+                  <span className="text-xs font-bold text-slate-400">
+                    Total Room Bill
+                  </span>
+                  <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">
+                    ₱{fallbackTotal.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Full Width Dynamic Presence Grid Block */}
+      {(() => {
+        const isPresenceBased =
+          room.waterBillingMode !== "fixed_monthly" &&
+          room.water_billing_mode !== "fixed_monthly";
+        const members = room.members || [];
+        const billingStart = room.billing?.start
+          ? new Date(room.billing.start)
+          : null;
+        const billingEnd = room.billing?.end
+          ? new Date(room.billing.end)
+          : null;
+        if (!isPresenceBased || members.length === 0) return null;
+
+        const memberRows = members.map((m) => {
+          const mId = m.id || m._id;
+          const name = m.user?.name || m.user?.email || "Resident Occupant";
+          const rawPresence = Array.isArray(m.presence) ? m.presence : [];
+          const filteredDays =
+            billingStart && billingEnd
+              ? rawPresence.filter((d) => {
+                  const dt = new Date(d);
+                  return dt >= billingStart && dt <= billingEnd;
+                })
+              : rawPresence;
+          const days = filteredDays.length;
+          const waterAmt = days * 5;
+          const isMe = String(mId) === String(userId);
+          return {
+            name,
+            days,
+            waterAmt,
+            isMe,
+            isPayer: m.isPayer || m.is_payer,
+          };
+        });
+
+        return (
+          <div className="rounded-3xl border border-slate-200/60 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 shadow-inner">
+                <Droplets size={15} />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-900 dark:text-white tracking-tight">
+                  Water Usage by Person
+                </h2>
+                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">
+                  Water costs are calculated at ₱5.00 per day for the days you
+                  stayed here.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {memberRows.map((mr, i) => (
+                <div
+                  key={i}
+                  className={`p-4 rounded-2xl border transition-all duration-200 hover:scale-[1.01] flex flex-col justify-between gap-3 ${
+                    mr.isMe
+                      ? "bg-gradient-to-br from-[#1a7a52]/5 to-transparent border-[#1a7a52]/20 dark:border-[#7ee8a2]/20"
+                      : "bg-slate-50/40 dark:bg-slate-800/10 border-slate-200/40 dark:border-slate-800/30"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-black text-slate-800 dark:text-slate-200 truncate flex items-center gap-2">
+                        {mr.name}
+                        {mr.isMe && (
+                          <span className="text-[8px] font-black uppercase bg-[#1a7a52] text-white px-1.5 py-0.5 rounded">
+                            You
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mt-1">
+                        {mr.days} day{mr.days !== 1 ? "s" : ""} recorded
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-200/30 dark:border-slate-800/20 mt-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      {!mr.isPayer ? "Not a Payer" : "Total Cost"}
+                    </span>
+                    <span className="text-xs font-black text-slate-900 dark:text-white">
+                      ₱{mr.waterAmt.toLocaleString()}
                     </span>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => setShowPayModal(true)}
-                    className="btn-primary w-full text-center flex items-center justify-center gap-2 mt-4"
-                  >
-                    <CreditCard size={16} /> Pay Now
-                  </button>
-                ))}
+                </div>
+              ))}
             </div>
-          )}
-        </>
-      )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

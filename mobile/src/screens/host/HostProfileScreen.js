@@ -24,9 +24,7 @@ import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrapper
 import { getAPIBaseURL } from "../../config/config";
 import { biometricAuth } from "../../utils/biometricAuth";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
-const THEME_OPTIONS = [
-  { key: "light", label: "Light", icon: "sunny" },
-];
+const THEME_OPTIONS = [{ key: "light", label: "Light", icon: "sunny" }];
 
 const HostProfileScreen = ({ navigation }) => {
   const { colors, preference, setTheme } = useTheme();
@@ -376,13 +374,13 @@ const HostProfileScreen = ({ navigation }) => {
           <Text style={styles.infoLabel}>Version</Text>
           <Text style={styles.infoValue}>
             {Constants.expoConfig?.version || "1.0.0"} (
-            {Application.nativeBuildVersion || "1"})
+            {Application.nativeBuildVersion || "42"})
           </Text>
         </View>
         <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
           <Text style={styles.infoLabel}>Build</Text>
           <Text style={styles.infoValue}>
-            {Application.nativeBuildVersion || "1"}
+            {Application.nativeBuildVersion || "42"}
           </Text>
         </View>
       </View>

@@ -895,7 +895,7 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
               onChangeText={setNewAccountNumber}
               onFocus={() => setAccNumFocused(true)}
               onBlur={() => setAccNumFocused(false)}
-              placeholder="e.g. 9079376194"
+              placeholder="e.g. 1234 5678 9012"
               placeholderTextColor={colors.textTertiary}
               keyboardType="default"
             />
