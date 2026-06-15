@@ -21,6 +21,7 @@ import {
 } from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import { Toast } from "../../components/CustomAlert";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const MyBugReportsScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -34,7 +35,11 @@ const MyBugReportsScreen = ({ navigation }) => {
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [newResponse, setNewResponse] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
 
   const showToast = (message, type = "success") =>
     setToast({ visible: true, type, message });
@@ -242,8 +247,9 @@ const MyBugReportsScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.centerContent}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading bug reports…</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
@@ -676,7 +682,7 @@ const createStyles = (colors) =>
       paddingVertical: 10,
       borderRadius: 20,
       borderWidth: 1,
-      borderColor: "#b38604",
+      borderColor: colors.accent,
       gap: 6,
     },
     emptyRefreshText: {

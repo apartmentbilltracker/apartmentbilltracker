@@ -679,26 +679,6 @@ const ClientTabNavigator = () => {
               },
             })}
           />
-          {/* <Tab.Screen
-            name="NotificationsStack"
-            component={NotificationsStackWrapper}
-            options={{
-              title: "Alerts",
-              tabBarBadge: unreadCount > 0 ? unreadCount : null,
-            }}
-            listeners={({ navigation }) => ({
-              tabPress: () => {
-                fetchUnreadCount();
-                navigation.dispatch(
-                  CommonActions.reset({
-                    index: 0,
-                    routes: [{ name: "NotificationsStack", state: { routes: [{ name: "NotificationsInbox" }] } }],
-                  }),
-                );
-              },
-              blur: () => { fetchUnreadCount(); },
-            })}
-          /> */}
           <Tab.Screen
             name="ProfileStack"
             component={ProfileStack}

@@ -31,6 +31,7 @@ import {
   getExactBillAmount,
   getSelectedPaymentBillTypes,
 } from "../../utils/paymentAmounts";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const BankTransferPaymentScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -60,7 +61,11 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [receiptLoading, setReceiptLoading] = useState(false);
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
   const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
 
   const showToast = (message, type = "success") =>
@@ -213,7 +218,10 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       setDownloadLoading(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        showToast("Please allow gallery access to save the QR code.", "warning");
+        showToast(
+          "Please allow gallery access to save the QR code.",
+          "warning",
+        );
         return;
       }
 
@@ -463,7 +471,10 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
         }
       }
     } catch (error) {
-      showToast(error.message || "Unable to confirm transfer. Please try again.", "error");
+      showToast(
+        error.message || "Unable to confirm transfer. Please try again.",
+        "error",
+      );
     } finally {
       setVerifyLoading(false);
     }
@@ -474,7 +485,10 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       setReceiptLoading(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        showToast("Please allow gallery access to save the receipt.", "warning");
+        showToast(
+          "Please allow gallery access to save the receipt.",
+          "warning",
+        );
         return;
       }
       const uri = await captureRef(receiptRef, { format: "png", quality: 1 });
@@ -504,7 +518,9 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
           { justifyContent: "center", alignItems: "center" },
         ]}
       >
-        <ActivityIndicator size="large" color={colors.accent} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
         <Text
           style={{ marginTop: 12, fontSize: 14, color: colors.textTertiary }}
         >
@@ -526,7 +542,9 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
       } catch {
         idsToCancel = [transactionId];
       }
-      await Promise.all(idsToCancel.map((id) => apiService.cancelTransaction(id)));
+      await Promise.all(
+        idsToCancel.map((id) => apiService.cancelTransaction(id)),
+      );
       showToast("Transfer has been cancelled", "info");
       navigation.goBack();
     } catch (err) {
@@ -1361,7 +1379,7 @@ const createStyles = (colors) => {
 
     /* Amount Card */
     amountCard: {
-      backgroundColor: accentSurface,
+      backgroundColor: colors.card,
       borderRadius: 24,
       paddingVertical: 24,
       paddingHorizontal: 20,

@@ -14,6 +14,7 @@ import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
 import { FlatListWithDetection } from "../../components/ScrollDetectionWrappers";
 import { Toast, ConfirmModal, InlineAlert } from "../../components/CustomAlert";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const SettlementScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -25,8 +26,15 @@ const SettlementScreen = ({ navigation, route }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("pending");
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
-  const [confirmModal, setConfirmModal] = useState({ visible: false, settlement: null });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
+  const [confirmModal, setConfirmModal] = useState({
+    visible: false,
+    settlement: null,
+  });
 
   const showToast = (message, type = "success") =>
     setToast({ visible: true, type, message });
@@ -72,7 +80,9 @@ const SettlementScreen = ({ navigation, route }) => {
       const response = await apiService.recordSettlement(
         roomId,
         settlement.debtor?.id || settlement.debtor?._id || settlement.debtorId,
-        settlement.creditor?.id || settlement.creditor?._id || settlement.creditorId,
+        settlement.creditor?.id ||
+          settlement.creditor?._id ||
+          settlement.creditorId,
         settlement.amount,
         settlement.amount,
         "Settled",
@@ -160,8 +170,9 @@ const SettlementScreen = ({ navigation, route }) => {
           <View style={{ width: 36 }} />
         </View>
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.loadingText}>Loading settlements…</Text>
+          <View style={styles.centerLoader}>
+            <HomeSpaceLoader />
+          </View>
         </View>
       </View>
     );

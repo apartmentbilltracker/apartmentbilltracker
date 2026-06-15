@@ -22,6 +22,7 @@ import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { Toast } from "../../components/CustomAlert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const WATER_BILL_PER_DAY = 5;
@@ -76,7 +77,11 @@ const RoomDetailsScreen = ({ route, navigation }) => {
   const [photoViewVisible, setPhotoViewVisible] = useState(false);
   const [photoViewIdx, setPhotoViewIdx] = useState(0);
   const [userJoinedRoom, setUserJoinedRoom] = useState(null);
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
 
   const showToast = (message, type = "success") =>
     setToast({ visible: true, type, message });
@@ -319,7 +324,9 @@ const RoomDetailsScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

@@ -18,6 +18,7 @@ import {
 } from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import { Toast } from "../../components/CustomAlert";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const WATER_BILL_PER_DAY = 5;
 
@@ -31,7 +32,11 @@ const BillingHistoryScreen = ({ route, navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCycle, setSelectedCycle] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
 
   const showToast = (message, type = "success") =>
     setToast({ visible: true, type, message });
@@ -266,8 +271,9 @@ const BillingHistoryScreen = ({ route, navigation }) => {
   if (loading && cycles.length === 0) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading billing history...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
