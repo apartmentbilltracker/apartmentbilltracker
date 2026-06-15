@@ -25,6 +25,8 @@ const allowedOrigins = [
   "https://apartmentbilltracker-ph.onrender.com",
   "https://apartmentbilltracker-server.onrender.com",
   "https://apartmentbilltracker-servers.onrender.com",
+  "https://propertyflowserver.onrender.com",
+  "https://propertyflowweb.onrender.com",
   // Local development
   "http://localhost:3000",
   "http://localhost:3001",
