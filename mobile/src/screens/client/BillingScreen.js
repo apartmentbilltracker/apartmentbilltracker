@@ -19,6 +19,7 @@ import { screenCache } from "../../hooks/useScreenCache";
 import AnimatedAmount from "../../components/AnimatedAmount";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const WATER_BILL_PER_DAY = 5;
 
@@ -335,8 +336,9 @@ const BillingScreen = ({ route }) => {
   if (loading && !billing) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading billing…</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const CARD_GAP = 12;
 const H_PADDING = 16;
@@ -337,8 +338,9 @@ const ClientRoomsScreen = ({ navigation }) => {
   if (loading && rooms.length === 0) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading properties...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

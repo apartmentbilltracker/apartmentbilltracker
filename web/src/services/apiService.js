@@ -9,6 +9,7 @@ export const authService = {
   setPassword: (data) => api.post("/api/v2/user/set-password", data),
   resendVerification: (email) =>
     api.post("/api/v2/user/resend-verification", { email }),
+  googleLogin: (data) => api.post("/api/v2/user/google-login", data),
   requestPasswordReset: (email) =>
     api.post("/api/v2/user/forgot-password", { email }),
   verifyResetCode: (email, resetCode) =>

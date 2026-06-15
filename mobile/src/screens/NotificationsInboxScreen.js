@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme/ThemeContext";
 import ModalBottomSpacer from "../components/ModalBottomSpacer";
 import AnnouncementsScreen from "./client/AnnouncementsScreen";
+import HomeSpaceLoader from "../components/SpaceLoader";
 
 const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
   const { colors } = useTheme();
@@ -279,8 +280,9 @@ const NotificationsInboxScreen = ({ navigation, route, onBadgeRefresh }) => {
       <View style={styles.container}>
         {renderHeader()}
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.loadingText}>Loading notifications…</Text>
+          <View style={styles.centerLoader}>
+            <HomeSpaceLoader />
+          </View>
         </View>
       </View>
     );

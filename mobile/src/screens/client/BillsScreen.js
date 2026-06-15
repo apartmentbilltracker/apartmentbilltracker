@@ -32,6 +32,7 @@ import {
   buildBillSharesFromCharge,
   findUserCharge,
 } from "../../utils/paymentAmounts";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const WATER_BILL_PER_DAY = 5;
@@ -193,7 +194,9 @@ const BillsScreen = ({ navigation, route }) => {
   const fetchActiveBillingCycle = async (roomId) => {
     try {
       const cycleResponse = await billingCycleService.getCurrentCycle(roomId);
-      setActiveCycle(cycleResponse?.billingCycle || cycleResponse?.data || null);
+      setActiveCycle(
+        cycleResponse?.billingCycle || cycleResponse?.data || null,
+      );
     } catch (error) {
       setActiveCycle(null);
     }
@@ -754,7 +757,9 @@ const BillsScreen = ({ navigation, route }) => {
           activeCycle?.memberCharges || [],
           memberUserId,
         );
-        const presenceDays = getFilteredPresence(member.id || member._id).length;
+        const presenceDays = getFilteredPresence(
+          member.id || member._id,
+        ).length;
         const memberWaterTotal = r2(
           Number(userCharge?.waterOwn ?? userCharge?.water_own) ||
             (isFixedWater && isPerPersonWater
@@ -876,7 +881,9 @@ const BillsScreen = ({ navigation, route }) => {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
@@ -900,7 +907,9 @@ const BillsScreen = ({ navigation, route }) => {
     activeCycle?.currentMeterReading ??
     activeCycle?.current_meter_reading ??
     null;
-  const currentPaymentStatus = billingDataLoading ? null : getUserPaymentStatus();
+  const currentPaymentStatus = billingDataLoading
+    ? null
+    : getUserPaymentStatus();
   const allBillsPaid = !billingDataLoading && hasUserPaidAllBills();
   const remainingDue = billingDataLoading ? 0 : getRemainingDue();
   const totalMembers = selectedRoom?.members?.length || 0;
@@ -1154,7 +1163,9 @@ const BillsScreen = ({ navigation, route }) => {
             </View>
 
             <View style={styles.waterModalTotalRow}>
-              <Text style={styles.waterModalTotalLabel}>Your shared portion</Text>
+              <Text style={styles.waterModalTotalLabel}>
+                Your shared portion
+              </Text>
               <Text style={styles.waterModalTotalAmount}>
                 {fmt(waterShareBreakdown?.sharedNonPayorWater || 0)}
               </Text>

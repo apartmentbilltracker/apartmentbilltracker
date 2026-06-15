@@ -15,9 +15,7 @@ import {
   billingCycleService,
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import {
-  ScrollViewWithDetection,
-} from "../../components/ScrollDetectionWrappers";
+import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { AuthContext } from "../../context/AuthContext";
 import {
   PAYMENT_BILL_TYPE_ORDER,
@@ -25,6 +23,7 @@ import {
   findUserCharge,
   normalizePaymentBillType,
 } from "../../utils/paymentAmounts";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const PAYMENT_GROUP_WINDOW_MS = 5 * 60 * 1000;
 
@@ -402,7 +401,9 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
       normalizeCycleDateKey(
         payment.billingCycleStart || payment.billing_cycle_start,
       ),
-      normalizeCycleDateKey(payment.billingCycleEnd || payment.billing_cycle_end),
+      normalizeCycleDateKey(
+        payment.billingCycleEnd || payment.billing_cycle_end,
+      ),
     ]
       .filter(Boolean)
       .join(":") ||
@@ -495,7 +496,7 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
     });
     const getDetailAmount = (item) =>
       sortedItems.length > 1
-        ? getCycleShareAmount(item, item.billType) ?? getPaymentAmount(item)
+        ? (getCycleShareAmount(item, item.billType) ?? getPaymentAmount(item))
         : getPaymentAmount(item);
     const totalAmount = sortedItems.reduce(
       (sum, item) => sum + getDetailAmount(item),
@@ -646,8 +647,9 @@ const PaymentHistoryScreen = ({ navigation, route }) => {
           </View>
         </View>
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.loadingText}>Loading transactions...</Text>
+          <View style={styles.centerLoader}>
+            <HomeSpaceLoader />
+          </View>
         </View>
       </View>
     );

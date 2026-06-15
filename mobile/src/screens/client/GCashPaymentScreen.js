@@ -30,6 +30,7 @@ import {
   getExactBillAmount,
   getSelectedPaymentBillTypes,
 } from "../../utils/paymentAmounts";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const GCashPaymentScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -91,7 +92,11 @@ const GCashPaymentScreen = ({ navigation, route }) => {
   };
   const [mobileNumberFocused, setMobileNumberFocused] = useState(false);
   const [mobileNumberError, setMobileNumberError] = useState(false);
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
   const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
 
   const showToast = (message, type = "success") =>
@@ -241,7 +246,10 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       setReceiptLoading(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        showToast("Please allow gallery access to save the receipt.", "warning");
+        showToast(
+          "Please allow gallery access to save the receipt.",
+          "warning",
+        );
         return;
       }
       const uri = await captureRef(receiptRef, { format: "png", quality: 1 });
@@ -261,7 +269,10 @@ const GCashPaymentScreen = ({ navigation, route }) => {
       // Request gallery permission
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        showToast("Please allow access to your photo gallery to save the QR code.", "warning");
+        showToast(
+          "Please allow access to your photo gallery to save the QR code.",
+          "warning",
+        );
         return;
       }
 
@@ -459,7 +470,10 @@ const GCashPaymentScreen = ({ navigation, route }) => {
         }
       }
     } catch (error) {
-      showToast(error.message || "Unable to verify payment. Please try again.", "error");
+      showToast(
+        error.message || "Unable to verify payment. Please try again.",
+        "error",
+      );
     } finally {
       setVerifyLoading(false);
     }
@@ -482,12 +496,9 @@ const GCashPaymentScreen = ({ navigation, route }) => {
           { justifyContent: "center", alignItems: "center" },
         ]}
       >
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text
-          style={{ marginTop: 12, fontSize: 14, color: colors.textTertiary }}
-        >
-          Preparing payment…
-        </Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
@@ -1102,7 +1113,7 @@ const createStyles = (colors) => {
 
     /* Amount Card */
     amountCard: {
-      backgroundColor: accentSurface,
+      backgroundColor: colors.card,
       borderRadius: 24,
       paddingVertical: 24,
       paddingHorizontal: 20,

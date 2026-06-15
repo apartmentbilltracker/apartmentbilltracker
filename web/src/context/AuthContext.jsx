@@ -102,6 +102,21 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const signInWithGoogle = useCallback(async (googleData) => {
+    try {
+      const res = await authService.googleLogin(googleData);
+      const data = res?.data || res;
+      const { token, user } = data;
+      setToken(token);
+      localStorage.setItem("cachedUser", JSON.stringify(user));
+      dispatch({ type: "SIGN_IN", token, user });
+      return { success: true };
+    } catch (err) {
+      const msg = err?.data?.message || err.message || "Google login failed";
+      return { success: false, error: msg };
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
       await authService.logout();
@@ -151,7 +166,14 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ state, signIn, signOut, refreshUser, updateUserProfile }}
+      value={{
+        state,
+        signIn,
+        signInWithGoogle,
+        signOut,
+        refreshUser,
+        updateUserProfile,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -54,6 +54,7 @@ import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import Feather from "@expo/vector-icons/Feather";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Toast, ConfirmModal } from "../../components/CustomAlert";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const ACTION_CARD_WIDTH = (SCREEN_WIDTH - 44) / 2;
@@ -2370,7 +2371,9 @@ const ClientHomeScreen = ({ navigation, route }) => {
       <View style={styles.searchIntroCard}>
         <View style={styles.searchIntroHeader}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.searchIntroLabel}>Discover available rooms</Text>
+            <Text style={styles.searchIntroLabel}>
+              Discover available rooms
+            </Text>
             <Text style={styles.searchHelperText}>
               Search by room name, code, owner, location, or amenities.
             </Text>
@@ -2508,7 +2511,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
         {/* ─── FULL-SCREEN LOADER OVERLAY ─── */}
         {loading && (
           <View style={styles.centerLoader}>
-            <ActivityIndicator size="large" color={colors.accent} />
+            <HomeSpaceLoader />
           </View>
         )}
 
@@ -2633,355 +2636,371 @@ const ClientHomeScreen = ({ navigation, route }) => {
           </View>
 
           {/* ─── BALANCE CARD (overlaps header) ─── */}
-          {userJoinedRoom && isCurrentUserPayor() ? (
-            (() => {
-              if (billingDataLoading) {
-                return (
-                  <View style={styles.balanceCardWrap}>
-                    <View style={styles.balanceCard}>
-                      <View style={styles.balanceCardTopRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.balanceLabel}>Total Balance</Text>
-                          <AmountSkeleton
-                            colors={colors}
-                            style={styles.balanceAmountSkeleton}
-                          />
-                          <Text style={styles.balanceSubLabel}>
-                            Checking your latest balance...
-                          </Text>
-                          <View style={styles.balanceMetaRow}>
-                            <AmountSkeleton
-                              colors={colors}
-                              style={styles.balanceMetaSkeleton}
-                            />
-                            <AmountSkeleton
-                              colors={colors}
-                              style={styles.balanceMetaSkeleton}
-                            />
-                          </View>
-                        </View>
-                        <View style={styles.balanceIconWrap}>
-                          <View style={styles.balanceIconInner}>
-                            <ActivityIndicator size="small" color="#00847B" />
-                          </View>
-                          <Text style={styles.balanceIconCaption}>Syncing</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                );
-              }
-
-              const breakdown = getExpenseBreakdown();
-              const remaining = getRemainingDue();
-              const totalBills = breakdown?.perPayor || 0;
-              const paymentStatus = getPaymentStatus();
-              const pendingCount = paymentStatus?.pendingCount || 0;
-              const memberCount = userJoinedRoom.members?.length || 0;
-              const cycleDaysRemaining = getCycleDaysRemaining();
-              const allPaid =
-                paymentStatus?.allPaid ||
-                userJoinedRoom.cycleStatus === "completed";
-              const { bills, daysRemaining: breakdownDaysRemaining } =
-                getIndividualBills();
-              const paidBillCount = bills.filter(
-                (bill) => bill.status === "paid",
-              ).length;
-
-              return (
-                <View style={styles.balanceCardWrap}>
-                  <View
-                    style={[
-                      styles.balanceCard,
-                      allPaid && styles.balanceCardPaid,
-                    ]}
-                  >
-                    <View style={styles.balanceCardTopRow}>
-                      <View style={{ flex: 1 }}>
-                        {allPaid ? (
-                          <>
-                            <View style={styles.balancePaidStatusRow}>
-                              <Ionicons
-                                name="checkmark-circle"
-                                size={18}
-                                color={colors.success || "#4caf50"}
-                              />
-                              <Text style={styles.balancePaidStatusText}>
-                                All bills paid
-                              </Text>
-                            </View>
-                            <Text style={styles.balanceAmount}>₱0.00</Text>
-                            <Text style={styles.balanceSubLabel}>
-                              You&apos;re up to date for this billing cycle
-                            </Text>
-                          </>
-                        ) : (
-                          <>
+          {userJoinedRoom && isCurrentUserPayor()
+            ? (() => {
+                if (billingDataLoading) {
+                  return (
+                    <View style={styles.balanceCardWrap}>
+                      <View style={styles.balanceCard}>
+                        <View style={styles.balanceCardTopRow}>
+                          <View style={{ flex: 1 }}>
                             <Text style={styles.balanceLabel}>
                               Total Balance
                             </Text>
-                            <AnimatedAmount
-                              value={remaining}
-                              formatter={(val) => `₱${val.toFixed(2)}`}
-                              style={styles.balanceAmount}
-                              animateOnMount={false}
+                            <AmountSkeleton
+                              colors={colors}
+                              style={styles.balanceAmountSkeleton}
                             />
                             <Text style={styles.balanceSubLabel}>
-                              You owe this cycle
+                              Checking your latest balance...
                             </Text>
-                          </>
-                        )}
-                        <View style={styles.balanceMetaRow}>
+                            <View style={styles.balanceMetaRow}>
+                              <AmountSkeleton
+                                colors={colors}
+                                style={styles.balanceMetaSkeleton}
+                              />
+                              <AmountSkeleton
+                                colors={colors}
+                                style={styles.balanceMetaSkeleton}
+                              />
+                            </View>
+                          </View>
+                          <View style={styles.balanceIconWrap}>
+                            <View style={styles.balanceIconInner}>
+                              <ActivityIndicator size="small" color="#00847B" />
+                            </View>
+                            <Text style={styles.balanceIconCaption}>
+                              Syncing
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                }
+
+                const breakdown = getExpenseBreakdown();
+                const remaining = getRemainingDue();
+                const totalBills = breakdown?.perPayor || 0;
+                const paymentStatus = getPaymentStatus();
+                const pendingCount = paymentStatus?.pendingCount || 0;
+                const memberCount = userJoinedRoom.members?.length || 0;
+                const cycleDaysRemaining = getCycleDaysRemaining();
+                const allPaid =
+                  paymentStatus?.allPaid ||
+                  userJoinedRoom.cycleStatus === "completed";
+                const { bills, daysRemaining: breakdownDaysRemaining } =
+                  getIndividualBills();
+                const paidBillCount = bills.filter(
+                  (bill) => bill.status === "paid",
+                ).length;
+
+                return (
+                  <View style={styles.balanceCardWrap}>
+                    <View
+                      style={[
+                        styles.balanceCard,
+                        allPaid && styles.balanceCardPaid,
+                      ]}
+                    >
+                      <View style={styles.balanceCardTopRow}>
+                        <View style={{ flex: 1 }}>
+                          {allPaid ? (
+                            <>
+                              <View style={styles.balancePaidStatusRow}>
+                                <Ionicons
+                                  name="checkmark-circle"
+                                  size={18}
+                                  color={colors.success || "#4caf50"}
+                                />
+                                <Text style={styles.balancePaidStatusText}>
+                                  All bills paid
+                                </Text>
+                              </View>
+                              <Text style={styles.balanceAmount}>₱0.00</Text>
+                              <Text style={styles.balanceSubLabel}>
+                                You&apos;re up to date for this billing cycle
+                              </Text>
+                            </>
+                          ) : (
+                            <>
+                              <Text style={styles.balanceLabel}>
+                                Total Balance
+                              </Text>
+                              <AnimatedAmount
+                                value={remaining}
+                                formatter={(val) => `₱${val.toFixed(2)}`}
+                                style={styles.balanceAmount}
+                                animateOnMount={false}
+                              />
+                              <Text style={styles.balanceSubLabel}>
+                                You owe this cycle
+                              </Text>
+                            </>
+                          )}
+                          <View style={styles.balanceMetaRow}>
+                            <View
+                              style={[
+                                styles.balanceMetaChip,
+                                allPaid && styles.balanceMetaChipPaid,
+                              ]}
+                            >
+                              <Ionicons
+                                name={
+                                  allPaid
+                                    ? "checkmark-done-outline"
+                                    : "document-text-outline"
+                                }
+                                size={13}
+                                color={allPaid ? "#2e7d32" : "#0c7364"}
+                              />
+                              <Text
+                                style={[
+                                  styles.balanceMetaChipText,
+                                  allPaid && styles.balanceMetaChipTextPaid,
+                                ]}
+                              >
+                                {allPaid
+                                  ? `${paidBillCount}/${bills.length || paidBillCount} paid`
+                                  : `${pendingCount} pending`}
+                              </Text>
+                            </View>
+                            <View style={styles.balanceMetaChip}>
+                              <Ionicons
+                                name="time-outline"
+                                size={13}
+                                color="#0c7364"
+                              />
+                              <Text style={styles.balanceMetaChipText}>
+                                {cycleDaysRemaining != null
+                                  ? `${cycleDaysRemaining} days left`
+                                  : "Current cycle"}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                        <View style={styles.balanceIconWrap}>
                           <View
                             style={[
-                              styles.balanceMetaChip,
-                              allPaid && styles.balanceMetaChipPaid,
+                              styles.balanceIconInner,
+                              allPaid && styles.balanceIconInnerPaid,
                             ]}
                           >
                             <Ionicons
                               name={
-                                allPaid
-                                  ? "checkmark-done-outline"
-                                  : "document-text-outline"
+                                allPaid ? "checkmark-done" : "wallet-outline"
                               }
-                              size={13}
-                              color={allPaid ? "#2e7d32" : "#0c7364"}
+                              size={30}
+                              color={
+                                allPaid
+                                  ? colors.success || "#4caf50"
+                                  : "#00847B"
+                              }
                             />
-                            <Text
-                              style={[
-                                styles.balanceMetaChipText,
-                                allPaid && styles.balanceMetaChipTextPaid,
-                              ]}
-                            >
-                              {allPaid
-                                ? `${paidBillCount}/${bills.length || paidBillCount} paid`
-                                : `${pendingCount} pending`}
-                            </Text>
                           </View>
-                          <View style={styles.balanceMetaChip}>
-                            <Ionicons
-                              name="time-outline"
-                              size={13}
-                              color="#0c7364"
-                            />
-                            <Text style={styles.balanceMetaChipText}>
-                              {cycleDaysRemaining != null
-                                ? `${cycleDaysRemaining} days left`
-                                : "Current cycle"}
-                            </Text>
-                          </View>
+                          <Text style={styles.balanceIconCaption}>
+                            {allPaid ? "Paid in full" : "This month"}
+                          </Text>
                         </View>
                       </View>
-                      <View style={styles.balanceIconWrap}>
+
+                      {activeCycle && bills.length > 0 && (
+                        <>
+                          <TouchableOpacity
+                            style={styles.balanceExpandRow}
+                            onPress={toggleBreakdown}
+                            activeOpacity={0.75}
+                          >
+                            <Text style={styles.balanceExpandLabel}>
+                              {balanceBreakdownExpanded
+                                ? "Hide bill breakdown"
+                                : "View bill breakdown"}
+                            </Text>
+                            <Ionicons
+                              name={
+                                balanceBreakdownExpanded
+                                  ? "chevron-up"
+                                  : "chevron-down"
+                              }
+                              size={18}
+                              color="#00847B"
+                            />
+                          </TouchableOpacity>
+
+                          {balanceBreakdownExpanded && (
+                            <View style={styles.balanceBreakdownSection}>
+                              <View style={styles.balanceBreakdownHeader}>
+                                <Text style={styles.balanceBreakdownTitle}>
+                                  {breakdownDaysRemaining === 0
+                                    ? "Due Today"
+                                    : breakdownDaysRemaining === 1
+                                      ? "Due Tomorrow"
+                                      : "Bill Breakdown"}
+                                </Text>
+                                <TouchableOpacity
+                                  onPress={() => setShowExpenseModal(true)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Text style={styles.upcomingBillsViewAll}>
+                                    View all
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                              {bills.map((bill, idx) => (
+                                <TouchableOpacity
+                                  key={`${bill.name}-${idx}`}
+                                  style={styles.balanceBreakdownBillCard}
+                                  onPress={() => setShowExpenseModal(true)}
+                                  activeOpacity={0.7}
+                                >
+                                  <View
+                                    style={[
+                                      styles.upcomingBillIconWrap,
+                                      { backgroundColor: "rgba(3,109,65,0.1)" },
+                                    ]}
+                                  >
+                                    <Ionicons
+                                      name={bill.icon}
+                                      size={20}
+                                      color={bill.color}
+                                    />
+                                  </View>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.upcomingBillName}>
+                                      {bill.name}
+                                    </Text>
+                                    <Text style={styles.upcomingBillDue}>
+                                      {bill.status === "paid"
+                                        ? "Paid this cycle"
+                                        : breakdownDaysRemaining === 0
+                                          ? "Due Today"
+                                          : breakdownDaysRemaining === 1
+                                            ? "Due Tomorrow"
+                                            : `Due in ${breakdownDaysRemaining} day${breakdownDaysRemaining !== 1 ? "s" : ""}`}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.upcomingBillRight}>
+                                    <Text style={styles.upcomingBillAmount}>
+                                      {fmt(bill.amount)}
+                                    </Text>
+                                    {bill.status === "paid" ? (
+                                      <Text
+                                        style={styles.upcomingBillPaidBadge}
+                                      >
+                                        ✓ Paid
+                                      </Text>
+                                    ) : breakdownDaysRemaining <= 5 ? (
+                                      <Text
+                                        style={styles.upcomingBillDueSoonBadge}
+                                      >
+                                        Due Soon
+                                      </Text>
+                                    ) : null}
+                                  </View>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          )}
+                        </>
+                      )}
+
+                      {allPaid && (
+                        <TouchableOpacity
+                          style={styles.balancePaidHistoryBtn}
+                          onPress={() =>
+                            navigation.navigate("BillsStack", {
+                              screen: "BillsMain",
+                            })
+                          }
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons
+                            name="receipt-outline"
+                            size={16}
+                            color={colors.success || "#4caf50"}
+                          />
+                          <Text style={styles.balancePaidHistoryText}>
+                            View payment history
+                          </Text>
+                          <Ionicons
+                            name="chevron-forward"
+                            size={16}
+                            color={colors.success || "#4caf50"}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {/* Quick Stats Row */}
+                    <View style={styles.quickStatsRow}>
+                      <View style={styles.quickStatCell}>
                         <View
                           style={[
-                            styles.balanceIconInner,
-                            allPaid && styles.balanceIconInnerPaid,
+                            styles.quickStatIcon,
+                            { backgroundColor: "#e0f7fa" },
                           ]}
                         >
                           <Ionicons
-                            name={allPaid ? "checkmark-done" : "wallet-outline"}
-                            size={30}
-                            color={
-                              allPaid ? colors.success || "#4caf50" : "#00847B"
-                            }
+                            name="document-text-outline"
+                            size={22}
+                            color="#0097a7"
                           />
                         </View>
-                        <Text style={styles.balanceIconCaption}>
-                          {allPaid ? "Paid in full" : "This month"}
+                        <Text style={styles.quickStatValue}>
+                          {pendingCount}
+                        </Text>
+                        <Text style={styles.quickStatLabel}>Pending Bills</Text>
+                        <Text style={styles.quickStatHint}>
+                          Needs attention
                         </Text>
                       </View>
-                    </View>
-
-                    {activeCycle && bills.length > 0 && (
-                      <>
-                        <TouchableOpacity
-                          style={styles.balanceExpandRow}
-                          onPress={toggleBreakdown}
-                          activeOpacity={0.75}
+                      <View style={styles.quickStatCell}>
+                        <View
+                          style={[
+                            styles.quickStatIcon,
+                            { backgroundColor: "#e8eaf6" },
+                          ]}
                         >
-                          <Text style={styles.balanceExpandLabel}>
-                            {balanceBreakdownExpanded
-                              ? "Hide bill breakdown"
-                              : "View bill breakdown"}
-                          </Text>
                           <Ionicons
-                            name={
-                              balanceBreakdownExpanded
-                                ? "chevron-up"
-                                : "chevron-down"
-                            }
-                            size={18}
-                            color="#00847B"
+                            name="cash-outline"
+                            size={22}
+                            color="#3949ab"
                           />
-                        </TouchableOpacity>
-
-                        {balanceBreakdownExpanded && (
-                          <View style={styles.balanceBreakdownSection}>
-                            <View style={styles.balanceBreakdownHeader}>
-                              <Text style={styles.balanceBreakdownTitle}>
-                                {breakdownDaysRemaining === 0
-                                  ? "Due Today"
-                                  : breakdownDaysRemaining === 1
-                                    ? "Due Tomorrow"
-                                    : "Bill Breakdown"}
-                              </Text>
-                              <TouchableOpacity
-                                onPress={() => setShowExpenseModal(true)}
-                                activeOpacity={0.7}
-                              >
-                                <Text style={styles.upcomingBillsViewAll}>
-                                  View all
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                            {bills.map((bill, idx) => (
-                              <TouchableOpacity
-                                key={`${bill.name}-${idx}`}
-                                style={styles.balanceBreakdownBillCard}
-                                onPress={() => setShowExpenseModal(true)}
-                                activeOpacity={0.7}
-                              >
-                                <View
-                                  style={[
-                                    styles.upcomingBillIconWrap,
-                                    { backgroundColor: "rgba(3,109,65,0.1)" },
-                                  ]}
-                                >
-                                  <Ionicons
-                                    name={bill.icon}
-                                    size={20}
-                                    color={bill.color}
-                                  />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={styles.upcomingBillName}>
-                                    {bill.name}
-                                  </Text>
-                                  <Text style={styles.upcomingBillDue}>
-                                    {bill.status === "paid"
-                                      ? "Paid this cycle"
-                                      : breakdownDaysRemaining === 0
-                                        ? "Due Today"
-                                        : breakdownDaysRemaining === 1
-                                          ? "Due Tomorrow"
-                                          : `Due in ${breakdownDaysRemaining} day${breakdownDaysRemaining !== 1 ? "s" : ""}`}
-                                  </Text>
-                                </View>
-                                <View style={styles.upcomingBillRight}>
-                                  <Text style={styles.upcomingBillAmount}>
-                                    {fmt(bill.amount)}
-                                  </Text>
-                                  {bill.status === "paid" ? (
-                                    <Text style={styles.upcomingBillPaidBadge}>
-                                      ✓ Paid
-                                    </Text>
-                                  ) : breakdownDaysRemaining <= 5 ? (
-                                    <Text
-                                      style={styles.upcomingBillDueSoonBadge}
-                                    >
-                                      Due Soon
-                                    </Text>
-                                  ) : null}
-                                </View>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        )}
-                      </>
-                    )}
-
-                    {allPaid && (
-                      <TouchableOpacity
-                        style={styles.balancePaidHistoryBtn}
-                        onPress={() =>
-                          navigation.navigate("BillsStack", {
-                            screen: "BillsMain",
-                          })
-                        }
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons
-                          name="receipt-outline"
-                          size={16}
-                          color={colors.success || "#4caf50"}
-                        />
-                        <Text style={styles.balancePaidHistoryText}>
-                          View payment history
+                        </View>
+                        <Text style={styles.quickStatValue} numberOfLines={1}>
+                          ₱{totalBills.toFixed(2)}
                         </Text>
-                        <Ionicons
-                          name="chevron-forward"
-                          size={16}
-                          color={colors.success || "#4caf50"}
-                        />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* Quick Stats Row */}
-                  <View style={styles.quickStatsRow}>
-                    <View style={styles.quickStatCell}>
-                      <View
-                        style={[
-                          styles.quickStatIcon,
-                          { backgroundColor: "#e0f7fa" },
-                        ]}
-                      >
-                        <Ionicons
-                          name="document-text-outline"
-                          size={22}
-                          color="#0097a7"
-                        />
+                        <Text style={styles.quickStatLabel}>Total Bills</Text>
+                        <Text style={styles.quickStatHint}>
+                          Shared this cycle
+                        </Text>
                       </View>
-                      <Text style={styles.quickStatValue}>{pendingCount}</Text>
-                      <Text style={styles.quickStatLabel}>Pending Bills</Text>
-                      <Text style={styles.quickStatHint}>Needs attention</Text>
-                    </View>
-                    <View style={styles.quickStatCell}>
-                      <View
-                        style={[
-                          styles.quickStatIcon,
-                          { backgroundColor: "#e8eaf6" },
-                        ]}
-                      >
-                        <Ionicons
-                          name="cash-outline"
-                          size={22}
-                          color="#3949ab"
-                        />
+                      <View style={styles.quickStatCell}>
+                        <View
+                          style={[
+                            styles.quickStatIcon,
+                            { backgroundColor: "#f3e5f5" },
+                          ]}
+                        >
+                          <Ionicons
+                            name="people-outline"
+                            size={22}
+                            color="#7b1fa2"
+                          />
+                        </View>
+                        <Text style={styles.quickStatValue}>{memberCount}</Text>
+                        <Text style={styles.quickStatLabel}>Members</Text>
+                        <Text style={styles.quickStatHint}>
+                          Living together
+                        </Text>
                       </View>
-                      <Text style={styles.quickStatValue} numberOfLines={1}>
-                        ₱{totalBills.toFixed(2)}
-                      </Text>
-                      <Text style={styles.quickStatLabel}>Total Bills</Text>
-                      <Text style={styles.quickStatHint}>
-                        Shared this cycle
-                      </Text>
-                    </View>
-                    <View style={styles.quickStatCell}>
-                      <View
-                        style={[
-                          styles.quickStatIcon,
-                          { backgroundColor: "#f3e5f5" },
-                        ]}
-                      >
-                        <Ionicons
-                          name="people-outline"
-                          size={22}
-                          color="#7b1fa2"
-                        />
-                      </View>
-                      <Text style={styles.quickStatValue}>{memberCount}</Text>
-                      <Text style={styles.quickStatLabel}>Members</Text>
-                      <Text style={styles.quickStatHint}>Living together</Text>
                     </View>
                   </View>
-                </View>
-              );
-            })()
-          ) : !userJoinedRoom ? (
-            renderRoomSearchCard()
-          ) : null}
+                );
+              })()
+            : !userJoinedRoom
+              ? renderRoomSearchCard()
+              : null}
 
           {/* ─── HOST BANNER ─── */}
           {announcementBanner && (
@@ -3397,222 +3416,222 @@ const ClientHomeScreen = ({ navigation, route }) => {
                       snapToAlignment="start"
                     >
                       {visibleUnjoinedRooms.map((room, index) => {
-                      const roomId = room.id || room._id;
-                      const isPending = pendingRoomIds.includes(roomId);
-                      const hasLoc =
-                        room.latitude != null && room.longitude != null;
-                      const roomPhotos = Array.isArray(room.photos)
-                        ? room.photos
-                        : [];
-                      const memberCount =
-                        room.memberCount ?? room.members?.length ?? 0;
+                        const roomId = room.id || room._id;
+                        const isPending = pendingRoomIds.includes(roomId);
+                        const hasLoc =
+                          room.latitude != null && room.longitude != null;
+                        const roomPhotos = Array.isArray(room.photos)
+                          ? room.photos
+                          : [];
+                        const memberCount =
+                          room.memberCount ?? room.members?.length ?? 0;
 
-                      return (
-                        <TouchableOpacity
-                          key={roomId}
-                          style={[
-                            styles.availCarouselCard,
-                            index === visibleUnjoinedRooms.length - 1 &&
-                              styles.availCarouselCardLast,
-                          ]}
-                          activeOpacity={0.85}
-                          onPress={() => setPreviewRoom(room)}
-                        >
-                          {/* ── Photo / placeholder banner ── */}
-                          <View style={styles.availCarouselPhotoWrap}>
-                            {roomPhotos.length > 0 ? (
-                              <Image
-                                source={{ uri: roomPhotos[0] }}
-                                style={styles.availCarouselPhoto}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <View
-                                style={styles.availCarouselPhotoPlaceholder}
-                              >
-                                <Ionicons
-                                  name="home-outline"
-                                  size={36}
-                                  color={colors.accent}
+                        return (
+                          <TouchableOpacity
+                            key={roomId}
+                            style={[
+                              styles.availCarouselCard,
+                              index === visibleUnjoinedRooms.length - 1 &&
+                                styles.availCarouselCardLast,
+                            ]}
+                            activeOpacity={0.85}
+                            onPress={() => setPreviewRoom(room)}
+                          >
+                            {/* ── Photo / placeholder banner ── */}
+                            <View style={styles.availCarouselPhotoWrap}>
+                              {roomPhotos.length > 0 ? (
+                                <Image
+                                  source={{ uri: roomPhotos[0] }}
+                                  style={styles.availCarouselPhoto}
+                                  resizeMode="cover"
                                 />
-                              </View>
-                            )}
+                              ) : (
+                                <View
+                                  style={styles.availCarouselPhotoPlaceholder}
+                                >
+                                  <Ionicons
+                                    name="home-outline"
+                                    size={36}
+                                    color={colors.accent}
+                                  />
+                                </View>
+                              )}
 
-                            {/* Top-left badges: Verified + photo count */}
-                            <View style={styles.availCarouselTopBadges}>
-                              <View style={styles.availCarouselBadge}>
-                                <Ionicons
-                                  name="shield-checkmark-outline"
-                                  size={11}
-                                  color="#fff"
-                                />
-                                <Text style={styles.availCarouselBadgeText}>
-                                  Verified
-                                </Text>
-                              </View>
-                              {roomPhotos.length > 1 && (
+                              {/* Top-left badges: Verified + photo count */}
+                              <View style={styles.availCarouselTopBadges}>
                                 <View style={styles.availCarouselBadge}>
                                   <Ionicons
-                                    name="images-outline"
+                                    name="shield-checkmark-outline"
                                     size={11}
                                     color="#fff"
                                   />
                                   <Text style={styles.availCarouselBadgeText}>
-                                    {roomPhotos.length} photos
+                                    Verified
                                   </Text>
                                 </View>
-                              )}
-                            </View>
+                                {roomPhotos.length > 1 && (
+                                  <View style={styles.availCarouselBadge}>
+                                    <Ionicons
+                                      name="images-outline"
+                                      size={11}
+                                      color="#fff"
+                                    />
+                                    <Text style={styles.availCarouselBadgeText}>
+                                      {roomPhotos.length} photos
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
 
-                            {/* Bottom-left: member count pill */}
-                            <View style={styles.availCarouselMemberPill}>
-                              <Ionicons
-                                name="people-outline"
-                                size={11}
-                                color="#fff"
-                              />
-                              <Text style={styles.availCarouselMemberText}>
-                                {memberCount}
-                              </Text>
-                            </View>
-
-                            {/* Bottom-right: expand photo */}
-                            {roomPhotos.length > 0 && (
-                              <TouchableOpacity
-                                style={styles.availCarouselExpandBtn}
-                                onPress={(e) => {
-                                  e.stopPropagation?.();
-                                  setPhotoViewIdx(0);
-                                  setPhotoViewData({
-                                    name: room.name,
-                                    photos: roomPhotos,
-                                  });
-                                }}
-                                activeOpacity={0.8}
-                              >
+                              {/* Bottom-left: member count pill */}
+                              <View style={styles.availCarouselMemberPill}>
                                 <Ionicons
-                                  name="scan-outline"
-                                  size={16}
+                                  name="people-outline"
+                                  size={11}
                                   color="#fff"
                                 />
-                              </TouchableOpacity>
-                            )}
-                          </View>
-
-                          {/* ── Card body ── */}
-                          <View style={styles.availCarouselBody}>
-                            {/* Room name */}
-                            <Text
-                              style={styles.availCarouselName}
-                              numberOfLines={2}
-                            >
-                              {room.name}
-                            </Text>
-
-                            {/* Location */}
-                            {(hasLoc || room.address) && (
-                              <View style={styles.availCarouselLocRow}>
-                                <Ionicons
-                                  name="location-outline"
-                                  size={11}
-                                  color={colors.textTertiary}
-                                />
-                                <Text
-                                  style={styles.availCarouselLocText}
-                                  numberOfLines={1}
-                                >
-                                  {room.address
-                                    ? room.address
-                                        .split(",")
-                                        .slice(0, 2)
-                                        .join(", ")
-                                    : "Location pinned"}
-                                </Text>
-                              </View>
-                            )}
-
-                            {/* Room type / description tag */}
-                            {room.description && (
-                              <View style={styles.availCarouselTypeRow}>
-                                <Ionicons
-                                  name="bed-outline"
-                                  size={11}
-                                  color={colors.textTertiary}
-                                />
-                                <Text
-                                  style={styles.availCarouselTypeText}
-                                  numberOfLines={1}
-                                >
-                                  {room.description}
-                                </Text>
-                              </View>
-                            )}
-
-                            {/* Divider */}
-                            <View style={styles.availCarouselDivider} />
-
-                            {/* Price row + join/pending */}
-                            <View style={styles.availCarouselFooter}>
-                              <View>
-                                <Text style={styles.availCarouselPriceLabel}>
-                                  Starts at
-                                </Text>
-                                <Text style={styles.availCarouselPrice}>
-                                  {Number(
-                                    room.rent ||
-                                      room.price ||
-                                      room.monthlyRent ||
-                                      room.billing?.rent ||
-                                      0,
-                                  ) > 0
-                                    ? `₱${Number(
-                                        room.rent ||
-                                          room.price ||
-                                          room.monthlyRent ||
-                                          room.billing?.rent,
-                                      ).toLocaleString()}`
-                                    : "Ask for price"}
+                                <Text style={styles.availCarouselMemberText}>
+                                  {memberCount}
                                 </Text>
                               </View>
 
-                              {isPending ? (
-                                <View style={styles.pendingChip}>
-                                  <Ionicons
-                                    name="time-outline"
-                                    size={11}
-                                    color="#e67e22"
-                                  />
-                                  <Text style={styles.pendingChipText}>
-                                    Pending
-                                  </Text>
-                                </View>
-                              ) : (
+                              {/* Bottom-right: expand photo */}
+                              {roomPhotos.length > 0 && (
                                 <TouchableOpacity
-                                  style={styles.availCarouselJoinBtn}
+                                  style={styles.availCarouselExpandBtn}
                                   onPress={(e) => {
                                     e.stopPropagation?.();
-                                    handleJoinRoom(roomId);
+                                    setPhotoViewIdx(0);
+                                    setPhotoViewData({
+                                      name: room.name,
+                                      photos: roomPhotos,
+                                    });
                                   }}
-                                  disabled={joiningRoomId === roomId}
-                                  activeOpacity={0.7}
+                                  activeOpacity={0.8}
                                 >
-                                  {joiningRoomId === roomId ? (
-                                    <ActivityIndicator
-                                      color={colors.textOnAccent}
-                                      size="small"
-                                    />
-                                  ) : (
-                                    <Text style={styles.joinBtnText}>
-                                      Inquire
-                                    </Text>
-                                  )}
+                                  <Ionicons
+                                    name="scan-outline"
+                                    size={16}
+                                    color="#fff"
+                                  />
                                 </TouchableOpacity>
                               )}
                             </View>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
+
+                            {/* ── Card body ── */}
+                            <View style={styles.availCarouselBody}>
+                              {/* Room name */}
+                              <Text
+                                style={styles.availCarouselName}
+                                numberOfLines={2}
+                              >
+                                {room.name}
+                              </Text>
+
+                              {/* Location */}
+                              {(hasLoc || room.address) && (
+                                <View style={styles.availCarouselLocRow}>
+                                  <Ionicons
+                                    name="location-outline"
+                                    size={11}
+                                    color={colors.textTertiary}
+                                  />
+                                  <Text
+                                    style={styles.availCarouselLocText}
+                                    numberOfLines={1}
+                                  >
+                                    {room.address
+                                      ? room.address
+                                          .split(",")
+                                          .slice(0, 2)
+                                          .join(", ")
+                                      : "Location pinned"}
+                                  </Text>
+                                </View>
+                              )}
+
+                              {/* Room type / description tag */}
+                              {room.description && (
+                                <View style={styles.availCarouselTypeRow}>
+                                  <Ionicons
+                                    name="bed-outline"
+                                    size={11}
+                                    color={colors.textTertiary}
+                                  />
+                                  <Text
+                                    style={styles.availCarouselTypeText}
+                                    numberOfLines={1}
+                                  >
+                                    {room.description}
+                                  </Text>
+                                </View>
+                              )}
+
+                              {/* Divider */}
+                              <View style={styles.availCarouselDivider} />
+
+                              {/* Price row + join/pending */}
+                              <View style={styles.availCarouselFooter}>
+                                <View>
+                                  <Text style={styles.availCarouselPriceLabel}>
+                                    Starts at
+                                  </Text>
+                                  <Text style={styles.availCarouselPrice}>
+                                    {Number(
+                                      room.rent ||
+                                        room.price ||
+                                        room.monthlyRent ||
+                                        room.billing?.rent ||
+                                        0,
+                                    ) > 0
+                                      ? `₱${Number(
+                                          room.rent ||
+                                            room.price ||
+                                            room.monthlyRent ||
+                                            room.billing?.rent,
+                                        ).toLocaleString()}`
+                                      : "Ask for price"}
+                                  </Text>
+                                </View>
+
+                                {isPending ? (
+                                  <View style={styles.pendingChip}>
+                                    <Ionicons
+                                      name="time-outline"
+                                      size={11}
+                                      color="#e67e22"
+                                    />
+                                    <Text style={styles.pendingChipText}>
+                                      Pending
+                                    </Text>
+                                  </View>
+                                ) : (
+                                  <TouchableOpacity
+                                    style={styles.availCarouselJoinBtn}
+                                    onPress={(e) => {
+                                      e.stopPropagation?.();
+                                      handleJoinRoom(roomId);
+                                    }}
+                                    disabled={joiningRoomId === roomId}
+                                    activeOpacity={0.7}
+                                  >
+                                    {joiningRoomId === roomId ? (
+                                      <ActivityIndicator
+                                        color={colors.textOnAccent}
+                                        size="small"
+                                      />
+                                    ) : (
+                                      <Text style={styles.joinBtnText}>
+                                        Inquire
+                                      </Text>
+                                    )}
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </ScrollView>
                   )}
                 </View>

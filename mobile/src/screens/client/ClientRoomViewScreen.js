@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import SafeMapView from "../../components/SafeMapView";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -127,8 +128,9 @@ const ClientRoomViewScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading room preview...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
@@ -374,7 +376,10 @@ const ClientRoomViewScreen = ({ route, navigation }) => {
             scrollEventThrottle={16}
           >
             {photos.map((photo, index) => (
-              <View key={`gallery-${photo}-${index}`} style={styles.galleryPage}>
+              <View
+                key={`gallery-${photo}-${index}`}
+                style={styles.galleryPage}
+              >
                 <Image
                   source={{ uri: photo }}
                   style={styles.galleryImage}

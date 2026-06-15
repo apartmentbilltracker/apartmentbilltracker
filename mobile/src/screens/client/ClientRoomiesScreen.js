@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { roommateService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const CARD_GAP = 12;
 const H_PADDING = 16;
@@ -34,7 +35,9 @@ const getAvatarSource = (profile) => {
 
 const getBudgetAmount = (profile) => {
   const amount = Number(profile?.budget);
-  return Number.isFinite(amount) && amount > 0 ? amount : Number.MAX_SAFE_INTEGER;
+  return Number.isFinite(amount) && amount > 0
+    ? amount
+    : Number.MAX_SAFE_INTEGER;
 };
 
 const getMoveInTime = (profile) => {
@@ -299,7 +302,9 @@ const ClientRoomiesScreen = ({ navigation }) => {
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.accent} />
+          <View style={styles.centerLoader}>
+            <HomeSpaceLoader />
+          </View>
         </View>
       ) : verifiedProfiles.length === 0 ? (
         <ScrollView

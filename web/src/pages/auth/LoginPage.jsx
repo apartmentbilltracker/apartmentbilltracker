@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useGoogleLogin } from "@react-oauth/google";
 import { useAppVersion } from "../../hooks/useAppVersion";
 import { useAuth } from "../../context/AuthContext";
 import { Alert, Spinner } from "../../components/ui";
@@ -30,29 +31,75 @@ const FEATURES = [
 ];
 
 export default function LoginPage() {
-  const { signIn } = useAuth(); //[cite: 10]
-  const navigate = useNavigate(); //[cite: 10]
-  const appVersion = useAppVersion(); //[cite: 10]
-  const [email, setEmail] = useState(""); //[cite: 10]
-  const [password, setPassword] = useState(""); //[cite: 10]
-  const [showPwd, setShowPwd] = useState(false); //[cite: 10]
-  const [loading, setLoading] = useState(false); //[cite: 10]
-  const [error, setError] = useState(""); //[cite: 10]
+  const { signIn, signInWithGoogle } = useAuth();
+  const navigate = useNavigate();
+  const appVersion = useAppVersion();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleGoogleSignIn = async (credentialResponse) => {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      const accessToken = credentialResponse.access_token;
+      // Fetch user info from Google's OAuth2 API (same as mobile)
+      const userResponse = await fetch(
+        `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`,
+      );
+      const userData = await userResponse.json();
+
+      const result = await signInWithGoogle({
+        email: userData.email,
+        name: userData.name,
+        avatar: userData.picture,
+        accessToken,
+      });
+
+      if (result?.success) {
+        navigate("/home");
+      } else {
+        setError(
+          result?.error ||
+            "We couldn't connect with your Google account. Please try again.",
+        );
+      }
+    } catch (err) {
+      setError(
+        "An unexpected issue occurred opening the door via Google. Please check your network.",
+      );
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const googleLogin = useGoogleLogin({
+    onSuccess: handleGoogleSignIn,
+    onError: () => {
+      setError("Google sign-in failed. Please try again.");
+    },
+    scope: "openid profile email",
+    access_type: "offline",
+  });
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); //[cite: 10]
+    e.preventDefault();
     if (!email || !password) {
-      //[cite: 10]
       setError("Please type in your email and password to continue.");
       return;
     }
-    setLoading(true); //[cite: 10]
-    setError(""); //[cite: 10]
-    const result = await signIn(email, password); //[cite: 10]
-    setLoading(false); //[cite: 10]
-    if (result.success)
-      navigate("/home"); //[cite: 10]
-    else setError(result.error); //[cite: 10]
+    setLoading(true);
+    setError("");
+    const result = await signIn(email, password);
+    setLoading(false);
+    if (result.success) {
+      navigate("/home");
+    } else {
+      setError(result.error);
+    }
   };
 
   return (
@@ -66,7 +113,7 @@ export default function LoginPage() {
         <div className="hidden lg:flex lg:flex-1 flex-col items-start text-left z-10">
           {/* Main Identity Header */}
           <div className="flex items-center gap-3 mb-8 bg-white/40 dark:bg-slate-900/40 p-2 pr-4 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 backdrop-blur-md shadow-2xs">
-            <div className="w-11 h-11 rounded-xl overflow-hidden shadow-sm bg-[#1a7a52] flex items-center justify-center shrink-0">
+            <div className="w-11 h-11 rounded-xl overflow-hidden shadow-sm border border-[#1a7a52] flex items-center justify-center shrink-0">
               <img
                 src="/icon.png"
                 alt="Community brand icon"
@@ -78,7 +125,7 @@ export default function LoginPage() {
                 Co-Living
               </p>
               <p className="text-base font-black text-slate-900 dark:text-white tracking-tight leading-none">
-                HomeSpace
+                PropFlow
               </p>
             </div>
           </div>
@@ -132,12 +179,10 @@ export default function LoginPage() {
 
           {/* Glassmorphic Portal Entry Box */}
           <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/60 dark:border-slate-800/80 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-black/30 overflow-hidden">
-            <div className="h-1 bg-gradient-to-r from-[#1a7a52] via-[#2bb37b] to-[#7ee8a2]" />
-
             <div className="p-8">
-              {error && ( //[cite: 10]
+              {error && (
                 <div className="mb-5">
-                  <Alert type="error">{error}</Alert> {/*[cite: 10] */}
+                  <Alert type="error">{error}</Alert>
                 </div>
               )}
 
@@ -150,9 +195,10 @@ export default function LoginPage() {
                     type="email"
                     className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950/20 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a7a52] dark:focus:ring-[#7ee8a2] transition-all"
                     placeholder="name@example.com"
-                    value={email} //[cite: 10]
-                    onChange={(e) => setEmail(e.target.value)} //[cite: 10]
-                    autoComplete="email" //[cite: 10]
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    disabled={loading || googleLoading}
                   />
                 </div>
 
@@ -162,7 +208,7 @@ export default function LoginPage() {
                       Your Password
                     </label>
                     <Link
-                      to="/forgot-password" //[cite: 10]
+                      to="/forgot-password"
                       className="text-xs font-bold text-[#1a7a52] dark:text-[#7ee8a2] hover:underline"
                     >
                       Forgot?
@@ -170,37 +216,83 @@ export default function LoginPage() {
                   </div>
                   <div className="relative">
                     <input
-                      type={showPwd ? "text" : "password"} //[cite: 10]
+                      type={showPwd ? "text" : "password"}
                       className="w-full pl-4 pr-11 py-2.5 bg-slate-50 dark:bg-slate-950/20 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#1a7a52] dark:focus:ring-[#7ee8a2] transition-all"
                       placeholder="••••••••"
-                      value={password} //[cite: 10]
-                      onChange={(e) => setPassword(e.target.value)} //[cite: 10]
-                      autoComplete="current-password" //[cite: 10]
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      disabled={loading || googleLoading}
                     />
                     <button
                       type="button"
-                      onClick={() => setShowPwd(!showPwd)} //[cite: 10]
+                      onClick={() => setShowPwd(!showPwd)}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                     >
                       {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}{" "}
-                      {/*[cite: 10] */}
                     </button>
                   </div>
                 </div>
 
                 {/* Submit Action Block */}
                 <button
-                  type="submit" //[cite: 10]
+                  type="submit"
                   className="w-full inline-flex items-center justify-center gap-2 py-3 bg-[#1a7a52] hover:bg-[#156342] dark:bg-[#7ee8a2] dark:hover:bg-[#64d08b] text-white dark:text-[#02302e] text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transform active:scale-[0.99] transition-all disabled:opacity-50 mt-2"
-                  disabled={loading} //[cite: 10]
+                  disabled={loading || googleLoading}
                 >
-                  {loading ? ( //[cite: 10]
+                  {loading ? (
                     <>
                       <Spinner size="sm" />
                       <span>Opening the door...</span>
                     </>
                   ) : (
                     <span>Sign In</span>
+                  )}
+                </button>
+
+                {/* Premium Splitter Decorator */}
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-slate-200 dark:border-slate-800/80"></div>
+                  <span className="flex-shrink mx-3 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    or step inside instantly via
+                  </span>
+                  <div className="flex-grow border-t border-slate-200 dark:border-slate-800/80"></div>
+                </div>
+
+                {/* Integrated Google Entry Action Button */}
+                <button
+                  type="button"
+                  onClick={() => googleLogin()}
+                  className="w-full inline-flex items-center justify-center gap-2.5 py-3 bg-white hover:bg-slate-50 dark:bg-slate-950/40 dark:hover:bg-slate-950/80 text-slate-700 dark:text-slate-200 text-xs font-bold uppercase tracking-wider rounded-xl border border-slate-200 dark:border-slate-800/80 shadow-xs transform active:scale-[0.99] transition-all disabled:opacity-50"
+                  disabled={loading || googleLoading}
+                >
+                  {googleLoading ? (
+                    <>
+                      <Spinner size="sm" />
+                      <span>Knocking on Google's door...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                        <path
+                          fill="#EA4335"
+                          d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582l3.51-3.51C17.642 1.055 14.982 0 12 0 7.354 0 3.307 2.664 1.296 6.545l3.97 3.22z"
+                        />
+                        <path
+                          fill="#4285F4"
+                          d="M23.755 12.273c0-.818-.073-1.609-.209-2.373H12v4.509h6.6c-.287 1.509-1.137 2.786-2.423 3.645l3.764 2.918c2.204-2.036 3.814-5.036 3.814-8.699z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.266 14.235L1.296 17.454A11.96 11.96 0 0 1 0 12c0-1.936.46-3.764 1.296-5.454l3.97 3.22a7.045 7.045 0 0 0 0 4.47z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 24c3.24 0 5.955-1.073 7.941-2.918l-3.764-2.918c-1.045.7-2.382 1.118-4.177 1.118-3.218 0-5.945-2.164-6.914-5.082l-3.97 3.073C3.307 21.336 7.354 24 12 24z"
+                        />
+                      </svg>
+                      <span>Continue with Google</span>
+                    </>
                   )}
                 </button>
               </form>
@@ -210,7 +302,7 @@ export default function LoginPage() {
           <p className="text-center text-xs font-semibold text-slate-400 dark:text-slate-500 mt-6">
             New to the community?{" "}
             <Link
-              to="/register" //[cite: 10]
+              to="/register"
               className="text-[#1a7a52] dark:text-[#7ee8a2] font-bold hover:underline ml-0.5"
             >
               Create an account
@@ -221,7 +313,7 @@ export default function LoginPage() {
 
       {/* Footer Branding Layer */}
       <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-bold tracking-wider text-slate-300 dark:text-slate-700 whitespace-nowrap uppercase">
-        Version {appVersion} &middot; Build 42 {/*[cite: 10] */}
+        Version {appVersion} &middot; Build 42
       </p>
     </div>
   );
