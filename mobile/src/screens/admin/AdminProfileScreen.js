@@ -321,8 +321,8 @@ const AdminProfileScreen = ({ navigation }) => {
 
   return (
     <ScrollViewWithDetection style={styles.container}>
-      {/* Profile Header Card */}
-      <View style={styles.profileCard}>
+      {/* Profile Header — Deep Forest Green */}
+      <View style={styles.profileHeader}>
         <View style={styles.avatarContainer}>
           <Image
             source={getAvatarSource()}
@@ -344,23 +344,9 @@ const AdminProfileScreen = ({ navigation }) => {
         </View>
         <Text style={styles.userName}>{user.name || "Admin"}</Text>
         <Text style={styles.userEmail}>{user.email || "N/A"}</Text>
-
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            backgroundColor: "rgba(179,134,4,0.12)",
-            paddingHorizontal: 12,
-            paddingVertical: 5,
-            borderRadius: 8,
-            marginBottom: 12,
-          }}
-        >
-          <Ionicons name="shield-checkmark" size={13} color="#b38604" />
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#b38604" }}>
-            Super Admin
-          </Text>
+        <View style={styles.superAdminBadge}>
+          <Ionicons name="shield-checkmark" size={13} color={colors.accent} />
+          <Text style={styles.superAdminBadgeText}>Super Admin</Text>
         </View>
       </View>
 
@@ -947,24 +933,27 @@ const createStyles = (colors) =>
       backgroundColor: colors.background,
     },
 
-    /* Profile Header Card */
-    profileCard: {
+    /* Profile Header */
+    profileHeader: {
       alignItems: "center",
-      paddingVertical: 28,
+      paddingTop: 32,
+      paddingBottom: 32,
       paddingHorizontal: 16,
-      marginHorizontal: 12,
-      marginTop: 12,
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      ...Platform.select({
-        ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.07,
-          shadowOffset: { width: 0, height: 2 },
-          shadowRadius: 8,
-        },
-        android: { elevation: 2 },
-      }),
+      backgroundColor: colors.headerBg,
+    },
+    superAdminBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 8,
+    },
+    superAdminBadgeText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.headerText,
     },
     avatarContainer: {
       marginBottom: 14,
@@ -978,7 +967,7 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 3,
-      borderColor: "rgba(179,134,4,0.18)",
+      borderColor: "rgba(255,255,255,0.30)",
     },
     avatarImage: {
       width: 88,
@@ -986,7 +975,7 @@ const createStyles = (colors) =>
       borderRadius: 44,
       backgroundColor: colors.inputBg,
       borderWidth: 3,
-      borderColor: "rgba(179,134,4,0.18)",
+      borderColor: "rgba(255,255,255,0.30)",
     },
     avatarText: {
       fontSize: 34,
@@ -1009,12 +998,12 @@ const createStyles = (colors) =>
     userName: {
       fontSize: 20,
       fontWeight: "700",
-      color: colors.text,
+      color: colors.headerText,
       marginBottom: 4,
     },
     userEmail: {
       fontSize: 14,
-      color: colors.textTertiary,
+      color: "rgba(255,255,255,0.65)",
       marginBottom: 16,
     },
     editButton: {
@@ -1027,8 +1016,8 @@ const createStyles = (colors) =>
       gap: 6,
       ...Platform.select({
         ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.2,
+          shadowColor: colors.accent,
+          shadowOpacity: 0.25,
           shadowOffset: { width: 0, height: 2 },
           shadowRadius: 4,
         },
@@ -1069,7 +1058,7 @@ const createStyles = (colors) =>
       width: 28,
       height: 28,
       borderRadius: 14,
-      backgroundColor: "rgba(179,134,4,0.12)",
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1104,7 +1093,7 @@ const createStyles = (colors) =>
       color: colors.text,
     },
     roleBadge: {
-      backgroundColor: "rgba(179,134,4,0.12)",
+      backgroundColor: colors.accentLight,
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: 8,
@@ -1173,8 +1162,8 @@ const createStyles = (colors) =>
       alignItems: "center",
       ...Platform.select({
         ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.2,
+          shadowColor: colors.accent,
+          shadowOpacity: 0.25,
           shadowOffset: { width: 0, height: 2 },
           shadowRadius: 6,
         },
@@ -1325,7 +1314,7 @@ const createStyles = (colors) =>
       width: 48,
       height: 48,
       borderRadius: 24,
-      backgroundColor: "rgba(179,134,4,0.12)",
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1364,7 +1353,7 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginBottom: 12,
       borderWidth: 3,
-      borderColor: "rgba(179,134,4,0.18)",
+      borderColor: colors.accentSurface,
     },
     modalAvatarImage: {
       width: 96,
@@ -1373,7 +1362,7 @@ const createStyles = (colors) =>
       backgroundColor: colors.inputBg,
       marginBottom: 12,
       borderWidth: 3,
-      borderColor: "rgba(179,134,4,0.18)",
+      borderColor: colors.accentSurface,
     },
     modalAvatarText: {
       fontSize: 38,
@@ -1390,8 +1379,8 @@ const createStyles = (colors) =>
       gap: 6,
       ...Platform.select({
         ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.2,
+          shadowColor: colors.accent,
+          shadowOpacity: 0.25,
           shadowOffset: { width: 0, height: 2 },
           shadowRadius: 4,
         },
@@ -1461,8 +1450,8 @@ const createStyles = (colors) =>
       gap: 8,
       ...Platform.select({
         ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.25,
+          shadowColor: colors.accent,
+          shadowOpacity: 0.3,
           shadowOffset: { width: 0, height: 3 },
           shadowRadius: 6,
         },

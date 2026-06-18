@@ -18,6 +18,7 @@ import { apiService } from "../../services/apiService";
 import { ActivityIndicator } from "react-native";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
@@ -379,8 +380,9 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.centerWrap}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading adjustments...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

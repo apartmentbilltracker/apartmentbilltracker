@@ -21,6 +21,7 @@ import {
   ScrollViewWithDetection,
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const AdminPresenceRemindersScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -225,8 +226,9 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
   if (loading && membersWithoutPresence.length === 0) {
     return (
       <View style={styles.centerWrap}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingLabel}>Loading members...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

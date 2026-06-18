@@ -25,6 +25,7 @@ import { screenCache } from "../../hooks/useScreenCache";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import AnimatedAmount from "../../components/AnimatedAmount";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const WATER_RATE = 5; // ₱5 per day
 const ELECTRICITY_RATE = 16; // ₱16 per kW (per unit)
@@ -970,7 +971,9 @@ const AdminBillingScreen = ({ navigation }) => {
   if (loading && !refreshing && rooms.length === 0) {
     return (
       <View style={styles.centerLoader}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
@@ -997,160 +1000,162 @@ const AdminBillingScreen = ({ navigation }) => {
           />
         }
       >
-      {/* ─── HEADER ─── */}
-      <View style={styles.header}>
-        <View style={styles.headerTopRow}>
-          <View style={styles.headerIconBg}>
-            <MaterialIcons name="receipt-long" size={21} color="#ffffff" />
-          </View>
-          <View style={styles.headerTopPill}>
-            <Ionicons name="calendar-outline" size={13} color="#ffffff" />
-            <Text style={styles.headerTopPillText}>
-              {cycleCompleted ? "Cycle Closed" : "Billing Setup"}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.headerTitleRow}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.headerEyebrow}>Host Billing</Text>
-            <Text style={styles.headerTitle}>Billing Management</Text>
-            <Text style={styles.headerSubtitle} numberOfLines={2}>
-              {selectedRoom
-                ? `${selectedRoom.name} billing cycle, charges, and member water usage.`
-                : "Select a room to manage billing details."}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.headerStatusRow}>
-          <View style={styles.headerStatusChip}>
-            <Ionicons name="people-outline" size={13} color="#ffffff" />
-            <Text style={styles.headerStatusChipText}>
-              {members.length || selectedRoom?.members?.length || 0} members
-            </Text>
-          </View>
-          <View style={styles.headerStatusChip}>
-            <Ionicons name="cash-outline" size={13} color="#ffffff" />
-            <Text style={styles.headerStatusChipText}>
-              {fmt(getTotalBilling() + calculateTotalCustomCharges())}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* ─── ROOM SELECTOR ─── */}
-      {rooms.length > 1 ? (
-        <View style={styles.roomDropdownContainer}>
-          <TouchableOpacity
-            style={styles.roomDropdownButton}
-            onPress={() => setRoomDropdownOpen(!roomDropdownOpen)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.roomDropdownLeft}>
-              <View
-                style={[
-                  styles.roomDropdownDot,
-                  { backgroundColor: colors.accent },
-                ]}
-              />
-              <Text style={styles.roomDropdownButtonText} numberOfLines={1}>
-                {selectedRoom?.name || "Select Room"}
+        {/* ─── HEADER ─── */}
+        <View style={styles.header}>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerIconBg}>
+              <MaterialIcons name="receipt-long" size={21} color="#ffffff" />
+            </View>
+            <View style={styles.headerTopPill}>
+              <Ionicons name="calendar-outline" size={13} color="#ffffff" />
+              <Text style={styles.headerTopPillText}>
+                {cycleCompleted ? "Cycle Closed" : "Billing Setup"}
               </Text>
             </View>
-            <View style={styles.roomDropdownRight}>
-              <Text style={styles.roomDropdownCount}>{rooms.length} rooms</Text>
-              <Ionicons
-                name={roomDropdownOpen ? "chevron-up" : "chevron-down"}
-                size={18}
-                color={colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
+          </View>
 
-          {roomDropdownOpen && (
-            <View style={styles.roomDropdownList}>
-              {rooms.map((room) => {
-                const active =
-                  selectedRoom?.id === room.id ||
-                  selectedRoom?._id === room._id;
-                const memberCount = room.members?.length || 0;
-                return (
-                  <TouchableOpacity
-                    key={room.id || room._id}
-                    style={[
-                      styles.roomDropdownItem,
-                      active && styles.roomDropdownItemActive,
-                    ]}
-                    onPress={() => {
-                      setSelectedRoom(room);
-                      setRoomDropdownOpen(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.roomDropdownItemLeft}>
-                      <View
-                        style={[
-                          styles.roomDropdownItemDot,
-                          {
-                            backgroundColor: active
-                              ? colors.accent
-                              : colors.textTertiary,
-                          },
-                        ]}
-                      />
-                      <View>
-                        <Text
+          <View style={styles.headerTitleRow}>
+            <View style={styles.headerCopy}>
+              <Text style={styles.headerEyebrow}>Host Billing</Text>
+              <Text style={styles.headerTitle}>Billing Management</Text>
+              <Text style={styles.headerSubtitle} numberOfLines={2}>
+                {selectedRoom
+                  ? `${selectedRoom.name} billing cycle, charges, and member water usage.`
+                  : "Select a room to manage billing details."}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.headerStatusRow}>
+            <View style={styles.headerStatusChip}>
+              <Ionicons name="people-outline" size={13} color="#ffffff" />
+              <Text style={styles.headerStatusChipText}>
+                {members.length || selectedRoom?.members?.length || 0} members
+              </Text>
+            </View>
+            <View style={styles.headerStatusChip}>
+              <Ionicons name="cash-outline" size={13} color="#ffffff" />
+              <Text style={styles.headerStatusChipText}>
+                {fmt(getTotalBilling() + calculateTotalCustomCharges())}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ─── ROOM SELECTOR ─── */}
+        {rooms.length > 1 ? (
+          <View style={styles.roomDropdownContainer}>
+            <TouchableOpacity
+              style={styles.roomDropdownButton}
+              onPress={() => setRoomDropdownOpen(!roomDropdownOpen)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.roomDropdownLeft}>
+                <View
+                  style={[
+                    styles.roomDropdownDot,
+                    { backgroundColor: colors.accent },
+                  ]}
+                />
+                <Text style={styles.roomDropdownButtonText} numberOfLines={1}>
+                  {selectedRoom?.name || "Select Room"}
+                </Text>
+              </View>
+              <View style={styles.roomDropdownRight}>
+                <Text style={styles.roomDropdownCount}>
+                  {rooms.length} rooms
+                </Text>
+                <Ionicons
+                  name={roomDropdownOpen ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={colors.textSecondary}
+                />
+              </View>
+            </TouchableOpacity>
+
+            {roomDropdownOpen && (
+              <View style={styles.roomDropdownList}>
+                {rooms.map((room) => {
+                  const active =
+                    selectedRoom?.id === room.id ||
+                    selectedRoom?._id === room._id;
+                  const memberCount = room.members?.length || 0;
+                  return (
+                    <TouchableOpacity
+                      key={room.id || room._id}
+                      style={[
+                        styles.roomDropdownItem,
+                        active && styles.roomDropdownItemActive,
+                      ]}
+                      onPress={() => {
+                        setSelectedRoom(room);
+                        setRoomDropdownOpen(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.roomDropdownItemLeft}>
+                        <View
                           style={[
-                            styles.roomDropdownItemText,
-                            active && styles.roomDropdownItemTextActive,
+                            styles.roomDropdownItemDot,
+                            {
+                              backgroundColor: active
+                                ? colors.accent
+                                : colors.textTertiary,
+                            },
                           ]}
-                          numberOfLines={1}
-                        >
-                          {room.name}
-                        </Text>
-                        <Text style={styles.roomDropdownItemSub}>
-                          {memberCount} member{memberCount !== 1 ? "s" : ""}
-                          {room.cycleStatus === "active"
-                            ? " • Active cycle"
-                            : room.cycleStatus === "completed"
-                              ? " • Cycle completed"
-                              : room.cycleStatus === "cycle_closed"
-                                ? " • Cycle closed"
-                                : " • No cycle"}
-                        </Text>
+                        />
+                        <View>
+                          <Text
+                            style={[
+                              styles.roomDropdownItemText,
+                              active && styles.roomDropdownItemTextActive,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {room.name}
+                          </Text>
+                          <Text style={styles.roomDropdownItemSub}>
+                            {memberCount} member{memberCount !== 1 ? "s" : ""}
+                            {room.cycleStatus === "active"
+                              ? " • Active cycle"
+                              : room.cycleStatus === "completed"
+                                ? " • Cycle completed"
+                                : room.cycleStatus === "cycle_closed"
+                                  ? " • Cycle closed"
+                                  : " • No cycle"}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                    {active && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={20}
-                        color={colors.accent}
-                      />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-        </View>
-      ) : rooms.length === 1 ? (
-        <View style={styles.roomPillBar}>
-          <View style={styles.roomPillContent}>
-            <View style={[styles.roomPill, styles.roomPillActive]}>
-              <View
-                style={[
-                  styles.roomPillDot,
-                  { backgroundColor: colors.accent },
-                ]}
-              />
-              <Text style={[styles.roomPillText, styles.roomPillTextActive]}>
-                {rooms[0].name}
-              </Text>
+                      {active && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={20}
+                          color={colors.accent}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        ) : rooms.length === 1 ? (
+          <View style={styles.roomPillBar}>
+            <View style={styles.roomPillContent}>
+              <View style={[styles.roomPill, styles.roomPillActive]}>
+                <View
+                  style={[
+                    styles.roomPillDot,
+                    { backgroundColor: colors.accent },
+                  ]}
+                />
+                <Text style={[styles.roomPillText, styles.roomPillTextActive]}>
+                  {rooms[0].name}
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
-      ) : null}
+        ) : null}
 
         {/* ─── NO ROOMS EMPTY STATE ─── */}
         {rooms.length === 0 && !loading && !refreshing && (

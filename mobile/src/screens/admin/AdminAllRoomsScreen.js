@@ -23,6 +23,7 @@ import {
   ScrollViewWithDetection,
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -314,10 +315,9 @@ const AdminAllRoomsScreen = ({ navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.loadingText}>Loading rooms...</Text>
+      <View style={styles.centerContainer}>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
         </View>
       </View>
     );
@@ -503,6 +503,10 @@ const createStyles = (colors) =>
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    centerContainer: {
+      justifyContent: "center",
+      alignItems: "center",
     },
     loadingContainer: {
       flex: 1,

@@ -22,6 +22,7 @@ import { settingsService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import { useFocusEffect } from "@react-navigation/native";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 // Common Philippine bank names for quick selection
 const BANK_OPTIONS = [
@@ -359,7 +360,9 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

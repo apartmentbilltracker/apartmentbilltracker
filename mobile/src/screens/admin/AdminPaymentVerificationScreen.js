@@ -23,6 +23,7 @@ import {
   ScrollViewWithDetection,
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const getBillColors = (c) => ({
   electricity: { bg: c.accentSurface, text: c.electricityColor, icon: "flash" },
@@ -308,8 +309,9 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
   if (loading && !refreshing) {
     return (
       <View style={styles.centerWrap}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading payments...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

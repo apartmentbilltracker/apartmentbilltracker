@@ -22,6 +22,7 @@ import {
   ScrollViewWithDetection,
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const AdminMembersScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
@@ -262,8 +263,9 @@ const AdminMembersScreen = ({ navigation, route }) => {
   if (loading && !refreshing) {
     return (
       <View style={styles.centerWrap}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingLabel}>Loading members...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

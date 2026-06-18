@@ -20,6 +20,7 @@ import {
   ScrollViewWithDetection,
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const GOLD = "#b38604";
 const getCategoryColor = (category) => {
@@ -196,15 +197,9 @@ const AdminFAQScreen = () => {
   if (loading) {
     return (
       <View style={styles.loadingWrap}>
-        <View style={styles.loadingIconWrap}>
-          <Ionicons name="help-circle-outline" size={32} color={GOLD} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
         </View>
-        <ActivityIndicator
-          size="large"
-          color={GOLD}
-          style={{ marginTop: 16 }}
-        />
-        <Text style={styles.loadingText}>Loading FAQs...</Text>
       </View>
     );
   }
