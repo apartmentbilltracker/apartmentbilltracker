@@ -32,7 +32,7 @@ import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import HomeSpaceLoader from "../../components/SpaceLoader";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const AdminAdsScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -59,7 +59,7 @@ const AdminAdsScreen = ({ navigation }) => {
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(
     new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-  ); // 30 days from now
+  );
   const [isActive, setIsActive] = useState(true);
   const [priority, setPriority] = useState(0);
   const [dismissible, setDismissible] = useState(true);
@@ -130,7 +130,6 @@ const AdminAdsScreen = ({ navigation }) => {
     setEditingAd(null);
   };
 
-  // Image picker handler - Select image and upload to Cloudinary
   const handlePickImage = async () => {
     try {
       const { status } =
@@ -145,9 +144,12 @@ const AdminAdsScreen = ({ navigation }) => {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
+        // allowsEditing opens the native crop screen so the admin can
+        // adjust the image before upload. No fixed `aspect` is set, so
+        // it opens with the full image selected — cropping is optional,
+        // not forced.
         allowsEditing: true,
-        aspect: [9, 16],
-        quality: 0.8,
+        quality: 1, // maximum quality; Cloudinary handles compression
       });
 
       if (!result.canceled && result.assets?.[0]) {
@@ -160,7 +162,6 @@ const AdminAdsScreen = ({ navigation }) => {
     }
   };
 
-  // Upload selected image to Cloudinary via backend
   const handleUploadImage = async () => {
     if (!selectedImageUri) {
       Alert.alert("Error", "No image selected");
@@ -171,7 +172,6 @@ const AdminAdsScreen = ({ navigation }) => {
       setUploadingImage(true);
       console.log("[Upload] Starting upload from:", selectedImageUri);
 
-      // Create FormData
       const formData = new FormData();
       formData.append("image", {
         uri: selectedImageUri,
@@ -181,12 +181,10 @@ const AdminAdsScreen = ({ navigation }) => {
 
       console.log("[Upload] FormData created, sending to backend...");
 
-      // Upload using adsService
       const result = await adsService.uploadImage(formData);
 
       console.log("[Upload] Response received:", result);
 
-      // Handle response - could be { data, status } from uploadFormData
       const imageUrl = result?.data?.imageUrl || result?.imageUrl;
 
       if (imageUrl) {
@@ -214,7 +212,6 @@ const AdminAdsScreen = ({ navigation }) => {
   };
 
   const handleCreateAd = async () => {
-    // Check if image URL is provided (title is optional)
     if (!imageUrl.trim()) {
       Alert.alert("Error", "Image URL is required");
       return;
@@ -315,13 +312,101 @@ const AdminAdsScreen = ({ navigation }) => {
     setDisplayOn(updated);
   };
 
+  /**
+   * AdImagePreview
+   * ─────────────────────────────────────────────────────────────
+   * Reads the native dimensions of the remote image via onLoad,
+   * then sizes the container to exactly match that aspect ratio so
+   * the full image is always visible — no cropping, no letterboxing.
+   *
+   * A floor of 160 and a ceiling of 65 % screen height keep cards
+   * reasonable for both tiny icons and very tall portrait images.
+   */
+  const AdImagePreview = ({ uri }) => {
+    const [containerHeight, setContainerHeight] = React.useState(200);
+
+    const handleLoad = (e) => {
+      const { width: srcW, height: srcH } = e.nativeEvent.source;
+      if (srcW && srcH) {
+        // Card inner width = screen − list padding (14 × 2) − card borders (1 × 2)
+        const cardW = SCREEN_WIDTH - 30;
+        const natural = (srcH / srcW) * cardW;
+        setContainerHeight(
+          Math.min(Math.max(natural, 160), SCREEN_HEIGHT * 0.65),
+        );
+      }
+    };
+
+    return (
+      <View
+        style={{
+          width: "100%",
+          height: containerHeight,
+          backgroundColor: colors.inputBg,
+          overflow: "hidden",
+        }}
+      >
+        <Image
+          source={{ uri }}
+          // width/height fills the container; resizeMode="contain" guarantees
+          // the whole image is visible — no pixel is ever cropped.
+          style={{ width: "100%", height: "100%" }}
+          resizeMode="contain"
+          onLoad={handleLoad}
+          onError={(e) => console.log("Image load error:", e)}
+        />
+      </View>
+    );
+  };
+
+  // Metric config with icons
+  const metricConfig = [
+    {
+      label: "Screen",
+      icon: "tv-outline",
+      getValue: (ad) => ad.display_screen,
+    },
+    {
+      label: "Priority",
+      icon: "arrow-up-circle-outline",
+      getValue: (ad) => ad.priority,
+    },
+    {
+      label: "Views",
+      icon: "eye-outline",
+      getValue: (ad) => ad.total_impressions || 0,
+    },
+    {
+      label: "Clicks",
+      icon: "hand-left-outline",
+      getValue: (ad) => ad.total_clicks || 0,
+    },
+  ];
+
   const renderAdCard = ({ item: ad }) => (
-    <View style={[styles.adCard, { borderColor: colors.inputBorder }]}>
-      {/* Header with Status */}
+    <View style={styles.adCard}>
+      {/* ── Status Accent Strip ── */}
+      <View
+        style={[
+          styles.statusStrip,
+          { backgroundColor: ad.is_active ? colors.success : colors.warning },
+        ]}
+      />
+
+      {/* ── Card Header ── */}
       <View style={styles.cardHeader}>
         <View style={styles.titleSection}>
           <Text style={styles.adTitle}>{ad.title || "Untitled Ad"}</Text>
-          <View style={styles.statusBadge}>
+          <View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor: ad.is_active
+                  ? colors.successBg
+                  : colors.warningBg,
+              },
+            ]}
+          >
             <View
               style={[
                 styles.statusDot,
@@ -332,7 +417,12 @@ const AdminAdsScreen = ({ navigation }) => {
                 },
               ]}
             />
-            <Text style={styles.statusText}>
+            <Text
+              style={[
+                styles.statusText,
+                { color: ad.is_active ? colors.success : colors.warning },
+              ]}
+            >
               {ad.is_active ? "Active" : "Inactive"}
             </Text>
           </View>
@@ -341,43 +431,23 @@ const AdminAdsScreen = ({ navigation }) => {
           value={ad.is_active}
           onValueChange={() => handleToggleActive(ad)}
           trackColor={{ false: colors.inputBorder, true: colors.accent }}
-          thumbColor={ad.is_active ? colors.accent : colors.inputBorder}
+          thumbColor={ad.is_active ? "#ffffff" : colors.textTertiary}
         />
       </View>
 
-      {/* Professional Image Preview Container */}
-      <View style={styles.imageContainer}>
-        {ad.image_url ? (
-          <>
-            <Image
-              source={{ uri: ad.image_url }}
-              style={styles.previewImage}
-              onError={(error) => console.log("Image load error:", error)}
-            />
-            {/* Gradient Overlay for better text contrast if needed */}
-            <View style={styles.imageOverlay} />
-          </>
-        ) : (
-          <View
-            style={[
-              styles.previewImage,
-              {
-                justifyContent: "center",
-                alignItems: "center",
-                backgroundColor: colors.background,
-              },
-            ]}
-          >
-            <Ionicons
-              name="image-outline"
-              size={40}
-              color={colors.textTertiary}
-            />
+      {/* ── Image — full native aspect ratio, nothing cropped ── */}
+      {ad.image_url ? (
+        <AdImagePreview uri={ad.image_url} />
+      ) : (
+        <View style={styles.imagePlaceholderContainer}>
+          <View style={styles.imagePlaceholderIconWrap}>
+            <Ionicons name="image-outline" size={32} color={colors.accent} />
           </View>
-        )}
-      </View>
+          <Text style={styles.imagePlaceholderText}>No image set</Text>
+        </View>
+      )}
 
-      {/* Description Preview (if available) */}
+      {/* ── Description ── */}
       {ad.description && (
         <View style={styles.descriptionSection}>
           <Text style={styles.descriptionText} numberOfLines={2}>
@@ -386,61 +456,67 @@ const AdminAdsScreen = ({ navigation }) => {
         </View>
       )}
 
-      {/* Key Metrics - Professional Grid Layout */}
+      {/* ── Metrics Grid ── */}
       <View style={styles.metricsContainer}>
         <View style={styles.metricRow}>
-          <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Screen</Text>
-            <Text style={styles.metricValue}>{ad.display_screen}</Text>
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Priority</Text>
-            <Text style={styles.metricValue}>{ad.priority}</Text>
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Views</Text>
-            <Text style={styles.metricValue}>{ad.total_impressions || 0}</Text>
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Clicks</Text>
-            <Text
-              style={[
-                styles.metricValue,
-                {
-                  color:
-                    ad.total_clicks > 0 ? colors.success : colors.textTertiary,
-                },
-              ]}
-            >
-              {ad.total_clicks || 0}
-            </Text>
-          </View>
+          {metricConfig.map((metric, idx) => {
+            const value = metric.getValue(ad);
+            const isClickMetric = metric.label === "Clicks";
+            const hasClicks = isClickMetric && value > 0;
+            return (
+              <React.Fragment key={metric.label}>
+                {idx > 0 && <View style={styles.metricDivider} />}
+                <View style={styles.metricItem}>
+                  <View
+                    style={[
+                      styles.metricIconChip,
+                      {
+                        backgroundColor: hasClicks
+                          ? colors.successBg
+                          : colors.accentLight,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={metric.icon}
+                      size={13}
+                      color={hasClicks ? colors.success : colors.accent}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.metricValue,
+                      hasClicks && { color: colors.success },
+                    ]}
+                  >
+                    {value}
+                  </Text>
+                  <Text style={styles.metricLabel}>{metric.label}</Text>
+                </View>
+              </React.Fragment>
+            );
+          })}
         </View>
       </View>
 
-      {/* Date Range */}
+      {/* ── Date Range ── */}
       <View style={styles.dateSection}>
-        <Ionicons
-          name="calendar-outline"
-          size={14}
-          color={colors.textTertiary}
-        />
+        <View style={styles.dateIconWrap}>
+          <Ionicons name="calendar-outline" size={13} color={colors.accent} />
+        </View>
         <Text style={styles.dateText}>
           {new Date(ad.start_date).toLocaleDateString()}
           {ad.end_date && ` → ${new Date(ad.end_date).toLocaleDateString()}`}
         </Text>
       </View>
 
-      {/* Action Buttons */}
+      {/* ── Action Buttons ── */}
       <View style={styles.actionButtons}>
         <TouchableOpacity
           style={[styles.actionButton, styles.analyticsBtn]}
           onPress={() => handleViewAnalytics(ad)}
         >
-          <Ionicons name="stats-chart" size={16} color={colors.accent} />
+          <Ionicons name="stats-chart" size={15} color={colors.accent} />
           <Text style={[styles.actionBtnText, { color: colors.accent }]}>
             Analytics
           </Text>
@@ -450,7 +526,7 @@ const AdminAdsScreen = ({ navigation }) => {
           style={[styles.actionButton, styles.editBtn]}
           onPress={() => handleEditAd(ad)}
         >
-          <Ionicons name="pencil" size={16} color={colors.accent} />
+          <Ionicons name="pencil" size={15} color={colors.accent} />
           <Text style={[styles.actionBtnText, { color: colors.accent }]}>
             Edit
           </Text>
@@ -460,7 +536,7 @@ const AdminAdsScreen = ({ navigation }) => {
           style={[styles.actionButton, styles.deleteBtn]}
           onPress={() => handleDeleteAd(ad.id)}
         >
-          <Ionicons name="trash" size={16} color={colors.error} />
+          <Ionicons name="trash" size={15} color={colors.error} />
           <Text style={[styles.actionBtnText, { color: colors.error }]}>
             Delete
           </Text>
@@ -479,52 +555,130 @@ const AdminAdsScreen = ({ navigation }) => {
     );
   }
 
+  // Computed summary stats
+  const activeCount = ads.filter((a) => a.is_active).length;
+  const totalImpressions = ads.reduce(
+    (s, a) => s + (a.total_impressions || 0),
+    0,
+  );
+  const totalClicks = ads.reduce((s, a) => s + (a.total_clicks || 0), 0);
+
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ads Management</Text>
-        <TouchableOpacity
-          onPress={() => {
-            resetForm();
-            setShowCreateModal(true);
-          }}
-        >
-          <Ionicons name="add" size={24} color={colors.accent} />
-        </TouchableOpacity>
+      {/* ════════════════════════════════════
+          Hero Header — forest green, matches
+          client dashboard brand language
+      ════════════════════════════════════ */}
+      <View style={styles.header}>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.headerText} />
+          </TouchableOpacity>
+
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.headerEyebrow}>PROPFLOW ADMIN</Text>
+            <Text style={styles.headerTitle}>Ads Manager</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.headerAddBtn}
+            onPress={() => {
+              resetForm();
+              setShowCreateModal(true);
+            }}
+          >
+            <Ionicons name="add" size={22} color={colors.headerText} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Summary Stats Strip */}
+        <View style={styles.summaryStrip}>
+          <View style={styles.summaryItem}>
+            <View style={styles.summaryIconWrap}>
+              <Ionicons
+                name="images-outline"
+                size={15}
+                color={colors.headerText}
+              />
+            </View>
+            <Text style={styles.summaryNum}>{ads.length}</Text>
+            <Text style={styles.summaryLbl}>Total</Text>
+          </View>
+
+          <View style={styles.summaryDivider} />
+
+          <View style={styles.summaryItem}>
+            <View style={styles.summaryIconWrap}>
+              <Ionicons name="radio-button-on" size={15} color="#78dc77" />
+            </View>
+            <Text style={styles.summaryNum}>{activeCount}</Text>
+            <Text style={styles.summaryLbl}>Active</Text>
+          </View>
+
+          <View style={styles.summaryDivider} />
+
+          <View style={styles.summaryItem}>
+            <View style={styles.summaryIconWrap}>
+              <Ionicons
+                name="eye-outline"
+                size={15}
+                color={colors.headerText}
+              />
+            </View>
+            <Text style={styles.summaryNum}>{totalImpressions}</Text>
+            <Text style={styles.summaryLbl}>Views</Text>
+          </View>
+
+          <View style={styles.summaryDivider} />
+
+          <View style={styles.summaryItem}>
+            <View style={styles.summaryIconWrap}>
+              <Ionicons
+                name="hand-left-outline"
+                size={15}
+                color={colors.headerText}
+              />
+            </View>
+            <Text style={styles.summaryNum}>{totalClicks}</Text>
+            <Text style={styles.summaryLbl}>Clicks</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Ads List */}
+      {/* ── Ads List ── */}
       <FlatListWithDetection
         data={ads}
         renderItem={renderAdCard}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons
-              name="image-outline"
-              size={48}
-              color={colors.textTertiary}
-            />
-            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
-              No ads yet
-            </Text>
-            <Text style={[styles.emptySubtext, { color: colors.textTertiary }]}>
-              Tap + to create your first ad
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="images-outline" size={36} color={colors.accent} />
+            </View>
+            <Text style={styles.emptyText}>No ads yet</Text>
+            <Text style={styles.emptySubtext}>
+              Tap + in the header to publish your first ad
             </Text>
           </View>
         }
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+          />
         }
         contentContainerStyle={styles.listContent}
         scrollEnabled
       />
 
-      {/* Create/Edit Modal */}
+      {/* ════════════════════════════════════
+          Create / Edit Modal
+      ════════════════════════════════════ */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
@@ -539,12 +693,12 @@ const AdminAdsScreen = ({ navigation }) => {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={styles.modalSheet}>
-            {/* Modal Header */}
+            {/* Handle */}
             <View style={styles.modalHeader}>
               <View style={styles.modalHandle} />
             </View>
 
-            {/* Modal Title Row */}
+            {/* Title Row */}
             <View style={styles.modalTitleRow}>
               <View style={styles.modalTitleIconWrap}>
                 <Ionicons
@@ -575,7 +729,7 @@ const AdminAdsScreen = ({ navigation }) => {
               <View style={styles.formFields}>
                 {/* Title */}
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Title *</Text>
+                  <Text style={styles.label}>Title</Text>
                   <TextInput
                     style={[styles.input, { borderColor: colors.inputBorder }]}
                     placeholder="Ad title"
@@ -656,7 +810,7 @@ const AdminAdsScreen = ({ navigation }) => {
                         />
                       </View>
 
-                      {/* Paste URL Option */}
+                      {/* Paste URL */}
                       <Text style={[styles.label, { marginTop: 8 }]}>
                         Paste Image URL
                       </Text>
@@ -679,6 +833,7 @@ const AdminAdsScreen = ({ navigation }) => {
                       <Image
                         source={{ uri: selectedImageUri }}
                         style={styles.imagePreview}
+                        resizeMode="contain"
                       />
                       <View style={styles.previewActions}>
                         <TouchableOpacity
@@ -718,8 +873,17 @@ const AdminAdsScreen = ({ navigation }) => {
                           style={styles.cancelBtn}
                           onPress={() => setSelectedImageUri(null)}
                         >
-                          <Ionicons name="close" size={16} color="#999" />
-                          <Text style={{ color: "#999", marginLeft: 6 }}>
+                          <Ionicons
+                            name="close"
+                            size={16}
+                            color={colors.textTertiary}
+                          />
+                          <Text
+                            style={{
+                              color: colors.textTertiary,
+                              marginLeft: 6,
+                            }}
+                          >
                             Cancel
                           </Text>
                         </TouchableOpacity>
@@ -733,6 +897,7 @@ const AdminAdsScreen = ({ navigation }) => {
                       <Image
                         source={{ uri: imageUrl }}
                         style={styles.imagePreview}
+                        resizeMode="contain"
                         onError={(error) =>
                           console.log("Image load error:", error)
                         }
@@ -741,13 +906,17 @@ const AdminAdsScreen = ({ navigation }) => {
                         style={styles.clearImageBtn}
                         onPress={clearImageUrl}
                       >
-                        <Ionicons name="close-circle" size={20} color="#fff" />
+                        <Ionicons
+                          name="close-circle"
+                          size={20}
+                          color={colors.textOnAccent}
+                        />
                       </TouchableOpacity>
                     </View>
                   )}
                 </View>
 
-                {/* Button Text & Link */}
+                {/* Button Text */}
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Button Text</Text>
                   <TextInput
@@ -759,6 +928,7 @@ const AdminAdsScreen = ({ navigation }) => {
                   />
                 </View>
 
+                {/* Button Link */}
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Button Link</Text>
                   <TextInput
@@ -770,7 +940,7 @@ const AdminAdsScreen = ({ navigation }) => {
                   />
                 </View>
 
-                {/* Display Settings */}
+                {/* Display On */}
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Display On</Text>
                   <View style={styles.checkboxGroup}>
@@ -826,34 +996,33 @@ const AdminAdsScreen = ({ navigation }) => {
                   </View>
                 </View>
 
-                {/* Dates */}
+                {/* Start Date */}
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Start Date</Text>
                   <TouchableOpacity
-                    style={[
-                      styles.dateButton,
-                      { borderColor: colors.inputBorder },
-                    ]}
+                    style={styles.dateButton}
                     onPress={() => setShowStartDatePicker(true)}
                   >
                     <Ionicons name="calendar" size={18} color={colors.accent} />
-                    <Text style={styles.dateText}>
+                    <Text
+                      style={[styles.dateText, { color: colors.inputText }]}
+                    >
                       {startDate.toLocaleDateString()}
                     </Text>
                   </TouchableOpacity>
                 </View>
 
+                {/* End Date */}
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>End Date</Text>
                   <TouchableOpacity
-                    style={[
-                      styles.dateButton,
-                      { borderColor: colors.inputBorder },
-                    ]}
+                    style={styles.dateButton}
                     onPress={() => setShowEndDatePicker(true)}
                   >
                     <Ionicons name="calendar" size={18} color={colors.accent} />
-                    <Text style={styles.dateText}>
+                    <Text
+                      style={[styles.dateText, { color: colors.inputText }]}
+                    >
                       {endDate.toLocaleDateString()}
                     </Text>
                   </TouchableOpacity>
@@ -874,51 +1043,51 @@ const AdminAdsScreen = ({ navigation }) => {
 
                 {/* Switches */}
                 <View style={styles.switchGroup}>
-                  <View style={styles.switchItem}>
+                  <View
+                    style={[
+                      styles.switchItem,
+                      {
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.divider,
+                      },
+                    ]}
+                  >
                     <Text style={styles.switchLabel}>Active</Text>
                     <Switch
                       value={isActive}
                       onValueChange={setIsActive}
-                      trackColor={{
-                        false: colors.surfaceVariant,
-                        true: colors.accent,
-                      }}
-                      thumbColor={
-                        isActive ? colors.accent : colors.surfaceVariant
-                      }
+                      trackColor={{ false: colors.border, true: colors.accent }}
+                      thumbColor={isActive ? "#ffffff" : colors.border}
                     />
                   </View>
                   <View style={styles.switchItem}>
-                    <Text style={styles.switchLabel}>Dismissible</Text>
+                    <Text style={styles.switchLabel}>Dismissable</Text>
                     <Switch
                       value={dismissible}
                       onValueChange={setDismissible}
-                      trackColor={{
-                        false: colors.surfaceVariant,
-                        true: colors.accent,
-                      }}
-                      thumbColor={
-                        dismissible ? colors.accent : colors.surfaceVariant
-                      }
+                      trackColor={{ false: colors.border, true: colors.accent }}
+                      thumbColor={dismissible ? "#ffffff" : colors.border}
                     />
                   </View>
                 </View>
 
-                {/* Action Buttons */}
+                {/* Submit */}
                 <View style={styles.formActions}>
                   <TouchableOpacity
                     style={[
                       styles.actionBtn,
-                      {
-                        backgroundColor: colors.accent,
-                      },
+                      { backgroundColor: colors.accent },
                     ]}
                     onPress={handleCreateAd}
                   >
                     <Text
-                      style={{ color: colors.textOnAccent, fontWeight: "600" }}
+                      style={{
+                        color: colors.textOnAccent,
+                        fontWeight: "700",
+                        fontSize: 15,
+                      }}
                     >
-                      {editingAd ? "Update Ad" : "Create Ad"}
+                      {editingAd ? "Update Ad" : "Publish Ad"}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -948,7 +1117,9 @@ const AdminAdsScreen = ({ navigation }) => {
         )}
       </Modal>
 
-      {/* Analytics Modal */}
+      {/* ════════════════════════════════════
+          Analytics Modal
+      ════════════════════════════════════ */}
       <Modal
         visible={showAnalyticsModal}
         animationType="slide"
@@ -960,12 +1131,12 @@ const AdminAdsScreen = ({ navigation }) => {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={styles.modalSheet}>
-            {/* Modal Header */}
+            {/* Handle */}
             <View style={styles.modalHeader}>
               <View style={styles.modalHandle} />
             </View>
 
-            {/* Modal Title Row */}
+            {/* Title Row */}
             <View style={styles.modalTitleRow}>
               <View style={styles.modalTitleIconWrap}>
                 <Ionicons
@@ -990,43 +1161,78 @@ const AdminAdsScreen = ({ navigation }) => {
               <View style={styles.formFields}>
                 {selectedAdAnalytics && (
                   <>
-                    <Text style={styles.analyticTitle}>
-                      {selectedAdAnalytics.title}
-                    </Text>
+                    {/* Ad preview row */}
+                    <View style={styles.analyticsAdPreview}>
+                      <View style={styles.analyticsAdIcon}>
+                        <Ionicons
+                          name="image-outline"
+                          size={20}
+                          color={colors.accent}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.analyticTitle}>
+                          {selectedAdAnalytics.title || "Untitled Ad"}
+                        </Text>
+                        <Text style={styles.analyticSubtitle}>
+                          {selectedAdAnalytics.display_screen} screen · Priority{" "}
+                          {selectedAdAnalytics.priority}
+                        </Text>
+                      </View>
+                    </View>
 
+                    {/* Stat Cards */}
                     <View style={styles.statGrid}>
                       <View
                         style={[
                           styles.statCard,
-                          { backgroundColor: colors.surfaceVariant },
+                          { backgroundColor: colors.accentSurface },
                         ]}
                       >
-                        <Text style={styles.statLabel}>Impressions</Text>
+                        <Ionicons
+                          name="eye-outline"
+                          size={22}
+                          color={colors.accent}
+                          style={{ marginBottom: 4 }}
+                        />
                         <Text style={styles.statValue}>
                           {selectedAdAnalytics.analytics?.totalImpressions || 0}
                         </Text>
+                        <Text style={styles.statLabel}>Impressions</Text>
                       </View>
                       <View
                         style={[
                           styles.statCard,
-                          { backgroundColor: colors.surfaceVariant },
+                          { backgroundColor: colors.accentSurface },
                         ]}
                       >
-                        <Text style={styles.statLabel}>Clicks</Text>
+                        <Ionicons
+                          name="hand-left-outline"
+                          size={22}
+                          color={colors.accent}
+                          style={{ marginBottom: 4 }}
+                        />
                         <Text style={styles.statValue}>
                           {selectedAdAnalytics.analytics?.totalClicks || 0}
                         </Text>
+                        <Text style={styles.statLabel}>Clicks</Text>
                       </View>
                       <View
                         style={[
                           styles.statCard,
-                          { backgroundColor: colors.surfaceVariant },
+                          { backgroundColor: colors.accentSurface },
                         ]}
                       >
-                        <Text style={styles.statLabel}>CTR</Text>
+                        <Ionicons
+                          name="trending-up-outline"
+                          size={22}
+                          color={colors.accent}
+                          style={{ marginBottom: 4 }}
+                        />
                         <Text style={styles.statValue}>
                           {selectedAdAnalytics.analytics?.ctr || "0"}%
                         </Text>
+                        <Text style={styles.statLabel}>CTR</Text>
                       </View>
                     </View>
                   </>
@@ -1052,36 +1258,122 @@ const createStyles = (colors, insets) =>
       justifyContent: "center",
       alignItems: "center",
     },
+    centerLoader: {
+      padding: 24,
+    },
+
+    // ── Hero Header ──────────────────────────
     header: {
+      backgroundColor: colors.headerBg,
+      paddingTop: insets.top + 8,
+      paddingBottom: 0,
+    },
+    headerTopRow: {
       flexDirection: "row",
-      justifyContent: "space-between",
       alignItems: "center",
       paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.surfaceVariant,
+      paddingBottom: 16,
+      gap: 12,
+    },
+    headerIconBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerTextBlock: {
+      flex: 1,
+    },
+    headerEyebrow: {
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 1.5,
+      color: "rgba(255,255,255,0.55)",
+      marginBottom: 2,
     },
     headerTitle: {
-      fontSize: 18,
+      fontSize: 22,
+      fontWeight: "800",
+      color: colors.headerText,
+      letterSpacing: 0.1,
+    },
+    headerAddBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    // ── Summary Stats Strip ──────────────────
+    summaryStrip: {
+      flexDirection: "row",
+      backgroundColor: "rgba(0,0,0,0.22)",
+      marginHorizontal: 16,
+      marginBottom: 16,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 4,
+    },
+    summaryItem: {
+      flex: 1,
+      alignItems: "center",
+      gap: 3,
+    },
+    summaryIconWrap: {
+      width: 30,
+      height: 30,
+      borderRadius: 9,
+      backgroundColor: "rgba(255,255,255,0.10)",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 2,
+    },
+    summaryNum: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.headerText,
+    },
+    summaryLbl: {
+      fontSize: 9,
       fontWeight: "600",
-      color: colors.text,
+      color: "rgba(255,255,255,0.50)",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
     },
+    summaryDivider: {
+      width: 1,
+      backgroundColor: "rgba(255,255,255,0.10)",
+      alignSelf: "stretch",
+      marginVertical: 4,
+    },
+
+    // ── List ────────────────────────────────
     listContent: {
-      padding: 12,
-      paddingBottom: 24,
+      padding: 14,
+      paddingBottom: 32,
     },
+
+    // ── Ad Card ─────────────────────────────
     adCard: {
       backgroundColor: colors.card,
       borderRadius: 16,
       overflow: "hidden",
       marginBottom: 16,
-      borderWidth: 2,
+      borderWidth: 1,
       borderColor: colors.border,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.08,
-      shadowRadius: 8,
+      shadowRadius: 12,
       elevation: 3,
+    },
+    statusStrip: {
+      height: 3,
+      width: "100%",
     },
     cardHeader: {
       flexDirection: "row",
@@ -1102,31 +1394,31 @@ const createStyles = (colors, insets) =>
       fontWeight: "700",
       color: colors.text,
       marginBottom: 6,
-      letterSpacing: 0.2,
+      letterSpacing: 0.1,
     },
     statusBadge: {
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
-      backgroundColor: colors.accentSurface,
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: 8,
       alignSelf: "flex-start",
     },
     statusDot: {
-      width: 7,
-      height: 7,
-      borderRadius: 3.5,
+      width: 6,
+      height: 6,
+      borderRadius: 3,
     },
     statusText: {
       fontSize: 11,
-      fontWeight: "600",
-      color: colors.accent,
+      fontWeight: "700",
     },
+
+    // ── Image Container ──────────────────────
     imageContainer: {
       width: "100%",
-      height: 280,
+      height: 220,
       backgroundColor: colors.background,
       position: "relative",
       overflow: "hidden",
@@ -1134,7 +1426,6 @@ const createStyles = (colors, insets) =>
     previewImage: {
       width: "100%",
       height: "100%",
-      backgroundColor: colors.background,
     },
     imageOverlay: {
       position: "absolute",
@@ -1144,6 +1435,27 @@ const createStyles = (colors, insets) =>
       height: 60,
       backgroundColor: "transparent",
     },
+    imagePlaceholder: {
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.inputBg,
+      gap: 8,
+    },
+    imagePlaceholderIconWrap: {
+      width: 56,
+      height: 56,
+      borderRadius: 16,
+      backgroundColor: colors.accentLight,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    imagePlaceholderText: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      fontWeight: "500",
+    },
+
+    // ── Description ──────────────────────────
     descriptionSection: {
       paddingHorizontal: 16,
       paddingVertical: 10,
@@ -1155,9 +1467,11 @@ const createStyles = (colors, insets) =>
       color: colors.textSecondary,
       lineHeight: 18,
     },
+
+    // ── Metrics ──────────────────────────────
     metricsContainer: {
       paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingVertical: 14,
       borderBottomWidth: 1,
       borderBottomColor: colors.divider,
     },
@@ -1169,41 +1483,59 @@ const createStyles = (colors, insets) =>
     metricItem: {
       flex: 1,
       alignItems: "center",
-      paddingVertical: 4,
+      gap: 2,
+    },
+    metricIconChip: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 2,
     },
     metricLabel: {
-      fontSize: 10,
+      fontSize: 9,
       color: colors.textTertiary,
-      marginBottom: 3,
-      fontWeight: "500",
+      fontWeight: "600",
       textTransform: "uppercase",
       letterSpacing: 0.5,
     },
     metricValue: {
-      fontSize: 15,
-      fontWeight: "700",
+      fontSize: 14,
+      fontWeight: "800",
       color: colors.accent,
     },
     metricDivider: {
       width: 1,
-      height: 20,
+      height: 40,
       backgroundColor: colors.divider,
-      marginHorizontal: 8,
     },
+
+    // ── Date Section ─────────────────────────
     dateSection: {
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: 16,
       paddingVertical: 10,
-      gap: 6,
+      gap: 8,
       borderBottomWidth: 1,
       borderBottomColor: colors.divider,
+    },
+    dateIconWrap: {
+      width: 24,
+      height: 24,
+      borderRadius: 7,
+      backgroundColor: colors.accentLight,
+      justifyContent: "center",
+      alignItems: "center",
     },
     dateText: {
       fontSize: 12,
       color: colors.textTertiary,
       fontWeight: "500",
     },
+
+    // ── Action Buttons ───────────────────────
     actionButtons: {
       flexDirection: "row",
       gap: 8,
@@ -1216,50 +1548,65 @@ const createStyles = (colors, insets) =>
       justifyContent: "center",
       alignItems: "center",
       paddingVertical: 10,
-      borderRadius: 8,
-      borderWidth: 1.5,
-      borderColor: colors.inputBorder,
+      borderRadius: 10,
       gap: 5,
     },
     analyticsBtn: {
-      backgroundColor: "transparent",
+      backgroundColor: colors.accentLight,
     },
     editBtn: {
-      backgroundColor: "transparent",
+      backgroundColor: colors.accentLight,
     },
     deleteBtn: {
-      borderColor: colors.error,
+      backgroundColor: colors.errorBg,
     },
     actionBtnText: {
       fontSize: 12,
-      fontWeight: "600",
-      letterSpacing: 0.3,
+      fontWeight: "700",
+      letterSpacing: 0.2,
     },
+
+    // ── Empty State ──────────────────────────
     emptyContainer: {
       alignItems: "center",
-      paddingVertical: 48,
+      paddingVertical: 60,
+      paddingHorizontal: 32,
+      gap: 8,
+    },
+    emptyIconWrap: {
+      width: 72,
+      height: 72,
+      borderRadius: 22,
+      backgroundColor: colors.accentLight,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 8,
     },
     emptyText: {
-      fontSize: 16,
-      fontWeight: "600",
-      marginTop: 12,
+      fontSize: 17,
+      fontWeight: "700",
+      color: colors.text,
     },
     emptySubtext: {
       fontSize: 13,
-      marginTop: 4,
+      color: colors.textTertiary,
+      textAlign: "center",
+      lineHeight: 18,
+      marginTop: 2,
     },
-    // Modal
+
+    // ── Modal ────────────────────────────────
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.4)",
+      backgroundColor: colors.overlay,
       justifyContent: "flex-end",
     },
     modalSheet: {
       backgroundColor: colors.card,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
-      paddingBottom: 12,
-      maxHeight: "85%",
+      maxHeight: SCREEN_HEIGHT * 0.88,
+      flexShrink: 1,
     },
     modalHeader: {
       alignItems: "center",
@@ -1301,13 +1648,16 @@ const createStyles = (colors, insets) =>
       justifyContent: "center",
       alignItems: "center",
     },
+
+    // ── Form ─────────────────────────────────
     formFields: {
       paddingHorizontal: 20,
       paddingBottom: 0,
       gap: 12,
     },
     formScroll: {
-      maxHeight: "70%",
+      flexGrow: 0,
+      flexShrink: 1,
     },
     formGroup: {
       gap: 6,
@@ -1320,12 +1670,12 @@ const createStyles = (colors, insets) =>
     input: {
       flex: 1,
       fontSize: 14,
-      color: colors.text,
+      color: colors.inputText,
       paddingVertical: 12,
       paddingHorizontal: 12,
       borderWidth: 1,
-      borderRadius: 8,
-      backgroundColor: colors.background,
+      borderRadius: 10,
+      backgroundColor: colors.inputBg,
       borderColor: colors.divider,
     },
     textArea: {
@@ -1359,7 +1709,7 @@ const createStyles = (colors, insets) =>
     },
     orText: {
       fontSize: 12,
-      fontWeight: "500",
+      fontWeight: "600",
     },
     imagePreviewContainer: {
       position: "relative",
@@ -1368,7 +1718,7 @@ const createStyles = (colors, insets) =>
     imagePreview: {
       width: "100%",
       height: 150,
-      borderRadius: 8,
+      borderRadius: 10,
       backgroundColor: colors.background,
     },
     clearImageBtn: {
@@ -1378,42 +1728,9 @@ const createStyles = (colors, insets) =>
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: "rgba(0, 0, 0, 0.6)",
+      backgroundColor: "rgba(0,0,0,0.6)",
       justifyContent: "center",
       alignItems: "center",
-    },
-    uploadImageBtn: {
-      borderWidth: 2,
-      borderStyle: "dashed",
-      borderRadius: 12,
-      paddingVertical: 24,
-      paddingHorizontal: 16,
-      justifyContent: "center",
-      alignItems: "center",
-      gap: 8,
-      backgroundColor: colors.inputBg,
-    },
-    uploadImageBtnText: {
-      fontSize: 14,
-      fontWeight: "600",
-    },
-    orDivider: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginVertical: 12,
-      gap: 8,
-    },
-    dividerLine: {
-      flex: 1,
-      height: 1,
-    },
-    orText: {
-      fontSize: 12,
-      fontWeight: "500",
-    },
-    imagePreviewContainer: {
-      position: "relative",
-      marginTop: 12,
     },
     previewActions: {
       flexDirection: "row",
@@ -1424,7 +1741,7 @@ const createStyles = (colors, insets) =>
       flex: 1,
       flexDirection: "row",
       paddingVertical: 12,
-      borderRadius: 8,
+      borderRadius: 10,
       justifyContent: "center",
       alignItems: "center",
       gap: 6,
@@ -1433,7 +1750,7 @@ const createStyles = (colors, insets) =>
       flexDirection: "row",
       paddingVertical: 12,
       paddingHorizontal: 16,
-      borderRadius: 8,
+      borderRadius: 10,
       borderWidth: 1,
       borderColor: colors.inputBorder,
       justifyContent: "center",
@@ -1441,7 +1758,7 @@ const createStyles = (colors, insets) =>
     },
     checkboxGroup: {
       flexDirection: "row",
-      gap: 12,
+      gap: 8,
     },
     checkbox: {
       flexDirection: "row",
@@ -1449,6 +1766,11 @@ const createStyles = (colors, insets) =>
       gap: 6,
       flex: 1,
       paddingVertical: 8,
+      paddingHorizontal: 4,
+      borderRadius: 8,
+    },
+    checkboxChecked: {
+      backgroundColor: colors.accentLight,
     },
     checkboxLabel: {
       fontSize: 14,
@@ -1459,9 +1781,9 @@ const createStyles = (colors, insets) =>
       gap: 8,
     },
     pill: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
       borderWidth: 1,
       borderColor: colors.inputBorder,
     },
@@ -1470,52 +1792,80 @@ const createStyles = (colors, insets) =>
       borderColor: colors.accent,
     },
     pillText: {
-      fontSize: 12,
+      fontSize: 13,
       color: colors.text,
+      fontWeight: "500",
     },
     pillTextActive: {
       color: colors.textOnAccent,
-      fontWeight: "600",
+      fontWeight: "700",
     },
     dateButton: {
       flexDirection: "row",
       alignItems: "center",
       borderWidth: 1,
-      borderRadius: 8,
+      borderRadius: 10,
       paddingHorizontal: 12,
-      paddingVertical: 10,
+      paddingVertical: 12,
       gap: 8,
       borderColor: colors.inputBorder,
+      backgroundColor: colors.inputBg,
     },
     switchGroup: {
-      gap: 12,
-      marginVertical: 12,
+      backgroundColor: colors.inputBg,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      overflow: "hidden",
     },
     switchItem: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      paddingVertical: 8,
+      paddingVertical: 12,
     },
     switchLabel: {
       fontSize: 14,
       color: colors.text,
+      fontWeight: "500",
     },
     formActions: {
       marginVertical: 8,
       gap: 8,
     },
     actionBtn: {
-      paddingVertical: 12,
-      borderRadius: 8,
+      paddingVertical: 14,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    // ── Analytics Modal ──────────────────────
+    analyticsAdPreview: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: colors.accentLight,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 4,
+    },
+    analyticsAdIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: colors.accentSurface,
       justifyContent: "center",
       alignItems: "center",
     },
     analyticTitle: {
-      fontSize: 18,
+      fontSize: 15,
       fontWeight: "700",
       color: colors.text,
-      marginBottom: 16,
+    },
+    analyticSubtitle: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
     },
     statGrid: {
       flexDirection: "row",
@@ -1524,20 +1874,21 @@ const createStyles = (colors, insets) =>
     },
     statCard: {
       flex: 1,
-      minWidth: 100,
-      paddingVertical: 12,
+      minWidth: 90,
+      paddingVertical: 14,
       paddingHorizontal: 12,
-      borderRadius: 8,
+      borderRadius: 12,
       alignItems: "center",
     },
     statLabel: {
-      fontSize: 12,
+      fontSize: 11,
       color: colors.textTertiary,
-      marginBottom: 4,
+      marginTop: 2,
+      fontWeight: "500",
     },
     statValue: {
-      fontSize: 20,
-      fontWeight: "700",
+      fontSize: 22,
+      fontWeight: "800",
       color: colors.accent,
     },
   });

@@ -55,7 +55,11 @@ const CashPaymentScreen = ({ navigation, route }) => {
   const [transactionId, setTransactionId] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [receiptLoading, setReceiptLoading] = useState(false);
-  const [toast, setToast] = useState({ visible: false, type: "success", message: "" });
+  const [toast, setToast] = useState({
+    visible: false,
+    type: "success",
+    message: "",
+  });
 
   const showToast = (message, type = "success") =>
     setToast({ visible: true, type, message });
@@ -287,7 +291,10 @@ const CashPaymentScreen = ({ navigation, route }) => {
       );
 
       if (missingAmountType) {
-        showToast("Please wait for bill amounts to load, then try again.", "warning");
+        showToast(
+          "Please wait for bill amounts to load, then try again.",
+          "warning",
+        );
         return;
       }
 
@@ -364,7 +371,10 @@ const CashPaymentScreen = ({ navigation, route }) => {
       setReceiptLoading(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        showToast("Please allow gallery access to save the receipt.", "warning");
+        showToast(
+          "Please allow gallery access to save the receipt.",
+          "warning",
+        );
         return;
       }
       const uri = await captureRef(receiptRef, { format: "png", quality: 1 });
@@ -947,7 +957,7 @@ const CashPaymentScreen = ({ navigation, route }) => {
                   property efficiently.
                 </Text>
                 <Text style={styles.websiteText}>
-                  www.apartmentbilltracker-ph.onrender.com
+                  www.propertyflowweb.onrender.com
                 </Text>
               </View>
             </View>

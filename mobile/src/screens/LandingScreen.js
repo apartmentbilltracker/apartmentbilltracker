@@ -13,6 +13,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Modal,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -446,14 +447,18 @@ const AuthModal = ({
       setRemoveLoadingEmail(accountEmail.toLowerCase());
       await savedAccountsService.removeAccount(accountEmail);
       setSavedAccounts((prev) =>
-        prev.filter((a) => a.email.toLowerCase() !== accountEmail.toLowerCase()),
+        prev.filter(
+          (a) => a.email.toLowerCase() !== accountEmail.toLowerCase(),
+        ),
       );
       setBioEnabledByEmail((prev) => {
         const next = { ...prev };
         delete next[accountEmail.toLowerCase()];
         return next;
       });
-      if (selectedAccount?.email?.toLowerCase() === accountEmail.toLowerCase()) {
+      if (
+        selectedAccount?.email?.toLowerCase() === accountEmail.toLowerCase()
+      ) {
         setSelectedAccount(null);
         setStep("start");
         setEmail("");
@@ -572,510 +577,775 @@ const AuthModal = ({
       statusBarTranslucent
     >
       <View style={ms.modalRoot}>
-      {/* ── Backdrop ── */}
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdrop }]}>
-        <TouchableOpacity
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: "rgba(0,0,0,0.68)" },
-          ]}
-          activeOpacity={1}
-          onPress={handleCloseModal}
-        />
-      </Animated.View>
-
-      {/* ── Sheet ── */}
-      <Animated.View
-        style={[ms.sheet, { transform: [{ translateY }] }]}
-        renderToHardwareTextureAndroid={false}
-      >
-        {/* ── Forest-green ambient texture inside the sheet ── */}
-        <View style={ms.sheetBg} pointerEvents="none">
-          <LinearGradient
-            colors={["rgba(129,216,163,0.09)", "rgba(129,216,163,0)"]}
-            style={[ms.sheetOrb, ms.sheetOrbTR]}
-            start={{ x: 0.5, y: 0.5 }}
-            end={{ x: 1, y: 1 }}
+        {/* ── Backdrop ── */}
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdrop }]}>
+          <TouchableOpacity
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: "rgba(0,0,0,0.68)" },
+            ]}
+            activeOpacity={1}
+            onPress={handleCloseModal}
           />
-          <LinearGradient
-            colors={["rgba(3,109,65,0.10)", "rgba(3,109,65,0)"]}
-            style={[ms.sheetOrb, ms.sheetOrbBL]}
-            start={{ x: 0.5, y: 0.5 }}
-            end={{ x: 1, y: 1 }}
-          />
-          <View style={ms.sheetBand} />
-          <View style={ms.sheetGrid}>
-            {Array.from({ length: 15 }).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  ms.sheetTile,
-                  {
-                    opacity: i % 3 === 0 ? 0.75 : 0.38,
-                    backgroundColor:
-                      i % 5 === 0
-                        ? "rgba(129,216,163,0.06)"
-                        : "rgba(255,255,255,0.028)",
-                    borderColor:
-                      i % 5 === 0
-                        ? "rgba(129,216,163,0.14)"
-                        : "rgba(158,208,205,0.09)",
-                  },
-                ]}
-              />
-            ))}
-          </View>
-        </View>
+        </Animated.View>
 
-        {/* ── Drag handle ── */}
-        <View style={ms.handleWrap}>
-          <LinearGradient
-            colors={[ACCENT_EMERALD + "44", ACCENT_EMERALD + "14"]}
-            style={ms.handle}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          />
-        </View>
-
-        {/* ── Close button ── */}
-        <TouchableOpacity
-          style={ms.closeBtn}
-          onPress={handleCloseModal}
-          activeOpacity={0.75}
-        >
-          <View style={ms.closeBtnInner}>
-            <Ionicons name="close" size={16} color={TEAL_MUTED} />
-          </View>
-        </TouchableOpacity>
-
-        <ScrollView
-          style={ms.sheetScroll}
-          contentContainerStyle={[
-            ms.sheetScrollContent,
-            { paddingBottom: insets.bottom + 20 },
-          ]}
-          keyboardShouldPersistTaps="always"
-          keyboardDismissMode="none"
-          nestedScrollEnabled
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-        >
-
-        {/* ── BillTrack micro-logo ── */}
+        {/* ── Sheet ── */}
         <Animated.View
-          style={[
-            ms.logoRow,
-            {
-              opacity: logoAnim,
-              transform: [
-                {
-                  translateY: logoAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-10, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
+          style={[ms.sheet, { transform: [{ translateY }] }]}
+          renderToHardwareTextureAndroid={false}
         >
-          <View style={ms.logoIconWrap}>
+          {/* ── Forest-green ambient texture inside the sheet ── */}
+          <View style={ms.sheetBg} pointerEvents="none">
             <LinearGradient
-              colors={["#036d41", "#81d8a3"]}
-              style={ms.logoIconGradient}
-              start={{ x: 0, y: 0 }}
+              colors={["rgba(129,216,163,0.09)", "rgba(129,216,163,0)"]}
+              style={[ms.sheetOrb, ms.sheetOrbTR]}
+              start={{ x: 0.5, y: 0.5 }}
               end={{ x: 1, y: 1 }}
-            >
-              <Ionicons name="leaf" size={11} color="#002b29" />
-            </LinearGradient>
-          </View>
-          <Text style={ms.logoText}>PropFlow</Text>
-        </Animated.View>
-
-        {/* ── Title ── */}
-        <Animated.View
-          style={{
-            opacity: logoAnim,
-            transform: [
-              {
-                translateY: logoAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [8, 0],
-                }),
-              },
-            ],
-          }}
-        >
-          <Text style={ms.title}>
-            {authMode === "signup"
-              ? signUpStep === 1
-                ? "Create your account"
-                : signUpStep === 2
-                  ? "Verify your email"
-                  : "Set your password"
-              : authMode === "forgot"
-                ? forgotStep === 1
-                  ? "Reset your password"
-                  : forgotStep === 2
-                    ? "Verify reset code"
-                    : "Set a new password"
-              : "Log in or sign up"}
-          </Text>
-          <Text style={ms.subtitle}>
-            {authMode === "signup"
-              ? signUpStep === 1
-                ? "Start with your details to receive a verification code."
-                : signUpStep === 2
-                  ? "Enter the 6-digit code sent to your email."
-                  : "Create a secure password to finish registration."
-              : authMode === "forgot"
-                ? forgotStep === 1
-                  ? "Enter your email to receive a 6-digit reset code."
-                  : forgotStep === 2
-                    ? "Enter the 6-digit code we sent to your email."
-                    : "Create a strong new password for your account."
-              : "Track bills, split costs fairly,\nand manage your property — all in one place."}
-          </Text>
-          {authMode === "signup" && (
-            <View style={ms.stepIndicatorWrap}>
-              <Text
-                style={ms.stepIndicatorText}
-              >{`Step ${signUpStep} of 3`}</Text>
-              <View style={ms.stepTrack}>
-                {[1, 2, 3].map((s) => (
-                  <View
-                    key={s}
-                    style={[ms.stepDot, s <= signUpStep && ms.stepDotActive]}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
-          {authMode === "forgot" && (
-            <View style={ms.stepIndicatorWrap}>
-              <Text
-                style={ms.stepIndicatorText}
-              >{`Step ${forgotStep} of 3`}</Text>
-              <View style={ms.stepTrack}>
-                {[1, 2, 3].map((s) => (
-                  <View
-                    key={s}
-                    style={[ms.stepDot, s <= forgotStep && ms.stepDotActive]}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
-        </Animated.View>
-
-        {authMode === "login" && (
-          <>
-            {/* ── Social buttons ── */}
-            <View style={ms.socialList}>
-              {SOCIAL_BTNS.map((item, i) => (
-                <SocialButton
-                  key={item.method}
-                  item={item}
-                  index={i}
-                  onPress={onAuth}
-                  disabled={loading}
+            />
+            <LinearGradient
+              colors={["rgba(3,109,65,0.10)", "rgba(3,109,65,0)"]}
+              style={[ms.sheetOrb, ms.sheetOrbBL]}
+              start={{ x: 0.5, y: 0.5 }}
+              end={{ x: 1, y: 1 }}
+            />
+            <View style={ms.sheetBand} />
+            <View style={ms.sheetGrid}>
+              {Array.from({ length: 15 }).map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    ms.sheetTile,
+                    {
+                      opacity: i % 3 === 0 ? 0.75 : 0.38,
+                      backgroundColor:
+                        i % 5 === 0
+                          ? "rgba(129,216,163,0.06)"
+                          : "rgba(255,255,255,0.028)",
+                      borderColor:
+                        i % 5 === 0
+                          ? "rgba(129,216,163,0.14)"
+                          : "rgba(158,208,205,0.09)",
+                    },
+                  ]}
                 />
               ))}
             </View>
+          </View>
 
-            {/* ── OR divider ── */}
+          {/* ── Drag handle ── */}
+          <View style={ms.handleWrap}>
+            <LinearGradient
+              colors={[ACCENT_EMERALD + "44", ACCENT_EMERALD + "14"]}
+              style={ms.handle}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
+          </View>
+
+          {/* ── Close button ── */}
+          <TouchableOpacity
+            style={ms.closeBtn}
+            onPress={handleCloseModal}
+            activeOpacity={0.75}
+          >
+            <View style={ms.closeBtnInner}>
+              <Ionicons name="close" size={16} color={TEAL_MUTED} />
+            </View>
+          </TouchableOpacity>
+
+          <ScrollView
+            style={ms.sheetScroll}
+            contentContainerStyle={[
+              ms.sheetScrollContent,
+              { paddingBottom: insets.bottom + 20 },
+            ]}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="none"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            {/* ── BillTrack micro-logo ── */}
             <Animated.View
               style={[
-                ms.orRow,
+                ms.logoRow,
                 {
-                  opacity: formAnim,
+                  opacity: logoAnim,
                   transform: [
                     {
-                      scaleX: formAnim.interpolate({
+                      translateY: logoAnim.interpolate({
                         inputRange: [0, 1],
-                        outputRange: [0.88, 1],
+                        outputRange: [-10, 0],
                       }),
                     },
                   ],
                 },
               ]}
             >
-              <View style={ms.orLine} />
-              <View style={ms.orPill}>
-                <Text style={ms.orText}>OR</Text>
+              <View style={ms.logoIconWrap}>
+                <LinearGradient
+                  colors={["#036d41", "#81d8a3"]}
+                  style={ms.logoIconGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="leaf" size={11} color="#002b29" />
+                </LinearGradient>
               </View>
-              <View style={ms.orLine} />
+              <Text style={ms.logoText}>PropFlow</Text>
             </Animated.View>
-          </>
-        )}
 
-        {/* ── Email input + Continue ── */}
-        <Animated.View style={{ opacity: formAnim }}>
-          {(authMode === "login" ||
-            (authMode === "forgot" && forgotStep === 1) ||
-            signUpStep === 1) &&
-            !(authMode === "login" && step === "email" && selectedAccount) && (
-            <>
-            <AuthInputWrap focused={focusedInput === "email"} error={!!emailError}>
-              <Ionicons
-                name="mail-outline"
-                size={16}
-                color={TEAL_MUTED}
-                style={ms.inputIcon}
-              />
-              <TextInput
-                style={ms.input}
-                placeholder="Email address"
-                placeholderTextColor="rgba(158,208,205,0.34)"
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  if (emailError) {
-                    setEmailError(getEmailValidationError(text));
-                  }
-                }}
-                onFocus={() => setFocusedInput("email")}
-                onBlur={() => {
-                  setFocusedInput((current) =>
-                    current === "email" ? null : current,
-                  );
-                  if (email.trim()) {
-                    setEmailError(getEmailValidationError(email));
-                  }
-                }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-              />
-              {email.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setEmail("");
-                    setEmailError("");
-                  }}
-                  activeOpacity={0.7}
-                  style={ms.inputClearBtn}
-                >
-                  <Ionicons name="close-circle" size={16} color={TEXT_SEC} />
-                </TouchableOpacity>
-              )}
-            </AuthInputWrap>
-            {!!emailError && (
-              <Text style={ms.inputErrorText}>{emailError}</Text>
-            )}
-            </>
-          )}
-
-          {authMode === "login" && step === "start" && savedAccounts.length > 0 && (
-            <View style={ms.savedAccountsWrap}>
-              <Text style={ms.savedAccountsTitle}>Saved accounts</Text>
-              {savedAccounts.map((account) => {
-                const hasBio = !!bioEnabledByEmail[account.email.toLowerCase()];
-                const isBioLoading =
-                  bioLoadingEmail === account.email.toLowerCase();
-                const isRemoveLoading =
-                  removeLoadingEmail === account.email.toLowerCase();
-                return (
-                  <View key={account.email} style={ms.savedAccountRow}>
-                    <TouchableOpacity
-                      style={{ flex: 1 }}
-                      activeOpacity={0.75}
-                      onPress={() => {
-                        setSelectedAccount(account);
-                        setEmail(account.email);
-                        setEmailError("");
-                        setPassword("");
-                        setStep("email");
-                      }}
-                    >
-                      <Text style={ms.savedAccountName} numberOfLines={1}>
-                        {account.name || account.email}
-                      </Text>
-                      <Text style={ms.savedAccountEmail} numberOfLines={1}>
-                        {account.email}
-                      </Text>
-                    </TouchableOpacity>
-                    {hasBio && (
-                      <TouchableOpacity
-                        style={ms.savedAccountBioBtn}
-                        activeOpacity={0.75}
-                        onPress={() => handleSavedAccountBiometric(account.email)}
-                        disabled={loading || isBioLoading || isRemoveLoading}
-                      >
-                        {isBioLoading ? (
-                          <ActivityIndicator size="small" color={ACCENT_EMERALD} />
-                        ) : (
-                          <Ionicons
-                            name="finger-print"
-                            size={18}
-                            color={ACCENT_EMERALD}
-                          />
-                        )}
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={ms.savedAccountRemoveBtn}
-                      activeOpacity={0.75}
-                      onPress={() => handleRemoveSavedAccount(account.email)}
-                      disabled={loading || isRemoveLoading || isBioLoading}
-                    >
-                      {isRemoveLoading ? (
-                        <ActivityIndicator size="small" color="#ff8c94" />
-                      ) : (
-                        <Ionicons name="trash-outline" size={16} color="#ff8c94" />
-                      )}
-                    </TouchableOpacity>
+            {/* ── Title ── */}
+            <Animated.View
+              style={{
+                opacity: logoAnim,
+                transform: [
+                  {
+                    translateY: logoAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [8, 0],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <Text style={ms.title}>
+                {authMode === "signup"
+                  ? signUpStep === 1
+                    ? "Create your account"
+                    : signUpStep === 2
+                      ? "Verify your email"
+                      : "Set your password"
+                  : authMode === "forgot"
+                    ? forgotStep === 1
+                      ? "Reset your password"
+                      : forgotStep === 2
+                        ? "Verify reset code"
+                        : "Set a new password"
+                    : "Log in or sign up"}
+              </Text>
+              <Text style={ms.subtitle}>
+                {authMode === "signup"
+                  ? signUpStep === 1
+                    ? "Start with your details to receive a verification code."
+                    : signUpStep === 2
+                      ? "Enter the 6-digit code sent to your email."
+                      : "Create a secure password to finish registration."
+                  : authMode === "forgot"
+                    ? forgotStep === 1
+                      ? "Enter your email to receive a 6-digit reset code."
+                      : forgotStep === 2
+                        ? "Enter the 6-digit code we sent to your email."
+                        : "Create a strong new password for your account."
+                    : "Track bills, split costs fairly,\nand manage your property — all in one place."}
+              </Text>
+              {authMode === "signup" && (
+                <View style={ms.stepIndicatorWrap}>
+                  <Text
+                    style={ms.stepIndicatorText}
+                  >{`Step ${signUpStep} of 3`}</Text>
+                  <View style={ms.stepTrack}>
+                    {[1, 2, 3].map((s) => (
+                      <View
+                        key={s}
+                        style={[
+                          ms.stepDot,
+                          s <= signUpStep && ms.stepDotActive,
+                        ]}
+                      />
+                    ))}
                   </View>
-                );
-              })}
-            </View>
-          )}
+                </View>
+              )}
+              {authMode === "forgot" && (
+                <View style={ms.stepIndicatorWrap}>
+                  <Text
+                    style={ms.stepIndicatorText}
+                  >{`Step ${forgotStep} of 3`}</Text>
+                  <View style={ms.stepTrack}>
+                    {[1, 2, 3].map((s) => (
+                      <View
+                        key={s}
+                        style={[
+                          ms.stepDot,
+                          s <= forgotStep && ms.stepDotActive,
+                        ]}
+                      />
+                    ))}
+                  </View>
+                </View>
+              )}
+            </Animated.View>
 
-          {authMode === "signup" && signUpStep === 1 && (
-            <AuthInputWrap focused={focusedInput === "fullName"}>
-              <Ionicons
-                name="person-outline"
-                size={16}
-                color={TEAL_MUTED}
-                style={ms.inputIcon}
-              />
-              <TextInput
-                style={ms.input}
-                placeholder="Full name"
-                placeholderTextColor="rgba(158,208,205,0.34)"
-                value={fullName}
-                onChangeText={setFullName}
-                onFocus={() => setFocusedInput("fullName")}
-                onBlur={() =>
-                  setFocusedInput((current) =>
-                    current === "fullName" ? null : current,
-                  )
-                }
-                autoCapitalize="words"
-                editable={!loading}
-              />
-            </AuthInputWrap>
-          )}
+            {authMode === "login" && (
+              <>
+                {/* ── Social buttons ── */}
+                <View style={ms.socialList}>
+                  {SOCIAL_BTNS.map((item, i) => (
+                    <SocialButton
+                      key={item.method}
+                      item={item}
+                      index={i}
+                      onPress={onAuth}
+                      disabled={loading}
+                    />
+                  ))}
+                </View>
 
-          {authMode === "signup" && signUpStep === 2 && (
-            <AuthInputWrap focused={focusedInput === "code"}>
-              <Ionicons
-                name="keypad-outline"
-                size={16}
-                color={TEAL_MUTED}
-                style={ms.inputIcon}
-              />
-              <TextInput
-                style={ms.input}
-                placeholder="6-digit code"
-                placeholderTextColor="rgba(158,208,205,0.34)"
-                value={code}
-                onChangeText={setCode}
-                onFocus={() => setFocusedInput("code")}
-                onBlur={() =>
-                  setFocusedInput((current) =>
-                    current === "code" ? null : current,
-                  )
-                }
-                keyboardType="number-pad"
-                maxLength={6}
-                editable={!loading}
-              />
-            </AuthInputWrap>
-          )}
-
-          {authMode === "signup" && signUpStep === 3 && (
-            <>
-              <AuthInputWrap focused={focusedInput === "password"}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={16}
-                  color={TEAL_MUTED}
-                  style={ms.inputIcon}
-                />
-                <TextInput
-                  style={ms.input}
-                  placeholder="Password"
-                  placeholderTextColor="rgba(158,208,205,0.34)"
-                  value={password}
-                  onChangeText={setPassword}
-                  onFocus={() => setFocusedInput("password")}
-                  onBlur={() =>
-                    setFocusedInput((current) =>
-                      current === "password" ? null : current,
-                    )
-                  }
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  editable={!loading}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword((v) => !v)}
-                  activeOpacity={0.7}
-                  style={ms.inputClearBtn}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-outline" : "eye-off-outline"}
-                    size={16}
-                    color={TEXT_SEC}
-                  />
-                </TouchableOpacity>
-              </AuthInputWrap>
-              <AuthInputWrap focused={focusedInput === "confirmPassword"}>
-                <Ionicons
-                  name="lock-closed"
-                  size={16}
-                  color={TEAL_MUTED}
-                  style={ms.inputIcon}
-                />
-                <TextInput
-                  style={ms.input}
-                  placeholder="Confirm password"
-                  placeholderTextColor="rgba(158,208,205,0.34)"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  onFocus={() => setFocusedInput("confirmPassword")}
-                  onBlur={() =>
-                    setFocusedInput((current) =>
-                      current === "confirmPassword" ? null : current,
-                    )
-                  }
-                  secureTextEntry={!showConfirmPassword}
-                  autoCapitalize="none"
-                  editable={!loading}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowConfirmPassword((v) => !v)}
-                  activeOpacity={0.7}
-                  style={ms.inputClearBtn}
-                >
-                  <Ionicons
-                    name={
-                      showConfirmPassword ? "eye-outline" : "eye-off-outline"
-                    }
-                    size={16}
-                    color={TEXT_SEC}
-                  />
-                </TouchableOpacity>
-              </AuthInputWrap>
-            </>
-          )}
-
-          {authMode === "forgot" ? (
-            <>
-              {forgotStep === 1 && (
-                <TouchableOpacity
+                {/* ── OR divider ── */}
+                <Animated.View
                   style={[
-                    ms.continueBtn,
-                    (!email.trim() || loading) && { opacity: 0.45 },
+                    ms.orRow,
+                    {
+                      opacity: formAnim,
+                      transform: [
+                        {
+                          scaleX: formAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.88, 1],
+                          }),
+                        },
+                      ],
+                    },
                   ]}
-                  onPress={async () => {
+                >
+                  <View style={ms.orLine} />
+                  <View style={ms.orPill}>
+                    <Text style={ms.orText}>OR</Text>
+                  </View>
+                  <View style={ms.orLine} />
+                </Animated.View>
+              </>
+            )}
+
+            {/* ── Email input + Continue ── */}
+            <Animated.View style={{ opacity: formAnim }}>
+              {(authMode === "login" ||
+                (authMode === "forgot" && forgotStep === 1) ||
+                signUpStep === 1) &&
+                !(
+                  authMode === "login" &&
+                  step === "email" &&
+                  selectedAccount
+                ) && (
+                  <>
+                    <AuthInputWrap
+                      focused={focusedInput === "email"}
+                      error={!!emailError}
+                    >
+                      <Ionicons
+                        name="mail-outline"
+                        size={16}
+                        color={TEAL_MUTED}
+                        style={ms.inputIcon}
+                      />
+                      <TextInput
+                        style={ms.input}
+                        placeholder="Email address"
+                        placeholderTextColor="rgba(158,208,205,0.34)"
+                        value={email}
+                        onChangeText={(text) => {
+                          setEmail(text);
+                          if (emailError) {
+                            setEmailError(getEmailValidationError(text));
+                          }
+                        }}
+                        onFocus={() => setFocusedInput("email")}
+                        onBlur={() => {
+                          setFocusedInput((current) =>
+                            current === "email" ? null : current,
+                          );
+                          if (email.trim()) {
+                            setEmailError(getEmailValidationError(email));
+                          }
+                        }}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={!loading}
+                      />
+                      {email.length > 0 && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            setEmail("");
+                            setEmailError("");
+                          }}
+                          activeOpacity={0.7}
+                          style={ms.inputClearBtn}
+                        >
+                          <Ionicons
+                            name="close-circle"
+                            size={16}
+                            color={TEXT_SEC}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </AuthInputWrap>
+                    {!!emailError && (
+                      <Text style={ms.inputErrorText}>{emailError}</Text>
+                    )}
+                  </>
+                )}
+
+              {authMode === "login" &&
+                step === "start" &&
+                savedAccounts.length > 0 && (
+                  <View style={ms.savedAccountsWrap}>
+                    <Text style={ms.savedAccountsTitle}>Saved accounts</Text>
+                    {savedAccounts.map((account) => {
+                      const hasBio =
+                        !!bioEnabledByEmail[account.email.toLowerCase()];
+                      const isBioLoading =
+                        bioLoadingEmail === account.email.toLowerCase();
+                      const isRemoveLoading =
+                        removeLoadingEmail === account.email.toLowerCase();
+                      return (
+                        <View key={account.email} style={ms.savedAccountRow}>
+                          <TouchableOpacity
+                            style={{ flex: 1 }}
+                            activeOpacity={0.75}
+                            onPress={() => {
+                              setSelectedAccount(account);
+                              setEmail(account.email);
+                              setEmailError("");
+                              setPassword("");
+                              setStep("email");
+                            }}
+                          >
+                            <Text style={ms.savedAccountName} numberOfLines={1}>
+                              {account.name || account.email}
+                            </Text>
+                            <Text
+                              style={ms.savedAccountEmail}
+                              numberOfLines={1}
+                            >
+                              {account.email}
+                            </Text>
+                          </TouchableOpacity>
+                          {hasBio && (
+                            <TouchableOpacity
+                              style={ms.savedAccountBioBtn}
+                              activeOpacity={0.75}
+                              onPress={() =>
+                                handleSavedAccountBiometric(account.email)
+                              }
+                              disabled={
+                                loading || isBioLoading || isRemoveLoading
+                              }
+                            >
+                              {isBioLoading ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color={ACCENT_EMERALD}
+                                />
+                              ) : (
+                                <Ionicons
+                                  name="finger-print"
+                                  size={18}
+                                  color={ACCENT_EMERALD}
+                                />
+                              )}
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity
+                            style={ms.savedAccountRemoveBtn}
+                            activeOpacity={0.75}
+                            onPress={() =>
+                              handleRemoveSavedAccount(account.email)
+                            }
+                            disabled={
+                              loading || isRemoveLoading || isBioLoading
+                            }
+                          >
+                            {isRemoveLoading ? (
+                              <ActivityIndicator size="small" color="#ff8c94" />
+                            ) : (
+                              <Ionicons
+                                name="trash-outline"
+                                size={16}
+                                color="#ff8c94"
+                              />
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+              {authMode === "signup" && signUpStep === 1 && (
+                <AuthInputWrap focused={focusedInput === "fullName"}>
+                  <Ionicons
+                    name="person-outline"
+                    size={16}
+                    color={TEAL_MUTED}
+                    style={ms.inputIcon}
+                  />
+                  <TextInput
+                    style={ms.input}
+                    placeholder="Full name"
+                    placeholderTextColor="rgba(158,208,205,0.34)"
+                    value={fullName}
+                    onChangeText={setFullName}
+                    onFocus={() => setFocusedInput("fullName")}
+                    onBlur={() =>
+                      setFocusedInput((current) =>
+                        current === "fullName" ? null : current,
+                      )
+                    }
+                    autoCapitalize="words"
+                    editable={!loading}
+                  />
+                </AuthInputWrap>
+              )}
+
+              {authMode === "signup" && signUpStep === 2 && (
+                <AuthInputWrap focused={focusedInput === "code"}>
+                  <Ionicons
+                    name="keypad-outline"
+                    size={16}
+                    color={TEAL_MUTED}
+                    style={ms.inputIcon}
+                  />
+                  <TextInput
+                    style={ms.input}
+                    placeholder="6-digit code"
+                    placeholderTextColor="rgba(158,208,205,0.34)"
+                    value={code}
+                    onChangeText={setCode}
+                    onFocus={() => setFocusedInput("code")}
+                    onBlur={() =>
+                      setFocusedInput((current) =>
+                        current === "code" ? null : current,
+                      )
+                    }
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    editable={!loading}
+                  />
+                </AuthInputWrap>
+              )}
+
+              {authMode === "signup" && signUpStep === 3 && (
+                <>
+                  <AuthInputWrap focused={focusedInput === "password"}>
+                    <Ionicons
+                      name="lock-closed-outline"
+                      size={16}
+                      color={TEAL_MUTED}
+                      style={ms.inputIcon}
+                    />
+                    <TextInput
+                      style={ms.input}
+                      placeholder="Password"
+                      placeholderTextColor="rgba(158,208,205,0.34)"
+                      value={password}
+                      onChangeText={setPassword}
+                      onFocus={() => setFocusedInput("password")}
+                      onBlur={() =>
+                        setFocusedInput((current) =>
+                          current === "password" ? null : current,
+                        )
+                      }
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      editable={!loading}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword((v) => !v)}
+                      activeOpacity={0.7}
+                      style={ms.inputClearBtn}
+                    >
+                      <Ionicons
+                        name={showPassword ? "eye-outline" : "eye-off-outline"}
+                        size={16}
+                        color={TEXT_SEC}
+                      />
+                    </TouchableOpacity>
+                  </AuthInputWrap>
+                  <AuthInputWrap focused={focusedInput === "confirmPassword"}>
+                    <Ionicons
+                      name="lock-closed"
+                      size={16}
+                      color={TEAL_MUTED}
+                      style={ms.inputIcon}
+                    />
+                    <TextInput
+                      style={ms.input}
+                      placeholder="Confirm password"
+                      placeholderTextColor="rgba(158,208,205,0.34)"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      onFocus={() => setFocusedInput("confirmPassword")}
+                      onBlur={() =>
+                        setFocusedInput((current) =>
+                          current === "confirmPassword" ? null : current,
+                        )
+                      }
+                      secureTextEntry={!showConfirmPassword}
+                      autoCapitalize="none"
+                      editable={!loading}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowConfirmPassword((v) => !v)}
+                      activeOpacity={0.7}
+                      style={ms.inputClearBtn}
+                    >
+                      <Ionicons
+                        name={
+                          showConfirmPassword
+                            ? "eye-outline"
+                            : "eye-off-outline"
+                        }
+                        size={16}
+                        color={TEXT_SEC}
+                      />
+                    </TouchableOpacity>
+                  </AuthInputWrap>
+                </>
+              )}
+
+              {authMode === "forgot" ? (
+                <>
+                  {forgotStep === 1 && (
+                    <TouchableOpacity
+                      style={[
+                        ms.continueBtn,
+                        (!email.trim() || loading) && { opacity: 0.45 },
+                      ]}
+                      onPress={async () => {
+                        if (!validateEmailField()) return;
+                        const ok = await onForgotPasswordRequest?.(email);
+                        if (ok) setForgotStep(2);
+                      }}
+                      activeOpacity={0.85}
+                      disabled={!email.trim() || loading}
+                    >
+                      <LinearGradient
+                        colors={["#036d41", "#81d8a3"]}
+                        style={ms.continueBtnGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                      >
+                        {loading && (
+                          <ActivityIndicator size="small" color="#002b29" />
+                        )}
+                        <Text style={ms.continueBtnText}>
+                          {loading ? "Sending code..." : "Send reset code"}
+                        </Text>
+                        <View style={ms.continueBtnArrow}>
+                          <Ionicons
+                            name="arrow-forward"
+                            size={14}
+                            color="#002b29"
+                          />
+                        </View>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
+
+                  {forgotStep === 2 && (
+                    <>
+                      <AuthInputWrap focused={focusedInput === "forgotCode"}>
+                        <Ionicons
+                          name="keypad-outline"
+                          size={16}
+                          color={TEAL_MUTED}
+                          style={ms.inputIcon}
+                        />
+                        <TextInput
+                          style={ms.input}
+                          placeholder="6-digit code"
+                          placeholderTextColor="rgba(158,208,205,0.34)"
+                          value={code}
+                          onChangeText={setCode}
+                          onFocus={() => setFocusedInput("forgotCode")}
+                          onBlur={() =>
+                            setFocusedInput((current) =>
+                              current === "forgotCode" ? null : current,
+                            )
+                          }
+                          keyboardType="number-pad"
+                          maxLength={6}
+                          editable={!loading}
+                        />
+                      </AuthInputWrap>
+                      <TouchableOpacity
+                        style={[
+                          ms.continueBtn,
+                          (code.length !== 6 || loading) && { opacity: 0.45 },
+                        ]}
+                        onPress={async () => {
+                          const ok = await onForgotPasswordVerify?.(
+                            email,
+                            code,
+                          );
+                          if (ok) setForgotStep(3);
+                        }}
+                        activeOpacity={0.85}
+                        disabled={code.length !== 6 || loading}
+                      >
+                        <LinearGradient
+                          colors={["#036d41", "#81d8a3"]}
+                          style={ms.continueBtnGradient}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                        >
+                          {loading && (
+                            <ActivityIndicator size="small" color="#002b29" />
+                          )}
+                          <Text style={ms.continueBtnText}>
+                            {loading ? "Verifying..." : "Verify code"}
+                          </Text>
+                          <View style={ms.continueBtnArrow}>
+                            <Ionicons
+                              name="arrow-forward"
+                              size={14}
+                              color="#002b29"
+                            />
+                          </View>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </>
+                  )}
+
+                  {forgotStep === 3 && (
+                    <>
+                      <AuthInputWrap
+                        focused={focusedInput === "forgotPassword"}
+                      >
+                        <Ionicons
+                          name="lock-closed-outline"
+                          size={16}
+                          color={TEAL_MUTED}
+                          style={ms.inputIcon}
+                        />
+                        <TextInput
+                          style={ms.input}
+                          placeholder="New password"
+                          placeholderTextColor="rgba(158,208,205,0.34)"
+                          value={password}
+                          onChangeText={setPassword}
+                          onFocus={() => setFocusedInput("forgotPassword")}
+                          onBlur={() =>
+                            setFocusedInput((current) =>
+                              current === "forgotPassword" ? null : current,
+                            )
+                          }
+                          secureTextEntry={!showPassword}
+                          autoCapitalize="none"
+                          editable={!loading}
+                        />
+                        <TouchableOpacity
+                          onPress={() => setShowPassword((v) => !v)}
+                          activeOpacity={0.7}
+                          style={ms.inputClearBtn}
+                        >
+                          <Ionicons
+                            name={
+                              showPassword ? "eye-outline" : "eye-off-outline"
+                            }
+                            size={16}
+                            color={TEXT_SEC}
+                          />
+                        </TouchableOpacity>
+                      </AuthInputWrap>
+                      <AuthInputWrap
+                        focused={focusedInput === "forgotConfirmPassword"}
+                      >
+                        <Ionicons
+                          name="lock-closed"
+                          size={16}
+                          color={TEAL_MUTED}
+                          style={ms.inputIcon}
+                        />
+                        <TextInput
+                          style={ms.input}
+                          placeholder="Confirm new password"
+                          placeholderTextColor="rgba(158,208,205,0.34)"
+                          value={confirmPassword}
+                          onChangeText={setConfirmPassword}
+                          onFocus={() =>
+                            setFocusedInput("forgotConfirmPassword")
+                          }
+                          onBlur={() =>
+                            setFocusedInput((current) =>
+                              current === "forgotConfirmPassword"
+                                ? null
+                                : current,
+                            )
+                          }
+                          secureTextEntry={!showConfirmPassword}
+                          autoCapitalize="none"
+                          editable={!loading}
+                        />
+                        <TouchableOpacity
+                          onPress={() => setShowConfirmPassword((v) => !v)}
+                          activeOpacity={0.7}
+                          style={ms.inputClearBtn}
+                        >
+                          <Ionicons
+                            name={
+                              showConfirmPassword
+                                ? "eye-outline"
+                                : "eye-off-outline"
+                            }
+                            size={16}
+                            color={TEXT_SEC}
+                          />
+                        </TouchableOpacity>
+                      </AuthInputWrap>
+                      <TouchableOpacity
+                        style={[
+                          ms.continueBtn,
+                          (!password || !confirmPassword || loading) && {
+                            opacity: 0.45,
+                          },
+                        ]}
+                        onPress={() =>
+                          onForgotPasswordReset?.(
+                            email,
+                            code,
+                            password,
+                            confirmPassword,
+                          )
+                        }
+                        activeOpacity={0.85}
+                        disabled={!password || !confirmPassword || loading}
+                      >
+                        <LinearGradient
+                          colors={["#036d41", "#81d8a3"]}
+                          style={ms.continueBtnGradient}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                        >
+                          {loading && (
+                            <ActivityIndicator size="small" color="#002b29" />
+                          )}
+                          <Text style={ms.continueBtnText}>
+                            {loading ? "Resetting..." : "Reset password"}
+                          </Text>
+                          <View style={ms.continueBtnArrow}>
+                            <Ionicons
+                              name="arrow-forward"
+                              size={14}
+                              color="#002b29"
+                            />
+                          </View>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </>
+              ) : authMode === "login" && step === "start" ? (
+                <TouchableOpacity
+                  style={[ms.continueBtn, !email.length && { opacity: 0.45 }]}
+                  onPress={() => {
                     if (!validateEmailField()) return;
-                    const ok = await onForgotPasswordRequest?.(email);
-                    if (ok) setForgotStep(2);
+                    setStep("email");
                   }}
                   activeOpacity={0.85}
-                  disabled={!email.trim() || loading}
+                  disabled={!email.length}
                 >
                   <LinearGradient
                     colors={["#036d41", "#81d8a3"]}
@@ -1083,12 +1353,7 @@ const AuthModal = ({
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   >
-                    {loading && (
-                      <ActivityIndicator size="small" color="#002b29" />
-                    )}
-                    <Text style={ms.continueBtnText}>
-                      {loading ? "Sending code..." : "Send reset code"}
-                    </Text>
+                    <Text style={ms.continueBtnText}>Continue</Text>
                     <View style={ms.continueBtnArrow}>
                       <Ionicons
                         name="arrow-forward"
@@ -1098,113 +1363,94 @@ const AuthModal = ({
                     </View>
                   </LinearGradient>
                 </TouchableOpacity>
-              )}
-
-              {forgotStep === 2 && (
+              ) : authMode === "login" ? (
                 <>
-                  <AuthInputWrap focused={focusedInput === "forgotCode"}>
-                    <Ionicons name="keypad-outline" size={16} color={TEAL_MUTED} style={ms.inputIcon} />
-                    <TextInput
-                      style={ms.input}
-                      placeholder="6-digit code"
-                      placeholderTextColor="rgba(158,208,205,0.34)"
-                      value={code}
-                      onChangeText={setCode}
-                      onFocus={() => setFocusedInput("forgotCode")}
-                      onBlur={() =>
-                        setFocusedInput((current) =>
-                          current === "forgotCode" ? null : current,
-                        )
-                      }
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      editable={!loading}
-                    />
-                  </AuthInputWrap>
                   <TouchableOpacity
-                    style={[
-                      ms.continueBtn,
-                      (code.length !== 6 || loading) && { opacity: 0.45 },
-                    ]}
-                    onPress={async () => {
-                      const ok = await onForgotPasswordVerify?.(email, code);
-                      if (ok) setForgotStep(3);
+                    onPress={() => {
+                      setPassword("");
+                      setStep("start");
+                      setSelectedAccount(null);
                     }}
-                    activeOpacity={0.85}
-                    disabled={code.length !== 6 || loading}
+                    activeOpacity={0.75}
+                    style={{
+                      alignSelf: "flex-start",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      marginBottom: 8,
+                    }}
+                    disabled={loading}
                   >
-                    <LinearGradient
-                      colors={["#036d41", "#81d8a3"]}
-                      style={ms.continueBtnGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
+                    <Ionicons
+                      name="chevron-back"
+                      size={15}
+                      color={ACCENT_EMERALD + "CC"}
+                    />
+                    <Text
+                      style={{
+                        color: ACCENT_EMERALD + "CC",
+                        fontWeight: "700",
+                      }}
                     >
-                      {loading && <ActivityIndicator size="small" color="#002b29" />}
-                      <Text style={ms.continueBtnText}>
-                        {loading ? "Verifying..." : "Verify code"}
-                      </Text>
-                      <View style={ms.continueBtnArrow}>
-                        <Ionicons name="arrow-forward" size={14} color="#002b29" />
-                      </View>
-                    </LinearGradient>
+                      Back
+                    </Text>
                   </TouchableOpacity>
-                </>
-              )}
 
-              {forgotStep === 3 && (
-                <>
-                  <AuthInputWrap focused={focusedInput === "forgotPassword"}>
-                    <Ionicons name="lock-closed-outline" size={16} color={TEAL_MUTED} style={ms.inputIcon} />
+                  {selectedAccount && (
+                    <View style={ms.selectedAccountPill}>
+                      <Text style={ms.selectedAccountText} numberOfLines={1}>
+                        {selectedAccount.email}
+                      </Text>
+                    </View>
+                  )}
+
+                  <AuthInputWrap focused={focusedInput === "loginPassword"}>
+                    <Ionicons
+                      name="lock-closed-outline"
+                      size={16}
+                      color={TEAL_MUTED}
+                      style={ms.inputIcon}
+                    />
                     <TextInput
                       style={ms.input}
-                      placeholder="New password"
+                      placeholder="Password"
                       placeholderTextColor="rgba(158,208,205,0.34)"
                       value={password}
                       onChangeText={setPassword}
-                      onFocus={() => setFocusedInput("forgotPassword")}
+                      onFocus={() => setFocusedInput("loginPassword")}
                       onBlur={() =>
                         setFocusedInput((current) =>
-                          current === "forgotPassword" ? null : current,
+                          current === "loginPassword" ? null : current,
                         )
                       }
                       secureTextEntry={!showPassword}
                       autoCapitalize="none"
+                      autoCorrect={false}
                       editable={!loading}
                     />
-                    <TouchableOpacity onPress={() => setShowPassword((v) => !v)} activeOpacity={0.7} style={ms.inputClearBtn}>
-                      <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={16} color={TEXT_SEC} />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword((v) => !v)}
+                      activeOpacity={0.7}
+                      style={ms.inputClearBtn}
+                    >
+                      <Ionicons
+                        name={showPassword ? "eye-outline" : "eye-off-outline"}
+                        size={16}
+                        color={TEXT_SEC}
+                      />
                     </TouchableOpacity>
                   </AuthInputWrap>
-                  <AuthInputWrap focused={focusedInput === "forgotConfirmPassword"}>
-                    <Ionicons name="lock-closed" size={16} color={TEAL_MUTED} style={ms.inputIcon} />
-                    <TextInput
-                      style={ms.input}
-                      placeholder="Confirm new password"
-                      placeholderTextColor="rgba(158,208,205,0.34)"
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      onFocus={() => setFocusedInput("forgotConfirmPassword")}
-                      onBlur={() =>
-                        setFocusedInput((current) =>
-                          current === "forgotConfirmPassword" ? null : current,
-                        )
-                      }
-                      secureTextEntry={!showConfirmPassword}
-                      autoCapitalize="none"
-                      editable={!loading}
-                    />
-                    <TouchableOpacity onPress={() => setShowConfirmPassword((v) => !v)} activeOpacity={0.7} style={ms.inputClearBtn}>
-                      <Ionicons name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} size={16} color={TEXT_SEC} />
-                    </TouchableOpacity>
-                  </AuthInputWrap>
+
                   <TouchableOpacity
                     style={[
                       ms.continueBtn,
-                      (!password || !confirmPassword || loading) && { opacity: 0.45 },
+                      (!email.length || !password.length || loading) && {
+                        opacity: 0.45,
+                      },
                     ]}
-                    onPress={() => onForgotPasswordReset?.(email, code, password, confirmPassword)}
+                    onPress={() => onEmailSignIn?.(email, password)}
                     activeOpacity={0.85}
-                    disabled={!password || !confirmPassword || loading}
+                    disabled={!email.length || !password.length || loading}
                   >
                     <LinearGradient
                       colors={["#036d41", "#81d8a3"]}
@@ -1212,292 +1458,191 @@ const AuthModal = ({
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                     >
-                      {loading && <ActivityIndicator size="small" color="#002b29" />}
                       <Text style={ms.continueBtnText}>
-                        {loading ? "Resetting..." : "Reset password"}
+                        {loading ? "Signing in..." : "Sign in"}
                       </Text>
                       <View style={ms.continueBtnArrow}>
-                        <Ionicons name="arrow-forward" size={14} color="#002b29" />
+                        <Ionicons
+                          name="log-in-outline"
+                          size={14}
+                          color="#002b29"
+                        />
                       </View>
                     </LinearGradient>
                   </TouchableOpacity>
                 </>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[
+                      ms.continueBtn,
+                      ((signUpStep === 1 &&
+                        (!fullName.trim() || !email.trim())) ||
+                        (signUpStep === 2 && code.length !== 6) ||
+                        (signUpStep === 3 &&
+                          (!password || !confirmPassword || loading))) && {
+                        opacity: 0.45,
+                      },
+                    ]}
+                    onPress={async () => {
+                      if (signUpStep === 1) {
+                        if (!validateEmailField()) return;
+                        const result = await onSignUpCreate?.(fullName, email);
+                        if (result?.ok || result?.resumeAtStep2) {
+                          setSignUpStep(2);
+                          setResendTimer(60);
+                        }
+                        return;
+                      }
+                      if (signUpStep === 2) {
+                        const ok = await onSignUpVerify?.(email, code);
+                        if (ok) setSignUpStep(3);
+                        return;
+                      }
+                      if (signUpStep === 3) {
+                        await onSignUpComplete?.(
+                          email,
+                          password,
+                          confirmPassword,
+                        );
+                      }
+                    }}
+                    activeOpacity={0.85}
+                    disabled={
+                      (signUpStep === 1 &&
+                        (!fullName.trim() || !email.trim())) ||
+                      (signUpStep === 2 && code.length !== 6) ||
+                      (signUpStep === 3 &&
+                        (!password || !confirmPassword || loading))
+                    }
+                  >
+                    <LinearGradient
+                      colors={["#036d41", "#81d8a3"]}
+                      style={ms.continueBtnGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    >
+                      {loading && (
+                        <ActivityIndicator size="small" color="#002b29" />
+                      )}
+                      <Text style={ms.continueBtnText}>
+                        {signUpStep === 3
+                          ? loading
+                            ? "Creating account..."
+                            : "Create account"
+                          : "Continue"}
+                      </Text>
+                      <View style={ms.continueBtnArrow}>
+                        <Ionicons
+                          name="arrow-forward"
+                          size={14}
+                          color="#002b29"
+                        />
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  {signUpStep === 2 && (
+                    <TouchableOpacity
+                      style={{
+                        alignSelf: "center",
+                        marginTop: 2,
+                        marginBottom: 12,
+                      }}
+                      activeOpacity={0.7}
+                      onPress={async () => {
+                        const ok = await onSignUpResend?.(email);
+                        if (ok) setResendTimer(60);
+                      }}
+                      disabled={loading || resendTimer > 0}
+                    >
+                      <Text
+                        style={{
+                          color: ACCENT_EMERALD + "CC",
+                          fontWeight: "700",
+                        }}
+                      >
+                        {resendTimer > 0
+                          ? `Resend code in ${resendTimer}s`
+                          : "Resend code"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
               )}
-            </>
-          ) : authMode === "login" && step === "start" ? (
-            <TouchableOpacity
-              style={[ms.continueBtn, !email.length && { opacity: 0.45 }]}
-              onPress={() => {
-                if (!validateEmailField()) return;
-                setStep("email");
-              }}
-              activeOpacity={0.85}
-              disabled={!email.length}
-            >
-              <LinearGradient
-                colors={["#036d41", "#81d8a3"]}
-                style={ms.continueBtnGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={ms.continueBtnText}>Continue</Text>
-                <View style={ms.continueBtnArrow}>
-                  <Ionicons name="arrow-forward" size={14} color="#002b29" />
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          ) : authMode === "login" ? (
-            <>
+
               <TouchableOpacity
                 onPress={() => {
-                  setPassword("");
-                  setStep("start");
-                  setSelectedAccount(null);
+                  if (authMode === "login") {
+                    setAuthMode("signup");
+                    setSignUpStep(1);
+                    setStep("start");
+                    setSelectedAccount(null);
+                    setEmailError("");
+                    setPassword("");
+                    setConfirmPassword("");
+                    setCode("");
+                    setResendTimer(0);
+                  } else {
+                    setAuthMode("login");
+                    setStep("start");
+                    setSelectedAccount(null);
+                    setEmailError("");
+                    setPassword("");
+                    setConfirmPassword("");
+                    setCode("");
+                    setResendTimer(0);
+                  }
                 }}
                 activeOpacity={0.75}
-                style={{
-                  alignSelf: "flex-start",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  marginBottom: 8,
-                }}
+                style={{ alignSelf: "center", marginBottom: 10 }}
                 disabled={loading}
               >
-                <Ionicons
-                  name="chevron-back"
-                  size={15}
-                  color={ACCENT_EMERALD + "CC"}
-                />
                 <Text
                   style={{ color: ACCENT_EMERALD + "CC", fontWeight: "700" }}
                 >
-                  Back
+                  {authMode === "login"
+                    ? "No account yet? Sign up"
+                    : authMode === "signup"
+                      ? "Already have an account? Log in"
+                      : "Back to login"}
                 </Text>
               </TouchableOpacity>
 
-              {selectedAccount && (
-                <View style={ms.selectedAccountPill}>
-                  <Text style={ms.selectedAccountText} numberOfLines={1}>
-                    {selectedAccount.email}
-                  </Text>
-                </View>
-              )}
-
-              <AuthInputWrap focused={focusedInput === "loginPassword"}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={16}
-                  color={TEAL_MUTED}
-                  style={ms.inputIcon}
-                />
-                <TextInput
-                  style={ms.input}
-                  placeholder="Password"
-                  placeholderTextColor="rgba(158,208,205,0.34)"
-                  value={password}
-                  onChangeText={setPassword}
-                  onFocus={() => setFocusedInput("loginPassword")}
-                  onBlur={() =>
-                    setFocusedInput((current) =>
-                      current === "loginPassword" ? null : current,
-                    )
-                  }
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!loading}
-                />
+              {authMode === "login" && step === "email" && (
                 <TouchableOpacity
-                  onPress={() => setShowPassword((v) => !v)}
-                  activeOpacity={0.7}
-                  style={ms.inputClearBtn}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-outline" : "eye-off-outline"}
-                    size={16}
-                    color={TEXT_SEC}
-                  />
-                </TouchableOpacity>
-              </AuthInputWrap>
-
-              <TouchableOpacity
-                style={[
-                  ms.continueBtn,
-                  (!email.length || !password.length || loading) && {
-                    opacity: 0.45,
-                  },
-                ]}
-                onPress={() => onEmailSignIn?.(email, password)}
-                activeOpacity={0.85}
-                disabled={!email.length || !password.length || loading}
-              >
-                <LinearGradient
-                  colors={["#036d41", "#81d8a3"]}
-                  style={ms.continueBtnGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={ms.continueBtnText}>
-                    {loading ? "Signing in..." : "Sign in"}
-                  </Text>
-                  <View style={ms.continueBtnArrow}>
-                    <Ionicons name="log-in-outline" size={14} color="#002b29" />
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity
-                style={[
-                  ms.continueBtn,
-                  ((signUpStep === 1 && (!fullName.trim() || !email.trim())) ||
-                    (signUpStep === 2 && code.length !== 6) ||
-                    (signUpStep === 3 &&
-                      (!password || !confirmPassword || loading))) && {
-                    opacity: 0.45,
-                  },
-                ]}
-                onPress={async () => {
-                  if (signUpStep === 1) {
-                    if (!validateEmailField()) return;
-                    const result = await onSignUpCreate?.(fullName, email);
-                    if (result?.ok || result?.resumeAtStep2) {
-                      setSignUpStep(2);
-                      setResendTimer(60);
-                    }
-                    return;
-                  }
-                  if (signUpStep === 2) {
-                    const ok = await onSignUpVerify?.(email, code);
-                    if (ok) setSignUpStep(3);
-                    return;
-                  }
-                  if (signUpStep === 3) {
-                    await onSignUpComplete?.(email, password, confirmPassword);
-                  }
-                }}
-                activeOpacity={0.85}
-                disabled={
-                  (signUpStep === 1 && (!fullName.trim() || !email.trim())) ||
-                  (signUpStep === 2 && code.length !== 6) ||
-                  (signUpStep === 3 &&
-                    (!password || !confirmPassword || loading))
-                }
-              >
-                <LinearGradient
-                  colors={["#036d41", "#81d8a3"]}
-                  style={ms.continueBtnGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  {loading && (
-                    <ActivityIndicator size="small" color="#002b29" />
-                  )}
-                  <Text style={ms.continueBtnText}>
-                    {signUpStep === 3
-                      ? loading
-                        ? "Creating account..."
-                        : "Create account"
-                      : "Continue"}
-                  </Text>
-                  <View style={ms.continueBtnArrow}>
-                    <Ionicons name="arrow-forward" size={14} color="#002b29" />
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-
-              {signUpStep === 2 && (
-                <TouchableOpacity
-                  style={{ alignSelf: "center", marginTop: 2, marginBottom: 12 }}
-                  activeOpacity={0.7}
-                  onPress={async () => {
-                    const ok = await onSignUpResend?.(email);
-                    if (ok) setResendTimer(60);
+                  onPress={() => {
+                    setAuthMode("forgot");
+                    setForgotStep(1);
+                    setEmailError("");
+                    setCode("");
+                    setPassword("");
+                    setConfirmPassword("");
                   }}
-                  disabled={loading || resendTimer > 0}
+                  activeOpacity={0.75}
+                  style={{ alignSelf: "center", marginBottom: 10 }}
+                  disabled={loading}
                 >
-                  <Text style={{ color: ACCENT_EMERALD + "CC", fontWeight: "700" }}>
-                    {resendTimer > 0
-                      ? `Resend code in ${resendTimer}s`
-                      : "Resend code"}
+                  <Text style={{ color: TEAL_MUTED, fontWeight: "700" }}>
+                    Forgot password?
                   </Text>
                 </TouchableOpacity>
               )}
-            </>
-          )}
 
-          <TouchableOpacity
-            onPress={() => {
-              if (authMode === "login") {
-                setAuthMode("signup");
-                setSignUpStep(1);
-                setStep("start");
-                setSelectedAccount(null);
-                setEmailError("");
-                setPassword("");
-                setConfirmPassword("");
-                setCode("");
-                setResendTimer(0);
-              } else {
-                setAuthMode("login");
-                setStep("start");
-                setSelectedAccount(null);
-                setEmailError("");
-                setPassword("");
-                setConfirmPassword("");
-                setCode("");
-                setResendTimer(0);
-              }
-            }}
-            activeOpacity={0.75}
-            style={{ alignSelf: "center", marginBottom: 10 }}
-            disabled={loading}
-          >
-            <Text style={{ color: ACCENT_EMERALD + "CC", fontWeight: "700" }}>
-              {authMode === "login"
-                ? "No account yet? Sign up"
-                : authMode === "signup"
-                  ? "Already have an account? Log in"
-                  : "Back to login"}
-            </Text>
-          </TouchableOpacity>
-
-          {authMode === "login" && step === "email" && (
-            <TouchableOpacity
-              onPress={() => {
-                setAuthMode("forgot");
-                setForgotStep(1);
-                setEmailError("");
-                setCode("");
-                setPassword("");
-                setConfirmPassword("");
-              }}
-              activeOpacity={0.75}
-              style={{ alignSelf: "center", marginBottom: 10 }}
-              disabled={loading}
-            >
-              <Text style={{ color: TEAL_MUTED, fontWeight: "700" }}>
-                Forgot password?
+              <Text style={ms.terms}>
+                By continuing, you agree to our{" "}
+                <Text style={ms.termsLink} onPress={onOpenTerms}>
+                  Terms of Service
+                </Text>{" "}
+                and{" "}
+                <Text style={ms.termsLink} onPress={onOpenPrivacy}>
+                  Privacy Policy
+                </Text>
+                .
               </Text>
-            </TouchableOpacity>
-          )}
-
-          <Text style={ms.terms}>
-            By continuing, you agree to our{" "}
-            <Text style={ms.termsLink} onPress={onOpenTerms}>
-              Terms of Service
-            </Text>{" "}
-            and{" "}
-            <Text style={ms.termsLink} onPress={onOpenPrivacy}>
-              Privacy Policy
-            </Text>
-            .
-          </Text>
+            </Animated.View>
+          </ScrollView>
         </Animated.View>
-        </ScrollView>
-      </Animated.View>
       </View>
     </Modal>
   );
@@ -1829,11 +1974,7 @@ const AuthInputWrap = ({ focused, error = false, children }) => (
     style={[
       ms.inputWrap,
       {
-        borderColor: error
-          ? "#ff8c94"
-          : focused
-            ? CARD_BORDER_HI
-            : CARD_BORDER,
+        borderColor: error ? "#ff8c94" : focused ? CARD_BORDER_HI : CARD_BORDER,
       },
     ]}
     collapsable={false}
@@ -1850,7 +1991,8 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [screenAuthenticating, setScreenAuthenticating] = useState(false);
-  const [authLoadingMessage, setAuthLoadingMessage] = useState("Signing you in...");
+  const [authLoadingMessage, setAuthLoadingMessage] =
+    useState("Signing you in...");
   const [toast, setToast] = useState({
     visible: false,
     type: "info",
@@ -2365,7 +2507,10 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       showToast("Reset code sent to your email", "success");
       return true;
     } catch (e) {
-      showToast(e?.data?.message || e?.message || "Failed to send reset code", "error");
+      showToast(
+        e?.data?.message || e?.message || "Failed to send reset code",
+        "error",
+      );
       return false;
     } finally {
       setLoading(false);
@@ -2387,14 +2532,22 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       showToast("Code verified", "success");
       return true;
     } catch (e) {
-      showToast(e?.data?.message || e?.message || "Failed to verify code", "error");
+      showToast(
+        e?.data?.message || e?.message || "Failed to verify code",
+        "error",
+      );
       return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForgotPasswordReset = async (email, code, password, confirmPassword) => {
+  const handleForgotPasswordReset = async (
+    email,
+    code,
+    password,
+    confirmPassword,
+  ) => {
     if (!password || password.length < 8) {
       showToast("Password must be at least 8 characters", "error");
       return false;
@@ -2413,7 +2566,11 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
     }
     try {
       setLoading(true);
-      const response = await authService.resetPassword(email.trim(), code, password);
+      const response = await authService.resetPassword(
+        email.trim(),
+        code,
+        password,
+      );
       if (!response?.success) {
         showToast(response?.message || "Failed to reset password", "error");
         return false;
@@ -2422,7 +2579,10 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       setShowModal(false);
       return true;
     } catch (e) {
-      showToast(e?.data?.message || e?.message || "Failed to reset password", "error");
+      showToast(
+        e?.data?.message || e?.message || "Failed to reset password",
+        "error",
+      );
       return false;
     } finally {
       setLoading(false);
@@ -2469,266 +2629,289 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
         <FloatingIcon key={i} {...fi} />
       ))}
 
-      <View
-        style={[
+      <ScrollView
+        style={ls.scrollView}
+        contentContainerStyle={[
           ls.content,
           { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 20 },
         ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-          {/* ─── Logo Row ─── */}
-          <Animated.View
-            style={[
-              ls.logoRow,
-              {
-                opacity: logoAnim,
-                transform: [
-                  {
-                    translateY: logoAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [-18, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <View style={ls.logoIconWrap}>
-              <LinearGradient
-                colors={["#036d41", "#81d8a3"]}
-                style={ls.logoIconGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Ionicons name="leaf" size={19} color="#002b29" />
-              </LinearGradient>
-            </View>
-            <Text style={ls.appName}>PropFlow</Text>
-            <View style={ls.betaBadge}>
-              <Text style={ls.betaText}>BETA</Text>
-            </View>
-          </Animated.View>
-
-          {/* ─── Hero Zone ─── */}
-          <Animated.View
-            style={[
-              ls.heroZone,
-              {
-                opacity: heroAnim,
-                transform: [
-                  {
-                    scale: heroAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.88, 1],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Animated.View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                width: width * 0.7,
-                height: width * 0.7,
-                borderRadius: width * 0.35,
-                borderWidth: 1,
-                borderColor: ACCENT_MINT,
-                opacity: ringOpacity,
-                transform: [{ scale: ringScale }],
-              }}
-            />
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                width: width * 0.5,
-                height: width * 0.5,
-                borderRadius: width * 0.25,
-                borderWidth: 1,
-                borderColor: ACCENT_MINT + "1C",
-              }}
-            />
-
-            <View style={ls.centralBadge}>
-              <LinearGradient
-                colors={["#036d41", "#0a4240"]}
-                style={ls.centralGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Ionicons
-                  name="receipt-outline"
-                  size={30}
-                  color={ACCENT_MINT}
-                />
-              </LinearGradient>
-            </View>
-
-            {[
-              {
-                label: "Electric",
-                icon: "flash",
-                color: ACCENT_MINT,
-                style: ls.orbitTL,
-              },
-              {
-                label: "Water",
-                icon: "water",
-                color: ACCENT_EMERALD,
-                style: ls.orbitTR,
-              },
-              {
-                label: "Internet",
-                icon: "wifi",
-                color: TEAL_MUTED,
-                style: ls.orbitBL,
-              },
-              {
-                label: "Rent",
-                icon: "home",
-                color: ACCENT_LEAF,
-                style: ls.orbitBR,
-              },
-            ].map(({ label, icon, color, style }) => (
-              <View key={label} style={[ls.orbitCard, style]}>
-                <View
-                  style={[ls.orbitCardInner, { borderColor: color + "2E" }]}
-                >
-                  <Ionicons name={icon} size={11} color={color} />
-                  <Text style={[ls.orbitCardText, { color }]}>{label}</Text>
-                </View>
-              </View>
-            ))}
-          </Animated.View>
-
-          {/* ─── Hero Text ─── */}
-          <Animated.View
-            style={{
-              opacity: textAnim,
+        {/* ─── Logo Row ─── */}
+        <Animated.View
+          style={[
+            ls.logoRow,
+            {
+              opacity: logoAnim,
               transform: [
                 {
-                  translateY: textAnim.interpolate({
+                  translateY: logoAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-18, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={ls.logoIconWrap}>
+            <LinearGradient
+              colors={["#036d41", "#81d8a3"]}
+              style={ls.logoIconGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Ionicons name="leaf" size={19} color="#002b29" />
+            </LinearGradient>
+          </View>
+          <Text style={ls.appName}>PropFlow</Text>
+          <View style={ls.betaBadge}>
+            <Text style={ls.betaText}>BETA</Text>
+          </View>
+        </Animated.View>
+
+        {/* ─── Hero Zone ─── */}
+        <Animated.View
+          style={[
+            ls.heroZone,
+            {
+              opacity: heroAnim,
+              transform: [
+                {
+                  scale: heroAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.88, 1],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              width: width * 0.7,
+              height: width * 0.7,
+              borderRadius: width * 0.35,
+              borderWidth: 1,
+              borderColor: ACCENT_MINT,
+              opacity: ringOpacity,
+              transform: [{ scale: ringScale }],
+            }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              width: width * 0.5,
+              height: width * 0.5,
+              borderRadius: width * 0.25,
+              borderWidth: 1,
+              borderColor: ACCENT_MINT + "1C",
+            }}
+          />
+
+          <View style={ls.centralBadge}>
+            <LinearGradient
+              colors={["#036d41", "#0a4240"]}
+              style={ls.centralGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Ionicons name="receipt-outline" size={30} color={ACCENT_MINT} />
+            </LinearGradient>
+          </View>
+
+          {[
+            {
+              label: "Electric",
+              icon: "flash",
+              color: ACCENT_MINT,
+              style: ls.orbitTL,
+            },
+            {
+              label: "Water",
+              icon: "water",
+              color: ACCENT_EMERALD,
+              style: ls.orbitTR,
+            },
+            {
+              label: "Internet",
+              icon: "wifi",
+              color: TEAL_MUTED,
+              style: ls.orbitBL,
+            },
+            {
+              label: "Rent",
+              icon: "home",
+              color: ACCENT_LEAF,
+              style: ls.orbitBR,
+            },
+          ].map(({ label, icon, color, style }) => (
+            <View key={label} style={[ls.orbitCard, style]}>
+              <View style={[ls.orbitCardInner, { borderColor: color + "2E" }]}>
+                <Ionicons name={icon} size={11} color={color} />
+                <Text style={[ls.orbitCardText, { color }]}>{label}</Text>
+              </View>
+            </View>
+          ))}
+        </Animated.View>
+
+        {/* ─── Hero Text ─── */}
+        <Animated.View
+          style={{
+            opacity: textAnim,
+            transform: [
+              {
+                translateY: textAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [18, 0],
+                }),
+              },
+            ],
+            alignItems: "center",
+            paddingHorizontal: 24,
+          }}
+        >
+          <Text style={ls.heroTitle}>
+            Property Bills,{"\n"}
+            <Text style={{ color: ACCENT_MINT }}>Organised</Text> & Split
+          </Text>
+          <Text style={ls.heroDesc}>
+            Track every utility, split water bills by presence, and manage all
+            your units — effortlessly.
+          </Text>
+        </Animated.View>
+
+        {/* ─── Feature Pills ─── */}
+        <Animated.View
+          style={[
+            ls.pillsRow,
+            {
+              opacity: pillsAnim,
+              transform: [
+                {
+                  translateY: pillsAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [14, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          {FEATURE_PILLS.map((f, i) => (
+            <FeaturePill key={f.label} {...f} delay={i * 55} />
+          ))}
+        </Animated.View>
+
+        {/* ─── Stats Card ─── */}
+        <Animated.View
+          style={[
+            ls.statsCard,
+            {
+              opacity: statsAnim,
+              transform: [
+                {
+                  translateY: statsAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [14, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <StatItem
+            value="100%"
+            label="Transparent"
+            color={ACCENT_MINT}
+            delay={200}
+          />
+          <View style={ls.statDivider} />
+          <StatItem
+            value="Fair"
+            label="Water Split"
+            color={ACCENT_EMERALD}
+            delay={300}
+          />
+          <View style={ls.statDivider} />
+          <StatItem
+            value="All"
+            label="Bill Types"
+            color={TEAL_MUTED}
+            delay={400}
+          />
+        </Animated.View>
+
+        {/* ─── CTA ─── */}
+        <Animated.View
+          style={[
+            ls.ctaWrap,
+            {
+              opacity: ctaAnim,
+              transform: [
+                {
+                  translateY: ctaAnim.interpolate({
                     inputRange: [0, 1],
                     outputRange: [18, 0],
                   }),
                 },
+                { scale: ctaScale },
               ],
-              alignItems: "center",
-              paddingHorizontal: 24,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() => {
+              setShowModal(true);
             }}
+            activeOpacity={0.87}
+            style={{ borderRadius: 18, overflow: "hidden", width: "100%" }}
           >
-            <Text style={ls.heroTitle}>
-              Property Bills,{"\n"}
-              <Text style={{ color: ACCENT_MINT }}>Organised</Text> & Split
-            </Text>
-            <Text style={ls.heroDesc}>
-              Track every utility, split water bills by presence, and manage all
-              your units — effortlessly.
-            </Text>
-          </Animated.View>
-
-          {/* ─── Feature Pills ─── */}
-          <Animated.View
-            style={[
-              ls.pillsRow,
-              {
-                opacity: pillsAnim,
-                transform: [
-                  {
-                    translateY: pillsAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [14, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            {FEATURE_PILLS.map((f, i) => (
-              <FeaturePill key={f.label} {...f} delay={i * 55} />
-            ))}
-          </Animated.View>
-
-          {/* ─── Stats Card ─── */}
-          <Animated.View
-            style={[
-              ls.statsCard,
-              {
-                opacity: statsAnim,
-                transform: [
-                  {
-                    translateY: statsAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [14, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <StatItem
-              value="100%"
-              label="Transparent"
-              color={ACCENT_MINT}
-              delay={200}
-            />
-            <View style={ls.statDivider} />
-            <StatItem
-              value="Fair"
-              label="Water Split"
-              color={ACCENT_EMERALD}
-              delay={300}
-            />
-            <View style={ls.statDivider} />
-            <StatItem
-              value="All"
-              label="Bill Types"
-              color={TEAL_MUTED}
-              delay={400}
-            />
-          </Animated.View>
-
-          {/* ─── CTA ─── */}
-          <Animated.View
-            style={[
-              ls.ctaWrap,
-              {
-                opacity: ctaAnim,
-                transform: [
-                  {
-                    translateY: ctaAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [18, 0],
-                    }),
-                  },
-                  { scale: ctaScale },
-                ],
-              },
-            ]}
-          >
-            <TouchableOpacity
-              onPress={() => {
-                setShowModal(true);
-              }}
-              activeOpacity={0.87}
-              style={{ borderRadius: 18, overflow: "hidden", width: "100%" }}
+            <LinearGradient
+              colors={["#036d41", "#81d8a3"]}
+              style={ls.ctaBtn}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
             >
-              <LinearGradient
-                colors={["#036d41", "#81d8a3"]}
-                style={ls.ctaBtn}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={ls.ctaBtnText}>Get Started</Text>
-                <Ionicons name="arrow-forward" size={17} color="#002b29" />
-              </LinearGradient>
-            </TouchableOpacity>
-            <Text style={ls.ctaNote}>
-              Free to use · No credit card required
+              <Text style={ls.ctaBtnText}>Get Started</Text>
+              <Ionicons name="arrow-forward" size={17} color="#002b29" />
+            </LinearGradient>
+          </TouchableOpacity>
+          <Text style={ls.ctaNote}>Free to use · No credit card required</Text>
+
+          {/* ─── Trust Note (NEW) ─── */}
+          <View style={ls.trustRow}>
+            <Ionicons name="lock-closed-outline" size={11} color={TEAL_MUTED} />
+            <Text style={ls.trustText}>
+              Bank-level encryption · Your data stays private
             </Text>
-          </Animated.View>
-      </View>
+          </View>
+
+          {/* ─── Legal Footer (NEW) ─── */}
+          <View style={ls.footerRow}>
+            <Text
+              style={ls.footerLink}
+              onPress={() => navigation?.navigate("TermsOfService")}
+            >
+              Terms of Service
+            </Text>
+            <Text style={ls.footerDot}>·</Text>
+            <Text
+              style={ls.footerLink}
+              onPress={() => navigation?.navigate("PrivacyPolicy")}
+            >
+              Privacy Policy
+            </Text>
+          </View>
+          <Text style={ls.copyrightText}>
+            © {new Date().getFullYear()} PropFlow. All rights reserved.
+          </Text>
+        </Animated.View>
+      </ScrollView>
 
       <AuthModal
         visible={showModal}
@@ -2763,12 +2946,7 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
       />
 
       {screenAuthenticating && (
-        <Modal
-          visible
-          transparent
-          animationType="fade"
-          statusBarTranslucent
-        >
+        <Modal visible transparent animationType="fade" statusBarTranslucent>
           <View style={ls.authLoadingRoot}>
             <BlurView
               intensity={Platform.OS === "android" ? 28 : 45}
@@ -2790,8 +2968,9 @@ const LandingScreen = ({ navigation, onGetStarted, onAuthSuccess }) => {
 // ── Landing Screen Styles ─────────────────────────────────────────────────────
 const ls = StyleSheet.create({
   root: { flex: 1, backgroundColor: FOREST_BG },
+  scrollView: { flex: 1 },
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
@@ -2883,6 +3062,7 @@ const ls = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
     letterSpacing: 0.1,
+    marginBottom: 9,
   },
   pillsRow: {
     flexDirection: "row",
@@ -2890,6 +3070,7 @@ const ls = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     paddingHorizontal: 4,
+    marginBottom: 9,
   },
   statsCard: {
     flexDirection: "row",
@@ -2901,13 +3082,14 @@ const ls = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 8,
     width: "100%",
+    marginBottom: 9,
   },
   statDivider: {
     width: 1,
     height: 28,
     backgroundColor: "rgba(158,208,205,0.10)",
   },
-  ctaWrap: { width: "100%", alignItems: "center", gap: 9 },
+  ctaWrap: { width: "100%", alignItems: "center", gap: 4 },
   ctaBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -2952,6 +3134,41 @@ const ls = StyleSheet.create({
     fontWeight: "700",
     color: TEXT_PRI,
     textAlign: "center",
+  },
+
+  // ── New: Trust Note + Legal Footer (added below CTA) ────────────────────
+  trustRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  trustText: {
+    fontSize: 10.5,
+    color: TEAL_MUTED,
+    letterSpacing: 0.1,
+  },
+  footerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+  },
+  footerLink: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: TEXT_SEC,
+    textDecorationLine: "underline",
+  },
+  footerDot: {
+    fontSize: 11,
+    color: "rgba(158,208,205,0.32)",
+  },
+  copyrightText: {
+    fontSize: 10,
+    color: "rgba(158,208,205,0.28)",
+    marginTop: 4,
+    letterSpacing: 0.2,
   },
 });
 

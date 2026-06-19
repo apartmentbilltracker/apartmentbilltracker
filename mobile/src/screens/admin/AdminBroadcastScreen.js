@@ -10,19 +10,386 @@ import {
   ActivityIndicator,
   Switch,
   RefreshControl,
+  Modal,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { apiService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BroadcastDetailModal
+// Named export so RecentBroadcastsWidget can reuse it without duplication.
+// ─────────────────────────────────────────────────────────────────────────────
+export const BroadcastDetailModal = ({
+  broadcast,
+  visible,
+  onClose,
+  colors,
+}) => {
+  if (!broadcast) return null;
+
+  const formatDateFull = (dateStr) => {
+    if (!dateStr) return "Unknown date";
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const target = broadcast.related_data?.target;
+  const targetConfig =
+    target === "all"
+      ? { icon: "globe-outline", label: "All Users", bg: "infoBg", fg: "info" }
+      : target === "user"
+        ? {
+            icon: "person-outline",
+            label: "Specific User(s)",
+            bg: "accentLight",
+            fg: "accent",
+          }
+        : {
+            icon: "home-outline",
+            label: "Specific Room",
+            bg: "accentLight",
+            fg: "accent",
+          };
+
+  const badgeBg = colors[targetConfig.bg] || colors.accentLight;
+  const badgeFg = colors[targetConfig.fg] || colors.accent;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "flex-end",
+          backgroundColor: "rgba(0,43,41,0.65)",
+        }}
+      >
+        {/* Tap-outside to close */}
+        <TouchableOpacity
+          style={{ flex: 1 }}
+          onPress={onClose}
+          activeOpacity={1}
+        />
+
+        <View
+          style={{
+            backgroundColor: colors.modal,
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            maxHeight: "88%",
+            paddingBottom: Platform.OS === "ios" ? 34 : 20,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: -6 },
+            shadowOpacity: 0.2,
+            shadowRadius: 16,
+            elevation: 24,
+          }}
+        >
+          {/* Drag handle */}
+          <View
+            style={{
+              width: 36,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: colors.border,
+              alignSelf: "center",
+              marginTop: 10,
+              marginBottom: 2,
+            }}
+          />
+
+          {/* Modal header */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: 16,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: colors.border,
+              gap: 12,
+            }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 14,
+                backgroundColor: colors.accentLight,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name="megaphone" size={24} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: "700",
+                  letterSpacing: 1.8,
+                  color: colors.accent,
+                  textTransform: "uppercase",
+                  marginBottom: 4,
+                }}
+              >
+                BROADCAST DETAIL
+              </Text>
+              <Text
+                style={{
+                  fontSize: 17,
+                  fontWeight: "700",
+                  color: colors.text,
+                  lineHeight: 22,
+                }}
+              >
+                {broadcast.title}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={onClose}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: colors.background,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={17} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={{ padding: 20 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Badge row */}
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 8,
+                marginBottom: 14,
+              }}
+            >
+              {/* Target */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 5,
+                  backgroundColor: badgeBg,
+                  paddingHorizontal: 11,
+                  paddingVertical: 6,
+                  borderRadius: 20,
+                }}
+              >
+                <Ionicons name={targetConfig.icon} size={13} color={badgeFg} />
+                <Text
+                  style={{ fontSize: 12, fontWeight: "700", color: badgeFg }}
+                >
+                  {targetConfig.label}
+                </Text>
+              </View>
+
+              {/* Sent count */}
+              {broadcast.sent_count != null && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 5,
+                    backgroundColor: colors.successBg,
+                    paddingHorizontal: 11,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                  }}
+                >
+                  <Ionicons
+                    name="people-outline"
+                    size={13}
+                    color={colors.success}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: colors.success,
+                    }}
+                  >
+                    {broadcast.sent_count} received
+                  </Text>
+                </View>
+              )}
+
+              {/* Email badge */}
+              {broadcast.related_data?.sendEmail && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 5,
+                    backgroundColor: colors.infoBg,
+                    paddingHorizontal: 11,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                  }}
+                >
+                  <Ionicons name="mail-outline" size={13} color={colors.info} />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: colors.info,
+                    }}
+                  >
+                    Email delivered
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Timestamp */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                marginBottom: 20,
+              }}
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={14}
+                color={colors.textTertiary}
+              />
+              <Text style={{ fontSize: 12, color: colors.textTertiary }}>
+                {formatDateFull(broadcast.created_at)}
+              </Text>
+            </View>
+
+            {/* Divider */}
+            <View
+              style={{
+                height: StyleSheet.hairlineWidth,
+                backgroundColor: colors.divider,
+                marginBottom: 18,
+              }}
+            />
+
+            {/* Message label */}
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                letterSpacing: 1.4,
+                color: colors.textTertiary,
+                textTransform: "uppercase",
+                marginBottom: 10,
+              }}
+            >
+              MESSAGE
+            </Text>
+
+            {/* Message body */}
+            <View
+              style={{
+                backgroundColor: colors.background,
+                borderRadius: 14,
+                padding: 16,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: colors.border,
+              }}
+            >
+              <Text
+                style={{ fontSize: 15, color: colors.text, lineHeight: 24 }}
+              >
+                {broadcast.message}
+              </Text>
+            </View>
+
+            {/* Room name if applicable */}
+            {broadcast.related_data?.roomName && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  marginTop: 14,
+                  backgroundColor: colors.accentLight,
+                  borderRadius: 12,
+                  padding: 14,
+                  borderWidth: 1,
+                  borderColor: colors.accent + "22",
+                }}
+              >
+                <Ionicons name="home-outline" size={16} color={colors.accent} />
+                <Text
+                  style={{ fontSize: 13, color: colors.textSecondary, flex: 1 }}
+                >
+                  Sent to room:{" "}
+                  <Text style={{ color: colors.accent, fontWeight: "700" }}>
+                    {broadcast.related_data.roomName}
+                  </Text>
+                </Text>
+              </View>
+            )}
+
+            <View style={{ height: 20 }} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+const TARGET_OPTIONS = [
+  { key: "all", icon: "globe-outline", label: "All Users" },
+  { key: "room", icon: "home-outline", label: "By Room" },
+  { key: "user", icon: "person-outline", label: "By User" },
+];
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AdminBroadcastScreen
+// ─────────────────────────────────────────────────────────────────────────────
 const AdminBroadcastScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
 
+  // ── Compose form ──
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
-  const [target, setTarget] = useState("all"); // "all" | "room" | "user"
+  const [target, setTarget] = useState("all");
   const [rooms, setRooms] = useState([]);
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [users, setUsers] = useState([]);
@@ -30,9 +397,15 @@ const AdminBroadcastScreen = ({ navigation }) => {
   const [userSearch, setUserSearch] = useState("");
   const [sendEmail, setSendEmail] = useState(false);
   const [sending, setSending] = useState(false);
+
+  // ── History ──
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── Detail modal ──
+  const [selectedBroadcast, setSelectedBroadcast] = useState(null);
+  const [detailVisible, setDetailVisible] = useState(false);
 
   useEffect(() => {
     fetchRooms();
@@ -43,10 +416,9 @@ const AdminBroadcastScreen = ({ navigation }) => {
   const fetchRooms = async () => {
     try {
       const response = await roomService.getRooms();
-      const allRooms = response.rooms || response.data?.rooms || [];
-      setRooms(allRooms);
-    } catch (error) {
-      console.error("Error fetching rooms:", error);
+      setRooms(response.rooms || response.data?.rooms || []);
+    } catch (e) {
+      console.error("fetchRooms:", e);
     }
   };
 
@@ -54,8 +426,21 @@ const AdminBroadcastScreen = ({ navigation }) => {
     try {
       const response = await apiService.get("/api/v2/admin/broadcast/users");
       setUsers(response.users || []);
-    } catch (error) {
-      console.error("Error fetching users:", error);
+    } catch (e) {
+      console.error("fetchUsers:", e);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      setLoadingHistory(true);
+      const response = await apiService.get("/api/v2/admin/broadcast/history");
+      setHistory(response.broadcasts || []);
+    } catch (e) {
+      console.error("fetchHistory:", e);
+    } finally {
+      setLoadingHistory(false);
+      setRefreshing(false);
     }
   };
 
@@ -68,19 +453,6 @@ const AdminBroadcastScreen = ({ navigation }) => {
     );
   }, [users, userSearch]);
 
-  const fetchHistory = async () => {
-    try {
-      setLoadingHistory(true);
-      const response = await apiService.get("/api/v2/admin/broadcast/history");
-      setHistory(response.broadcasts || []);
-    } catch (error) {
-      console.error("Error fetching broadcast history:", error);
-    } finally {
-      setLoadingHistory(false);
-      setRefreshing(false);
-    }
-  };
-
   const canSend =
     title.trim().length > 0 &&
     message.trim().length > 0 &&
@@ -90,7 +462,6 @@ const AdminBroadcastScreen = ({ navigation }) => {
 
   const handleSend = async () => {
     if (!canSend) return;
-
     const targetLabel =
       target === "all"
         ? "all users"
@@ -100,7 +471,7 @@ const AdminBroadcastScreen = ({ navigation }) => {
             "selected room";
 
     Alert.alert(
-      "Send Notification",
+      "Send Broadcast",
       `Send "${title}" to ${targetLabel}?${sendEmail ? "\n\nEmails will also be sent." : ""}`,
       [
         { text: "Cancel", style: "cancel" },
@@ -120,23 +491,17 @@ const AdminBroadcastScreen = ({ navigation }) => {
                   sendEmail,
                 },
               );
-
               const sent = response.sent || 0;
               const emailed = response.emailed || 0;
               let summary = `Notification sent to ${sent} user(s).`;
               if (sendEmail) summary += `\n${emailed} email(s) delivered.`;
-
               Alert.alert("Sent!", summary);
               setTitle("");
               setMessage("");
               setSendEmail(false);
               fetchHistory();
-            } catch (error) {
-              console.error("Error sending broadcast:", error);
-              Alert.alert(
-                "Error",
-                error.message || "Failed to send notification",
-              );
+            } catch (e) {
+              Alert.alert("Error", e.message || "Failed to send notification");
             } finally {
               setSending(false);
             }
@@ -146,31 +511,149 @@ const AdminBroadcastScreen = ({ navigation }) => {
     );
   };
 
-  const formatDate = (dateStr) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+  const openDetail = (broadcast) => {
+    setSelectedBroadcast(broadcast);
+    setDetailVisible(true);
   };
 
+  // ─ Render history card ─
+  const renderHistoryCard = (item, index) => {
+    const t = item.related_data?.target;
+    const targetIcon =
+      t === "all"
+        ? "globe-outline"
+        : t === "user"
+          ? "person-outline"
+          : "home-outline";
+    const targetLabel =
+      t === "all" ? "All Users" : t === "user" ? "User(s)" : "Room";
+
+    return (
+      <TouchableOpacity
+        key={item.id || index}
+        style={styles.historyCard}
+        onPress={() => openDetail(item)}
+        activeOpacity={0.72}
+      >
+        {/* Accent strip */}
+        <View style={styles.historyStrip} />
+
+        <View
+          style={{
+            flex: 1,
+            paddingVertical: 11,
+            paddingRight: 12,
+            paddingLeft: 10,
+          }}
+        >
+          {/* Top row: title + date */}
+          <View style={styles.historyTopRow}>
+            <Text style={styles.historyTitle} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={styles.historyDate}>
+              {formatDate(item.created_at)}
+            </Text>
+          </View>
+
+          {/* Message preview */}
+          <Text style={styles.historyMessage} numberOfLines={2}>
+            {item.message}
+          </Text>
+
+          {/* Footer badges + tap hint */}
+          <View style={styles.historyFooter}>
+            {t && (
+              <View style={styles.historyBadge}>
+                <Ionicons name={targetIcon} size={11} color={colors.accent} />
+                <Text style={styles.historyBadgeText}>{targetLabel}</Text>
+              </View>
+            )}
+            {item.sent_count != null && (
+              <View
+                style={[
+                  styles.historyBadge,
+                  { backgroundColor: colors.successBg, marginLeft: 6 },
+                ]}
+              >
+                <Ionicons
+                  name="people-outline"
+                  size={11}
+                  color={colors.success}
+                />
+                <Text
+                  style={[styles.historyBadgeText, { color: colors.success }]}
+                >
+                  {item.sent_count}
+                </Text>
+              </View>
+            )}
+            {item.related_data?.sendEmail && (
+              <View
+                style={[
+                  styles.historyBadge,
+                  { backgroundColor: colors.infoBg, marginLeft: 6 },
+                ]}
+              >
+                <Ionicons name="mail-outline" size={11} color={colors.info} />
+                <Text style={[styles.historyBadgeText, { color: colors.info }]}>
+                  Email
+                </Text>
+              </View>
+            )}
+            <View style={styles.tapHint}>
+              <Text style={styles.tapHintText}>View full</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={12}
+                color={colors.accent}
+              />
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Send Notification</Text>
-        <View style={{ width: 36 }} />
+      {/* ── Hero Header ─────────────────────────────────────────────────── */}
+      <View style={styles.hero}>
+        <View style={styles.heroTopRow}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Live broadcast count pill */}
+          {!loadingHistory && (
+            <View style={styles.heroPill}>
+              <Ionicons
+                name="megaphone-outline"
+                size={12}
+                color={colors.headerBg}
+              />
+              <Text style={styles.heroPillText}>
+                {history.length} broadcast{history.length !== 1 ? "s" : ""} sent
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.heroBody}>
+          <Text style={styles.heroEyebrow}>ADMIN TOOLS</Text>
+          <Text style={styles.heroTitle}>Broadcasts</Text>
+          <Text style={styles.heroSubtitle}>
+            Push notifications &amp; emails to your tenants
+          </Text>
+        </View>
       </View>
 
+      {/* ── Scrollable Content ───────────────────────────────────────────── */}
       <ScrollViewWithDetection
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -182,31 +665,36 @@ const AdminBroadcastScreen = ({ navigation }) => {
               setRefreshing(true);
               fetchHistory();
             }}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
           />
         }
       >
-        {/* Compose Section */}
+        {/* ─ Compose ─────────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="create-outline" size={18} color={colors.accent} />
+            <View style={styles.sectionBar} />
+            <View style={styles.sectionIconWrap}>
+              <Ionicons name="create-outline" size={16} color={colors.accent} />
+            </View>
             <Text style={styles.sectionTitle}>Compose</Text>
           </View>
 
-          <Text style={styles.label}>Title</Text>
+          <Text style={styles.label}>TITLE</Text>
           <TextInput
             style={styles.input}
             placeholder="e.g. Maintenance Notice"
-            placeholderTextColor={colors.textTertiary}
+            placeholderTextColor={colors.placeholder}
             value={title}
             onChangeText={setTitle}
             maxLength={100}
           />
 
-          <Text style={styles.label}>Message</Text>
+          <Text style={styles.label}>MESSAGE</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Type your message here..."
-            placeholderTextColor={colors.textTertiary}
+            placeholderTextColor={colors.placeholder}
             value={message}
             onChangeText={setMessage}
             multiline
@@ -214,97 +702,54 @@ const AdminBroadcastScreen = ({ navigation }) => {
             textAlignVertical="top"
             maxLength={2000}
           />
-          <Text style={styles.charCount}>{message.length}/2000</Text>
+          <Text style={styles.charCount}>{message.length} / 2000</Text>
         </View>
 
-        {/* Target Section */}
+        {/* ─ Recipients ───────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="people-outline" size={18} color={colors.accent} />
+            <View style={styles.sectionBar} />
+            <View style={styles.sectionIconWrap}>
+              <Ionicons name="people-outline" size={16} color={colors.accent} />
+            </View>
             <Text style={styles.sectionTitle}>Recipients</Text>
           </View>
 
           <View style={styles.targetRow}>
-            <TouchableOpacity
-              style={[
-                styles.targetChip,
-                target === "all" && styles.targetChipActive,
-              ]}
-              onPress={() => setTarget("all")}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="globe-outline"
-                size={16}
-                color={
-                  target === "all" ? colors.textOnAccent : colors.textSecondary
-                }
-              />
-              <Text
+            {TARGET_OPTIONS.map(({ key, icon, label }) => (
+              <TouchableOpacity
+                key={key}
                 style={[
-                  styles.targetChipText,
-                  target === "all" && styles.targetChipTextActive,
+                  styles.targetChip,
+                  target === key && styles.targetChipActive,
                 ]}
+                onPress={() => setTarget(key)}
+                activeOpacity={0.7}
               >
-                All Users
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.targetChip,
-                target === "room" && styles.targetChipActive,
-              ]}
-              onPress={() => setTarget("room")}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="home-outline"
-                size={16}
-                color={
-                  target === "room" ? colors.textOnAccent : colors.textSecondary
-                }
-              />
-              <Text
-                style={[
-                  styles.targetChipText,
-                  target === "room" && styles.targetChipTextActive,
-                ]}
-              >
-                Specific Room
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.targetChip,
-                target === "user" && styles.targetChipActive,
-              ]}
-              onPress={() => setTarget("user")}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="person-outline"
-                size={16}
-                color={
-                  target === "user" ? colors.textOnAccent : colors.textSecondary
-                }
-              />
-              <Text
-                style={[
-                  styles.targetChipText,
-                  target === "user" && styles.targetChipTextActive,
-                ]}
-              >
-                Specific User
-              </Text>
-            </TouchableOpacity>
+                <Ionicons
+                  name={icon}
+                  size={15}
+                  color={
+                    target === key ? colors.textOnAccent : colors.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.targetChipText,
+                    target === key && styles.targetChipTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
+          {/* Room picker */}
           {target === "room" && (
-            <View style={styles.roomPicker}>
+            <View style={styles.subPicker}>
               {rooms.length === 0 ? (
-                <Text style={styles.noRoomsText}>No rooms found</Text>
+                <Text style={styles.emptyPickerText}>No rooms found</Text>
               ) : (
                 <ScrollViewWithDetection
                   horizontal
@@ -323,6 +768,13 @@ const AdminBroadcastScreen = ({ navigation }) => {
                         onPress={() => setSelectedRoomId(id)}
                         activeOpacity={0.7}
                       >
+                        {active && (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={13}
+                            color="#fff"
+                          />
+                        )}
                         <Text
                           style={[
                             styles.roomChipText,
@@ -339,35 +791,32 @@ const AdminBroadcastScreen = ({ navigation }) => {
             </View>
           )}
 
+          {/* User picker */}
           {target === "user" && (
-            <View style={styles.roomPicker}>
+            <View style={styles.subPicker}>
               <TextInput
-                style={[styles.input, { marginBottom: 8 }]}
-                placeholder="Search by name or email..."
-                placeholderTextColor={colors.textTertiary}
+                style={[styles.input, { marginBottom: 10 }]}
+                placeholder="Search by name or email…"
+                placeholderTextColor={colors.placeholder}
                 value={userSearch}
                 onChangeText={setUserSearch}
               />
               {filteredUsers.length > 0 && (
                 <View style={styles.selectAllRow}>
                   <Text style={styles.selectedCount}>
-                    {selectedUserIds.length} selected
+                    {selectedUserIds.length} of {filteredUsers.length} selected
                   </Text>
                   <TouchableOpacity
                     onPress={() => {
-                      const allFilteredIds = filteredUsers.map((u) => u.id);
-                      const allSelected = allFilteredIds.every((id) =>
+                      const allIds = filteredUsers.map((u) => u.id);
+                      const allSel = allIds.every((id) =>
                         selectedUserIds.includes(id),
                       );
-                      if (allSelected) {
-                        setSelectedUserIds((prev) =>
-                          prev.filter((id) => !allFilteredIds.includes(id)),
-                        );
-                      } else {
-                        setSelectedUserIds((prev) => [
-                          ...new Set([...prev, ...allFilteredIds]),
-                        ]);
-                      }
+                      setSelectedUserIds(
+                        allSel
+                          ? selectedUserIds.filter((id) => !allIds.includes(id))
+                          : [...new Set([...selectedUserIds, ...allIds])],
+                      );
                     }}
                     activeOpacity={0.7}
                   >
@@ -382,10 +831,10 @@ const AdminBroadcastScreen = ({ navigation }) => {
                 </View>
               )}
               {filteredUsers.length === 0 ? (
-                <Text style={styles.noRoomsText}>No users found</Text>
+                <Text style={styles.emptyPickerText}>No users found</Text>
               ) : (
                 <ScrollViewWithDetection
-                  style={{ maxHeight: 180 }}
+                  style={{ maxHeight: 200 }}
                   nestedScrollEnabled
                   showsVerticalScrollIndicator
                 >
@@ -432,22 +881,29 @@ const AdminBroadcastScreen = ({ navigation }) => {
           )}
         </View>
 
-        {/* Options Section */}
+        {/* ─ Options ──────────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="settings-outline" size={18} color={colors.accent} />
+            <View style={styles.sectionBar} />
+            <View style={styles.sectionIconWrap}>
+              <Ionicons
+                name="settings-outline"
+                size={16}
+                color={colors.accent}
+              />
+            </View>
             <Text style={styles.sectionTitle}>Options</Text>
           </View>
 
           <View style={styles.switchRow}>
-            <View style={styles.switchInfo}>
-              <Ionicons name="mail-outline" size={20} color={colors.text} />
-              <View style={styles.switchTextWrap}>
-                <Text style={styles.switchLabel}>Also send via Email</Text>
-                <Text style={styles.switchDesc}>
-                  Recipients will get an email in addition to the in-app alert
-                </Text>
-              </View>
+            <View style={styles.switchIconWrap}>
+              <Ionicons name="mail-outline" size={20} color={colors.accent} />
+            </View>
+            <View style={styles.switchTextWrap}>
+              <Text style={styles.switchLabel}>Also send via Email</Text>
+              <Text style={styles.switchDesc}>
+                Recipients get an email in addition to the in-app alert
+              </Text>
             </View>
             <Switch
               value={sendEmail}
@@ -458,184 +914,216 @@ const AdminBroadcastScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Send Button */}
+        {/* ─ Send Button ──────────────────────────────────────────────────── */}
         <TouchableOpacity
-          style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+          style={[
+            styles.sendBtn,
+            (!canSend || sending) && styles.sendBtnDisabled,
+          ]}
           onPress={handleSend}
           disabled={!canSend || sending}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
           {sending ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <>
               <Ionicons name="send" size={18} color="#fff" />
-              <Text style={styles.sendBtnText}>Send Notification</Text>
+              <Text style={styles.sendBtnText}>Send Broadcast</Text>
             </>
           )}
         </TouchableOpacity>
 
-        {/* History Section */}
+        {/* ─ Recent Broadcasts ─────────────────────────────────────────────── */}
         <View style={[styles.section, { marginTop: 24 }]}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="time-outline" size={18} color={colors.accent} />
+            <View style={styles.sectionBar} />
+            <View style={styles.sectionIconWrap}>
+              <Ionicons name="time-outline" size={16} color={colors.accent} />
+            </View>
             <Text style={styles.sectionTitle}>Recent Broadcasts</Text>
           </View>
 
           {loadingHistory ? (
             <ActivityIndicator
               color={colors.accent}
-              style={{ marginVertical: 20 }}
+              style={{ marginVertical: 24 }}
             />
           ) : history.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons
-                name="megaphone-outline"
-                size={40}
-                color={colors.textTertiary}
-              />
-              <Text style={styles.emptyText}>No broadcasts sent yet</Text>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons
+                  name="megaphone-outline"
+                  size={30}
+                  color={colors.textTertiary}
+                />
+              </View>
+              <Text style={styles.emptyTitle}>No broadcasts yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Compose your first message above
+              </Text>
             </View>
           ) : (
-            history.map((item) => (
-              <View key={item.id} style={styles.historyCard}>
-                <View style={styles.historyHeader}>
-                  <Text style={styles.historyTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.historyDate}>
-                    {formatDate(item.created_at)}
-                  </Text>
-                </View>
-                <Text style={styles.historyMessage} numberOfLines={2}>
-                  {item.message}
-                </Text>
-                {item.related_data?.target && (
-                  <View style={styles.historyBadgeRow}>
-                    <View style={styles.historyBadge}>
-                      <Ionicons
-                        name={
-                          item.related_data.target === "all"
-                            ? "globe-outline"
-                            : item.related_data.target === "user"
-                              ? "person-outline"
-                              : "home-outline"
-                        }
-                        size={12}
-                        color={colors.accent}
-                      />
-                      <Text style={styles.historyBadgeText}>
-                        {item.related_data.target === "all"
-                          ? "All Users"
-                          : item.related_data.target === "user"
-                            ? "Single User"
-                            : "Room"}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            ))
+            history.map(renderHistoryCard)
           )}
         </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 48 }} />
       </ScrollViewWithDetection>
+
+      {/* ── Detail Modal ─────────────────────────────────────────────────── */}
+      <BroadcastDetailModal
+        broadcast={selectedBroadcast}
+        visible={detailVisible}
+        onClose={() => setDetailVisible(false)}
+        colors={colors}
+      />
     </View>
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
 const createStyles = (colors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: {
+
+    // ── Hero ──
+    hero: {
+      backgroundColor: colors.headerBg,
+      paddingTop: 16,
+      paddingBottom: 28,
+      paddingHorizontal: 20,
+    },
+    heroTopRow: {
       flexDirection: "row",
-      alignItems: "center",
       justifyContent: "space-between",
-      paddingHorizontal: 16,
-      paddingTop: 14,
-      paddingBottom: 14,
-      backgroundColor: colors.card,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
+      alignItems: "center",
+      marginBottom: 18,
     },
     backBtn: {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: colors.background,
+      backgroundColor: "rgba(255,255,255,0.15)",
       alignItems: "center",
       justifyContent: "center",
     },
-    headerTitle: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: colors.text,
+    heroPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: colors.accentSurface || "#9af2bb",
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 20,
     },
+    heroPillText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.headerBg,
+    },
+    heroBody: { gap: 4 },
+    heroEyebrow: {
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 2,
+      color: "rgba(255,255,255,0.55)",
+      textTransform: "uppercase",
+    },
+    heroTitle: {
+      fontSize: 30,
+      fontWeight: "800",
+      color: "#ffffff",
+      lineHeight: 36,
+    },
+    heroSubtitle: {
+      fontSize: 13,
+      color: "rgba(255,255,255,0.60)",
+      marginTop: 2,
+    },
+
+    // ── Scroll ──
     scroll: { flex: 1 },
-    scrollContent: { padding: 16 },
+    scrollContent: { padding: 16, paddingTop: 20 },
+
+    // ── Section Card ──
     section: {
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 16,
       padding: 16,
       marginBottom: 14,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.07,
+      shadowRadius: 6,
+      elevation: 2,
     },
     sectionHeader: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      marginBottom: 14,
+      marginBottom: 16,
     },
-    sectionTitle: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: colors.text,
+    sectionBar: {
+      width: 3,
+      height: 18,
+      borderRadius: 2,
+      backgroundColor: colors.accent,
     },
+    sectionIconWrap: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      backgroundColor: colors.accentLight,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sectionTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
+
+    // ── Form ──
     label: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: colors.textSecondary,
-      marginBottom: 6,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0.8,
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      marginBottom: 7,
       marginTop: 4,
     },
     input: {
-      backgroundColor: colors.background,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 10,
+      backgroundColor: colors.inputBg,
+      borderWidth: 1.5,
+      borderColor: colors.inputBorder,
+      borderRadius: 12,
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 15,
-      color: colors.text,
-      marginBottom: 10,
+      color: colors.inputText,
+      marginBottom: 12,
     },
-    textArea: {
-      minHeight: 110,
-      paddingTop: 12,
-    },
+    textArea: { minHeight: 120, paddingTop: 12 },
     charCount: {
       fontSize: 11,
       color: colors.textTertiary,
       textAlign: "right",
-      marginTop: -6,
+      marginTop: -8,
       marginBottom: 4,
     },
-    targetRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
+
+    // ── Target chips ──
+    targetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     targetChip: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "center",
       gap: 6,
       paddingVertical: 10,
       paddingHorizontal: 14,
-      borderRadius: 10,
-      borderWidth: 1,
+      borderRadius: 12,
+      borderWidth: 1.5,
       borderColor: colors.border,
       backgroundColor: colors.background,
     },
@@ -644,21 +1132,22 @@ const createStyles = (colors) =>
       borderColor: colors.accent,
     },
     targetChipText: {
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "600",
       color: colors.textSecondary,
     },
-    targetChipTextActive: {
-      color: colors.textOnAccent,
-    },
-    roomPicker: {
-      marginTop: 12,
-    },
+    targetChipTextActive: { color: colors.textOnAccent },
+
+    // ── Sub-pickers ──
+    subPicker: { marginTop: 14 },
     roomChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
       paddingHorizontal: 16,
-      paddingVertical: 8,
+      paddingVertical: 9,
       borderRadius: 20,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: colors.border,
       backgroundColor: colors.background,
       marginRight: 8,
@@ -672,123 +1161,118 @@ const createStyles = (colors) =>
       fontWeight: "600",
       color: colors.textSecondary,
     },
-    roomChipTextActive: {
-      color: colors.textOnAccent,
-    },
-    noRoomsText: {
+    roomChipTextActive: { color: "#fff" },
+    emptyPickerText: {
       fontSize: 13,
       color: colors.textTertiary,
       fontStyle: "italic",
     },
+
+    // ── User list ──
     selectAllRow: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 8,
+      marginBottom: 10,
     },
     selectedCount: {
       fontSize: 12,
       color: colors.textTertiary,
       fontWeight: "600",
     },
-    selectAllText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: colors.accent,
-    },
+    selectAllText: { fontSize: 13, fontWeight: "700", color: colors.accent },
     userRow: {
       flexDirection: "row",
       alignItems: "center",
-      paddingVertical: 10,
+      paddingVertical: 11,
       paddingHorizontal: 12,
-      borderRadius: 8,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: 10,
+      borderWidth: 1,
       borderColor: colors.border,
       marginBottom: 6,
       backgroundColor: colors.background,
     },
     userRowActive: {
-      backgroundColor: colors.accent + "15",
+      backgroundColor: colors.accentLight,
       borderColor: colors.accent,
     },
-    userName: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.text,
-    },
-    userEmail: {
-      fontSize: 12,
-      color: colors.textTertiary,
-      marginTop: 1,
-    },
-    switchRow: {
-      flexDirection: "row",
+    userName: { fontSize: 14, fontWeight: "600", color: colors.text },
+    userEmail: { fontSize: 12, color: colors.textTertiary, marginTop: 1 },
+
+    // ── Options ──
+    switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+    switchIconWrap: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: colors.accentLight,
       alignItems: "center",
-      justifyContent: "space-between",
-    },
-    switchInfo: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      flex: 1,
-      marginRight: 12,
+      justifyContent: "center",
     },
     switchTextWrap: { flex: 1 },
-    switchLabel: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.text,
-    },
+    switchLabel: { fontSize: 14, fontWeight: "700", color: colors.text },
     switchDesc: {
       fontSize: 12,
       color: colors.textTertiary,
       marginTop: 2,
-      lineHeight: 16,
+      lineHeight: 17,
     },
+
+    // ── Send button ──
     sendBtn: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: 8,
+      gap: 10,
       backgroundColor: colors.accent,
-      paddingVertical: 16,
-      borderRadius: 14,
+      paddingVertical: 17,
+      borderRadius: 16,
       shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.25,
-      shadowRadius: 8,
-      elevation: 4,
+      shadowOffset: { width: 0, height: 5 },
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      elevation: 6,
     },
-    sendBtnDisabled: {
-      opacity: 0.5,
-    },
+    sendBtnDisabled: { opacity: 0.45 },
     sendBtnText: {
       fontSize: 16,
-      fontWeight: "700",
+      fontWeight: "800",
       color: "#fff",
+      letterSpacing: 0.4,
     },
-    emptyState: {
-      alignItems: "center",
-      paddingVertical: 24,
-      gap: 8,
-    },
-    emptyText: {
-      fontSize: 14,
-      color: colors.textTertiary,
-    },
-    historyCard: {
+
+    // ── Empty state ──
+    emptyState: { alignItems: "center", paddingVertical: 28, gap: 6 },
+    emptyIconWrap: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
       backgroundColor: colors.background,
-      borderRadius: 10,
-      padding: 12,
-      marginBottom: 8,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 4,
+    },
+    emptyTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
+    emptySubtitle: { fontSize: 13, color: colors.textTertiary },
+
+    // ── History cards ──
+    historyCard: {
+      flexDirection: "row",
+      borderRadius: 12,
+      marginBottom: 10,
+      backgroundColor: colors.background,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
+      overflow: "hidden",
     },
-    historyHeader: {
+    historyStrip: { width: 4, backgroundColor: colors.accent },
+    historyTopRow: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 4,
+      marginBottom: 5,
     },
     historyTitle: {
       fontSize: 14,
@@ -797,35 +1281,35 @@ const createStyles = (colors) =>
       flex: 1,
       marginRight: 8,
     },
-    historyDate: {
-      fontSize: 11,
-      color: colors.textTertiary,
-    },
+    historyDate: { fontSize: 11, color: colors.textTertiary },
     historyMessage: {
       fontSize: 13,
       color: colors.textSecondary,
-      lineHeight: 18,
+      lineHeight: 19,
+      marginBottom: 10,
     },
-    historyBadgeRow: {
+    historyFooter: {
       flexDirection: "row",
-      marginTop: 6,
+      alignItems: "center",
+      flexWrap: "wrap",
     },
     historyBadge: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
       paddingHorizontal: 8,
-      paddingVertical: 3,
+      paddingVertical: 4,
       borderRadius: 6,
-      backgroundColor: colors.card,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      backgroundColor: colors.accentLight,
     },
-    historyBadgeText: {
-      fontSize: 11,
-      fontWeight: "600",
-      color: colors.accent,
+    historyBadgeText: { fontSize: 11, fontWeight: "600", color: colors.accent },
+    tapHint: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 2,
+      marginLeft: "auto",
     },
+    tapHintText: { fontSize: 11, fontWeight: "600", color: colors.accent },
   });
 
 export default AdminBroadcastScreen;
