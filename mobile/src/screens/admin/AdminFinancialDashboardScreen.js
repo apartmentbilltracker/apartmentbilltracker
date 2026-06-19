@@ -21,6 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { apiService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
@@ -140,8 +141,9 @@ const AdminFinancialDashboardScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.centerWrap}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading financial data...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

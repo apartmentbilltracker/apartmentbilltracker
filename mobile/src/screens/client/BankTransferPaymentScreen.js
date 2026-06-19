@@ -1175,7 +1175,7 @@ const BankTransferPaymentScreen = ({ navigation, route }) => {
                   property efficiently.
                 </Text>
                 <Text style={styles.websiteText}>
-                  www.apartmentbilltracker-ph.onrender.com
+                  www.propertyflowweb.onrender.com
                 </Text>
               </View>
             </View>

@@ -15,6 +15,7 @@ import {
   ScrollViewWithDetection,
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const AdminAttendanceScreen = () => {
   const { colors } = useTheme();
@@ -116,7 +117,9 @@ const AdminAttendanceScreen = () => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

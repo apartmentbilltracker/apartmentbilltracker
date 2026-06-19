@@ -20,6 +20,7 @@ import {
   ScrollViewWithDetection,
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const GOLD = "#b38604";
 const AdminBugReportsScreen = ({ navigation }) => {
@@ -220,15 +221,9 @@ const AdminBugReportsScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingWrap}>
-        <View style={styles.loadingIconWrap}>
-          <Ionicons name="bug-outline" size={32} color={GOLD} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
         </View>
-        <ActivityIndicator
-          size="large"
-          color={GOLD}
-          style={{ marginTop: 16 }}
-        />
-        <Text style={styles.loadingText}>Loading bug reports...</Text>
       </View>
     );
   }

@@ -17,6 +17,7 @@ import { useRoute } from "@react-navigation/native";
 import { apiService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
@@ -291,8 +292,9 @@ const AdminRemindersScreen = ({ navigation }) => {
   if (loading && !refreshing) {
     return (
       <View style={styles.centerWrap}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingLabel}>Loading reminders...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }

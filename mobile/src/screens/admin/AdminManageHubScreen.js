@@ -21,9 +21,10 @@ import { AuthContext } from "../../context/AuthContext";
 import { hostRoleService, roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const AdminManageHubScreen = ({ navigation }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = createStyles(colors);
   const insets = useSafeAreaInsets();
   const { state } = useContext(AuthContext);
@@ -91,10 +92,9 @@ const AdminManageHubScreen = ({ navigation }) => {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.loadingText}>Loading...</Text>
+      <View style={styles.centerContainer}>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
         </View>
       </View>
     );
@@ -113,72 +113,107 @@ const AdminManageHubScreen = ({ navigation }) => {
       }
     >
       {/* Header */}
-      <View style={styles.headerSection}>
+      <View style={styles.header}>
+        <Text style={styles.eyebrowText}>ADMIN TOOLS</Text>
         <Text style={styles.headerTitle}>Management</Text>
         <Text style={styles.headerSubtitle}>
           Control users, rooms, and system settings
         </Text>
+
+        <View style={styles.headerPillsRow}>
+          <View style={styles.headerPill}>
+            <Ionicons name="people" size={13} color={colors.headerText} />
+            <Text style={styles.headerPillText}>{stats.totalUsers} users</Text>
+          </View>
+          <View style={styles.headerPill}>
+            <Ionicons name="hourglass" size={13} color={colors.headerText} />
+            <Text style={styles.headerPillText}>
+              {stats.pendingRequests} pending
+            </Text>
+          </View>
+        </View>
       </View>
+
+      {/* Overview / overlap card */}
+      <TouchableOpacity
+        style={styles.overviewCard}
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate("AllRooms")}
+      >
+        <View style={styles.overviewTopRow}>
+          <View>
+            <Text style={styles.overviewLabel}>TOTAL ROOMS</Text>
+            <Text style={styles.overviewValue}>{stats.totalRooms}</Text>
+            <Text style={styles.overviewSub}>Active across the platform</Text>
+          </View>
+          <View style={styles.overviewIconWrap}>
+            <Ionicons name="home" size={24} color={colors.accent} />
+          </View>
+        </View>
+
+        <View style={styles.overviewPillsRow}>
+          <View style={styles.overviewPill}>
+            <Ionicons name="people" size={13} color={colors.accent} />
+            <Text style={styles.overviewPillText}>
+              {stats.totalMembers} members
+            </Text>
+          </View>
+          <View style={styles.overviewPill}>
+            <Ionicons name="key" size={13} color={colors.accent} />
+            <Text style={styles.overviewPillText}>
+              {stats.totalHosts} hosts
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.overviewDivider} />
+
+        <View style={styles.overviewFooterRow}>
+          <Text style={styles.overviewFooterText}>View room overview</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+        </View>
+      </TouchableOpacity>
 
       {/* Overview Stats */}
       <View style={styles.statsGrid}>
-        <View
-          style={[
-            styles.statCard,
-            { backgroundColor: isDark ? "rgba(41,128,185,0.18)" : "#EBF5FB" },
-          ]}
-        >
-          <View style={[styles.statIconWrap, { backgroundColor: "#2980B9" }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.infoBg }]}>
+          <View style={[styles.statIconWrap, { backgroundColor: colors.info }]}>
             <Ionicons name="people" size={16} color="#fff" />
           </View>
-          <Text style={[styles.statValue, { color: "#2980B9" }]}>
+          <Text style={[styles.statValue, { color: colors.info }]}>
             {stats.totalUsers}
           </Text>
           <Text style={styles.statLabel}>Users</Text>
         </View>
-        <View
-          style={[
-            styles.statCard,
-            { backgroundColor: isDark ? "rgba(39,174,96,0.18)" : "#EAFAF1" },
-          ]}
-        >
-          <View style={[styles.statIconWrap, { backgroundColor: "#27AE60" }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.successBg }]}>
+          <View
+            style={[styles.statIconWrap, { backgroundColor: colors.success }]}
+          >
             <Ionicons name="home" size={16} color="#fff" />
           </View>
-          <Text style={[styles.statValue, { color: "#27AE60" }]}>
+          <Text style={[styles.statValue, { color: colors.success }]}>
             {stats.totalRooms}
           </Text>
           <Text style={styles.statLabel}>Rooms</Text>
         </View>
-        <View
-          style={[
-            styles.statCard,
-            { backgroundColor: isDark ? "rgba(179,134,4,0.18)" : "#FEF9E7" },
-          ]}
-        >
-          <View style={[styles.statIconWrap, { backgroundColor: "#b38604" }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.warningBg }]}>
+          <View
+            style={[styles.statIconWrap, { backgroundColor: colors.warning }]}
+          >
             <Ionicons name="key" size={16} color="#fff" />
           </View>
-          <Text
-            style={[
-              styles.statValue,
-              { color: isDark ? "#e8b800" : "#b38604" },
-            ]}
-          >
+          <Text style={[styles.statValue, { color: colors.warning }]}>
             {stats.totalHosts}
           </Text>
           <Text style={styles.statLabel}>Hosts</Text>
         </View>
-        <View
-          style={[
-            styles.statCard,
-            { backgroundColor: isDark ? "rgba(231,76,60,0.18)" : "#FDEDEC" },
-          ]}
-        >
-          <View style={[styles.statIconWrap, { backgroundColor: "#E74C3C" }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.errorBg }]}>
+          <View
+            style={[styles.statIconWrap, { backgroundColor: colors.error }]}
+          >
             <Ionicons name="hourglass" size={16} color="#fff" />
           </View>
-          <Text style={[styles.statValue, { color: "#E74C3C" }]}>
+          <Text style={[styles.statValue, { color: colors.error }]}>
             {stats.pendingRequests}
           </Text>
           <Text style={styles.statLabel}>Pending</Text>
@@ -205,12 +240,9 @@ const AdminManageHubScreen = ({ navigation }) => {
           activeOpacity={0.7}
         >
           <View
-            style={[
-              styles.actionIconWrap,
-              { backgroundColor: "rgba(52,152,219,0.12)" },
-            ]}
+            style={[styles.actionIconWrap, { backgroundColor: colors.infoBg }]}
           >
-            <Ionicons name="people-outline" size={22} color="#2980B9" />
+            <Ionicons name="people-outline" size={22} color={colors.info} />
           </View>
           <View style={styles.actionContent}>
             <Text style={styles.actionTitle}>User Management</Text>
@@ -246,10 +278,10 @@ const AdminManageHubScreen = ({ navigation }) => {
           <View
             style={[
               styles.actionIconWrap,
-              { backgroundColor: "rgba(39,174,96,0.12)" },
+              { backgroundColor: colors.successBg },
             ]}
           >
-            <Ionicons name="home-outline" size={22} color="#27AE60" />
+            <Ionicons name="home-outline" size={22} color={colors.success} />
           </View>
           <View style={styles.actionContent}>
             <Text style={styles.actionTitle}>Room Overview</Text>
@@ -285,10 +317,14 @@ const AdminManageHubScreen = ({ navigation }) => {
           <View
             style={[
               styles.actionIconWrap,
-              { backgroundColor: "rgba(142,68,173,0.12)" },
+              { backgroundColor: colors.actionRoomInfoBg },
             ]}
           >
-            <Ionicons name="settings-outline" size={22} color="#8E44AD" />
+            <Ionicons
+              name="settings-outline"
+              size={22}
+              color={colors.actionRoomInfoIcon}
+            />
           </View>
           <View style={styles.actionContent}>
             <Text style={styles.actionTitle}>Room Management</Text>
@@ -312,10 +348,10 @@ const AdminManageHubScreen = ({ navigation }) => {
           <View
             style={[
               styles.actionIconWrap,
-              { backgroundColor: "rgba(230,126,34,0.12)" },
+              { backgroundColor: colors.warningBg },
             ]}
           >
-            <Ionicons name="receipt-outline" size={22} color="#E67E22" />
+            <Ionicons name="receipt-outline" size={22} color={colors.warning} />
           </View>
           <View style={styles.actionContent}>
             <Text style={styles.actionTitle}>Billing</Text>
@@ -337,12 +373,9 @@ const AdminManageHubScreen = ({ navigation }) => {
           activeOpacity={0.7}
         >
           <View
-            style={[
-              styles.actionIconWrap,
-              { backgroundColor: "rgba(231,76,60,0.12)" },
-            ]}
+            style={[styles.actionIconWrap, { backgroundColor: colors.errorBg }]}
           >
-            <Ionicons name="person-outline" size={22} color="#E74C3C" />
+            <Ionicons name="person-outline" size={22} color={colors.error} />
           </View>
           <View style={styles.actionContent}>
             <Text style={styles.actionTitle}>Members</Text>
@@ -414,6 +447,10 @@ const createStyles = (colors) =>
       flex: 1,
       backgroundColor: colors.background,
     },
+    centerContainer: {
+      justifyContent: "center",
+      alignItems: "center",
+    },
     contentContainer: {
       paddingBottom: 16,
     },
@@ -427,38 +464,159 @@ const createStyles = (colors) =>
       fontSize: 14,
       color: colors.textTertiary,
     },
-    headerSection: {
-      paddingHorizontal: 16,
-      paddingTop: 16,
-      paddingBottom: 16,
+
+    // ── Header ──
+    header: {
+      backgroundColor: colors.headerBg,
+      paddingTop: 24,
+      paddingHorizontal: 20,
+      paddingBottom: 56,
+      borderBottomLeftRadius: 32,
+      borderBottomRightRadius: 32,
+    },
+    eyebrowText: {
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 1.2,
+      color: "rgba(255,255,255,0.65)",
+      marginBottom: 8,
     },
     headerTitle: {
-      fontSize: 22,
+      fontSize: 30,
+      fontWeight: "800",
+      color: colors.headerText,
+      marginBottom: 6,
+    },
+    headerSubtitle: {
+      fontSize: 14,
+      color: "rgba(255,255,255,0.75)",
+      fontWeight: "500",
+      lineHeight: 19,
+      marginBottom: 16,
+    },
+    headerPillsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    headerPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "rgba(255,255,255,0.12)",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 16,
+      gap: 6,
+    },
+    headerPillText: {
+      color: colors.headerText,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+
+    // ── Overview overlap card ──
+    overviewCard: {
+      marginHorizontal: 16,
+      marginTop: -40,
+      backgroundColor: colors.accentSurface,
+      borderRadius: 24,
+      padding: 20,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow,
+          shadowOpacity: 0.12,
+          shadowOffset: { width: 0, height: 6 },
+          shadowRadius: 14,
+        },
+        android: { elevation: 4 },
+      }),
+    },
+    overviewTopRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+    },
+    overviewLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 1,
+      color: colors.textSecondary,
+      marginBottom: 6,
+    },
+    overviewValue: {
+      fontSize: 36,
       fontWeight: "800",
       color: colors.text,
       marginBottom: 4,
     },
-    headerSubtitle: {
-      fontSize: 14,
-      color: colors.textTertiary,
-      fontWeight: "500",
+    overviewSub: {
+      fontSize: 13,
+      color: colors.textSecondary,
     },
+    overviewIconWrap: {
+      width: 52,
+      height: 52,
+      borderRadius: 16,
+      backgroundColor: colors.card,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    overviewPillsRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 16,
+      flexWrap: "wrap",
+    },
+    overviewPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.accentLight,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 14,
+      gap: 6,
+    },
+    overviewPillText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    overviewDivider: {
+      height: 1,
+      backgroundColor: colors.divider,
+      marginVertical: 16,
+      opacity: 0.4,
+    },
+    overviewFooterRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 6,
+    },
+    overviewFooterText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+
+    // ── Stats Grid ──
     statsGrid: {
       flexDirection: "row",
-      paddingHorizontal: 12,
+      paddingHorizontal: 16,
       gap: 8,
-      marginBottom: 16,
+      marginTop: 20,
+      marginBottom: 4,
     },
     statCard: {
       flex: 1,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 10,
       alignItems: "center",
     },
     statIconWrap: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
+      width: 30,
+      height: 30,
+      borderRadius: 10,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 6,
@@ -473,17 +631,18 @@ const createStyles = (colors) =>
       color: colors.textTertiary,
       marginTop: 2,
     },
+
+    // ── Sections ──
     section: {
-      marginHorizontal: 12,
-      marginTop: 4,
-      marginBottom: 8,
+      marginHorizontal: 16,
+      marginTop: 16,
       backgroundColor: colors.card,
-      borderRadius: 14,
-      paddingVertical: 14,
-      paddingHorizontal: 16,
+      borderRadius: 20,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: colors.shadow,
           shadowOpacity: 0.05,
           shadowOffset: { width: 0, height: 2 },
           shadowRadius: 6,
@@ -495,13 +654,13 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       marginBottom: 12,
-      gap: 8,
+      gap: 10,
     },
     sectionIconWrap: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: "rgba(179,134,4,0.12)",
+      width: 30,
+      height: 30,
+      borderRadius: 10,
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -558,8 +717,8 @@ const createStyles = (colors) =>
     },
     insightCard: {
       backgroundColor: colors.cardAlt || colors.background,
-      borderRadius: 12,
-      padding: 14,
+      borderRadius: 16,
+      padding: 16,
     },
     insightRow: {
       flexDirection: "row",

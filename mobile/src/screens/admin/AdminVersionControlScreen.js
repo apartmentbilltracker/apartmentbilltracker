@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { settingsService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const AdminVersionControlScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -37,7 +38,6 @@ const AdminVersionControlScreen = ({ navigation }) => {
   );
   const [updateMessage, setUpdateMessage] = useState("");
 
-  // Track original values to detect changes
   const [original, setOriginal] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -115,8 +115,6 @@ const AdminVersionControlScreen = ({ navigation }) => {
       );
       return;
     }
-
-    // Warn if force update is enabled
     if (forceUpdate) {
       Alert.alert(
         "Confirm Force Update",
@@ -168,8 +166,7 @@ const AdminVersionControlScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading version settings...</Text>
+        <HomeSpaceLoader />
       </View>
     );
   }
@@ -184,11 +181,39 @@ const AdminVersionControlScreen = ({ navigation }) => {
           refreshing={refreshing}
           onRefresh={onRefresh}
           tintColor={colors.accent}
-          colors={["#b38604"]}
+          colors={[colors.accent]}
         />
       }
     >
-      {/* Header Info */}
+      {/* ── Hero Header Banner ── */}
+      <View style={styles.heroBanner}>
+        <View style={styles.heroBannerInner}>
+          <View style={styles.heroIconWrap}>
+            <Ionicons name="git-branch" size={26} color={colors.headerText} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.heroEyebrow}>ADMIN PANEL</Text>
+            <Text style={styles.heroTitle}>Version Control</Text>
+            <Text style={styles.heroSubtitle}>
+              Manage app versions and update policies
+            </Text>
+          </View>
+        </View>
+
+        {/* Running version pill inside banner */}
+        <View style={styles.heroPill}>
+          <Ionicons
+            name="phone-portrait-outline"
+            size={13}
+            color={colors.accentSurface}
+          />
+          <Text style={styles.heroPillText}>Running v{currentAppVersion}</Text>
+          <View style={styles.heroPillDot} />
+          <Text style={styles.heroPillLive}>Live</Text>
+        </View>
+      </View>
+
+      {/* ── How It Works card ── */}
       <View style={styles.infoCard}>
         <View style={styles.infoIconWrap}>
           <Ionicons name="information-circle" size={20} color={colors.accent} />
@@ -203,30 +228,22 @@ const AdminVersionControlScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {/* Current Running Version */}
-      <View style={styles.currentVersionCard}>
-        <Ionicons
-          name="phone-portrait-outline"
-          size={22}
-          color={colors.accent}
-        />
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={styles.currentVersionLabel}>This App Version</Text>
-          <Text style={styles.currentVersionValue}>v{currentAppVersion}</Text>
-        </View>
-        <View style={styles.versionBadge}>
-          <Text style={styles.versionBadgeText}>Running</Text>
-        </View>
+      {/* ── Section: Version Settings ── */}
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionAccentBar} />
+        <Text style={styles.sectionTitle}>Version Settings</Text>
       </View>
 
-      {/* Version Settings Section */}
-      <Text style={styles.sectionTitle}>Version Settings</Text>
-
-      {/* Minimum Version */}
+      {/* Minimum Required Version */}
       <View style={styles.fieldCard}>
         <View style={styles.fieldHeader}>
-          <View style={[styles.fieldIconWrap, { backgroundColor: "#FFF3E0" }]}>
-            <Ionicons name="shield-checkmark" size={18} color="#e65100" />
+          <View
+            style={[
+              styles.fieldIconWrap,
+              { backgroundColor: colors.accentSurface },
+            ]}
+          >
+            <Ionicons name="shield-checkmark" size={18} color={colors.accent} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.fieldLabel}>Minimum Required Version</Text>
@@ -240,13 +257,13 @@ const AdminVersionControlScreen = ({ navigation }) => {
           value={minVersion}
           onChangeText={setMinVersion}
           placeholder="1.0.0"
-          placeholderTextColor={colors.textTertiary}
+          placeholderTextColor={colors.placeholder}
           keyboardType="numeric"
           autoCapitalize="none"
         />
       </View>
 
-      {/* Latest Version */}
+      {/* Latest App Version */}
       <View style={styles.fieldCard}>
         <View style={styles.fieldHeader}>
           <View
@@ -269,35 +286,31 @@ const AdminVersionControlScreen = ({ navigation }) => {
           value={latestVersion}
           onChangeText={setLatestVersion}
           placeholder="1.1.2"
-          placeholderTextColor={colors.textTertiary}
+          placeholderTextColor={colors.placeholder}
           keyboardType="numeric"
           autoCapitalize="none"
         />
       </View>
 
       {/* Force Update Toggle */}
-      <View style={styles.fieldCard}>
+      <View style={[styles.fieldCard, forceUpdate && styles.fieldCardDanger]}>
         <View style={styles.toggleRow}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              flex: 1,
-            }}
-          >
+          <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
             <View
               style={[
                 styles.fieldIconWrap,
                 {
                   marginRight: 12,
-                  backgroundColor: forceUpdate ? "#FFEBEE" : colors.inputBg,
+                  backgroundColor: forceUpdate
+                    ? colors.errorBg
+                    : colors.inputBg,
                 },
               ]}
             >
               <Ionicons
                 name={forceUpdate ? "lock-closed" : "lock-open"}
                 size={18}
-                color={forceUpdate ? "#d32f2f" : colors.textTertiary}
+                color={forceUpdate ? colors.error : colors.textTertiary}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -310,13 +323,13 @@ const AdminVersionControlScreen = ({ navigation }) => {
           <Switch
             value={forceUpdate}
             onValueChange={setForceUpdate}
-            trackColor={{ false: "#ddd", true: "#FFCDD2" }}
-            thumbColor={forceUpdate ? "#d32f2f" : "#f4f3f4"}
+            trackColor={{ false: colors.border, true: colors.errorBg }}
+            thumbColor={forceUpdate ? colors.error : colors.textTertiary}
           />
         </View>
         {forceUpdate && (
           <View style={styles.warningBanner}>
-            <Ionicons name="warning" size={16} color="#e65100" />
+            <Ionicons name="warning" size={16} color={colors.error} />
             <Text style={styles.warningText}>
               Users below v{minVersion} will be completely blocked from using
               the app.
@@ -325,9 +338,13 @@ const AdminVersionControlScreen = ({ navigation }) => {
         )}
       </View>
 
-      {/* Update URL */}
-      <Text style={styles.sectionTitle}>Download Settings</Text>
+      {/* ── Section: Download Settings ── */}
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionAccentBar} />
+        <Text style={styles.sectionTitle}>Download Settings</Text>
+      </View>
 
+      {/* GitHub Releases URL */}
       <View style={styles.fieldCard}>
         <View style={styles.fieldHeader}>
           <View
@@ -347,7 +364,7 @@ const AdminVersionControlScreen = ({ navigation }) => {
           value={updateUrl}
           onChangeText={setUpdateUrl}
           placeholder="https://github.com/user/repo/releases"
-          placeholderTextColor={colors.textTertiary}
+          placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
@@ -365,8 +382,17 @@ const AdminVersionControlScreen = ({ navigation }) => {
       {/* Custom Update Message */}
       <View style={styles.fieldCard}>
         <View style={styles.fieldHeader}>
-          <View style={[styles.fieldIconWrap, { backgroundColor: "#F3E5F5" }]}>
-            <Ionicons name="chatbubble-ellipses" size={18} color="#7B1FA2" />
+          <View
+            style={[
+              styles.fieldIconWrap,
+              { backgroundColor: colors.accentSurface },
+            ]}
+          >
+            <Ionicons
+              name="chatbubble-ellipses"
+              size={18}
+              color={colors.accent}
+            />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.fieldLabel}>Custom Update Message</Text>
@@ -380,14 +406,14 @@ const AdminVersionControlScreen = ({ navigation }) => {
           value={updateMessage}
           onChangeText={setUpdateMessage}
           placeholder='e.g., "New features! Update now for billing improvements."'
-          placeholderTextColor={colors.textTertiary}
+          placeholderTextColor={colors.placeholder}
           multiline
           numberOfLines={3}
           textAlignVertical="top"
         />
       </View>
 
-      {/* Save Button */}
+      {/* ── Save Button ── */}
       <TouchableOpacity
         style={[
           styles.saveButton,
@@ -407,28 +433,18 @@ const AdminVersionControlScreen = ({ navigation }) => {
         )}
       </TouchableOpacity>
 
-      {/* SQL Guide */}
+      {/* ── SQL Setup Guide ── */}
       <View style={styles.sqlCard}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 8,
-          }}
-        >
-          <Ionicons name="code-slash" size={16} color={colors.textTertiary} />
+        <View style={styles.sqlCardHeader}>
+          <View style={styles.sqlIconWrap}>
+            <Ionicons name="code-slash" size={15} color={colors.accent} />
+          </View>
           <Text style={styles.sqlTitle}>
             Supabase Setup — Add columns to app_settings
           </Text>
         </View>
         <Text style={styles.sqlCode}>
-          {`ALTER TABLE app_settings
-ADD COLUMN IF NOT EXISTS min_app_version TEXT DEFAULT '1.0.0',
-ADD COLUMN IF NOT EXISTS latest_app_version TEXT DEFAULT '1.1.2',
-ADD COLUMN IF NOT EXISTS force_update BOOLEAN DEFAULT false,
-ADD COLUMN IF NOT EXISTS update_url TEXT DEFAULT '',
-ADD COLUMN IF NOT EXISTS update_message TEXT DEFAULT '';`}
+          {`ALTER TABLE app_settings\nADD COLUMN IF NOT EXISTS min_app_version TEXT DEFAULT '1.0.0',\nADD COLUMN IF NOT EXISTS latest_app_version TEXT DEFAULT '1.1.2',\nADD COLUMN IF NOT EXISTS force_update BOOLEAN DEFAULT false,\nADD COLUMN IF NOT EXISTS update_url TEXT DEFAULT '',\nADD COLUMN IF NOT EXISTS update_message TEXT DEFAULT '';`}
         </Text>
       </View>
 
@@ -444,7 +460,6 @@ const createStyles = (colors) =>
       backgroundColor: colors.background,
     },
     contentContainer: {
-      padding: 16,
       paddingBottom: 32,
     },
     loadingContainer: {
@@ -453,24 +468,89 @@ const createStyles = (colors) =>
       alignItems: "center",
       backgroundColor: colors.background,
     },
-    loadingText: {
-      marginTop: 12,
-      fontSize: 14,
-      color: colors.textSecondary,
+
+    // ── Hero Banner ──
+    heroBanner: {
+      backgroundColor: colors.headerBg,
+      paddingHorizontal: 20,
+      paddingTop: 22,
+      paddingBottom: 20,
+      marginBottom: 16,
+    },
+    heroBannerInner: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 14,
+      marginBottom: 14,
+    },
+    heroIconWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      backgroundColor: "rgba(255,255,255,0.10)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    heroEyebrow: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.accentSurface,
+      letterSpacing: 1.5,
+      marginBottom: 4,
+    },
+    heroTitle: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: colors.headerText,
+      marginBottom: 4,
+    },
+    heroSubtitle: {
+      fontSize: 12,
+      color: "rgba(255,255,255,0.55)",
+      lineHeight: 17,
+    },
+    heroPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: "rgba(255,255,255,0.08)",
+      alignSelf: "flex-start",
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+    },
+    heroPillText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.accentSurface,
+    },
+    heroPillDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 3,
+      backgroundColor: colors.success,
+    },
+    heroPillLive: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.success,
     },
 
-    // Info card
+    // ── Info Card ──
     infoCard: {
       flexDirection: "row",
       backgroundColor: colors.accentSurface,
-      borderRadius: 12,
+      borderRadius: 14,
       padding: 14,
-      marginBottom: 16,
+      marginHorizontal: 16,
+      marginBottom: 20,
       alignItems: "flex-start",
       gap: 10,
     },
     infoIconWrap: {
-      marginTop: 2,
+      marginTop: 1,
     },
     infoTitle: {
       fontSize: 13,
@@ -485,71 +565,49 @@ const createStyles = (colors) =>
       opacity: 0.85,
     },
 
-    // Current version card
-    currentVersionCard: {
+    // ── Section Header ──
+    sectionHeader: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 16,
-      marginBottom: 20,
-      ...Platform.select({
-        ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-        },
-        android: { elevation: 2 },
-      }),
+      gap: 8,
+      marginHorizontal: 16,
+      marginBottom: 10,
+      marginTop: 4,
     },
-    currentVersionLabel: {
-      fontSize: 12,
-      color: colors.textTertiary,
-      fontWeight: "500",
+    sectionAccentBar: {
+      width: 3,
+      height: 16,
+      borderRadius: 2,
+      backgroundColor: colors.accent,
     },
-    currentVersionValue: {
-      fontSize: 20,
-      fontWeight: "800",
-      color: colors.text,
-      marginTop: 2,
-    },
-    versionBadge: {
-      backgroundColor: colors.successBg,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 8,
-    },
-    versionBadgeText: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: colors.success,
-    },
-
-    // Section
     sectionTitle: {
       fontSize: 15,
       fontWeight: "700",
       color: colors.text,
-      marginBottom: 10,
-      marginTop: 4,
     },
 
-    // Field card
+    // ── Field Cards ──
     fieldCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 16,
       padding: 16,
+      marginHorizontal: 16,
       marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.04,
-          shadowRadius: 4,
+          shadowColor: colors.shadow,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
         },
-        android: { elevation: 1 },
+        android: { elevation: 2 },
       }),
+    },
+    fieldCardDanger: {
+      borderColor: colors.error,
+      borderWidth: 1,
     },
     fieldHeader: {
       flexDirection: "row",
@@ -558,9 +616,9 @@ const createStyles = (colors) =>
       marginBottom: 12,
     },
     fieldIconWrap: {
-      width: 34,
-      height: 34,
-      borderRadius: 9,
+      width: 36,
+      height: 36,
+      borderRadius: 10,
       justifyContent: "center",
       alignItems: "center",
       marginTop: 1,
@@ -578,47 +636,47 @@ const createStyles = (colors) =>
     },
     versionInput: {
       backgroundColor: colors.inputBg,
-      borderRadius: 10,
+      borderRadius: 12,
       paddingHorizontal: 14,
       paddingVertical: Platform.OS === "ios" ? 12 : 10,
       fontSize: 15,
       fontWeight: "600",
-      color: colors.text,
+      color: colors.inputText,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.inputBorder,
     },
     multilineInput: {
-      minHeight: 70,
+      minHeight: 72,
       fontSize: 13,
       fontWeight: "400",
       lineHeight: 20,
     },
 
-    // Toggle
+    // ── Toggle Row ──
     toggleRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
     },
 
-    // Warning
+    // ── Warning Banner ──
     warningBanner: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      backgroundColor: "#FFF3E0",
-      borderRadius: 8,
+      backgroundColor: colors.errorBg,
+      borderRadius: 10,
       padding: 10,
       marginTop: 12,
     },
     warningText: {
       fontSize: 12,
-      color: "#e65100",
+      color: colors.error,
       flex: 1,
       lineHeight: 17,
     },
 
-    // Test link
+    // ── Test Link Button ──
     testLinkBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -633,46 +691,72 @@ const createStyles = (colors) =>
       color: colors.accent,
     },
 
-    // Save button
+    // ── Save Button ──
     saveButton: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: 8,
-      backgroundColor: "#b38604",
-      paddingVertical: 15,
-      borderRadius: 12,
+      backgroundColor: colors.accent,
+      paddingVertical: 16,
+      borderRadius: 14,
+      marginHorizontal: 16,
       marginTop: 8,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.18,
+          shadowRadius: 8,
+        },
+        android: { elevation: 4 },
+      }),
     },
     saveButtonDisabled: {
-      opacity: 0.5,
+      opacity: 0.45,
     },
     saveButtonText: {
       fontSize: 16,
       fontWeight: "700",
-      color: "#fff",
+      color: colors.textOnAccent,
     },
 
-    // SQL Guide
+    // ── SQL Guide Card ──
     sqlCard: {
-      backgroundColor: colors.inputBg,
-      borderRadius: 12,
+      backgroundColor: colors.cardAlt,
+      borderRadius: 14,
       padding: 14,
       marginTop: 20,
+      marginHorizontal: 16,
       borderWidth: 1,
       borderColor: colors.border,
       borderStyle: "dashed",
     },
+    sqlCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 10,
+    },
+    sqlIconWrap: {
+      width: 26,
+      height: 26,
+      borderRadius: 7,
+      backgroundColor: colors.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+    },
     sqlTitle: {
       fontSize: 12,
       fontWeight: "600",
-      color: colors.textTertiary,
+      color: colors.textSecondary,
+      flex: 1,
     },
     sqlCode: {
       fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
       fontSize: 10,
       color: colors.textSecondary,
-      lineHeight: 16,
+      lineHeight: 17,
     },
   });
 

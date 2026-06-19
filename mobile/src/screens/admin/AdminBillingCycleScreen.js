@@ -22,6 +22,7 @@ import {
 } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -238,9 +239,7 @@ const AdminBillingCycleScreen = ({ route }) => {
               if (response.success) {
                 Alert.alert(
                   "Success",
-                  isOpen
-                    ? "Payment gateway closed"
-                    : "Payment gateway opened",
+                  isOpen ? "Payment gateway closed" : "Payment gateway opened",
                 );
                 fetchCycles();
               }
@@ -398,7 +397,9 @@ const AdminBillingCycleScreen = ({ route }) => {
   if (loading && cycles.length === 0) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
@@ -716,9 +717,7 @@ const AdminBillingCycleScreen = ({ route }) => {
                           }
                           size={18}
                           color={
-                            paymentGatewayOpen
-                              ? colors.error
-                              : colors.success
+                            paymentGatewayOpen ? colors.error : colors.success
                           }
                         />
                         <Text

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo} from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,11 @@ import {
 } from "react-native";
 import { roomService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
-import { ScrollViewWithDetection, FlatListWithDetection } from "../../navigation/AdminNavigator";
+import {
+  ScrollViewWithDetection,
+  FlatListWithDetection,
+} from "../../navigation/AdminNavigator";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const WATER_RATE = 5; // ₱5 per day
 
@@ -136,7 +140,9 @@ const AdminReportsScreen = () => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
@@ -283,149 +289,150 @@ const AdminReportsScreen = () => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  section: {
-    padding: 16,
-    marginBottom: 8,
-    backgroundColor: colors.card,
-  },
-  exportSection: {
-    padding: 12,
-    backgroundColor: colors.card,
-    marginBottom: 8,
-  },
-  exportButton: {
-    backgroundColor: colors.success,
-    borderRadius: 6,
-    padding: 14,
-    alignItems: "center",
-  },
-  exportButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 12,
-  },
-  roomOption: {
-    padding: 12,
-    borderRadius: 6,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  roomOptionActive: {
-    borderColor: "#b38604",
-    backgroundColor: colors.accentSurface,
-  },
-  roomOptionText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  roomOptionTextActive: {
-    color: colors.accent,
-    fontWeight: "600",
-  },
-  statsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    padding: 8,
-    backgroundColor: colors.background,
-  },
-  statCard: {
-    width: "48%",
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  totalCard: {
-    borderWidth: 2,
-    borderColor: colors.success,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  memberCard: {
-    backgroundColor: colors.inputBg,
-    borderRadius: 6,
-    padding: 12,
-    marginBottom: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: "#b38604",
-  },
-  memberHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  memberName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-    flex: 1,
-  },
-  percentBadge: {
-    backgroundColor: colors.info,
-    color: "#fff",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  memberStats: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginVertical: 8,
-  },
-  memberStatItem: {
-    flex: 1,
-  },
-  memberStatLabel: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    marginBottom: 2,
-  },
-  memberStatValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  memberEmail: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    marginTop: 4,
-  },
-  noDataText: {
-    fontSize: 14,
-    color: colors.textTertiary,
-    textAlign: "center",
-    paddingVertical: 20,
-  },
-});
+const createStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    section: {
+      padding: 16,
+      marginBottom: 8,
+      backgroundColor: colors.card,
+    },
+    exportSection: {
+      padding: 12,
+      backgroundColor: colors.card,
+      marginBottom: 8,
+    },
+    exportButton: {
+      backgroundColor: colors.success,
+      borderRadius: 6,
+      padding: 14,
+      alignItems: "center",
+    },
+    exportButtonText: {
+      color: "#fff",
+      fontWeight: "600",
+      fontSize: 16,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 12,
+    },
+    roomOption: {
+      padding: 12,
+      borderRadius: 6,
+      marginBottom: 8,
+      borderWidth: 2,
+      borderColor: colors.border,
+    },
+    roomOptionActive: {
+      borderColor: "#b38604",
+      backgroundColor: colors.accentSurface,
+    },
+    roomOptionText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    roomOptionTextActive: {
+      color: colors.accent,
+      fontWeight: "600",
+    },
+    statsContainer: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+      padding: 8,
+      backgroundColor: colors.background,
+    },
+    statCard: {
+      width: "48%",
+      backgroundColor: colors.card,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 8,
+      alignItems: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      elevation: 2,
+    },
+    totalCard: {
+      borderWidth: 2,
+      borderColor: colors.success,
+    },
+    statLabel: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginBottom: 4,
+    },
+    statValue: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    memberCard: {
+      backgroundColor: colors.inputBg,
+      borderRadius: 6,
+      padding: 12,
+      marginBottom: 8,
+      borderLeftWidth: 4,
+      borderLeftColor: "#b38604",
+    },
+    memberHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    memberName: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+      flex: 1,
+    },
+    percentBadge: {
+      backgroundColor: colors.info,
+      color: "#fff",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    memberStats: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginVertical: 8,
+    },
+    memberStatItem: {
+      flex: 1,
+    },
+    memberStatLabel: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      marginBottom: 2,
+    },
+    memberStatValue: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    memberEmail: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 4,
+    },
+    noDataText: {
+      fontSize: 14,
+      color: colors.textTertiary,
+      textAlign: "center",
+      paddingVertical: 20,
+    },
+  });
 
 export default AdminReportsScreen;

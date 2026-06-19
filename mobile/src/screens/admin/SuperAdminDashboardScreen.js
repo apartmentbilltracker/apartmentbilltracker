@@ -17,6 +17,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { hostRoleService, supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const SuperAdminDashboardScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -188,12 +189,30 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
   }, []);
 
   const hosts = allUsers.filter((u) => u.role === "host");
+  const greetingTime = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 18) return "Good Afternoon";
+    return "Good Evening";
+  })();
+
+  const getRelativeTime = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    const diffDays = Math.floor((Date.now() - date.getTime()) / 86400000);
+    if (diffDays <= 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+    return date.toLocaleDateString();
+  };
 
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading dashboard...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
@@ -201,6 +220,7 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
   return (
     <ScrollViewWithDetection
       style={styles.container}
+      contentContainerStyle={styles.scrollContent}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -210,45 +230,164 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
       }
     >
       {/* Header */}
-      <View style={styles.headerSection}>
-        <Text style={styles.greeting}>
-          Hello, {state.user?.name || "Admin"} 👋
-        </Text>
-        <Text style={styles.headerSub}>System Overview</Text>
+      <View style={styles.header}>
+        <View style={styles.headerTopRow}>
+          <View style={styles.avatarCircle}>
+            {state.user?.avatar?.url ? (
+              <Image
+                source={{ uri: state.user.avatar.url }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Ionicons
+                name="shield-checkmark"
+                size={22}
+                color={colors.headerText}
+              />
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.bellBtn}
+            onPress={() =>
+              navigation
+                .getParent()
+                ?.navigate("SupportStack", { screen: "SupportTickets" })
+            }
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={20}
+              color={colors.headerText}
+            />
+            {supportStats.openTickets > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>
+                  {supportStats.openTickets}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.eyebrowRow}>
+          <Text style={styles.eyebrowText}>YOUR CONTROL CENTER</Text>
+          <View style={styles.rolePill}>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={13}
+              color={colors.headerText}
+            />
+            <Text style={styles.rolePillText}>Super Admin</Text>
+          </View>
+        </View>
+
+        <Text style={styles.headerTitle}>Dashboard</Text>
+
+        <View style={styles.greetingCard}>
+          <Text style={styles.greeting}>
+            {greetingTime}, {state.user?.name || "Admin"} 👋
+          </Text>
+          <Text style={styles.greetingSub}>
+            Here's what's happening across the platform.
+          </Text>
+          <View style={styles.headerPillsRow}>
+            <View style={styles.headerPill}>
+              <Ionicons name="people" size={13} color={colors.headerText} />
+              <Text style={styles.headerPillText}>
+                {stats.totalUsers} users
+              </Text>
+            </View>
+            <View style={styles.headerPill}>
+              <Ionicons name="hourglass" size={13} color={colors.headerText} />
+              <Text style={styles.headerPillText}>
+                {pendingRequests.length} pending
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
+
+      {/* Overview / overlap card */}
+      <TouchableOpacity
+        style={styles.overviewCard}
+        activeOpacity={0.85}
+        onPress={() =>
+          navigation
+            .getParent()
+            ?.navigate("ManageStack", { screen: "UserManagement" })
+        }
+      >
+        <View style={styles.overviewTopRow}>
+          <View>
+            <Text style={styles.overviewLabel}>TOTAL PLATFORM USERS</Text>
+            <Text style={styles.overviewValue}>{stats.totalUsers}</Text>
+            <Text style={styles.overviewSub}>Registered across all roles</Text>
+          </View>
+          <View style={styles.overviewIconWrap}>
+            <Ionicons name="people" size={24} color={colors.accent} />
+          </View>
+        </View>
+
+        <View style={styles.overviewPillsRow}>
+          <View style={styles.overviewPill}>
+            <Ionicons name="key" size={13} color={colors.accent} />
+            <Text style={styles.overviewPillText}>
+              {stats.totalHosts} active hosts
+            </Text>
+          </View>
+          <View style={styles.overviewPill}>
+            <Ionicons name="bug" size={13} color={colors.accent} />
+            <Text style={styles.overviewPillText}>
+              {supportStats.openBugs} open bugs
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.overviewDivider} />
+
+        <View style={styles.overviewFooterRow}>
+          <Text style={styles.overviewFooterText}>View user management</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+        </View>
+      </TouchableOpacity>
 
       {/* Stats Cards */}
       <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: colors.infoBg }]}>
-          <View style={[styles.statIconWrap, { backgroundColor: colors.info }]}>
-            <Ionicons name="people" size={18} color="#fff" />
+        <View style={styles.statCard}>
+          <View
+            style={[styles.statIconWrap, { backgroundColor: colors.infoBg }]}
+          >
+            <Ionicons name="people" size={18} color={colors.info} />
           </View>
-          <Text style={[styles.statValue, { color: colors.info }]}>
+          <Text style={[styles.statValue, { color: colors.text }]}>
             {stats.totalUsers}
           </Text>
           <Text style={styles.statLabel}>Total Users</Text>
+          <Text style={styles.statSub}>All roles</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: colors.warningBg }]}>
+        <View style={styles.statCard}>
           <View
-            style={[styles.statIconWrap, { backgroundColor: colors.warning }]}
+            style={[styles.statIconWrap, { backgroundColor: colors.warningBg }]}
           >
-            <Ionicons name="key" size={18} color="#fff" />
+            <Ionicons name="key" size={18} color={colors.warning} />
           </View>
-          <Text style={[styles.statValue, { color: colors.warning }]}>
+          <Text style={[styles.statValue, { color: colors.text }]}>
             {stats.totalHosts}
           </Text>
           <Text style={styles.statLabel}>Hosts</Text>
+          <Text style={styles.statSub}>Managing rooms</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: colors.successBg }]}>
+        <View style={styles.statCard}>
           <View
-            style={[styles.statIconWrap, { backgroundColor: colors.success }]}
+            style={[styles.statIconWrap, { backgroundColor: colors.successBg }]}
           >
-            <Ionicons name="person" size={18} color="#fff" />
+            <Ionicons name="person" size={18} color={colors.success} />
           </View>
-          <Text style={[styles.statValue, { color: colors.success }]}>
+          <Text style={[styles.statValue, { color: colors.text }]}>
             {stats.totalClients}
           </Text>
           <Text style={styles.statLabel}>Clients</Text>
+          <Text style={styles.statSub}>Regular members</Text>
         </View>
       </View>
 
@@ -272,42 +411,68 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
 
         {pendingRequests.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={32}
-              color={colors.textTertiary}
-            />
-            <Text style={styles.emptyText}>No pending requests</Text>
+            <View
+              style={[
+                styles.emptyIconBadge,
+                { backgroundColor: colors.successBg },
+              ]}
+            >
+              <Ionicons
+                name="checkmark-circle"
+                size={28}
+                color={colors.success}
+              />
+            </View>
+            <Text style={styles.emptyTitle}>All caught up</Text>
+            <Text style={styles.emptyText}>
+              No pending host requests right now
+            </Text>
           </View>
         ) : (
           pendingRequests.map((req) => (
             <View key={req.id} style={styles.requestCard}>
-              <View style={styles.requestInfo}>
-                {req.avatar?.url ? (
-                  <Image
-                    source={{ uri: req.avatar.url }}
-                    style={styles.requestAvatar}
-                  />
-                ) : (
-                  <View style={styles.requestAvatarPlaceholder}>
-                    <Text style={styles.requestAvatarText}>
-                      {(req.name || "U").charAt(0).toUpperCase()}
-                    </Text>
+              <View style={styles.requestTopRow}>
+                <View style={styles.requestInfo}>
+                  <View
+                    style={[styles.avatarRing, { borderColor: colors.accent }]}
+                  >
+                    {req.avatar?.url ? (
+                      <Image
+                        source={{ uri: req.avatar.url }}
+                        style={styles.requestAvatar}
+                      />
+                    ) : (
+                      <View style={styles.requestAvatarPlaceholder}>
+                        <Text style={styles.requestAvatarText}>
+                          {(req.name || "U").charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                )}
-                <View style={styles.requestDetails}>
-                  <Text style={styles.requestName}>
-                    {req.name || "Unknown"}
-                  </Text>
-                  <Text style={styles.requestEmail}>{req.email || "N/A"}</Text>
-                  <Text style={styles.requestDate}>
-                    Requested:{" "}
-                    {req.host_requested_at
-                      ? new Date(req.host_requested_at).toLocaleDateString()
-                      : "N/A"}
-                  </Text>
+                  <View style={styles.requestDetails}>
+                    <Text style={styles.requestName}>
+                      {req.name || "Unknown"}
+                    </Text>
+                    <Text style={styles.requestEmail}>
+                      {req.email || "N/A"}
+                    </Text>
+                    <View style={styles.timePill}>
+                      <Ionicons
+                        name="time-outline"
+                        size={11}
+                        color={colors.textTertiary}
+                      />
+                      <Text style={styles.timePillText}>
+                        Requested {getRelativeTime(req.host_requested_at)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.statusTag}>
+                  <Text style={styles.statusTagText}>Pending</Text>
                 </View>
               </View>
+
               <View style={styles.requestActions}>
                 {processingId === req.id ? (
                   <ActivityIndicator size="small" color={colors.accent} />
@@ -317,14 +482,18 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
                       style={styles.approveBtn}
                       onPress={() => handleApproveHost(req.id, req.name)}
                     >
-                      <Ionicons name="checkmark" size={18} color="#fff" />
+                      <Ionicons
+                        name="checkmark"
+                        size={18}
+                        color={colors.textOnAccent}
+                      />
                       <Text style={styles.approveBtnText}>Approve</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.rejectBtn}
                       onPress={() => handleRejectHost(req.id, req.name)}
                     >
-                      <Ionicons name="close" size={18} color="#e74c3c" />
+                      <Ionicons name="close" size={18} color={colors.error} />
                       <Text style={styles.rejectBtnText}>Reject</Text>
                     </TouchableOpacity>
                   </>
@@ -342,44 +511,60 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             <Ionicons name="key-outline" size={16} color={colors.accent} />
           </View>
           <Text style={styles.sectionTitle}>Active Hosts</Text>
-          <Text style={styles.sectionCount}>{hosts.length}</Text>
+          <View style={styles.countPill}>
+            <Text style={styles.countPillText}>{hosts.length}</Text>
+          </View>
         </View>
 
         {hosts.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons
-              name="people-outline"
-              size={32}
-              color={colors.textTertiary}
-            />
-            <Text style={styles.emptyText}>No active hosts</Text>
+            <View
+              style={[
+                styles.emptyIconBadge,
+                { backgroundColor: colors.warningBg },
+              ]}
+            >
+              <Ionicons name="people" size={26} color={colors.warning} />
+            </View>
+            <Text style={styles.emptyTitle}>No active hosts yet</Text>
+            <Text style={styles.emptyText}>
+              Approved hosts will appear here
+            </Text>
           </View>
         ) : (
           hosts.map((host) => (
             <View key={host.id} style={styles.hostCard}>
               <View style={styles.hostInfo}>
-                {host.avatar?.url ? (
-                  <Image
-                    source={{ uri: host.avatar.url }}
-                    style={styles.requestAvatar}
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.requestAvatarPlaceholder,
-                      { backgroundColor: "#b38604" },
-                    ]}
-                  >
-                    <Text style={styles.requestAvatarText}>
-                      {(host.name || "H").charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
+                <View
+                  style={[styles.avatarRing, { borderColor: colors.warning }]}
+                >
+                  {host.avatar?.url ? (
+                    <Image
+                      source={{ uri: host.avatar.url }}
+                      style={styles.requestAvatar}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.requestAvatarPlaceholder,
+                        { backgroundColor: colors.warning },
+                      ]}
+                    >
+                      <Text style={styles.requestAvatarText}>
+                        {(host.name || "H").charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 <View style={styles.requestDetails}>
                   <Text style={styles.requestName}>
                     {host.name || "Unknown"}
                   </Text>
                   <Text style={styles.requestEmail}>{host.email || "N/A"}</Text>
+                  <View style={styles.hostTag}>
+                    <Ionicons name="key" size={10} color={colors.warning} />
+                    <Text style={styles.hostTagText}>Host</Text>
+                  </View>
                 </View>
               </View>
               <TouchableOpacity
@@ -388,13 +573,13 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
                 disabled={processingId === host.id}
               >
                 {processingId === host.id ? (
-                  <ActivityIndicator size="small" color="#e74c3c" />
+                  <ActivityIndicator size="small" color={colors.error} />
                 ) : (
                   <>
                     <Ionicons
                       name="arrow-down-outline"
                       size={14}
-                      color="#e74c3c"
+                      color={colors.error}
                     />
                     <Text style={styles.demoteBtnText}>Demote</Text>
                   </>
@@ -426,10 +611,14 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             <View
               style={[
                 styles.quickActionIcon,
-                { backgroundColor: "rgba(52,152,219,0.12)" },
+                { backgroundColor: colors.infoBg },
               ]}
             >
-              <Ionicons name="chatbubbles-outline" size={20} color="#3498DB" />
+              <Ionicons
+                name="chatbubbles-outline"
+                size={20}
+                color={colors.info}
+              />
             </View>
             <Text style={styles.quickActionLabel}>Support</Text>
             {supportStats.openTickets > 0 && (
@@ -452,10 +641,10 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             <View
               style={[
                 styles.quickActionIcon,
-                { backgroundColor: "rgba(231,76,60,0.12)" },
+                { backgroundColor: colors.errorBg },
               ]}
             >
-              <Ionicons name="bug-outline" size={20} color="#E74C3C" />
+              <Ionicons name="bug-outline" size={20} color={colors.error} />
             </View>
             <Text style={styles.quickActionLabel}>Bug Reports</Text>
             {supportStats.openBugs > 0 && (
@@ -478,13 +667,13 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             <View
               style={[
                 styles.quickActionIcon,
-                { backgroundColor: "rgba(179,134,4,0.12)" },
+                { backgroundColor: colors.warningBg },
               ]}
             >
               <Ionicons
                 name="notifications-outline"
                 size={20}
-                color="#b38604"
+                color={colors.warning}
               />
             </View>
             <Text style={styles.quickActionLabel}>Broadcast</Text>
@@ -501,10 +690,14 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             <View
               style={[
                 styles.quickActionIcon,
-                { backgroundColor: "rgba(142,68,173,0.12)" },
+                { backgroundColor: colors.actionRoomInfoBg },
               ]}
             >
-              <Ionicons name="cloud-upload-outline" size={20} color="#8E44AD" />
+              <Ionicons
+                name="cloud-upload-outline"
+                size={20}
+                color={colors.actionRoomInfoIcon}
+              />
             </View>
             <Text style={styles.quickActionLabel}>Version</Text>
           </TouchableOpacity>
@@ -520,10 +713,14 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             <View
               style={[
                 styles.quickActionIcon,
-                { backgroundColor: "rgba(52,152,219,0.12)" },
+                { backgroundColor: colors.actionPayBillsBg },
               ]}
             >
-              <Ionicons name="people-outline" size={20} color="#2980B9" />
+              <Ionicons
+                name="people-outline"
+                size={20}
+                color={colors.actionPayBillsIcon}
+              />
             </View>
             <Text style={styles.quickActionLabel}>Users</Text>
           </TouchableOpacity>
@@ -539,10 +736,14 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             <View
               style={[
                 styles.quickActionIcon,
-                { backgroundColor: "rgba(39,174,96,0.12)" },
+                { backgroundColor: colors.actionPresenceBg },
               ]}
             >
-              <Ionicons name="home-outline" size={20} color="#27AE60" />
+              <Ionicons
+                name="home-outline"
+                size={20}
+                color={colors.actionPresenceIcon}
+              />
             </View>
             <Text style={styles.quickActionLabel}>All Rooms</Text>
           </TouchableOpacity>
@@ -558,12 +759,28 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             <View
               style={[
                 styles.quickActionIcon,
-                { backgroundColor: "rgba(211,47,47,0.12)" },
+                { backgroundColor: colors.actionChatBg },
               ]}
             >
-              <Ionicons name="image-outline" size={20} color="#d32f2f" />
+              <Ionicons
+                name="image-outline"
+                size={20}
+                color={colors.actionChatIcon}
+              />
             </View>
             <Text style={styles.quickActionLabel}>Ads</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.sectionFooterRow}>
+          <TouchableOpacity
+            style={styles.sectionFooterLink}
+            onPress={() => navigation.getParent()?.navigate("ManageStack")}
+          >
+            <Text style={styles.sectionFooterText}>
+              Open full management hub
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.accent} />
           </TouchableOpacity>
         </View>
       </View>
@@ -579,6 +796,9 @@ const createStyles = (colors) =>
       flex: 1,
       backgroundColor: colors.background,
     },
+    scrollContent: {
+      paddingBottom: 8,
+    },
     loadingContainer: {
       flex: 1,
       justifyContent: "center",
@@ -590,36 +810,235 @@ const createStyles = (colors) =>
       fontSize: 14,
       color: colors.textTertiary,
     },
-    headerSection: {
-      paddingHorizontal: 16,
-      paddingTop: 16,
-      paddingBottom: 8,
+
+    // ── Header ──
+    header: {
+      backgroundColor: colors.headerBg,
+      paddingTop: 24,
+      paddingHorizontal: 20,
+      paddingBottom: 56,
+      borderBottomLeftRadius: 32,
+      borderBottomRightRadius: 32,
+    },
+    headerTopRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    avatarCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      justifyContent: "center",
+      alignItems: "center",
+      overflow: "hidden",
+      borderWidth: 2,
+      borderColor: "rgba(255,255,255,0.25)",
+    },
+    avatarImage: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+    },
+    bellBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    bellBadge: {
+      position: "absolute",
+      top: -2,
+      right: -2,
+      backgroundColor: colors.error,
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 4,
+      borderWidth: 2,
+      borderColor: colors.headerBg,
+    },
+    bellBadgeText: {
+      color: "#fff",
+      fontSize: 10,
+      fontWeight: "700",
+    },
+    eyebrowRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    eyebrowText: {
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 1.2,
+      color: "rgba(255,255,255,0.65)",
+    },
+    rolePill: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "rgba(255,255,255,0.15)",
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
+      gap: 6,
+    },
+    rolePillText: {
+      color: colors.headerText,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    headerTitle: {
+      fontSize: 32,
+      fontWeight: "800",
+      color: colors.headerText,
+      marginBottom: 16,
+    },
+    greetingCard: {
+      backgroundColor: "rgba(255,255,255,0.08)",
+      borderRadius: 18,
+      padding: 16,
     },
     greeting: {
-      fontSize: 22,
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.headerText,
+      marginBottom: 4,
+    },
+    greetingSub: {
+      fontSize: 13,
+      color: "rgba(255,255,255,0.75)",
+      lineHeight: 18,
+      marginBottom: 12,
+    },
+    headerPillsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    headerPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "rgba(255,255,255,0.12)",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 16,
+      gap: 6,
+    },
+    headerPillText: {
+      color: colors.headerText,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+
+    // ── Overview overlap card ──
+    overviewCard: {
+      marginHorizontal: 16,
+      marginTop: -40,
+      backgroundColor: colors.accentSurface,
+      borderRadius: 24,
+      padding: 20,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow,
+          shadowOpacity: 0.12,
+          shadowOffset: { width: 0, height: 6 },
+          shadowRadius: 14,
+        },
+        android: { elevation: 4 },
+      }),
+    },
+    overviewTopRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+    },
+    overviewLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 1,
+      color: colors.textSecondary,
+      marginBottom: 6,
+    },
+    overviewValue: {
+      fontSize: 36,
       fontWeight: "800",
       color: colors.text,
       marginBottom: 4,
     },
-    headerSub: {
-      fontSize: 14,
-      color: colors.textTertiary,
-      fontWeight: "500",
+    overviewSub: {
+      fontSize: 13,
+      color: colors.textSecondary,
     },
+    overviewIconWrap: {
+      width: 52,
+      height: 52,
+      borderRadius: 16,
+      backgroundColor: colors.card,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    overviewPillsRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 16,
+      flexWrap: "wrap",
+    },
+    overviewPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.accentLight,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 14,
+      gap: 6,
+    },
+    overviewPillText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    overviewDivider: {
+      height: 1,
+      backgroundColor: colors.divider,
+      marginVertical: 16,
+      opacity: 0.4,
+    },
+    overviewFooterRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 6,
+    },
+    overviewFooterText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.accent,
+    },
+
+    // ── Stats Row ──
     statsRow: {
       flexDirection: "row",
-      paddingHorizontal: 12,
-      gap: 8,
-      marginVertical: 12,
+      paddingHorizontal: 16,
+      gap: 10,
+      marginTop: 20,
     },
     statCard: {
       flex: 1,
-      borderRadius: 14,
+      backgroundColor: colors.card,
+      borderRadius: 18,
       padding: 14,
       alignItems: "center",
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: colors.shadow,
           shadowOpacity: 0.05,
           shadowOffset: { width: 0, height: 2 },
           shadowRadius: 6,
@@ -628,33 +1047,42 @@ const createStyles = (colors) =>
       }),
     },
     statIconWrap: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      width: 44,
+      height: 44,
+      borderRadius: 14,
       justifyContent: "center",
       alignItems: "center",
-      marginBottom: 8,
+      marginBottom: 10,
     },
     statValue: {
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: "800",
     },
     statLabel: {
-      fontSize: 11,
-      fontWeight: "600",
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 0.4,
+      color: colors.textTertiary,
+      marginTop: 4,
+      textTransform: "uppercase",
+    },
+    statSub: {
+      fontSize: 10,
       color: colors.textTertiary,
       marginTop: 2,
     },
+
+    // ── Sections ──
     section: {
-      marginHorizontal: 12,
-      marginTop: 12,
+      marginHorizontal: 16,
+      marginTop: 16,
       backgroundColor: colors.card,
-      borderRadius: 14,
-      paddingVertical: 14,
-      paddingHorizontal: 16,
+      borderRadius: 20,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: colors.shadow,
           shadowOpacity: 0.05,
           shadowOffset: { width: 0, height: 2 },
           shadowRadius: 6,
@@ -665,14 +1093,14 @@ const createStyles = (colors) =>
     sectionHeader: {
       flexDirection: "row",
       alignItems: "center",
-      marginBottom: 12,
-      gap: 8,
+      marginBottom: 14,
+      gap: 10,
     },
     sectionIconWrap: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: "rgba(179,134,4,0.12)",
+      width: 30,
+      height: 30,
+      borderRadius: 10,
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -682,13 +1110,22 @@ const createStyles = (colors) =>
       color: colors.text,
       flex: 1,
     },
-    sectionCount: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: colors.textTertiary,
+    countPill: {
+      backgroundColor: colors.cardAlt,
+      minWidth: 26,
+      height: 22,
+      borderRadius: 11,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 8,
+    },
+    countPillText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.textSecondary,
     },
     badge: {
-      backgroundColor: "#e74c3c",
+      backgroundColor: colors.error,
       minWidth: 22,
       height: 22,
       borderRadius: 11,
@@ -697,35 +1134,63 @@ const createStyles = (colors) =>
       paddingHorizontal: 6,
     },
     badgeText: {
-      color: "#fff",
+      color: colors.textOnAccent,
       fontSize: 11,
       fontWeight: "700",
     },
     emptyState: {
       alignItems: "center",
-      paddingVertical: 24,
-      gap: 8,
+      paddingVertical: 28,
+      gap: 4,
+    },
+    emptyIconBadge: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+    emptyTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.text,
     },
     emptyText: {
-      fontSize: 13,
+      fontSize: 12,
       color: colors.textTertiary,
+    },
+    avatarRing: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      borderWidth: 2,
+      padding: 2,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
     },
     requestCard: {
       backgroundColor: colors.cardAlt || colors.background,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 14,
-      marginBottom: 8,
+      marginBottom: 10,
+    },
+    requestTopRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 14,
     },
     requestInfo: {
       flexDirection: "row",
       alignItems: "center",
-      marginBottom: 10,
+      flex: 1,
     },
     requestAvatar: {
       width: 40,
       height: 40,
       borderRadius: 20,
-      marginRight: 12,
     },
     requestAvatarPlaceholder: {
       width: 40,
@@ -734,7 +1199,6 @@ const createStyles = (colors) =>
       backgroundColor: colors.accent,
       justifyContent: "center",
       alignItems: "center",
-      marginRight: 12,
     },
     requestAvatarText: {
       fontSize: 16,
@@ -754,10 +1218,48 @@ const createStyles = (colors) =>
       color: colors.textTertiary,
       marginTop: 1,
     },
-    requestDate: {
+    timePill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 4,
+    },
+    timePillText: {
       fontSize: 11,
+      fontWeight: "600",
       color: colors.textTertiary,
-      marginTop: 3,
+    },
+    statusTag: {
+      backgroundColor: colors.warningBg,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+      marginLeft: 8,
+    },
+    statusTagText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.warning,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+    },
+    hostTag: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: colors.warningBg,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      marginTop: 5,
+      alignSelf: "flex-start",
+    },
+    hostTagText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.warning,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
     },
     requestActions: {
       flexDirection: "row",
@@ -766,30 +1268,41 @@ const createStyles = (colors) =>
     approveBtn: {
       flex: 1,
       flexDirection: "row",
-      backgroundColor: "#27AE60",
-      borderRadius: 10,
-      paddingVertical: 10,
+      backgroundColor: colors.success,
+      borderRadius: 14,
+      paddingVertical: 12,
       justifyContent: "center",
       alignItems: "center",
       gap: 4,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.success,
+          shadowOpacity: 0.3,
+          shadowOffset: { width: 0, height: 3 },
+          shadowRadius: 6,
+        },
+        android: { elevation: 2 },
+      }),
     },
     approveBtnText: {
-      color: "#fff",
+      color: colors.textOnAccent,
       fontSize: 13,
       fontWeight: "700",
     },
     rejectBtn: {
       flex: 1,
       flexDirection: "row",
-      backgroundColor: "rgba(231,76,60,0.1)",
-      borderRadius: 10,
-      paddingVertical: 10,
+      backgroundColor: colors.errorBg,
+      borderRadius: 14,
+      paddingVertical: 12,
       justifyContent: "center",
       alignItems: "center",
       gap: 4,
+      borderWidth: 1,
+      borderColor: colors.error,
     },
     rejectBtnText: {
-      color: "#e74c3c",
+      color: colors.error,
       fontSize: 13,
       fontWeight: "700",
     },
@@ -798,9 +1311,9 @@ const createStyles = (colors) =>
       alignItems: "center",
       justifyContent: "space-between",
       backgroundColor: colors.cardAlt || colors.background,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 12,
-      marginBottom: 8,
+      marginBottom: 10,
     },
     hostInfo: {
       flexDirection: "row",
@@ -810,14 +1323,14 @@ const createStyles = (colors) =>
     demoteBtn: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: "rgba(231,76,60,0.1)",
-      borderRadius: 8,
+      backgroundColor: colors.errorBg,
+      borderRadius: 10,
       paddingHorizontal: 10,
-      paddingVertical: 6,
+      paddingVertical: 7,
       gap: 4,
     },
     demoteBtnText: {
-      color: "#e74c3c",
+      color: colors.error,
       fontSize: 12,
       fontWeight: "600",
     },
@@ -829,30 +1342,32 @@ const createStyles = (colors) =>
     quickAction: {
       width: "47%",
       backgroundColor: colors.cardAlt || colors.background,
-      borderRadius: 12,
-      paddingVertical: 16,
+      borderRadius: 18,
+      paddingVertical: 18,
       paddingHorizontal: 14,
       alignItems: "center",
       position: "relative",
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
     },
     quickActionIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 46,
+      height: 46,
+      borderRadius: 16,
       justifyContent: "center",
       alignItems: "center",
-      marginBottom: 8,
+      marginBottom: 10,
     },
     quickActionLabel: {
       fontSize: 12,
-      fontWeight: "600",
+      fontWeight: "700",
       color: colors.text,
     },
     quickActionBadge: {
       position: "absolute",
       top: 8,
       right: 8,
-      backgroundColor: "#e74c3c",
+      backgroundColor: colors.error,
       minWidth: 18,
       height: 18,
       borderRadius: 9,
@@ -864,6 +1379,21 @@ const createStyles = (colors) =>
       color: "#fff",
       fontSize: 10,
       fontWeight: "700",
+    },
+    sectionFooterRow: {
+      marginTop: 14,
+      alignItems: "center",
+    },
+    sectionFooterLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingVertical: 6,
+    },
+    sectionFooterText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.accent,
     },
   });
 

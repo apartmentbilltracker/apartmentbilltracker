@@ -20,6 +20,7 @@ import { hostRoleService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { FlatListWithDetection } from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const ROLE_FILTERS = [
   { key: "all", label: "All" },
@@ -289,9 +290,8 @@ const AdminUserManagementScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.loadingText}>Loading users...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
         </View>
       </View>
     );

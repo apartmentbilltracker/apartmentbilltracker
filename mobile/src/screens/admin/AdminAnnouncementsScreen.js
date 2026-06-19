@@ -25,6 +25,7 @@ import {
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const REACTION_TYPES = [
   { type: "like", emoji: "\uD83D\uDC4D", label: "Like" },
@@ -300,7 +301,9 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
@@ -314,7 +317,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
             <Ionicons
               name="megaphone-outline"
               size={20}
-              color={colors.accent}
+              color={colors.headerText}
             />
           </View>
           <View>
@@ -392,17 +395,24 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
       {/* Summary Strip */}
       <View style={styles.summaryStrip}>
         <View style={styles.summaryItem}>
-          <Ionicons
-            name="document-text-outline"
-            size={16}
-            color={colors.accent}
-          />
+          <View style={styles.summaryIconWrap}>
+            <Ionicons
+              name="document-text-outline"
+              size={18}
+              color={colors.accent}
+            />
+          </View>
           <Text style={styles.summaryValue}>{announcements.length}</Text>
           <Text style={styles.summaryLabel}>Posts</Text>
         </View>
-        <View style={styles.summarySep} />
         <View style={styles.summaryItem}>
-          <Ionicons name="chatbubble-outline" size={16} color={colors.accent} />
+          <View style={styles.summaryIconWrap}>
+            <Ionicons
+              name="chatbubble-outline"
+              size={18}
+              color={colors.accent}
+            />
+          </View>
           <Text style={styles.summaryValue}>
             {announcements.reduce(
               (sum, a) => sum + (a.comments?.length || 0),
@@ -411,9 +421,10 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
           </Text>
           <Text style={styles.summaryLabel}>Comments</Text>
         </View>
-        <View style={styles.summarySep} />
         <View style={styles.summaryItem}>
-          <Ionicons name="heart-outline" size={16} color={colors.accent} />
+          <View style={styles.summaryIconWrap}>
+            <Ionicons name="heart-outline" size={18} color={colors.accent} />
+          </View>
           <Text style={styles.summaryValue}>
             {announcements.reduce(
               (sum, a) => sum + (a.reactions?.length || 0),
@@ -433,6 +444,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
           const userReaction = userReactions[annId];
           const reactionCounts = {};
           const totalReactions = item.reactions?.length || 0;
+          const isPinned = item.is_pinned || item.isPinned;
 
           item.reactions?.forEach((reaction) => {
             reactionCounts[reaction.type] =
@@ -440,7 +452,14 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
           });
 
           return (
-            <View style={styles.postCard}>
+            <View style={[styles.postCard, isPinned && styles.postCardPinned]}>
+              {/* Pinned Banner */}
+              {isPinned && (
+                <View style={styles.pinnedBar}>
+                  <Ionicons name="bookmark" size={12} color={colors.accent} />
+                  <Text style={styles.pinnedBarText}>Pinned</Text>
+                </View>
+              )}
               {/* Post Header */}
               <View style={styles.postHeader}>
                 <View style={styles.creatorInfo}>
@@ -768,7 +787,7 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#b38604"]}
+            colors={[colors.accent]}
             tintcolor={colors.accent}
           />
         }
@@ -784,15 +803,6 @@ const AdminAnnouncementsScreen = ({ navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalIconHeader}>
-              <View style={styles.modalIconWrap}>
-                <Ionicons
-                  name="create-outline"
-                  size={24}
-                  color={colors.accent}
-                />
-              </View>
-            </View>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Create Announcement</Text>
               <TouchableOpacity
@@ -1034,9 +1044,9 @@ const createStyles = (colors) =>
       alignItems: "center",
       paddingHorizontal: 16,
       paddingVertical: 14,
-      backgroundColor: colors.card,
+      backgroundColor: colors.headerBg,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
+      borderBottomColor: "rgba(255,255,255,0.08)",
       ...Platform.select({
         ios: {
           shadowColor: "#000",
@@ -1056,18 +1066,18 @@ const createStyles = (colors) =>
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: "rgba(179,134,4,0.12)",
+      backgroundColor: "rgba(255,255,255,0.15)",
       justifyContent: "center",
       alignItems: "center",
     },
     headerTitle: {
       fontSize: 18,
       fontWeight: "700",
-      color: colors.text,
+      color: colors.headerText,
     },
     headerSubtitle: {
       fontSize: 12,
-      color: colors.textTertiary,
+      color: "rgba(255,255,255,0.60)",
       marginTop: 1,
     },
     createButton: {
@@ -1079,8 +1089,8 @@ const createStyles = (colors) =>
       alignItems: "center",
       ...Platform.select({
         ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.25,
+          shadowColor: colors.accent,
+          shadowOpacity: 0.35,
           shadowOffset: { width: 0, height: 3 },
           shadowRadius: 6,
         },
@@ -1091,8 +1101,8 @@ const createStyles = (colors) =>
     /* Summary Strip */
     roomSelectorWrapper: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-      backgroundColor: colors.card,
+      borderBottomColor: "rgba(255,255,255,0.08)",
+      backgroundColor: colors.headerBg,
     },
     roomSelectorScroll: {
       flex: 0,
@@ -1114,9 +1124,9 @@ const createStyles = (colors) =>
       paddingHorizontal: 18,
       paddingVertical: 10,
       borderRadius: 22,
-      backgroundColor: colors.inputBg,
+      backgroundColor: "rgba(255,255,255,0.10)",
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: "rgba(255,255,255,0.18)",
     },
     roomChipActive: {
       backgroundColor: colors.accent,
@@ -1125,20 +1135,27 @@ const createStyles = (colors) =>
     roomChipText: {
       fontSize: 15,
       fontWeight: "600",
-      color: colors.textSecondary,
+      color: "rgba(255,255,255,0.70)",
     },
     roomChipTextActive: {
       color: colors.textOnAccent,
     },
     summaryStrip: {
       flexDirection: "row",
-      backgroundColor: colors.card,
       marginHorizontal: 12,
       marginTop: 12,
       marginBottom: 4,
+      gap: 10,
+    },
+    summaryItem: {
+      flex: 1,
+      backgroundColor: colors.card,
       borderRadius: 14,
-      paddingVertical: 12,
+      paddingVertical: 14,
       paddingHorizontal: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 2,
       ...Platform.select({
         ios: {
           shadowColor: "#000",
@@ -1149,26 +1166,29 @@ const createStyles = (colors) =>
         android: { elevation: 2 },
       }),
     },
-    summaryItem: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
+    summaryIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
-      gap: 5,
+      alignItems: "center",
+      marginBottom: 4,
     },
     summaryValue: {
-      fontSize: 15,
+      fontSize: 18,
       fontWeight: "700",
       color: colors.text,
     },
     summaryLabel: {
-      fontSize: 12,
+      fontSize: 10,
       color: colors.textTertiary,
+      textAlign: "center",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
     },
     summarySep: {
-      width: StyleSheet.hairlineWidth,
-      backgroundColor: colors.skeleton,
-      marginVertical: 2,
+      width: 0,
     },
 
     /* Post List */
@@ -1191,6 +1211,25 @@ const createStyles = (colors) =>
         android: { elevation: 2 },
       }),
       overflow: "hidden",
+    },
+    postCardPinned: {
+      borderLeftWidth: 3,
+      borderLeftColor: colors.accent,
+    },
+    pinnedBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: colors.accentLight,
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+    },
+    pinnedBarText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.accent,
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
     },
     postHeader: {
       flexDirection: "row",
@@ -1386,7 +1425,7 @@ const createStyles = (colors) =>
       width: 30,
       height: 30,
       borderRadius: 15,
-      backgroundColor: "rgba(179,134,4,0.15)",
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
       marginRight: 10,
@@ -1468,7 +1507,7 @@ const createStyles = (colors) =>
       width: 72,
       height: 72,
       borderRadius: 36,
-      backgroundColor: "rgba(179,134,4,0.10)",
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 16,
@@ -1515,7 +1554,7 @@ const createStyles = (colors) =>
       width: 48,
       height: 48,
       borderRadius: 24,
-      backgroundColor: "rgba(179,134,4,0.12)",
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1576,10 +1615,10 @@ const createStyles = (colors) =>
       marginBottom: 8,
       ...Platform.select({
         ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.25,
+          shadowColor: colors.accent,
+          shadowOpacity: 0.3,
           shadowOffset: { width: 0, height: 3 },
-          shadowRadius: 6,
+          shadowRadius: 8,
         },
         android: { elevation: 3 },
       }),

@@ -77,8 +77,8 @@ export default function HomeSpaceLoader() {
   });
 
   // Dynamic Theme Styling
-  const brandGreen = isDark ? "#7ee8a2" : "#1a7a52";
-  const trackColor = isDark ? "#1e293b" : "#e2e8f0";
+  const brandGreen = "#1a7a52";
+  const trackColor = "#e2e8f0";
 
   return (
     <View style={styles.container}>
@@ -88,9 +88,7 @@ export default function HomeSpaceLoader() {
           style={[
             styles.pingRing,
             {
-              backgroundColor: isDark
-                ? "rgba(126, 232, 162, 0.15)"
-                : "rgba(26, 122, 82, 0.15)",
+              backgroundColor: "rgba(26, 122, 82, 0.15)",
               transform: [{ scale: pingScale }],
               opacity: pingOpacity,
             },

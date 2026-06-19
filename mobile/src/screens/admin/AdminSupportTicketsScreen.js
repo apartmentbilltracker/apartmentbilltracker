@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
   Alert,
   Modal,
   TextInput,
-  FlatList,
   ActivityIndicator,
   Platform,
   RefreshControl,
@@ -21,7 +19,34 @@ import {
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
 
-const GOLD = "#b38604";
+// ─── Semantic status / priority colours (unchanged — these are not theme tones)
+const STATUS_COLORS = {
+  open: "#ef4444",
+  "in-progress": "#f59e0b",
+  resolved: "#10b981",
+  closed: "#6b7280",
+};
+const PRIORITY_COLORS = { high: "#ef4444", medium: "#f59e0b", low: "#10b981" };
+
+const getStatusColor = (s) => STATUS_COLORS[s] ?? "#6b7280";
+const getPriorityColor = (p) => PRIORITY_COLORS[p] ?? "#6b7280";
+
+const getStatusIcon = (s) => {
+  const map = {
+    open: "alert-circle",
+    "in-progress": "time",
+    resolved: "checkmark-circle",
+    closed: "lock-closed",
+  };
+  return map[s] ?? "help-circle";
+};
+const getPriorityIcon = (p) => {
+  const map = { high: "flame", medium: "warning", low: "leaf" };
+  return map[p] ?? "flag";
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const AdminSupportTicketsScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -38,19 +63,19 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
 
   useEffect(() => {
     fetchAllTickets();
-    const unsubscribe = navigation.addListener("focus", () => {
-      fetchAllTickets();
-    });
+    const unsubscribe = navigation.addListener("focus", fetchAllTickets);
     return unsubscribe;
   }, [navigation]);
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
 
   const fetchAllTickets = async () => {
     setLoading(true);
     try {
-      const response = await supportService.getAllTickets();
-      setTickets(Array.isArray(response) ? response : response?.data || []);
-    } catch (error) {
-      console.error("Error fetching tickets:", error);
+      const res = await supportService.getAllTickets();
+      setTickets(Array.isArray(res) ? res : res?.data || []);
+    } catch (err) {
+      console.error("Error fetching tickets:", err);
       Alert.alert("Error", "Failed to load tickets");
     } finally {
       setLoading(false);
@@ -60,14 +85,16 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      const response = await supportService.getAllTickets();
-      setTickets(Array.isArray(response) ? response : response?.data || []);
-    } catch (error) {
-      console.error("Error refreshing tickets:", error);
+      const res = await supportService.getAllTickets();
+      setTickets(Array.isArray(res) ? res : res?.data || []);
+    } catch (err) {
+      console.error("Error refreshing tickets:", err);
     } finally {
       setRefreshing(false);
     }
   };
+
+  // ── Ticket actions ─────────────────────────────────────────────────────────
 
   const handleTicketPress = async (ticketId) => {
     try {
@@ -77,15 +104,15 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
       setModalVisible(true);
       try {
         await supportService.markTicketAsRead(ticketId);
-        setTickets(
-          tickets.map((t) =>
+        setTickets((prev) =>
+          prev.map((t) =>
             (t.id || t._id) === ticketId ? { ...t, isReadByAdmin: true } : t,
           ),
         );
-      } catch (error) {
-        console.error("Error marking ticket as read:", error);
+      } catch (e) {
+        console.error("Error marking ticket as read:", e);
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to load ticket details");
     }
   };
@@ -101,18 +128,17 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
         selectedTicket.id || selectedTicket._id,
         replyText,
       );
-      const updatedTicket = {
-        ...selectedTicket,
+      setSelectedTicket((prev) => ({
+        ...prev,
         replies: [
-          ...(selectedTicket.replies || []),
+          ...(prev.replies || []),
           { from: "admin", message: replyText, createdAt: new Date() },
         ],
         isReadByAdmin: false,
-      };
-      setSelectedTicket(updatedTicket);
+      }));
       setReplyText("");
       Alert.alert("Success", "Reply added successfully");
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to add reply");
     } finally {
       setSubmitting(false);
@@ -126,77 +152,17 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
         selectedTicket.id || selectedTicket._id,
         status,
       );
-      const updatedTicket = { ...selectedTicket, status };
-      setSelectedTicket(updatedTicket);
+      setSelectedTicket((prev) => ({ ...prev, status }));
       setNewStatus(status);
       Alert.alert("Success", "Ticket status updated");
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to update status");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case "open":
-        return "alert-circle";
-      case "in-progress":
-        return "time";
-      case "resolved":
-        return "checkmark-circle";
-      case "closed":
-        return "lock-closed";
-      default:
-        return "help-circle";
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "open":
-        return "#ef4444";
-      case "in-progress":
-        return "#f59e0b";
-      case "resolved":
-        return "#10b981";
-      case "closed":
-        return "#6b7280";
-      default:
-        return "#6b7280";
-    }
-  };
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case "high":
-        return "#ef4444";
-      case "medium":
-        return "#f59e0b";
-      case "low":
-        return "#10b981";
-      default:
-        return "#6b7280";
-    }
-  };
-
-  const getPriorityIcon = (priority) => {
-    switch (priority) {
-      case "high":
-        return "flame";
-      case "medium":
-        return "warning";
-      case "low":
-        return "leaf";
-      default:
-        return "flag";
-    }
-  };
-
-  const filteredTickets =
-    statusFilter === "all"
-      ? tickets
-      : tickets.filter((t) => t.status === statusFilter);
+  // ── Derived data ───────────────────────────────────────────────────────────
 
   const statusCounts = {
     all: tickets.length,
@@ -206,54 +172,111 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
     closed: tickets.filter((t) => t.status === "closed").length,
   };
 
+  const filteredTickets =
+    statusFilter === "all"
+      ? tickets
+      : tickets.filter((t) => t.status === statusFilter);
+
+  // ── Loading screen ─────────────────────────────────────────────────────────
+
   if (loading) {
     return (
       <View style={styles.loadingWrap}>
         <View style={styles.loadingIconWrap}>
-          <Ionicons name="ticket-outline" size={32} color={GOLD} />
+          <Ionicons name="headset-outline" size={32} color={colors.accent} />
         </View>
         <ActivityIndicator
           size="large"
-          color={GOLD}
+          color={colors.accent}
           style={{ marginTop: 16 }}
         />
-        <Text style={styles.loadingText}>Loading tickets...</Text>
+        <Text style={styles.loadingText}>Loading tickets…</Text>
       </View>
     );
   }
 
+  // ── Main render ────────────────────────────────────────────────────────────
+
   return (
     <View style={styles.container}>
-      {/* Summary Strip */}
-      <View style={styles.summaryStrip}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryValue}>{statusCounts.all}</Text>
-          <Text style={styles.summaryLabel}>Total</Text>
+      {/* ── Header Banner (matches dashboard deep-green header) ── */}
+      <View style={styles.headerBanner}>
+        <View style={styles.headerRow}>
+          <View style={styles.headerIconWrap}>
+            <Ionicons
+              name="headset-outline"
+              size={22}
+              color={colors.headerText}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Support Hub</Text>
+            <Text style={styles.headerSub}>
+              Manage & respond to all tickets
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.headerRefreshBtn}
+            onPress={fetchAllTickets}
+          >
+            <Ionicons
+              name="refresh-outline"
+              size={20}
+              color={colors.headerText}
+            />
+          </TouchableOpacity>
         </View>
-        <View style={[styles.summaryDivider]} />
-        <View style={styles.summaryItem}>
-          <Text style={[styles.summaryValue, { color: "#ef4444" }]}>
-            {statusCounts.open}
-          </Text>
-          <Text style={styles.summaryLabel}>Open</Text>
-        </View>
-        <View style={[styles.summaryDivider]} />
-        <View style={styles.summaryItem}>
-          <Text style={[styles.summaryValue, { color: "#f59e0b" }]}>
-            {statusCounts["in-progress"]}
-          </Text>
-          <Text style={styles.summaryLabel}>In Progress</Text>
-        </View>
-        <View style={[styles.summaryDivider]} />
-        <View style={styles.summaryItem}>
-          <Text style={[styles.summaryValue, { color: "#10b981" }]}>
-            {statusCounts.resolved}
-          </Text>
-          <Text style={styles.summaryLabel}>Resolved</Text>
+
+        {/* ── Stat Cards (modelled on dashboard Quick Stats Row) ── */}
+        <View style={styles.statRow}>
+          {[
+            {
+              label: "Total",
+              value: statusCounts.all,
+              icon: "albums-outline",
+              bg: "rgba(255,255,255,0.12)",
+              iconColor: colors.headerText,
+              valueColor: colors.headerText,
+            },
+            {
+              label: "Open",
+              value: statusCounts.open,
+              icon: "alert-circle-outline",
+              bg: "rgba(239,68,68,0.25)",
+              iconColor: "#fca5a5",
+              valueColor: "#fca5a5",
+            },
+            {
+              label: "In Progress",
+              value: statusCounts["in-progress"],
+              icon: "time-outline",
+              bg: "rgba(245,158,11,0.25)",
+              iconColor: "#fcd34d",
+              valueColor: "#fcd34d",
+            },
+            {
+              label: "Resolved",
+              value: statusCounts.resolved,
+              icon: "checkmark-circle-outline",
+              bg: "rgba(129,216,163,0.25)",
+              iconColor: "#9af2bb",
+              valueColor: "#9af2bb",
+            },
+          ].map((s, i) => (
+            <View key={i} style={styles.statCard}>
+              <View style={[styles.statIconWrap, { backgroundColor: s.bg }]}>
+                <Ionicons name={s.icon} size={15} color={s.iconColor} />
+              </View>
+              <Text style={[styles.statValue, { color: s.valueColor }]}>
+                {s.value}
+              </Text>
+              <Text style={styles.statLabel}>{s.label}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
-      {/* Filter Tabs */}
+      {/* ── Filter Chips ── */}
       <ScrollViewWithDetection
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -267,6 +290,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
           { key: "closed", label: "Closed", icon: "lock-closed" },
         ].map((tab) => {
           const active = statusFilter === tab.key;
+          const count = statusCounts[tab.key];
           return (
             <TouchableOpacity
               key={tab.key}
@@ -288,39 +312,54 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
               >
                 {tab.label}
               </Text>
+              {count > 0 && (
+                <View
+                  style={[styles.chipBadge, active && styles.chipBadgeActive]}
+                >
+                  <Text
+                    style={[
+                      styles.chipBadgeText,
+                      active && styles.chipBadgeTextActive,
+                    ]}
+                  >
+                    {count}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           );
         })}
       </ScrollViewWithDetection>
 
-      {/* Tickets List */}
+      {/* ── Ticket List ── */}
       <FlatListWithDetection
         data={filteredTickets}
-        keyExtractor={(item) => item.id || item._id}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        keyExtractor={(item) => String(item.id || item._id)}
+        contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[GOLD]}
-            tintColor={GOLD}
+            colors={[colors.accent]}
+            tintColor={colors.accent}
           />
         }
         renderItem={({ item }) => {
           const sColor = getStatusColor(item.status);
           const pColor = getPriorityColor(item.priority);
           const hasUnread =
-            !item.isReadByAdmin && item.replies && item.replies.length > 0;
+            !item.isReadByAdmin && (item.replies || []).length > 0;
           return (
             <TouchableOpacity
               style={styles.ticketCard}
               onPress={() => handleTicketPress(item.id || item._id)}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
             >
-              {/* Left accent */}
+              {/* Left status accent bar */}
               <View style={[styles.cardAccent, { backgroundColor: sColor }]} />
 
               <View style={styles.cardBody}>
+                {/* Top row: subject + status badge */}
                 <View style={styles.cardTopRow}>
                   <View style={{ flex: 1, marginRight: 10 }}>
                     <Text style={styles.ticketSubject} numberOfLines={2}>
@@ -328,9 +367,9 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                     </Text>
                     <View style={styles.userRow}>
                       <Ionicons
-                        name="person-outline"
-                        size={12}
-                        color={colors.textSecondary}
+                        name="person-circle-outline"
+                        size={13}
+                        color={colors.accent}
                       />
                       <Text style={styles.ticketUser}>{item.userName}</Text>
                     </View>
@@ -359,6 +398,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
 
                 <View style={styles.cardSeparator} />
 
+                {/* Meta row: category · priority · reply count */}
                 <View style={styles.cardMetaRow}>
                   <View style={styles.metaChip}>
                     <Ionicons
@@ -383,9 +423,9 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                     <Ionicons
                       name="chatbubble-outline"
                       size={12}
-                      color={GOLD}
+                      color={colors.accent}
                     />
-                    <Text style={[styles.metaText, { color: GOLD }]}>
+                    <Text style={[styles.metaText, { color: colors.accent }]}>
                       {(item.replies || []).length}
                     </Text>
                   </View>
@@ -403,153 +443,140 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <View style={styles.emptyIconWrap}>
-              <Ionicons name="mail-open-outline" size={40} color={GOLD} />
+              <Ionicons
+                name="mail-open-outline"
+                size={40}
+                color={colors.accent}
+              />
             </View>
-            <Text style={styles.emptyTitle}>No Tickets Found</Text>
+            <Text style={styles.emptyTitle}>All Clear!</Text>
             <Text style={styles.emptySub}>
-              All support tickets are handled!
+              No support tickets to manage right now.
             </Text>
           </View>
         }
       />
 
-      {/* Ticket Details Modal */}
-      <Modal visible={modalVisible} transparent animationType="fade">
+      {/* ── Ticket Detail Modal (slides up from bottom) ── */}
+      <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            {/* Modal Header */}
+            {/* Modal header — dark green band */}
             <View style={styles.modalHeader}>
-              <View style={styles.modalIconWrap}>
-                <Ionicons name="ticket-outline" size={22} color={GOLD} />
+              {/* Drag pill */}
+              <View style={styles.dragPill} />
+              <View style={styles.modalHeaderContent}>
+                <View style={styles.modalIconWrap}>
+                  <Ionicons
+                    name="ticket-outline"
+                    size={20}
+                    color={colors.headerText}
+                  />
+                </View>
+                <Text style={styles.modalTitle}>Ticket Details</Text>
+                <TouchableOpacity
+                  onPress={() => setModalVisible(false)}
+                  style={styles.modalClose}
+                >
+                  <Ionicons name="close" size={20} color={colors.headerText} />
+                </TouchableOpacity>
               </View>
-              <Text style={styles.modalTitle}>Ticket Details</Text>
-              <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                style={styles.modalClose}
-              >
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
             </View>
 
             {selectedTicket && (
               <ScrollViewWithDetection
                 style={styles.modalBody}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 30 }}
+                contentContainerStyle={{ paddingBottom: 36 }}
               >
                 {/* Subject */}
                 <Text style={styles.modalSubject}>
                   {selectedTicket.subject}
                 </Text>
 
-                {/* Info Grid */}
+                {/* ── Info Grid ── */}
                 <View style={styles.infoGrid}>
-                  <View style={styles.infoCell}>
-                    <View
-                      style={[
-                        styles.infoCellIcon,
-                        { backgroundColor: GOLD + "18" },
-                      ]}
-                    >
-                      <Ionicons name="person-outline" size={16} color={GOLD} />
+                  {[
+                    {
+                      icon: "person-outline",
+                      label: "Customer",
+                      value: selectedTicket.userName,
+                      bg: colors.accentLight,
+                      iconColor: colors.accent,
+                    },
+                    {
+                      icon: "mail-outline",
+                      label: "Email",
+                      value: selectedTicket.userEmail,
+                      bg: colors.statMembersBg,
+                      iconColor: colors.statMembersIcon,
+                    },
+                    {
+                      icon: "pricetag-outline",
+                      label: "Category",
+                      value:
+                        selectedTicket.category?.charAt(0).toUpperCase() +
+                        selectedTicket.category?.slice(1),
+                      bg: "#fef3c7",
+                      iconColor: "#f59e0b",
+                    },
+                    {
+                      icon: getPriorityIcon(selectedTicket.priority),
+                      label: "Priority",
+                      value: selectedTicket.priority?.toUpperCase(),
+                      bg: getPriorityColor(selectedTicket.priority) + "18",
+                      iconColor: getPriorityColor(selectedTicket.priority),
+                      valueColor: getPriorityColor(selectedTicket.priority),
+                    },
+                  ].map((cell, i) => (
+                    <View key={i} style={styles.infoCell}>
+                      <View
+                        style={[
+                          styles.infoCellIcon,
+                          { backgroundColor: cell.bg },
+                        ]}
+                      >
+                        <Ionicons
+                          name={cell.icon}
+                          size={16}
+                          color={cell.iconColor}
+                        />
+                      </View>
+                      <Text style={styles.infoCellLabel}>{cell.label}</Text>
+                      <Text
+                        style={[
+                          styles.infoCellValue,
+                          cell.valueColor && { color: cell.valueColor },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {cell.value}
+                      </Text>
                     </View>
-                    <Text style={styles.infoCellLabel}>Customer</Text>
-                    <Text style={styles.infoCellValue} numberOfLines={1}>
-                      {selectedTicket.userName}
-                    </Text>
-                  </View>
-                  <View style={styles.infoCell}>
-                    <View
-                      style={[
-                        styles.infoCellIcon,
-                        { backgroundColor: "#10b981" + "18" },
-                      ]}
-                    >
-                      <Ionicons name="mail-outline" size={16} color="#10b981" />
-                    </View>
-                    <Text style={styles.infoCellLabel}>Email</Text>
-                    <Text style={styles.infoCellValue} numberOfLines={1}>
-                      {selectedTicket.userEmail}
-                    </Text>
-                  </View>
-                  <View style={styles.infoCell}>
-                    <View
-                      style={[
-                        styles.infoCellIcon,
-                        { backgroundColor: "#f59e0b" + "18" },
-                      ]}
-                    >
-                      <Ionicons
-                        name="pricetag-outline"
-                        size={16}
-                        color="#f59e0b"
-                      />
-                    </View>
-                    <Text style={styles.infoCellLabel}>Category</Text>
-                    <Text style={styles.infoCellValue}>
-                      {selectedTicket.category?.charAt(0).toUpperCase() +
-                        selectedTicket.category?.slice(1)}
-                    </Text>
-                  </View>
-                  <View style={styles.infoCell}>
-                    <View
-                      style={[
-                        styles.infoCellIcon,
-                        {
-                          backgroundColor:
-                            getPriorityColor(selectedTicket.priority) + "18",
-                        },
-                      ]}
-                    >
-                      <Ionicons
-                        name={getPriorityIcon(selectedTicket.priority)}
-                        size={16}
-                        color={getPriorityColor(selectedTicket.priority)}
-                      />
-                    </View>
-                    <Text style={styles.infoCellLabel}>Priority</Text>
-                    <Text
-                      style={[
-                        styles.infoCellValue,
-                        { color: getPriorityColor(selectedTicket.priority) },
-                      ]}
-                    >
-                      {selectedTicket.priority?.toUpperCase()}
-                    </Text>
-                  </View>
+                  ))}
                 </View>
 
-                {/* Message Section */}
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <View style={styles.sectionIconWrap}>
-                      <Ionicons
-                        name="document-text-outline"
-                        size={16}
-                        color={GOLD}
-                      />
-                    </View>
-                    <Text style={styles.sectionTitle}>Ticket Message</Text>
-                  </View>
+                {/* ── Ticket Message ── */}
+                <SectionBlock
+                  icon="document-text-outline"
+                  title="Ticket Message"
+                  colors={colors}
+                  styles={styles}
+                >
                   <View style={styles.messageBox}>
                     <Text style={styles.messageText}>
                       {selectedTicket.message}
                     </Text>
                   </View>
-                </View>
+                </SectionBlock>
 
-                {/* Status Update */}
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <View style={styles.sectionIconWrap}>
-                      <Ionicons
-                        name="swap-horizontal-outline"
-                        size={16}
-                        color={GOLD}
-                      />
-                    </View>
-                    <Text style={styles.sectionTitle}>Update Status</Text>
-                  </View>
+                {/* ── Status Update ── */}
+                <SectionBlock
+                  icon="swap-horizontal-outline"
+                  title="Update Status"
+                  colors={colors}
+                  styles={styles}
+                >
                   <View style={styles.statusGrid}>
                     {["open", "in-progress", "resolved", "closed"].map(
                       (status) => {
@@ -560,23 +587,35 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                             key={status}
                             style={[
                               styles.statusOption,
+                              { borderColor: sCol + "55" },
                               active && {
                                 backgroundColor: sCol,
                                 borderColor: sCol,
                               },
                             ]}
                             onPress={() => handleStatusChange(status)}
-                            activeOpacity={0.7}
+                            activeOpacity={0.75}
                           >
-                            <Ionicons
-                              name={getStatusIcon(status)}
-                              size={18}
-                              color={active ? "#fff" : sCol}
-                            />
+                            <View
+                              style={[
+                                styles.statusOptionIconWrap,
+                                {
+                                  backgroundColor: active
+                                    ? "rgba(255,255,255,0.2)"
+                                    : sCol + "18",
+                                },
+                              ]}
+                            >
+                              <Ionicons
+                                name={getStatusIcon(status)}
+                                size={16}
+                                color={active ? "#fff" : sCol}
+                              />
+                            </View>
                             <Text
                               style={[
                                 styles.statusOptionText,
-                                active && { color: colors.textOnAccent },
+                                active && { color: "#fff" },
                               ]}
                             >
                               {status.charAt(0).toUpperCase() +
@@ -587,31 +626,23 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                       },
                     )}
                   </View>
-                </View>
+                </SectionBlock>
 
-                {/* Conversation */}
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <View style={styles.sectionIconWrap}>
-                      <Ionicons
-                        name="chatbubbles-outline"
-                        size={16}
-                        color={GOLD}
-                      />
-                    </View>
-                    <Text style={styles.sectionTitle}>
-                      Conversation ({selectedTicket.replies?.length || 0})
-                    </Text>
-                  </View>
-
+                {/* ── Conversation ── */}
+                <SectionBlock
+                  icon="chatbubbles-outline"
+                  title={`Conversation (${selectedTicket.replies?.length || 0})`}
+                  colors={colors}
+                  styles={styles}
+                >
                   {selectedTicket.replies &&
                   selectedTicket.replies.length > 0 ? (
                     <View style={styles.conversationWrap}>
-                      {selectedTicket.replies.map((reply, index) => {
+                      {selectedTicket.replies.map((reply, idx) => {
                         const isAdmin = reply.from === "admin";
                         return (
                           <View
-                            key={index}
+                            key={idx}
                             style={[
                               styles.bubbleRow,
                               isAdmin
@@ -636,12 +667,16 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                                         : "person-outline"
                                     }
                                     size={12}
-                                    color={isAdmin ? "#fff" : colors.text}
+                                    color={
+                                      isAdmin
+                                        ? "rgba(255,255,255,0.85)"
+                                        : colors.accent
+                                    }
                                   />
                                   <Text
                                     style={[
                                       styles.bubbleSender,
-                                      isAdmin && { color: colors.textOnAccent },
+                                      isAdmin && { color: "#fff" },
                                     ]}
                                   >
                                     {isAdmin ? "You (Admin)" : "Customer"}
@@ -651,7 +686,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                                   style={[
                                     styles.bubbleTime,
                                     isAdmin && {
-                                      color: "rgba(255,255,255,0.7)",
+                                      color: "rgba(255,255,255,0.65)",
                                     },
                                   ]}
                                 >
@@ -661,7 +696,7 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                               <Text
                                 style={[
                                   styles.bubbleText,
-                                  isAdmin && { color: colors.textOnAccent },
+                                  isAdmin && { color: "#fff" },
                                 ]}
                               >
                                 {reply.message}
@@ -676,30 +711,25 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                       <Ionicons
                         name="chatbubble-ellipses-outline"
                         size={32}
-                        color={GOLD + "60"}
+                        color={colors.accent + "70"}
                       />
                       <Text style={styles.noRepliesText}>
-                        No replies yet. Start the conversation below!
+                        No replies yet.{"\n"}Start the conversation below!
                       </Text>
                     </View>
                   )}
-                </View>
+                </SectionBlock>
 
-                {/* Reply Input */}
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <View style={styles.sectionIconWrap}>
-                      <Ionicons
-                        name="return-down-forward-outline"
-                        size={16}
-                        color={GOLD}
-                      />
-                    </View>
-                    <Text style={styles.sectionTitle}>Add Reply</Text>
-                  </View>
+                {/* ── Reply Input ── */}
+                <SectionBlock
+                  icon="return-down-forward-outline"
+                  title="Add Reply"
+                  colors={colors}
+                  styles={styles}
+                >
                   <TextInput
                     style={styles.replyInput}
-                    placeholder="Type your reply here..."
+                    placeholder="Type your reply here…"
                     placeholderTextColor={colors.placeholder}
                     multiline
                     numberOfLines={4}
@@ -714,22 +744,15 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
                     activeOpacity={0.8}
                   >
                     {submitting ? (
-                      <ActivityIndicator
-                        color={colors.textOnAccent}
-                        size="small"
-                      />
+                      <ActivityIndicator color="#fff" size="small" />
                     ) : (
                       <>
-                        <Ionicons
-                          name="send"
-                          size={18}
-                          color={colors.textOnAccent}
-                        />
+                        <Ionicons name="send" size={18} color="#fff" />
                         <Text style={styles.sendBtnText}>Send Reply</Text>
                       </>
                     )}
                   </TouchableOpacity>
-                </View>
+                </SectionBlock>
               </ScrollViewWithDetection>
             )}
           </View>
@@ -739,12 +762,29 @@ const AdminSupportTicketsScreen = ({ navigation }) => {
   );
 };
 
+// ─── Small reusable section header wrapper ────────────────────────────────────
+const SectionBlock = ({ icon, title, colors, styles, children }) => (
+  <View style={styles.section}>
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionIconWrap}>
+        <Ionicons name={icon} size={15} color={colors.accent} />
+      </View>
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+    {children}
+  </View>
+);
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const createStyles = (colors) =>
   StyleSheet.create({
+    /* ── Layout ── */
     container: {
       flex: 1,
       backgroundColor: colors.background,
     },
+
+    /* ── Loading ── */
     loadingWrap: {
       flex: 1,
       backgroundColor: colors.background,
@@ -752,61 +792,109 @@ const createStyles = (colors) =>
       alignItems: "center",
     },
     loadingIconWrap: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: GOLD + "15",
+      width: 68,
+      height: 68,
+      borderRadius: 34,
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
     },
     loadingText: {
-      marginTop: 12,
+      marginTop: 14,
       color: colors.textSecondary,
       fontSize: 14,
-    },
-
-    /* Summary Strip */
-    summaryStrip: {
-      flexDirection: "row",
-      backgroundColor: colors.card,
-      marginHorizontal: 16,
-      marginTop: 12,
-      borderRadius: 14,
-      paddingVertical: 14,
-      paddingHorizontal: 8,
-      alignItems: "center",
-      ...Platform.select({
-        ios: {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-        },
-        android: { elevation: 3 },
-      }),
-    },
-    summaryItem: {
-      flex: 1,
-      alignItems: "center",
-    },
-    summaryValue: {
-      fontSize: 20,
-      fontWeight: "800",
-      color: GOLD,
-    },
-    summaryLabel: {
-      fontSize: 11,
-      color: colors.textSecondary,
-      marginTop: 2,
       fontWeight: "500",
     },
-    summaryDivider: {
-      width: StyleSheet.hairlineWidth,
-      height: 28,
-      backgroundColor: colors.border,
+
+    /* ── Header Banner ── */
+    headerBanner: {
+      backgroundColor: colors.headerBg,
+      paddingTop: 16,
+      paddingHorizontal: 16,
+      paddingBottom: 20,
+      borderBottomLeftRadius: 26,
+      borderBottomRightRadius: 26,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.25,
+          shadowRadius: 10,
+        },
+        android: { elevation: 6 },
+      }),
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 18,
+    },
+    headerIconWrap: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: "rgba(255,255,255,0.14)",
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: colors.headerText,
+      letterSpacing: 0.2,
+    },
+    headerSub: {
+      fontSize: 12,
+      color: "rgba(255,255,255,0.60)",
+      marginTop: 2,
+    },
+    headerRefreshBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      justifyContent: "center",
+      alignItems: "center",
     },
 
-    /* Filter Tabs */
+    /* ── Stat Cards ── */
+    statRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: "rgba(255,255,255,0.09)",
+      borderRadius: 14,
+      paddingVertical: 11,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.10)",
+    },
+    statIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 5,
+    },
+    statValue: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.headerText,
+    },
+    statLabel: {
+      fontSize: 9,
+      color: "rgba(255,255,255,0.55)",
+      marginTop: 2,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+
+    /* ── Filter Chips ── */
     filterRow: {
       paddingHorizontal: 16,
       paddingVertical: 12,
@@ -823,8 +911,8 @@ const createStyles = (colors) =>
       borderColor: colors.border,
     },
     filterChipActive: {
-      backgroundColor: GOLD,
-      borderColor: GOLD,
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
     },
     filterChipText: {
       fontSize: 12,
@@ -834,21 +922,48 @@ const createStyles = (colors) =>
     filterChipTextActive: {
       color: "#fff",
     },
+    chipBadge: {
+      marginLeft: 6,
+      backgroundColor: colors.borderLight,
+      borderRadius: 9,
+      minWidth: 18,
+      height: 18,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 4,
+    },
+    chipBadgeActive: {
+      backgroundColor: "rgba(255,255,255,0.28)",
+    },
+    chipBadgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.textSecondary,
+    },
+    chipBadgeTextActive: {
+      color: "#fff",
+    },
 
-    /* Ticket Cards */
+    /* ── Ticket List ── */
+    listContent: {
+      paddingTop: 4,
+      paddingBottom: 24,
+    },
+
+    /* ── Ticket Card ── */
     ticketCard: {
       flexDirection: "row",
       marginHorizontal: 16,
       marginBottom: 10,
-      borderRadius: 14,
+      borderRadius: 16,
       backgroundColor: colors.card,
       overflow: "hidden",
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: colors.shadow,
           shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.06,
-          shadowRadius: 6,
+          shadowOpacity: 0.07,
+          shadowRadius: 8,
         },
         android: { elevation: 2 },
       }),
@@ -859,7 +974,7 @@ const createStyles = (colors) =>
     cardBody: {
       flex: 1,
       paddingHorizontal: 14,
-      paddingVertical: 12,
+      paddingVertical: 13,
     },
     cardTopRow: {
       flexDirection: "row",
@@ -870,6 +985,7 @@ const createStyles = (colors) =>
       fontWeight: "700",
       color: colors.text,
       marginBottom: 4,
+      lineHeight: 20,
     },
     userRow: {
       flexDirection: "row",
@@ -879,10 +995,11 @@ const createStyles = (colors) =>
     ticketUser: {
       fontSize: 12,
       color: colors.textSecondary,
+      fontWeight: "500",
     },
     badgeColumn: {
       alignItems: "flex-end",
-      gap: 4,
+      gap: 5,
     },
     statusBadge: {
       flexDirection: "row",
@@ -925,69 +1042,79 @@ const createStyles = (colors) =>
       fontWeight: "500",
     },
 
-    /* Empty State */
+    /* ── Empty State ── */
     emptyWrap: {
       alignItems: "center",
       justifyContent: "center",
-      paddingVertical: 60,
+      paddingVertical: 64,
     },
     emptyIconWrap: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
-      backgroundColor: GOLD + "15",
+      width: 76,
+      height: 76,
+      borderRadius: 38,
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
-      marginBottom: 16,
+      marginBottom: 18,
     },
     emptyTitle: {
-      fontSize: 16,
+      fontSize: 17,
       fontWeight: "700",
       color: colors.text,
     },
     emptySub: {
       fontSize: 13,
       color: colors.textSecondary,
-      marginTop: 4,
+      marginTop: 5,
+      textAlign: "center",
     },
 
-    /* Modal */
+    /* ── Modal ── */
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 16,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "flex-end",
     },
     modalCard: {
       width: "100%",
-      maxHeight: "92%",
+      maxHeight: "94%",
       backgroundColor: colors.card,
-      borderRadius: 18,
+      borderTopLeftRadius: 26,
+      borderTopRightRadius: 26,
       overflow: "hidden",
       ...Platform.select({
         ios: {
           shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.15,
-          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.18,
+          shadowRadius: 14,
         },
-        android: { elevation: 8 },
+        android: { elevation: 10 },
       }),
     },
+    dragPill: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: "rgba(255,255,255,0.30)",
+      alignSelf: "center",
+      marginBottom: 10,
+      marginTop: 10,
+    },
     modalHeader: {
+      backgroundColor: colors.headerBg,
+      paddingBottom: 14,
+      paddingHorizontal: 16,
+    },
+    modalHeaderContent: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
     },
     modalIconWrap: {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: GOLD + "15",
+      backgroundColor: "rgba(255,255,255,0.14)",
       justifyContent: "center",
       alignItems: "center",
       marginRight: 10,
@@ -996,46 +1123,48 @@ const createStyles = (colors) =>
       flex: 1,
       fontSize: 17,
       fontWeight: "700",
-      color: colors.text,
+      color: colors.headerText,
     },
     modalClose: {
       width: 34,
       height: 34,
       borderRadius: 17,
-      backgroundColor: colors.background,
+      backgroundColor: "rgba(255,255,255,0.14)",
       justifyContent: "center",
       alignItems: "center",
     },
     modalBody: {
       paddingHorizontal: 16,
-      paddingTop: 10,
+      paddingTop: 16,
     },
     modalSubject: {
-      fontSize: 16,
-      fontWeight: "700",
+      fontSize: 17,
+      fontWeight: "800",
       color: colors.text,
-      marginBottom: 14,
-      lineHeight: 22,
+      marginBottom: 16,
+      lineHeight: 24,
     },
 
-    /* Info Grid */
+    /* ── Info Grid ── */
     infoGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: 10,
-      marginBottom: 18,
+      marginBottom: 20,
     },
     infoCell: {
       width: "47%",
       backgroundColor: colors.background,
-      borderRadius: 12,
-      padding: 12,
+      borderRadius: 14,
+      padding: 13,
       alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.borderLight,
     },
     infoCellIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 6,
@@ -1049,13 +1178,13 @@ const createStyles = (colors) =>
       fontSize: 12,
       color: colors.text,
       fontWeight: "700",
-      marginTop: 2,
+      marginTop: 3,
       textAlign: "center",
     },
 
-    /* Section */
+    /* ── Section ── */
     section: {
-      marginBottom: 18,
+      marginBottom: 20,
     },
     sectionHeader: {
       flexDirection: "row",
@@ -1064,10 +1193,10 @@ const createStyles = (colors) =>
       gap: 8,
     },
     sectionIconWrap: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: GOLD + "15",
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.accentLight,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1078,18 +1207,20 @@ const createStyles = (colors) =>
     },
     messageBox: {
       backgroundColor: colors.background,
-      borderRadius: 12,
+      borderRadius: 14,
       padding: 14,
       borderLeftWidth: 3,
-      borderLeftColor: GOLD,
+      borderLeftColor: colors.accent,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
     },
     messageText: {
       fontSize: 13,
       color: colors.text,
-      lineHeight: 20,
+      lineHeight: 21,
     },
 
-    /* Status Grid */
+    /* ── Status Grid ── */
     statusGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
@@ -1097,14 +1228,20 @@ const createStyles = (colors) =>
     },
     statusOption: {
       width: "47%",
-      paddingVertical: 12,
-      borderRadius: 12,
+      paddingVertical: 13,
+      borderRadius: 14,
       borderWidth: 1.5,
-      borderColor: colors.border,
       backgroundColor: colors.background,
       alignItems: "center",
       justifyContent: "center",
-      gap: 4,
+      gap: 6,
+    },
+    statusOptionIconWrap: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      justifyContent: "center",
+      alignItems: "center",
     },
     statusOptionText: {
       fontSize: 12,
@@ -1112,9 +1249,9 @@ const createStyles = (colors) =>
       color: colors.textSecondary,
     },
 
-    /* Conversation Bubbles */
+    /* ── Conversation ── */
     conversationWrap: {
-      marginTop: 4,
+      marginTop: 2,
     },
     bubbleRow: {
       flexDirection: "row",
@@ -1124,15 +1261,17 @@ const createStyles = (colors) =>
       maxWidth: "82%",
       paddingHorizontal: 14,
       paddingVertical: 10,
-      borderRadius: 14,
+      borderRadius: 16,
     },
     adminBubble: {
-      backgroundColor: GOLD,
+      backgroundColor: colors.accent,
       borderBottomRightRadius: 4,
     },
     customerBubble: {
       backgroundColor: colors.background,
       borderBottomLeftRadius: 4,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
     },
     bubbleHeader: {
       flexDirection: "row",
@@ -1162,9 +1301,12 @@ const createStyles = (colors) =>
     },
     noRepliesWrap: {
       alignItems: "center",
-      paddingVertical: 24,
+      paddingVertical: 28,
       backgroundColor: colors.background,
-      borderRadius: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      borderStyle: "dashed",
     },
     noRepliesText: {
       fontSize: 12,
@@ -1172,27 +1314,28 @@ const createStyles = (colors) =>
       marginTop: 8,
       textAlign: "center",
       paddingHorizontal: 20,
+      lineHeight: 18,
     },
 
-    /* Reply Input */
+    /* ── Reply Input ── */
     replyInput: {
-      backgroundColor: colors.background,
+      backgroundColor: colors.inputBg,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
+      borderColor: colors.inputBorder,
+      borderRadius: 14,
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 13,
-      color: colors.text,
+      color: colors.inputText,
       textAlignVertical: "top",
-      minHeight: 80,
+      minHeight: 88,
       marginBottom: 10,
     },
     sendBtn: {
       flexDirection: "row",
-      backgroundColor: GOLD,
-      borderRadius: 12,
-      paddingVertical: 14,
+      backgroundColor: colors.accent,
+      borderRadius: 14,
+      paddingVertical: 15,
       justifyContent: "center",
       alignItems: "center",
       gap: 8,
@@ -1201,6 +1344,7 @@ const createStyles = (colors) =>
       color: "#fff",
       fontSize: 15,
       fontWeight: "700",
+      letterSpacing: 0.3,
     },
   });
 

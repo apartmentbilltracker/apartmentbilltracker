@@ -27,6 +27,7 @@ import {
   ScrollViewWithDetection,
   FlatListWithDetection,
 } from "../../components/ScrollDetectionWrappers";
+import HomeSpaceLoader from "../../components/SpaceLoader";
 
 const getBillMeta = (c) => ({
   rent: { icon: "home", color: c.success, bg: c.successBg, label: "Rent" },
@@ -602,8 +603,9 @@ const AdminBillingDetailsScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.centerWrap}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading billing details...</Text>
+        <View style={styles.centerLoader}>
+          <HomeSpaceLoader />
+        </View>
       </View>
     );
   }
