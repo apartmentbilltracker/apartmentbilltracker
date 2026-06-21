@@ -36,6 +36,12 @@ const getBillMeta = (c) => ({
   },
 });
 
+const formatCurrency = (value) =>
+  `\u20B1${(Number(value) || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
 const AdminRemindersScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -96,7 +102,7 @@ const AdminRemindersScreen = ({ navigation }) => {
 
   const handleSendReminder = async (member) => {
     try {
-      setLoading(true);
+      setBulkSending(true);
       await apiService.post(
         `/api/v2/admin/reminders/send-reminder/${room?.id || room?._id}/${member.memberId}`,
         {
@@ -113,7 +119,7 @@ const AdminRemindersScreen = ({ navigation }) => {
         error.response?.data?.message || "Failed to send reminder",
       );
     } finally {
-      setLoading(false);
+      setBulkSending(false);
     }
   };
 
@@ -160,6 +166,24 @@ const AdminRemindersScreen = ({ navigation }) => {
     }
     setSelectedMembers(newSelection);
   };
+
+  const totalOverdueAmount = useMemo(
+    () =>
+      overduePayments.reduce(
+        (sum, member) => sum + Number(member.totalDue || 0),
+        0,
+      ),
+    [overduePayments],
+  );
+
+  const longestOverdueDays = useMemo(
+    () =>
+      overduePayments.reduce(
+        (max, member) => Math.max(max, Number(member.daysOverdue || 0)),
+        0,
+      ),
+    [overduePayments],
+  );
 
   const renderMemberCard = (member) => {
     const isSelected = selectedMembers.has(member.memberId);
@@ -209,7 +233,7 @@ const AdminRemindersScreen = ({ navigation }) => {
                 {initials}
               </Text>
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={styles.memberIdentity}>
               <Text style={styles.memberName} numberOfLines={1}>
                 {member.memberName}
               </Text>
@@ -219,7 +243,12 @@ const AdminRemindersScreen = ({ navigation }) => {
             </View>
           </View>
           <View style={styles.cardTopRight}>
-            <Text style={styles.memberAmount}>
+            <Text
+              style={styles.memberAmount}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.68}
+            >
               ₱{(member.totalDue || 0).toFixed(2)}
             </Text>
             <View style={styles.overdueBadge}>
@@ -316,29 +345,68 @@ const AdminRemindersScreen = ({ navigation }) => {
           />
         }
       >
-        {/* Summary Strip */}
-        <View style={styles.summaryStrip}>
-          <View
-            style={[
-              styles.stripIconWrap,
-              { backgroundColor: colors.accentSurface },
-            ]}
-          >
-            <Ionicons name="notifications" size={18} color={colors.accent} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.stripTitle}>Payment Reminders</Text>
-            <Text style={styles.stripSubtitle}>
-              {room?.name || "Room"} — {overduePayments.length} overdue
-            </Text>
-          </View>
-          {overduePayments.length > 0 && (
-            <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>
-                {overduePayments.length}
+        {/* Summary */}
+        <View style={styles.summaryPanel}>
+          <View style={styles.summaryTopRow}>
+            <View style={styles.summaryIconWrap}>
+              <Ionicons
+                name="notifications"
+                size={20}
+                color={colors.textOnAccent}
+              />
+            </View>
+            <View style={styles.summaryCopy}>
+              <Text style={styles.summaryEyebrow} numberOfLines={1}>
+                Payment Reminders
+              </Text>
+              <Text style={styles.summaryTitle} numberOfLines={1}>
+                {room?.name || "Selected Room"}
               </Text>
             </View>
-          )}
+            {overduePayments.length > 0 && (
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>
+                  {overduePayments.length}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.summaryStatsRow}>
+            <View style={styles.summaryStatCard}>
+              <Text
+                style={styles.summaryStatValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+              >
+                {overduePayments.length}
+              </Text>
+              <Text style={styles.summaryStatLabel}>Overdue</Text>
+            </View>
+            <View style={styles.summaryStatCard}>
+              <Text
+                style={styles.summaryStatValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.62}
+              >
+                {formatCurrency(totalOverdueAmount)}
+              </Text>
+              <Text style={styles.summaryStatLabel}>Total Due</Text>
+            </View>
+            <View style={styles.summaryStatCard}>
+              <Text
+                style={styles.summaryStatValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+              >
+                {longestOverdueDays}d
+              </Text>
+              <Text style={styles.summaryStatLabel}>Longest</Text>
+            </View>
+          </View>
         </View>
 
         {overduePayments.length === 0 ? (
@@ -417,6 +485,7 @@ const AdminRemindersScreen = ({ navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeaderRow}>
               <View style={styles.modalHeaderLeft}>
                 <View
@@ -432,8 +501,10 @@ const AdminRemindersScreen = ({ navigation }) => {
                   />
                 </View>
                 <View>
-                  <Text style={styles.modalTitle}>Reminder History</Text>
-                  <Text style={styles.modalSubtitle}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>
+                    Reminder History
+                  </Text>
+                  <Text style={styles.modalSubtitle} numberOfLines={1}>
                     {selectedMember?.memberName}
                   </Text>
                 </View>
@@ -524,6 +595,7 @@ const AdminRemindersScreen = ({ navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeaderRow}>
               <View style={styles.modalHeaderLeft}>
                 <View
@@ -535,8 +607,10 @@ const AdminRemindersScreen = ({ navigation }) => {
                   <Ionicons name="send" size={18} color={colors.accent} />
                 </View>
                 <View>
-                  <Text style={styles.modalTitle}>Send Reminder</Text>
-                  <Text style={styles.modalSubtitle}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>
+                    Send Reminder
+                  </Text>
+                  <Text style={styles.modalSubtitle} numberOfLines={1}>
                     {selectedMember
                       ? `To: ${selectedMember.memberName}`
                       : `To: ${selectedMembers.size} selected members`}
@@ -663,13 +737,94 @@ const createStyles = (colors) =>
     },
     stripTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
     stripSubtitle: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
-    countBadge: {
-      backgroundColor: "#e53935",
-      width: 26,
-      height: 26,
-      borderRadius: 13,
+    summaryPanel: {
+      backgroundColor: colors.card,
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 22,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow || "#000",
+          shadowOpacity: 0.08,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 8 },
+        },
+        android: { elevation: 4 },
+      }),
+    },
+    summaryTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    summaryIconWrap: {
+      width: 42,
+      height: 42,
+      borderRadius: 15,
+      backgroundColor: colors.accent,
       justifyContent: "center",
       alignItems: "center",
+      flexShrink: 0,
+    },
+    summaryCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+    summaryEyebrow: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    summaryTitle: {
+      fontSize: 18,
+      fontWeight: "900",
+      color: colors.text,
+      marginTop: 3,
+    },
+    summaryStatsRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 14,
+    },
+    summaryStatCard: {
+      flex: 1,
+      minWidth: 0,
+      borderRadius: 15,
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      paddingHorizontal: 10,
+      paddingVertical: 11,
+    },
+    summaryStatValue: {
+      fontSize: 15,
+      fontWeight: "900",
+      color: colors.text,
+      includeFontPadding: false,
+    },
+    summaryStatLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.35,
+      marginTop: 5,
+      includeFontPadding: false,
+    },
+    countBadge: {
+      backgroundColor: "#e53935",
+      minWidth: 28,
+      height: 28,
+      borderRadius: 14,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 7,
+      flexShrink: 0,
     },
     countBadgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
 
@@ -738,17 +893,19 @@ const createStyles = (colors) =>
     /* ── Member Card ── */
     memberCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 18,
       padding: 16,
       marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 1 },
+          shadowColor: colors.shadow || "#000",
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 5 },
         },
-        android: { elevation: 1 },
+        android: { elevation: 2 },
       }),
     },
     memberCardSelected: {
@@ -759,15 +916,22 @@ const createStyles = (colors) =>
     cardTop: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "center",
+      alignItems: "flex-start",
+      gap: 10,
     },
     cardTopLeft: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       flex: 1,
+      minWidth: 0,
       gap: 10,
     },
-    cardTopRight: { alignItems: "flex-end", gap: 4 },
+    cardTopRight: {
+      alignItems: "flex-end",
+      gap: 5,
+      maxWidth: 118,
+      flexShrink: 0,
+    },
     checkbox: {
       width: 22,
       height: 22,
@@ -788,11 +952,24 @@ const createStyles = (colors) =>
       borderRadius: 18,
       justifyContent: "center",
       alignItems: "center",
+      flexShrink: 0,
     },
     avatarText: { fontSize: 13, fontWeight: "700" },
-    memberName: { fontSize: 14, fontWeight: "600", color: colors.text },
+    memberIdentity: {
+      flex: 1,
+      minWidth: 0,
+      paddingTop: 1,
+    },
+    memberName: { fontSize: 15, fontWeight: "800", color: colors.text },
     memberEmail: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
-    memberAmount: { fontSize: 16, fontWeight: "800", color: colors.accent },
+    memberAmount: {
+      fontSize: 17,
+      fontWeight: "900",
+      color: colors.accent,
+      textAlign: "right",
+      width: "100%",
+      includeFontPadding: false,
+    },
     overdueBadge: {
       flexDirection: "row",
       alignItems: "center",
@@ -809,14 +986,14 @@ const createStyles = (colors) =>
       flexDirection: "row",
       flexWrap: "wrap",
       gap: 6,
-      marginTop: 12,
-      marginBottom: 12,
+      marginTop: 14,
+      marginBottom: 14,
     },
     billChip: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      borderRadius: 8,
+      borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 5,
     },
@@ -831,21 +1008,20 @@ const createStyles = (colors) =>
       paddingTop: 12,
     },
     cardActionBtn: {
+      flex: 1,
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "center",
       gap: 5,
-      paddingVertical: 8,
+      paddingVertical: 10,
       paddingHorizontal: 14,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.divider,
+      borderRadius: 12,
       backgroundColor: colors.cardAlt,
     },
     cardActionText: { fontSize: 12, fontWeight: "600" },
     sendActionBtn: {
       backgroundColor: colors.accent,
       borderColor: "#b38604",
-      flex: 1,
       justifyContent: "center",
     },
     sendActionText: { fontSize: 12, fontWeight: "700", color: "#fff" },
@@ -853,22 +1029,22 @@ const createStyles = (colors) =>
     /* ── Bulk Action Bar ── */
     bulkBar: {
       position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
+      bottom: 12,
+      left: 12,
+      right: 12,
       flexDirection: "row",
-      gap: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      gap: 10,
+      padding: 10,
       backgroundColor: colors.card,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.08,
-          shadowRadius: 6,
-          shadowOffset: { width: 0, height: -2 },
+          shadowColor: colors.shadow || "#000",
+          shadowOpacity: 0.12,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 8 },
         },
         android: { elevation: 6 },
       }),
@@ -876,7 +1052,7 @@ const createStyles = (colors) =>
     bulkCancelBtn: {
       flex: 1,
       paddingVertical: 12,
-      borderRadius: 10,
+      borderRadius: 13,
       backgroundColor: colors.background,
       flexDirection: "row",
       justifyContent: "center",
@@ -891,7 +1067,7 @@ const createStyles = (colors) =>
     bulkSendBtn: {
       flex: 1.4,
       paddingVertical: 12,
-      borderRadius: 10,
+      borderRadius: 13,
       backgroundColor: colors.accent,
       flexDirection: "row",
       justifyContent: "center",
@@ -904,15 +1080,23 @@ const createStyles = (colors) =>
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.45)",
-      justifyContent: "center",
-      alignItems: "center",
+      justifyContent: "flex-end",
     },
     modalContent: {
       backgroundColor: colors.card,
-      borderRadius: 18,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
       padding: 22,
-      width: "90%",
+      width: "100%",
       maxHeight: "85%",
+    },
+    modalHandle: {
+      width: 42,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.skeleton,
+      alignSelf: "center",
+      marginBottom: 16,
     },
     modalHeaderRow: {
       flexDirection: "row",
@@ -920,7 +1104,14 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginBottom: 16,
     },
-    modalHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+    modalHeaderLeft: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingRight: 10,
+    },
     modalIconWrap: {
       width: 40,
       height: 40,
@@ -928,7 +1119,7 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    modalTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
+    modalTitle: { fontSize: 17, fontWeight: "800", color: colors.text },
     modalSubtitle: { fontSize: 13, color: colors.textTertiary, marginTop: 1 },
 
     /* ── History Card ── */

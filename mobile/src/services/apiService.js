@@ -67,14 +67,19 @@ export const authService = {
 
 // Host Role Services
 export const hostRoleService = {
-  requestHost: () => api.post("/api/v2/user/request-host").then(extractData),
+  requestHost: (data) =>
+    data instanceof FormData
+      ? api.uploadFormData("/api/v2/user/request-host", data).then(extractData)
+      : api.post("/api/v2/user/request-host", data).then(extractData),
   getHostStatus: () => api.get("/api/v2/user/host-status").then(extractData),
   getPendingHostRequests: () =>
     api.get("/api/v2/user/pending-host-requests").then(extractData),
   approveHost: (userId) =>
     api.put(`/api/v2/user/approve-host/${userId}`).then(extractData),
-  rejectHost: (userId) =>
-    api.put(`/api/v2/user/reject-host/${userId}`).then(extractData),
+  rejectHost: (userId, rejectionReason) =>
+    api
+      .put(`/api/v2/user/reject-host/${userId}`, { rejectionReason })
+      .then(extractData),
   getAllUsers: () => api.get("/api/v2/user/all-users").then(extractData),
   demoteHost: (userId) =>
     api.put(`/api/v2/user/demote-host/${userId}`).then(extractData),

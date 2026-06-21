@@ -11,9 +11,6 @@ import {
   Alert,
   RefreshControl,
   Dimensions,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
@@ -74,11 +71,6 @@ const AdminBillingScreen = ({ navigation }) => {
   const [showCustomChargeInput, setShowCustomChargeInput] = useState(false);
   const [tempChargeName, setTempChargeName] = useState("");
   const [tempChargeAmount, setTempChargeAmount] = useState("");
-
-  // Editor modal state
-  const [editorModalVisible, setEditorModalVisible] = useState(false);
-  // Tracks when billing cycle data is fully loaded (for initial loader gate)
-  const [dataReady, setDataReady] = useState(false);
 
   // Fetch rooms on mount and when screen regains focus
   useEffect(() => {
@@ -470,9 +462,6 @@ const AdminBillingScreen = ({ navigation }) => {
           setCustomCharges([]);
         }
       }
-    } finally {
-      // Mark billing data as ready so the initial loader can be dismissed
-      setDataReady(true);
     }
   };
 
@@ -492,11 +481,6 @@ const AdminBillingScreen = ({ navigation }) => {
         ? allRooms.find((r) => r.id === currentId || r._id === currentId)
         : null;
       setSelectedRoom(updatedRoom || allRooms[0] || null);
-
-      // If no rooms, nothing more to load — mark as ready immediately
-      if (allRooms.length === 0) {
-        setDataReady(true);
-      }
     } finally {
       if (isRefresh) setRefreshing(false);
       else setLoading(false);
@@ -601,24 +585,6 @@ const AdminBillingScreen = ({ navigation }) => {
     } finally {
       setSavingWaterMode(false);
     }
-  };
-
-  // ─── EDITOR MODAL HELPERS ───
-  const openEditorModal = () => {
-    if (cycleCompleted) {
-      Alert.alert(
-        "Cycle Completed",
-        "This billing cycle is complete. Tap 'Create New Billing Cycle' above to start a new one.",
-      );
-      return;
-    }
-    setEditMode(true);
-    setEditorModalVisible(true);
-  };
-
-  const closeEditorModal = () => {
-    setEditMode(false);
-    setEditorModalVisible(false);
   };
 
   const getFilteredPresenceDays = (member) => {
@@ -770,8 +736,6 @@ const AdminBillingScreen = ({ navigation }) => {
       } else {
         // EXISTING CYCLE: Update the active cycle
         const updatePayload = {
-          startDate: cyclePayload.startDate,
-          endDate: cyclePayload.endDate,
           rent: cyclePayload.rent,
           electricity: cyclePayload.electricity,
           waterBillAmount: cyclePayload.waterBillAmount,
@@ -851,7 +815,6 @@ const AdminBillingScreen = ({ navigation }) => {
         }
       }
 
-      setEditorModalVisible(false);
       setEditMode(false);
     } catch (error) {
       console.error("Error saving billing:", error);
@@ -977,7 +940,6 @@ const AdminBillingScreen = ({ navigation }) => {
         setCurrReading("");
         setCycleCompleted(false);
         setEditMode(false);
-        setEditorModalVisible(false);
 
         // Clear stale cache so the form doesn't repopulate with old values
         screenCache.clear(
@@ -1005,8 +967,8 @@ const AdminBillingScreen = ({ navigation }) => {
     }
   };
 
-  // Block screen on first ever load until BOTH rooms AND billing cycle data are ready
-  if (!dataReady && !refreshing) {
+  // Only block the screen on first ever load (before any cache exists)
+  if (loading && !refreshing && rooms.length === 0) {
     return (
       <View style={styles.centerLoader}>
         <View style={styles.centerLoader}>
@@ -1503,7 +1465,6 @@ const AdminBillingScreen = ({ navigation }) => {
                       billing: null,
                     }));
                     setEditMode(true);
-                    setEditorModalVisible(true);
                   }}
                   activeOpacity={0.8}
                 >
@@ -1759,7 +1720,7 @@ const AdminBillingScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {/* ─── BILLING DETAILS CARD (read-only summary) ─── */}
+            {/* ─── BILLING DETAILS FORM ─── */}
             <View style={styles.formCard}>
               <View style={styles.formCardHeader}>
                 <View style={styles.formCardHeaderLeft}>
@@ -1768,7 +1729,7 @@ const AdminBillingScreen = ({ navigation }) => {
                     size={18}
                     color={colors.accent}
                   />
-                  <Text style={styles.formCardTitle}>Billing Details</Text>
+                  <Text style={styles.formCardTitle}>Billing Editor</Text>
                   {cycleCompleted && (
                     <View
                       style={{
@@ -1790,63 +1751,118 @@ const AdminBillingScreen = ({ navigation }) => {
                       </Text>
                     </View>
                   )}
-                  {!cycleCompleted && startDate && endDate && (
-                    <View
-                      style={{
-                        backgroundColor: "#fff3e0",
-                        borderRadius: 6,
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        marginLeft: 8,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 9,
-                          fontWeight: "700",
-                          color: "#e65100",
-                        }}
-                      >
-                        ACTIVE
-                      </Text>
-                    </View>
-                  )}
                 </View>
-                <TouchableOpacity
-                  style={[styles.editBadge, cycleCompleted && { opacity: 0.4 }]}
-                  onPress={openEditorModal}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="pencil"
-                    size={13}
-                    color={colors.textOnAccent}
-                  />
-                  <Text style={styles.editBadgeText}>Edit</Text>
-                </TouchableOpacity>
+                {!editMode ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.editBadge,
+                      cycleCompleted && { opacity: 0.4 },
+                    ]}
+                    onPress={() => {
+                      if (cycleCompleted) {
+                        Alert.alert(
+                          "Cycle Completed",
+                          "This billing cycle is complete. Tap 'Create New Billing Cycle' above to start a new one.",
+                        );
+                        return;
+                      }
+                      setEditMode(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="pencil"
+                      size={13}
+                      color={colors.textOnAccent}
+                    />
+                    <Text style={styles.editBadgeText}>Edit</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.cancelBadge}
+                    onPress={() => setEditMode(false)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={13}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.cancelBadgeText}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
-              {/* Billing Period — read-only */}
-              <Text style={styles.formSectionLabel}>BILLING PERIOD</Text>
+              {/* Billing Period */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 2,
+                }}
+              >
+                <Text style={[styles.formSectionLabel, { marginBottom: 0 }]}>
+                  BILLING PERIOD
+                </Text>
+                {cycleCompleted ? (
+                  <View
+                    style={{
+                      backgroundColor: "#e8f5e9",
+                      borderRadius: 6,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      marginLeft: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 9,
+                        fontWeight: "700",
+                        color: "#27ae60",
+                      }}
+                    >
+                      COMPLETED
+                    </Text>
+                  </View>
+                ) : startDate && endDate ? (
+                  <View
+                    style={{
+                      backgroundColor: "#fff3e0",
+                      borderRadius: 6,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      marginLeft: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 9,
+                        fontWeight: "700",
+                        color: "#e65100",
+                      }}
+                    >
+                      ACTIVE
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
               <View style={styles.dateRow}>
                 <View style={styles.dateCol}>
                   <Text style={styles.fieldLabel}>Start Date</Text>
-                  <View style={[styles.fieldWrapper, { opacity: 0.8 }]}>
+                  <View style={styles.fieldWrapper}>
                     <Ionicons
                       name="calendar-outline"
                       size={15}
                       color={colors.accent}
                     />
-                    <Text
-                      style={[
-                        styles.fieldInput,
-                        {
-                          color: startDate ? colors.text : colors.textTertiary,
-                        },
-                      ]}
-                    >
-                      {startDate || "Not set"}
-                    </Text>
+                    <TextInput
+                      style={styles.fieldInput}
+                      placeholder="YYYY-MM-DD"
+                      value={startDate}
+                      onChangeText={setStartDate}
+                      editable={editMode && !saving}
+                      placeholderTextColor={colors.textTertiary}
+                    />
                   </View>
                 </View>
                 <View style={styles.dateArrow}>
@@ -1858,72 +1874,376 @@ const AdminBillingScreen = ({ navigation }) => {
                 </View>
                 <View style={styles.dateCol}>
                   <Text style={styles.fieldLabel}>End Date</Text>
-                  <View style={[styles.fieldWrapper, { opacity: 0.8 }]}>
+                  <View style={styles.fieldWrapper}>
                     <Ionicons
                       name="calendar-outline"
                       size={15}
                       color={colors.accent}
                     />
-                    <Text
-                      style={[
-                        styles.fieldInput,
-                        { color: endDate ? colors.text : colors.textTertiary },
-                      ]}
-                    >
-                      {endDate || "Not set"}
-                    </Text>
+                    <TextInput
+                      style={styles.fieldInput}
+                      placeholder="YYYY-MM-DD"
+                      value={endDate}
+                      onChangeText={setEndDate}
+                      editable={editMode && !saving}
+                      placeholderTextColor={colors.textTertiary}
+                    />
                   </View>
                 </View>
               </View>
 
-              {/* Electricity strip */}
-              <View style={styles.electricityStrip}>
-                <View style={styles.electricityStripLeft}>
-                  <Ionicons
-                    name="flash"
-                    size={16}
-                    color={colors.electricityColor}
-                  />
-                  <Text style={styles.electricityStripLabel}>
-                    Electricity ({"₱"}
-                    {ELECTRICITY_RATE}/kWh)
-                  </Text>
+              {/* Bill Amounts */}
+              <Text style={styles.formSectionLabel}>BILL AMOUNTS</Text>
+              <View style={styles.inputPairRow}>
+                <View style={styles.inputPairCol}>
+                  <Text style={styles.fieldLabel}>Rent</Text>
+                  <View style={styles.fieldWrapper}>
+                    <Text style={styles.pesoPrefix}>{"\u20B1"}</Text>
+                    <TextInput
+                      style={styles.fieldInput}
+                      placeholder="0.00"
+                      value={rent}
+                      onChangeText={setRent}
+                      keyboardType="decimal-pad"
+                      editable={editMode && !saving}
+                      placeholderTextColor={colors.textTertiary}
+                    />
+                  </View>
                 </View>
-                <Text style={styles.electricityStripAmount}>
-                  {fmt(electricity)}
-                </Text>
+                <View style={styles.inputPairCol}>
+                  <Text style={styles.fieldLabel}>Internet</Text>
+                  <View style={styles.fieldWrapper}>
+                    <Text style={styles.pesoPrefix}>{"\u20B1"}</Text>
+                    <TextInput
+                      style={styles.fieldInput}
+                      placeholder="0.00"
+                      value={internet}
+                      onChangeText={setInternet}
+                      keyboardType="decimal-pad"
+                      editable={editMode && !saving}
+                      placeholderTextColor={colors.textTertiary}
+                    />
+                  </View>
+                </View>
               </View>
 
-              {/* Water strip */}
-              <View style={[styles.electricityStrip, { marginTop: 4 }]}>
-                <View style={styles.electricityStripLeft}>
-                  <Ionicons name="water" size={16} color={colors.info} />
+              {/* Meter Readings & Electricity */}
+              <Text style={styles.formSectionLabel}>METER READINGS</Text>
+              <View style={styles.inputPairRow}>
+                <View style={styles.inputPairCol}>
+                  <Text style={styles.fieldLabel}>Previous (kWh)</Text>
+                  <View style={styles.fieldWrapper}>
+                    <MaterialIcons
+                      name="speed"
+                      size={15}
+                      color={colors.textTertiary}
+                    />
+                    <TextInput
+                      style={styles.fieldInput}
+                      placeholder="0"
+                      value={prevReading}
+                      onChangeText={handlePrevReadingChange}
+                      keyboardType="decimal-pad"
+                      editable={editMode && !saving}
+                      placeholderTextColor={colors.textTertiary}
+                    />
+                  </View>
+                </View>
+                <View style={styles.inputPairCol}>
+                  <Text style={styles.fieldLabel}>Current (kWh)</Text>
+                  <View style={styles.fieldWrapper}>
+                    <MaterialIcons
+                      name="speed"
+                      size={15}
+                      color={colors.textTertiary}
+                    />
+                    <TextInput
+                      style={styles.fieldInput}
+                      placeholder="0"
+                      value={currReading}
+                      onChangeText={handleCurrReadingChange}
+                      keyboardType="decimal-pad"
+                      editable={editMode && !saving}
+                      placeholderTextColor={colors.textTertiary}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* kWh usage preview shown whenever both readings are valid */}
+              {prevReading &&
+                currReading &&
+                Number(currReading) > Number(prevReading) && (
+                  <View style={styles.usagePreviewRow}>
+                    <MaterialIcons
+                      name="trending-up"
+                      size={14}
+                      color="#e65100"
+                    />
+                    <Text style={styles.usagePreviewText}>
+                      {(Number(currReading) - Number(prevReading)).toFixed(0)}{" "}
+                      kWh used × ₱{ELECTRICITY_RATE}/kWh = {fmt(electricity)}
+                    </Text>
+                  </View>
+                )}
+
+              {/* Electricity — editable input in edit mode, read-only strip in view mode */}
+              {editMode ? (
+                <View style={styles.inputPairRow}>
+                  <View style={[styles.inputPairCol, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>
+                      Electricity{" "}
+                      <Text
+                        style={{ color: colors.textTertiary, fontSize: 10 }}
+                      >
+                        (auto-filled · tap to override)
+                      </Text>
+                    </Text>
+                    <View style={styles.fieldWrapper}>
+                      <Ionicons
+                        name="flash"
+                        size={15}
+                        color={colors.electricityColor}
+                      />
+                      <TextInput
+                        style={styles.fieldInput}
+                        placeholder="0.00"
+                        value={electricity}
+                        onChangeText={setElectricity}
+                        keyboardType="decimal-pad"
+                        editable={!saving}
+                        placeholderTextColor={colors.textTertiary}
+                      />
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.electricityStrip}>
+                  <View style={styles.electricityStripLeft}>
+                    <Ionicons
+                      name="flash"
+                      size={16}
+                      color={colors.electricityColor}
+                    />
+                    <Text style={styles.electricityStripLabel}>
+                      Electricity ({"\u20B1"}
+                      {ELECTRICITY_RATE}/kWh)
+                    </Text>
+                  </View>
+                  <Text style={styles.electricityStripAmount}>
+                    {fmt(electricity)}
+                  </Text>
+                </View>
+              )}
+
+              {/* Water Billing Mode */}
+              <Text style={[styles.formSectionLabel, { marginTop: 4 }]}>
+                WATER BILLING MODE
+              </Text>
+              <View style={styles.waterModeToggleRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.waterModeBtn,
+                    waterMode === "presence" && styles.waterModeBtnActive,
+                  ]}
+                  onPress={() =>
+                    editMode && !saving && setWaterMode("presence")
+                  }
+                  disabled={!editMode || saving}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="partly-sunny"
+                    size={14}
+                    color={
+                      waterMode === "presence"
+                        ? colors.textOnAccent
+                        : colors.textSecondary
+                    }
+                  />
                   <Text
                     style={[
-                      styles.electricityStripLabel,
+                      styles.waterModeBtnText,
+                      waterMode === "presence" && styles.waterModeBtnTextActive,
+                    ]}
+                  >
+                    {"\u20B1"}5/day Presence
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.waterModeBtn,
+                    waterMode === "fixed_monthly" && styles.waterModeBtnActive,
+                  ]}
+                  onPress={() =>
+                    editMode && !saving && setWaterMode("fixed_monthly")
+                  }
+                  disabled={!editMode || saving}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="lock-closed"
+                    size={14}
+                    color={
+                      waterMode === "fixed_monthly"
+                        ? colors.textOnAccent
+                        : colors.textSecondary
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.waterModeBtnText,
+                      waterMode === "fixed_monthly" &&
+                        styles.waterModeBtnTextActive,
+                    ]}
+                  >
+                    Fixed Monthly
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {/* Water mode description */}
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: colors.textSecondary,
+                  paddingHorizontal: 16,
+                  marginTop: 6,
+                  marginBottom: 6,
+                  lineHeight: 17,
+                }}
+              >
+                {waterMode === "fixed_monthly"
+                  ? waterFixedType === "per_person"
+                    ? "A fixed amount is charged per paying member each month. Total scales with member count."
+                    : "One fixed total for the whole room, split equally among all paying members."
+                  : "Each member is charged \u20B15 per day they mark themselves as present in the room."}
+              </Text>
+
+              {/* Fixed Monthly sub-options: By Room vs Per Person */}
+              {waterMode === "fixed_monthly" && (
+                <View style={styles.waterSubToggleRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.waterSubBtn,
+                      waterFixedType === "by_room" && styles.waterSubBtnActive,
+                    ]}
+                    onPress={() =>
+                      editMode && !saving && setWaterFixedType("by_room")
+                    }
+                    disabled={!editMode || saving}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name="home"
+                      size={13}
+                      color={
+                        waterFixedType === "by_room"
+                          ? colors.info
+                          : colors.textTertiary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.waterSubBtnText,
+                        waterFixedType === "by_room" &&
+                          styles.waterSubBtnTextActive,
+                      ]}
+                    >
+                      By Room
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.waterSubBtn,
+                      waterFixedType === "per_person" &&
+                        styles.waterSubBtnActive,
+                    ]}
+                    onPress={() =>
+                      editMode && !saving && setWaterFixedType("per_person")
+                    }
+                    disabled={!editMode || saving}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name="person"
+                      size={13}
+                      color={
+                        waterFixedType === "per_person"
+                          ? colors.info
+                          : colors.textTertiary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.waterSubBtnText,
+                        waterFixedType === "per_person" &&
+                          styles.waterSubBtnTextActive,
+                      ]}
+                    >
+                      Per Person
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {editMode && waterMode === "fixed_monthly" && (
+                <View
+                  style={[
+                    styles.fieldWrapper,
+                    { marginHorizontal: 16, marginTop: 4 },
+                  ]}
+                >
+                  <Text style={styles.pesoPrefix}>{"\u20B1"}</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder={
+                      waterFixedType === "per_person"
+                        ? "Amount per person"
+                        : "Fixed total for the room"
+                    }
+                    value={waterFixed}
+                    onChangeText={setWaterFixed}
+                    keyboardType="decimal-pad"
+                    editable={!saving}
+                    placeholderTextColor={colors.textTertiary}
+                  />
+                </View>
+              )}
+              {!editMode && (
+                <View style={[styles.electricityStrip, { marginTop: 4 }]}>
+                  <View style={styles.electricityStripLeft}>
+                    <Ionicons name="water" size={16} color={colors.info} />
+                    <Text
+                      style={[
+                        styles.electricityStripLabel,
+                        { color: colors.info },
+                      ]}
+                    >
+                      Water (
+                      {waterMode === "fixed_monthly"
+                        ? waterFixedType === "per_person"
+                          ? `\u20B1${parseFloat(waterFixed) || 0}/person`
+                          : `\u20B1${parseFloat(waterFixed) || 0}/room`
+                        : `\u20B1${WATER_RATE}/day Presence`}
+                      )
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.electricityStripAmount,
                       { color: colors.info },
                     ]}
                   >
-                    Water (
-                    {waterMode === "fixed_monthly"
-                      ? waterFixedType === "per_person"
-                        ? `₱${parseFloat(waterFixed) || 0}/person`
-                        : `₱${parseFloat(waterFixed) || 0}/room`
-                      : `₱${WATER_RATE}/day Presence`}
-                    )
+                    {fmt(calculateTotalWaterBill())}
                   </Text>
                 </View>
-                <Text
-                  style={[
-                    styles.electricityStripAmount,
-                    { color: colors.info },
-                  ]}
-                >
-                  {fmt(calculateTotalWaterBill())}
-                </Text>
-              </View>
+              )}
 
-              {/* Custom charges — read-only list */}
+              {/* ─── ADDITIONAL CHARGES SECTION ─── */}
+              <Text style={[styles.formSectionLabel, { marginTop: 12 }]}>
+                ADDITIONAL CHARGES (Optional)
+              </Text>
+
               {customCharges.length > 0 && (
                 <View style={styles.customChargesList}>
                   {customCharges.map((charge, index) => (
@@ -1937,21 +2257,138 @@ const AdminBillingScreen = ({ navigation }) => {
                           {parseFloat(charge.amount).toFixed(2)}
                         </Text>
                       </View>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveCustomCharge(index)}
+                        style={styles.customChargeRemoveBtn}
+                      >
+                        <MaterialIcons
+                          name="close"
+                          size={18}
+                          color={colors.textTertiary}
+                        />
+                      </TouchableOpacity>
                     </View>
                   ))}
                 </View>
               )}
 
-              {/* Archive & Close — accessible without opening the modal */}
+              {editMode && showCustomChargeInput ? (
+                <View style={styles.customChargeInputBox}>
+                  <View style={styles.inputPairRow}>
+                    <View
+                      style={[styles.inputPairCol, { flex: 1, marginRight: 6 }]}
+                    >
+                      <Text style={styles.fieldLabel}>Charge Name *</Text>
+                      <View style={styles.fieldWrapper}>
+                        <TextInput
+                          style={styles.fieldInput}
+                          placeholder="e.g., Maintenance"
+                          value={tempChargeName}
+                          onChangeText={setTempChargeName}
+                          editable={!saving}
+                          placeholderTextColor={colors.textTertiary}
+                        />
+                      </View>
+                    </View>
+                    <View
+                      style={[styles.inputPairCol, { flex: 1, marginLeft: 6 }]}
+                    >
+                      <Text style={styles.fieldLabel}>Amount *</Text>
+                      <View style={styles.fieldWrapper}>
+                        <Text style={styles.pesoPrefix}>{"\u20B1"}</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          placeholder="0.00"
+                          keyboardType="decimal-pad"
+                          value={tempChargeAmount}
+                          onChangeText={setTempChargeAmount}
+                          editable={!saving}
+                          placeholderTextColor={colors.textTertiary}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.customChargeButtonRow}>
+                    <TouchableOpacity
+                      style={[styles.cancelBtn, { flex: 1 }]}
+                      onPress={() => {
+                        setShowCustomChargeInput(false);
+                        setTempChargeName("");
+                        setTempChargeAmount("");
+                      }}
+                      disabled={saving}
+                    >
+                      <Text style={styles.cancelBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.saveBtn, { flex: 1, marginLeft: 8 }]}
+                      onPress={handleAddCustomCharge}
+                      disabled={saving}
+                    >
+                      <Ionicons
+                        name="add"
+                        size={16}
+                        color={colors.textOnAccent}
+                      />
+                      <Text style={styles.saveBtnText}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : editMode && customCharges.length < 10 ? (
+                <TouchableOpacity
+                  style={styles.addCustomChargeBtn}
+                  onPress={() => setShowCustomChargeInput(true)}
+                  disabled={saving}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={20}
+                    color={colors.accent}
+                  />
+                  <Text style={styles.addCustomChargeBtnText}>
+                    Add Custom Charge
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {/* Action Buttons */}
+              {editMode && (
+                <View style={[styles.formActions, { paddingBottom: 8 }]}>
+                  <TouchableOpacity
+                    style={[styles.saveBtn, saving && styles.btnDisabled]}
+                    onPress={handleSaveBilling}
+                    disabled={saving}
+                    activeOpacity={0.8}
+                  >
+                    {saving ? (
+                      <ActivityIndicator
+                        color={colors.textOnAccent}
+                        size="small"
+                      />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="checkmark"
+                          size={18}
+                          color={colors.textOnAccent}
+                        />
+                        <Text style={styles.saveBtnText}>Save Billing</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Archive & Close — visible outside edit mode so host can finalize anytime */}
               {!cycleCompleted && (rent || electricity || startDate) && (
                 <View
                   style={{
                     paddingHorizontal: 16,
                     paddingBottom: 16,
-                    paddingTop: 12,
+                    paddingTop: editMode ? 0 : 12,
                   }}
                 >
-                  {/* <TouchableOpacity
+                  <TouchableOpacity
                     style={[styles.archiveBtn, saving && styles.btnDisabled]}
                     onPress={handleArchiveToBillingCycle}
                     disabled={saving}
@@ -1974,18 +2411,18 @@ const AdminBillingScreen = ({ navigation }) => {
                         </Text>
                       </>
                     )}
-                  </TouchableOpacity> */}
+                  </TouchableOpacity>
                   <Text
                     style={{
                       fontSize: 11,
                       color: colors.textTertiary,
                       textAlign: "center",
+                      marginTop: 6,
                       lineHeight: 15,
                     }}
                   >
-                    View, Save and Edit billing details using the Edit button
-                    above. Once the cycle is closed, you can create a new cycle
-                    with fresh billing details.
+                    Saves final amounts, closes this cycle, and clears presence
+                    for the next billing period.
                   </Text>
                 </View>
               )}
@@ -2278,652 +2715,6 @@ const AdminBillingScreen = ({ navigation }) => {
           </>
         )}
       </ScrollViewWithDetection>
-
-      {/* ═══════════════════════════════════════════════
-          BILLING EDITOR BOTTOM SHEET MODAL
-      ═══════════════════════════════════════════════ */}
-      <Modal
-        visible={editorModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeEditorModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            {/* Drag handle */}
-            <View style={styles.modalHandle} />
-
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderLeft}>
-                <View style={styles.modalHeaderIconBg}>
-                  <Ionicons
-                    name="document-text"
-                    size={18}
-                    color={colors.accent}
-                  />
-                </View>
-                <Text style={styles.modalHeaderTitle}>Billing Editor</Text>
-                {cycleCompleted && (
-                  <View
-                    style={{
-                      backgroundColor: "#e8f5e9",
-                      borderRadius: 6,
-                      paddingHorizontal: 8,
-                      paddingVertical: 3,
-                      marginLeft: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 10,
-                        fontWeight: "700",
-                        color: "#27ae60",
-                      }}
-                    >
-                      COMPLETED
-                    </Text>
-                  </View>
-                )}
-                {!cycleCompleted && startDate && endDate && (
-                  <View
-                    style={{
-                      backgroundColor: "#fff3e0",
-                      borderRadius: 6,
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      marginLeft: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 9,
-                        fontWeight: "700",
-                        color: "#e65100",
-                      }}
-                    >
-                      ACTIVE
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={closeEditorModal}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Scrollable Form */}
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              style={{ flex: 1 }}
-            >
-              <ScrollView
-                style={styles.modalScroll}
-                contentContainerStyle={styles.modalScrollContent}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
-                {/* ── Billing Period ── */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 2,
-                  }}
-                >
-                  <Text style={[styles.formSectionLabel, { marginBottom: 4 }]}>
-                    BILLING PERIOD
-                  </Text>
-                </View>
-                <View style={styles.dateRow}>
-                  <View style={styles.dateCol}>
-                    <Text style={styles.fieldLabel}>Start Date</Text>
-                    <View style={styles.fieldWrapper}>
-                      <Ionicons
-                        name="calendar-outline"
-                        size={15}
-                        color={colors.accent}
-                      />
-                      <TextInput
-                        style={styles.fieldInput}
-                        placeholder="YYYY-MM-DD"
-                        value={startDate}
-                        onChangeText={setStartDate}
-                        editable={!saving}
-                        placeholderTextColor={colors.textTertiary}
-                      />
-                    </View>
-                  </View>
-                  <View style={styles.dateArrow}>
-                    <MaterialIcons
-                      name="arrow-forward"
-                      size={14}
-                      color={colors.textSecondary}
-                    />
-                  </View>
-                  <View style={styles.dateCol}>
-                    <Text style={styles.fieldLabel}>End Date</Text>
-                    <View style={styles.fieldWrapper}>
-                      <Ionicons
-                        name="calendar-outline"
-                        size={15}
-                        color={colors.accent}
-                      />
-                      <TextInput
-                        style={styles.fieldInput}
-                        placeholder="YYYY-MM-DD"
-                        value={endDate}
-                        onChangeText={setEndDate}
-                        editable={!saving}
-                        placeholderTextColor={colors.textTertiary}
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                {/* ── Bill Amounts ── */}
-                <Text style={styles.formSectionLabel}>BILL AMOUNTS</Text>
-                <View style={styles.inputPairRow}>
-                  <View style={styles.inputPairCol}>
-                    <Text style={styles.fieldLabel}>Rent</Text>
-                    <View style={styles.fieldWrapper}>
-                      <Text style={styles.pesoPrefix}>{"₱"}</Text>
-                      <TextInput
-                        style={styles.fieldInput}
-                        placeholder="0.00"
-                        value={rent}
-                        onChangeText={setRent}
-                        keyboardType="decimal-pad"
-                        editable={!saving}
-                        placeholderTextColor={colors.textTertiary}
-                      />
-                    </View>
-                  </View>
-                  <View style={styles.inputPairCol}>
-                    <Text style={styles.fieldLabel}>Internet</Text>
-                    <View style={styles.fieldWrapper}>
-                      <Text style={styles.pesoPrefix}>{"₱"}</Text>
-                      <TextInput
-                        style={styles.fieldInput}
-                        placeholder="0.00"
-                        value={internet}
-                        onChangeText={setInternet}
-                        keyboardType="decimal-pad"
-                        editable={!saving}
-                        placeholderTextColor={colors.textTertiary}
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                {/* ── Meter Readings ── */}
-                <Text style={styles.formSectionLabel}>METER READINGS</Text>
-                <View style={styles.inputPairRow}>
-                  <View style={styles.inputPairCol}>
-                    <Text style={styles.fieldLabel}>Previous (kWh)</Text>
-                    <View style={styles.fieldWrapper}>
-                      <MaterialIcons
-                        name="speed"
-                        size={15}
-                        color={colors.textTertiary}
-                      />
-                      <TextInput
-                        style={styles.fieldInput}
-                        placeholder="0"
-                        value={prevReading}
-                        onChangeText={handlePrevReadingChange}
-                        keyboardType="decimal-pad"
-                        editable={!saving}
-                        placeholderTextColor={colors.textTertiary}
-                      />
-                    </View>
-                  </View>
-                  <View style={styles.inputPairCol}>
-                    <Text style={styles.fieldLabel}>Current (kWh)</Text>
-                    <View style={styles.fieldWrapper}>
-                      <MaterialIcons
-                        name="speed"
-                        size={15}
-                        color={colors.textTertiary}
-                      />
-                      <TextInput
-                        style={styles.fieldInput}
-                        placeholder="0"
-                        value={currReading}
-                        onChangeText={handleCurrReadingChange}
-                        keyboardType="decimal-pad"
-                        editable={!saving}
-                        placeholderTextColor={colors.textTertiary}
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                {/* kWh usage preview */}
-                {prevReading &&
-                  currReading &&
-                  Number(currReading) > Number(prevReading) && (
-                    <View style={styles.usagePreviewRow}>
-                      <MaterialIcons
-                        name="trending-up"
-                        size={14}
-                        color="#e65100"
-                      />
-                      <Text style={styles.usagePreviewText}>
-                        {(Number(currReading) - Number(prevReading)).toFixed(0)}{" "}
-                        kWh used × {"₱"}
-                        {ELECTRICITY_RATE}/kWh = {fmt(electricity)}
-                      </Text>
-                    </View>
-                  )}
-
-                {/* Electricity override */}
-                <View style={styles.inputPairRow}>
-                  <View style={[styles.inputPairCol, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>
-                      Electricity{" "}
-                      <Text
-                        style={{ color: colors.textTertiary, fontSize: 10 }}
-                      >
-                        (auto-filled · tap to override)
-                      </Text>
-                    </Text>
-                    <View style={styles.fieldWrapper}>
-                      <Ionicons
-                        name="flash"
-                        size={15}
-                        color={colors.electricityColor}
-                      />
-                      <TextInput
-                        style={styles.fieldInput}
-                        placeholder="0.00"
-                        value={electricity}
-                        onChangeText={setElectricity}
-                        keyboardType="decimal-pad"
-                        editable={!saving}
-                        placeholderTextColor={colors.textTertiary}
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                {/* ── Water Billing Mode ── */}
-                <Text style={[styles.formSectionLabel, { marginTop: 4 }]}>
-                  WATER BILLING MODE
-                </Text>
-                <View style={styles.waterModeToggleRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.waterModeBtn,
-                      waterMode === "presence" && styles.waterModeBtnActive,
-                    ]}
-                    onPress={() => !saving && setWaterMode("presence")}
-                    disabled={saving}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name="partly-sunny"
-                      size={14}
-                      color={
-                        waterMode === "presence"
-                          ? colors.textOnAccent
-                          : colors.textSecondary
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.waterModeBtnText,
-                        waterMode === "presence" &&
-                          styles.waterModeBtnTextActive,
-                      ]}
-                    >
-                      {"₱"}5/day Presence
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.waterModeBtn,
-                      waterMode === "fixed_monthly" &&
-                        styles.waterModeBtnActive,
-                    ]}
-                    onPress={() => !saving && setWaterMode("fixed_monthly")}
-                    disabled={saving}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name="lock-closed"
-                      size={14}
-                      color={
-                        waterMode === "fixed_monthly"
-                          ? colors.textOnAccent
-                          : colors.textSecondary
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.waterModeBtnText,
-                        waterMode === "fixed_monthly" &&
-                          styles.waterModeBtnTextActive,
-                      ]}
-                    >
-                      Fixed Monthly
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: colors.textSecondary,
-                    paddingHorizontal: 16,
-                    marginTop: 6,
-                    marginBottom: 6,
-                    lineHeight: 17,
-                  }}
-                >
-                  {waterMode === "fixed_monthly"
-                    ? waterFixedType === "per_person"
-                      ? "A fixed amount is charged per paying member each month. Total scales with member count."
-                      : "One fixed total for the whole room, split equally among all paying members."
-                    : "Each member is charged ₱5 per day they mark themselves as present in the room."}
-                </Text>
-                {waterMode === "fixed_monthly" && (
-                  <View style={styles.waterSubToggleRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.waterSubBtn,
-                        waterFixedType === "by_room" &&
-                          styles.waterSubBtnActive,
-                      ]}
-                      onPress={() => !saving && setWaterFixedType("by_room")}
-                      disabled={saving}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="home"
-                        size={13}
-                        color={
-                          waterFixedType === "by_room"
-                            ? colors.info
-                            : colors.textTertiary
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.waterSubBtnText,
-                          waterFixedType === "by_room" &&
-                            styles.waterSubBtnTextActive,
-                        ]}
-                      >
-                        By Room
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.waterSubBtn,
-                        waterFixedType === "per_person" &&
-                          styles.waterSubBtnActive,
-                      ]}
-                      onPress={() => !saving && setWaterFixedType("per_person")}
-                      disabled={saving}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="person"
-                        size={13}
-                        color={
-                          waterFixedType === "per_person"
-                            ? colors.info
-                            : colors.textTertiary
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.waterSubBtnText,
-                          waterFixedType === "per_person" &&
-                            styles.waterSubBtnTextActive,
-                        ]}
-                      >
-                        Per Person
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                {waterMode === "fixed_monthly" && (
-                  <View
-                    style={[
-                      styles.fieldWrapper,
-                      { marginHorizontal: 16, marginTop: 4 },
-                    ]}
-                  >
-                    <Text style={styles.pesoPrefix}>{"₱"}</Text>
-                    <TextInput
-                      style={styles.fieldInput}
-                      placeholder={
-                        waterFixedType === "per_person"
-                          ? "Amount per person"
-                          : "Fixed total for the room"
-                      }
-                      value={waterFixed}
-                      onChangeText={setWaterFixed}
-                      keyboardType="decimal-pad"
-                      editable={!saving}
-                      placeholderTextColor={colors.textTertiary}
-                    />
-                  </View>
-                )}
-
-                {/* ── Additional Charges ── */}
-                <Text style={[styles.formSectionLabel, { marginTop: 12 }]}>
-                  ADDITIONAL CHARGES (Optional)
-                </Text>
-                {customCharges.length > 0 && (
-                  <View style={styles.customChargesList}>
-                    {customCharges.map((charge, index) => (
-                      <View key={index} style={styles.customChargeItem}>
-                        <View style={styles.customChargeInfo}>
-                          <Text style={styles.customChargeName}>
-                            {charge.name}
-                          </Text>
-                          <Text style={styles.customChargeAmount}>
-                            {String.fromCharCode(8369)}
-                            {parseFloat(charge.amount).toFixed(2)}
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => handleRemoveCustomCharge(index)}
-                          style={styles.customChargeRemoveBtn}
-                        >
-                          <MaterialIcons
-                            name="close"
-                            size={18}
-                            color={colors.textTertiary}
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </View>
-                )}
-                {showCustomChargeInput ? (
-                  <View style={styles.customChargeInputBox}>
-                    <View style={styles.inputPairRow}>
-                      <View
-                        style={[
-                          styles.inputPairCol,
-                          { flex: 1, marginRight: 6 },
-                        ]}
-                      >
-                        <Text style={styles.fieldLabel}>Charge Name *</Text>
-                        <View style={styles.fieldWrapper}>
-                          <TextInput
-                            style={styles.fieldInput}
-                            placeholder="e.g., Maintenance"
-                            value={tempChargeName}
-                            onChangeText={setTempChargeName}
-                            editable={!saving}
-                            placeholderTextColor={colors.textTertiary}
-                          />
-                        </View>
-                      </View>
-                      <View
-                        style={[
-                          styles.inputPairCol,
-                          { flex: 1, marginLeft: 6 },
-                        ]}
-                      >
-                        <Text style={styles.fieldLabel}>Amount *</Text>
-                        <View style={styles.fieldWrapper}>
-                          <Text style={styles.pesoPrefix}>{"₱"}</Text>
-                          <TextInput
-                            style={styles.fieldInput}
-                            placeholder="0.00"
-                            keyboardType="decimal-pad"
-                            value={tempChargeAmount}
-                            onChangeText={setTempChargeAmount}
-                            editable={!saving}
-                            placeholderTextColor={colors.textTertiary}
-                          />
-                        </View>
-                      </View>
-                    </View>
-                    <View style={styles.customChargeButtonRow}>
-                      <TouchableOpacity
-                        style={[styles.cancelBtn, { flex: 1 }]}
-                        onPress={() => {
-                          setShowCustomChargeInput(false);
-                          setTempChargeName("");
-                          setTempChargeAmount("");
-                        }}
-                        disabled={saving}
-                      >
-                        <Text style={styles.cancelBtnText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.saveBtn, { flex: 1, marginLeft: 8 }]}
-                        onPress={handleAddCustomCharge}
-                        disabled={saving}
-                      >
-                        <Ionicons
-                          name="add"
-                          size={16}
-                          color={colors.textOnAccent}
-                        />
-                        <Text style={styles.saveBtnText}>Add</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : customCharges.length < 10 ? (
-                  <TouchableOpacity
-                    style={styles.addCustomChargeBtn}
-                    onPress={() => setShowCustomChargeInput(true)}
-                    disabled={saving}
-                  >
-                    <Ionicons
-                      name="add-circle-outline"
-                      size={20}
-                      color={colors.accent}
-                    />
-                    <Text style={styles.addCustomChargeBtnText}>
-                      Add Custom Charge
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {/* ── Action Buttons ── */}
-                <View
-                  style={[
-                    styles.formActions,
-                    { paddingBottom: Platform.OS === "ios" ? 24 : 16 },
-                  ]}
-                >
-                  <TouchableOpacity
-                    style={[styles.saveBtn, saving && styles.btnDisabled]}
-                    onPress={handleSaveBilling}
-                    disabled={saving}
-                    activeOpacity={0.8}
-                  >
-                    {saving ? (
-                      <ActivityIndicator
-                        color={colors.textOnAccent}
-                        size="small"
-                      />
-                    ) : (
-                      <>
-                        <Ionicons
-                          name="checkmark"
-                          size={18}
-                          color={colors.textOnAccent}
-                        />
-                        <Text style={styles.saveBtnText}>Save Billing</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-
-                  {!cycleCompleted && (rent || electricity || startDate) && (
-                    <>
-                      {/* <TouchableOpacity
-                        style={[
-                          styles.archiveBtn,
-                          saving && styles.btnDisabled,
-                        ]}
-                        onPress={handleArchiveToBillingCycle}
-                        disabled={saving}
-                        activeOpacity={0.8}
-                      >
-                        {saving ? (
-                          <ActivityIndicator
-                            color={colors.textOnAccent}
-                            size="small"
-                          />
-                        ) : (
-                          <>
-                            <Ionicons
-                              name="archive"
-                              size={16}
-                              color={colors.textOnAccent}
-                            />
-                            <Text style={styles.archiveBtnText}>
-                              Archive & Close Cycle
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity> */}
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          color: colors.textTertiary,
-                          textAlign: "center",
-                          lineHeight: 15,
-                        }}
-                      >
-                        Don't forget to review and save the billing cycle after
-                        making changes!
-                      </Text>
-                    </>
-                  )}
-
-                  <TouchableOpacity
-                    style={styles.cancelBtn}
-                    onPress={closeEditorModal}
-                    disabled={saving}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name="close"
-                      size={16}
-                      color={colors.textSecondary}
-                    />
-                    <Text style={styles.cancelBtnText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </KeyboardAvoidingView>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -2931,9 +2722,13 @@ const AdminBillingScreen = ({ navigation }) => {
 const createStyles = (colors) => {
   const isDarkMode = colors.statusBarStyle === "light-content";
   const forestHeader = isDarkMode ? colors.background : "#063f39";
-  const softSurface = "rgba(3,109,65,0.055)";
-  const softBorder = "rgba(3,109,65,0.12)";
-  const cardShadow = "#0a4240";
+  const softSurface = isDarkMode
+    ? "rgba(255,255,255,0.06)"
+    : "rgba(3,109,65,0.055)";
+  const softBorder = isDarkMode
+    ? "rgba(158,208,205,0.16)"
+    : "rgba(3,109,65,0.12)";
+  const cardShadow = isDarkMode ? "#000000" : "#0a4240";
 
   return StyleSheet.create({
     // ─── LAYOUT ───
@@ -3392,7 +3187,6 @@ const createStyles = (colors) => {
       flexDirection: "row",
       alignItems: "flex-end",
       paddingHorizontal: 16,
-      marginBottom: 8,
     },
     dateCol: { flex: 1 },
     dateArrow: { paddingHorizontal: 8, paddingBottom: 12 },
@@ -3400,6 +3194,7 @@ const createStyles = (colors) => {
       flexDirection: "row",
       gap: 12,
       paddingHorizontal: 16,
+      marginBottom: 10,
     },
     inputPairCol: { flex: 1 },
     usagePreviewRow: {
@@ -3419,7 +3214,8 @@ const createStyles = (colors) => {
       justifyContent: "space-between",
       alignItems: "center",
       marginHorizontal: 16,
-      marginBottom: 4,
+      marginTop: 6,
+      marginBottom: 12,
       paddingHorizontal: 12,
       paddingVertical: 10,
       backgroundColor: colors.accentSurface,
@@ -3723,82 +3519,6 @@ const createStyles = (colors) => {
       fontSize: 16,
       fontWeight: "800",
       color: colors.waterColor,
-    },
-
-    // ─── BILLING EDITOR MODAL ───
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.45)",
-      justifyContent: "flex-end",
-    },
-    modalSheet: {
-      backgroundColor: colors.card,
-      borderTopLeftRadius: 28,
-      borderTopRightRadius: 28,
-      height: "90%",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: -6 },
-      shadowOpacity: 0.18,
-      shadowRadius: 20,
-      elevation: 24,
-    },
-    modalHandle: {
-      width: 40,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: isDarkMode
-        ? "rgba(255,255,255,0.18)"
-        : "rgba(0,0,0,0.14)",
-      alignSelf: "center",
-      marginTop: 12,
-      marginBottom: 4,
-    },
-    modalHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: softBorder,
-    },
-    modalHeaderLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      flex: 1,
-    },
-    modalHeaderIconBg: {
-      width: 36,
-      height: 36,
-      borderRadius: 12,
-      backgroundColor: softSurface,
-      borderWidth: 1,
-      borderColor: softBorder,
-      justifyContent: "center",
-      alignItems: "center",
-      marginRight: 10,
-    },
-    modalHeaderTitle: {
-      fontSize: 18,
-      fontWeight: "800",
-      color: colors.text,
-    },
-    modalCloseBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: softSurface,
-      borderWidth: 1,
-      borderColor: softBorder,
-      justifyContent: "center",
-      alignItems: "center",
-      marginLeft: 10,
-    },
-    modalScroll: {
-      flex: 1,
-    },
-    modalScrollContent: {
-      paddingBottom: 12,
     },
 
     // ─── CYCLES BUTTON ───

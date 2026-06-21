@@ -37,6 +37,12 @@ const getBillMeta = (c) => ({
   },
 });
 
+const formatCurrency = (value) =>
+  `\u20B1${(Number(value) || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
 const AdminAdjustmentsScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -214,6 +220,28 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
     { key: "internet", field: "internetShare" },
   ];
 
+  const payerMembers = useMemo(
+    () =>
+      (breakdown?.memberBreakdown || []).filter(
+        (member) => member.isPayer !== false,
+      ),
+    [breakdown?.memberBreakdown],
+  );
+
+  const paidMembersCount = useMemo(
+    () => payerMembers.filter((member) => member.allPaid).length,
+    [payerMembers],
+  );
+
+  const totalDueAmount = useMemo(
+    () =>
+      payerMembers.reduce(
+        (sum, member) => sum + Number(member.totalDue || 0),
+        0,
+      ),
+    [payerMembers],
+  );
+
   const renderMemberCard = (member) => {
     const isPaid = member.allPaid;
     const initials = (member.memberName || "?")
@@ -247,7 +275,7 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
                 {initials}
               </Text>
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={styles.memberIdentity}>
               <Text style={styles.memberName} numberOfLines={1}>
                 {member.memberName}
               </Text>
@@ -264,7 +292,12 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
             </View>
           </View>
           <View style={styles.memberRight}>
-            <Text style={styles.memberTotal}>
+            <Text
+              style={styles.memberTotal}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.68}
+            >
               ₱{(member.totalDue || 0).toFixed(2)}
             </Text>
             {isPaid && (
@@ -297,7 +330,12 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
                   </View>
                   <Text style={styles.chargeLabel}>{meta.label}</Text>
                 </View>
-                <Text style={styles.chargeValue}>
+                <Text
+                  style={styles.chargeValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                >
                   ₱{(member[field] || 0).toFixed(2)}
                 </Text>
               </View>
@@ -306,7 +344,12 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
           {/* Total */}
           <View style={styles.chargeTotalRow}>
             <Text style={styles.chargeTotalLabel}>Total Due</Text>
-            <Text style={styles.chargeTotalValue}>
+            <Text
+              style={styles.chargeTotalValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >
               ₱{(member.totalDue || 0).toFixed(2)}
             </Text>
           </View>
@@ -399,20 +442,45 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
         />
       }
     >
-      <View style={styles.summaryStrip}>
-        <View
-          style={[
-            styles.stripIconWrap,
-            { backgroundColor: colors.accentSurface },
-          ]}
-        >
-          <Ionicons name="settings-sharp" size={18} color={colors.accent} />
+      <View style={styles.summaryPanel}>
+        <View style={styles.summaryTopRow}>
+          <View style={styles.summaryIconWrap}>
+            <Ionicons
+              name="settings-sharp"
+              size={20}
+              color={colors.textOnAccent}
+            />
+          </View>
+          <View style={styles.summaryCopy}>
+            <Text style={styles.summaryEyebrow} numberOfLines={1}>
+              Charge Adjustments
+            </Text>
+            <Text style={styles.summaryTitle} numberOfLines={1}>
+              Cycle #{breakdown?.cycleNumber || "-"}
+            </Text>
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.stripTitle}>Charge Adjustments</Text>
-          <Text style={styles.stripSubtitle}>
-            Cycle #{breakdown?.cycleNumber}
-          </Text>
+
+        <View style={styles.summaryStatsRow}>
+          <View style={styles.summaryStatCard}>
+            <Text style={styles.summaryStatValue}>{payerMembers.length}</Text>
+            <Text style={styles.summaryStatLabel}>Payors</Text>
+          </View>
+          <View style={styles.summaryStatCard}>
+            <Text
+              style={styles.summaryStatValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.62}
+            >
+              {formatCurrency(totalDueAmount)}
+            </Text>
+            <Text style={styles.summaryStatLabel}>Total Due</Text>
+          </View>
+          <View style={styles.summaryStatCard}>
+            <Text style={styles.summaryStatValue}>{paidMembersCount}</Text>
+            <Text style={styles.summaryStatLabel}>Paid</Text>
+          </View>
         </View>
       </View>
 
@@ -421,12 +489,10 @@ const AdminAdjustmentsScreen = ({ navigation }) => {
           <Ionicons name="people" size={16} color={colors.accent} />
           <Text style={styles.sectionTitle}>Members</Text>
         </View>
-        {breakdown?.memberBreakdown?.length > 0 ? (
-          breakdown.memberBreakdown
-            .filter((member) => member.isPayer !== false)
-            .map((member) => (
-              <View key={member.userId}>{renderMemberCard(member)}</View>
-            ))
+        {payerMembers.length > 0 ? (
+          payerMembers.map((member) => (
+            <View key={member.userId}>{renderMemberCard(member)}</View>
+          ))
         ) : (
           <View style={styles.emptyCard}>
             <View style={styles.emptyIconWrap}>
@@ -798,9 +864,88 @@ const createStyles = (colors) =>
     },
     stripTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
     stripSubtitle: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
+    summaryPanel: {
+      backgroundColor: colors.card,
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 22,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow || "#000",
+          shadowOpacity: 0.08,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 8 },
+        },
+        android: { elevation: 4 },
+      }),
+    },
+    summaryTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    summaryIconWrap: {
+      width: 42,
+      height: 42,
+      borderRadius: 15,
+      backgroundColor: colors.accent,
+      justifyContent: "center",
+      alignItems: "center",
+      flexShrink: 0,
+    },
+    summaryCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+    summaryEyebrow: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    summaryTitle: {
+      fontSize: 18,
+      fontWeight: "900",
+      color: colors.text,
+      marginTop: 3,
+    },
+    summaryStatsRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 14,
+    },
+    summaryStatCard: {
+      flex: 1,
+      minWidth: 0,
+      borderRadius: 15,
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      paddingHorizontal: 10,
+      paddingVertical: 11,
+    },
+    summaryStatValue: {
+      fontSize: 15,
+      fontWeight: "900",
+      color: colors.text,
+      includeFontPadding: false,
+    },
+    summaryStatLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.35,
+      marginTop: 5,
+      includeFontPadding: false,
+    },
 
     /* ── Sections ── */
-    section: { paddingHorizontal: 14, marginTop: 18, paddingBottom: 24 },
+    section: { paddingHorizontal: 16, marginTop: 18, paddingBottom: 24 },
     sectionHeader: {
       flexDirection: "row",
       alignItems: "center",
@@ -850,41 +995,55 @@ const createStyles = (colors) =>
     /* ── Member Card ── */
     memberCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 18,
       padding: 16,
       marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 1 },
+          shadowColor: colors.shadow || "#000",
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 5 },
         },
-        android: { elevation: 1 },
+        android: { elevation: 2 },
       }),
     },
     memberHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "center",
+      alignItems: "flex-start",
+      gap: 10,
       marginBottom: 14,
     },
     memberLeft: {
       flexDirection: "row",
       alignItems: "center",
       flex: 1,
+      minWidth: 0,
       gap: 10,
     },
-    memberRight: { alignItems: "flex-end", gap: 4 },
+    memberRight: {
+      alignItems: "flex-end",
+      gap: 4,
+      maxWidth: 124,
+      flexShrink: 0,
+    },
     memberAvatar: {
       width: 38,
       height: 38,
       borderRadius: 19,
       justifyContent: "center",
       alignItems: "center",
+      flexShrink: 0,
     },
     avatarText: { fontSize: 14, fontWeight: "700" },
-    memberName: { fontSize: 14, fontWeight: "600", color: colors.text },
+    memberIdentity: {
+      flex: 1,
+      minWidth: 0,
+    },
+    memberName: { fontSize: 15, fontWeight: "800", color: colors.text },
     presenceRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -892,7 +1051,14 @@ const createStyles = (colors) =>
       marginTop: 2,
     },
     presenceText: { fontSize: 11, color: colors.textTertiary },
-    memberTotal: { fontSize: 16, fontWeight: "800", color: colors.accent },
+    memberTotal: {
+      fontSize: 17,
+      fontWeight: "900",
+      color: colors.accent,
+      textAlign: "right",
+      width: "100%",
+      includeFontPadding: false,
+    },
     paidChip: {
       flexDirection: "row",
       alignItems: "center",

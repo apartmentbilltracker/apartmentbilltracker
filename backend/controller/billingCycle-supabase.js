@@ -911,6 +911,8 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
       waterBillAmount,
       internet,
       status,
+      startDate,
+      endDate,
       previousMeterReading,
       currentMeterReading,
       customCharges,
@@ -918,7 +920,30 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
 
     // console.log("[BILLING-UPDATE] Received customCharges:", customCharges);
 
+    let currentCycle = null;
+    const getCurrentCycle = async () => {
+      if (!currentCycle) {
+        currentCycle = await SupabaseService.selectByColumn(
+          "billing_cycles",
+          "id",
+          cycleId,
+        );
+      }
+      return currentCycle;
+    };
+
+    if (startDate !== undefined || endDate !== undefined) {
+      const cycle = await getCurrentCycle();
+      const effectiveStartDate = startDate || cycle?.start_date;
+      const effectiveEndDate = endDate || cycle?.end_date;
+      if (new Date(effectiveStartDate) >= new Date(effectiveEndDate)) {
+        return next(new ErrorHandler("Start date must be before end date", 400));
+      }
+    }
+
     const updateData = {};
+    if (startDate !== undefined) updateData.start_date = new Date(startDate);
+    if (endDate !== undefined) updateData.end_date = new Date(endDate);
     if (rent !== undefined) updateData.rent = rent;
     if (electricity !== undefined) updateData.electricity = electricity;
     if (waterBillAmount !== undefined)
@@ -949,14 +974,12 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
       waterBillAmount !== undefined ||
       water !== undefined ||
       internet !== undefined ||
+      startDate !== undefined ||
+      endDate !== undefined ||
       customCharges !== undefined
     ) {
       // Fetch current cycle to get existing values for fields not being updated
-      const currentCycle = await SupabaseService.selectByColumn(
-        "billing_cycles",
-        "id",
-        cycleId,
-      );
+      currentCycle = await getCurrentCycle();
       const r = parseFloat(updateData.rent ?? currentCycle?.rent ?? 0);
       const e = parseFloat(
         updateData.electricity ?? currentCycle?.electricity ?? 0,
@@ -971,12 +994,14 @@ router.put("/:cycleId", isAuthenticated, async (req, res, next) => {
       const waterRaw = parseFloat(
         updateData.water_bill_amount ?? currentCycle?.water_bill_amount ?? 0,
       );
+      const effectiveStartDate = startDate || currentCycle?.start_date;
+      const effectiveEndDate = endDate || currentCycle?.end_date;
       const { membersCount: updMembersCount, waterBillAmount: computedWater } =
         cycleRoomId
           ? await computeCycleStats(
               cycleRoomId,
-              currentCycle.start_date,
-              currentCycle.end_date,
+              effectiveStartDate,
+              effectiveEndDate,
               waterRaw,
               cycleRoom?.water_billing_mode,
               cycleRoom?.water_fixed_type,

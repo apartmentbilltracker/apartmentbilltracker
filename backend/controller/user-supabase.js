@@ -18,11 +18,114 @@ const { isAuthenticated } = require("../middleware/auth");
 const ActivationContent = require("../utils/ActivationContent");
 const ResetPasswordEmail = require("../utils/ResetPasswordEmail");
 const avatarCache = require("../utils/MemoryCache");
-const { uploadAvatarToStorage } = require("../utils/supabaseStorage");
+const {
+  uploadAvatarToStorage,
+  uploadHostVerificationFile,
+  createHostVerificationSignedUrl,
+} = require("../utils/supabaseStorage");
 const activityTracker = require("../utils/activityTracker");
 
 // In-memory store for pending users (10-minute expiry)
 const pendingUsers = new Map();
+
+const PHILIPPINE_ID_TYPES = {
+  philsys: "PhilSys ID / ePhilID",
+  passport: "Philippine Passport",
+  driver_license: "LTO Driver's License",
+  umid_sss: "UMID / SSS ID",
+  tin: "BIR TIN ID",
+  philhealth: "PhilHealth ID",
+  prc: "PRC License ID",
+  postal: "Postal ID",
+  voter: "Voter's ID",
+};
+
+const compact = (value = "") => String(value).trim().toUpperCase();
+const digitsOnly = (value = "") => compact(value).replace(/\D/g, "");
+
+function normalizePhilippineIdNumber(idType, idNumber) {
+  const raw = compact(idNumber);
+  switch (idType) {
+    case "philsys":
+    case "tin":
+    case "philhealth":
+      return digitsOnly(raw);
+    case "driver_license":
+    case "umid_sss":
+    case "passport":
+      return raw.replace(/[^A-Z0-9]/g, "");
+    default:
+      return raw.replace(/\s/g, "");
+  }
+}
+
+function validatePhilippineIdNumber(idType, idNumber) {
+  const normalized = normalizePhilippineIdNumber(idType, idNumber);
+  switch (idType) {
+    case "philsys":
+      return /^\d{16}$/.test(normalized);
+    case "passport":
+      return /^[A-Z]\d{7}[A-Z]$/.test(normalized) ||
+        /^[A-Z]{2}\d{7}$/.test(normalized);
+    case "driver_license":
+      return /^[A-Z]\d{10}$/.test(normalized);
+    case "umid_sss":
+      return /^\d{12}$/.test(normalized) || /^\d{10}$/.test(normalized);
+    case "tin":
+    case "philhealth":
+      return /^\d{12}$/.test(normalized);
+    case "prc":
+      return /^\d{6,8}$/.test(normalized);
+    case "postal":
+      return /^[A-Z0-9-]{6,20}$/.test(normalized);
+    case "voter":
+      return /^[A-Z0-9-]{8,24}$/.test(normalized);
+    default:
+      return false;
+  }
+}
+
+function requireField(body, field, label) {
+  const value = String(body[field] || "").trim();
+  if (!value) {
+    const error = new Error(`${label} is required`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return value;
+}
+
+function getUploadedFile(files, field) {
+  const file = files?.[field];
+  return Array.isArray(file) ? file[0] : file;
+}
+
+async function attachSignedVerificationUrls(application) {
+  if (!application) return null;
+  const cloned = JSON.parse(JSON.stringify(application));
+  const documents = cloned.documents || {};
+  const facial = cloned.facialVerification || {};
+
+  if (documents.idFront?.path) {
+    documents.idFront.signedUrl = await createHostVerificationSignedUrl(
+      documents.idFront.path,
+    );
+  }
+  if (documents.idBack?.path) {
+    documents.idBack.signedUrl = await createHostVerificationSignedUrl(
+      documents.idBack.path,
+    );
+  }
+  if (facial.selfie?.path) {
+    facial.selfie.signedUrl = await createHostVerificationSignedUrl(
+      facial.selfie.path,
+    );
+  }
+
+  cloned.documents = documents;
+  cloned.facialVerification = facial;
+  return cloned;
+}
 
 // Cleanup expired pending users every 5 minutes
 setInterval(
@@ -1038,7 +1141,7 @@ router.get(
         user,
       });
     } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
+      return next(new ErrorHandler(error.message, error.statusCode || 500));
     }
   }),
 );
@@ -1223,17 +1326,130 @@ router.post(
         );
       }
 
+      const body = req.body || {};
+      const firstName = requireField(body, "firstName", "First name");
+      const lastName = requireField(body, "lastName", "Last name");
+      const birthDate = requireField(body, "birthDate", "Birth date");
+      const phoneNumber = requireField(body, "phoneNumber", "Phone number");
+      const addressLine = requireField(body, "addressLine", "Home address");
+      const city = requireField(body, "city", "City or municipality");
+      const province = requireField(body, "province", "Province");
+      const postalCode = requireField(body, "postalCode", "Postal code");
+      const idType = requireField(body, "idType", "Government ID type");
+      const idNumber = requireField(body, "idNumber", "Government ID number");
+
+      if (!PHILIPPINE_ID_TYPES[idType]) {
+        return next(new ErrorHandler("Unsupported Philippine ID type", 400));
+      }
+
+      const parsedBirthDate = new Date(birthDate);
+      if (Number.isNaN(parsedBirthDate.getTime())) {
+        return next(
+          new ErrorHandler("Birth date must use a valid date format", 400),
+        );
+      }
+
+      const age =
+        (Date.now() - parsedBirthDate.getTime()) /
+        (365.25 * 24 * 60 * 60 * 1000);
+      if (age < 18) {
+        return next(
+          new ErrorHandler("Host applicants must be at least 18 years old", 400),
+        );
+      }
+
+      const normalizedIdNumber = normalizePhilippineIdNumber(idType, idNumber);
+      const idFormatValid = validatePhilippineIdNumber(idType, idNumber);
+      if (!idFormatValid) {
+        return next(
+          new ErrorHandler(
+            `${PHILIPPINE_ID_TYPES[idType]} number format is not valid`,
+            400,
+          ),
+        );
+      }
+
+      if (String(body.verificationConsent) !== "true") {
+        return next(
+          new ErrorHandler("Verification consent is required", 400),
+        );
+      }
+
+      const idFrontFile = getUploadedFile(req.files, "idFront");
+      const idBackFile = getUploadedFile(req.files, "idBack");
+      const selfieFile = getUploadedFile(req.files, "selfie");
+
+      if (!idFrontFile) {
+        return next(new ErrorHandler("Government ID front image is required", 400));
+      }
+      if (!selfieFile) {
+        return next(new ErrorHandler("Facial verification selfie is required", 400));
+      }
+
+      const [idFront, idBack, selfie] = await Promise.all([
+        uploadHostVerificationFile(req.user.id, "id-front", idFrontFile),
+        idBackFile
+          ? uploadHostVerificationFile(req.user.id, "id-back", idBackFile)
+          : Promise.resolve(null),
+        uploadHostVerificationFile(req.user.id, "selfie", selfieFile),
+      ]);
+
+      const submittedAt = new Date().toISOString();
+      const legalName = [firstName, body.middleName, lastName]
+        .map((part) => String(part || "").trim())
+        .filter(Boolean)
+        .join(" ");
+
+      const hostApplication = {
+        submittedAt,
+        personalDetails: {
+          firstName,
+          middleName: String(body.middleName || "").trim(),
+          lastName,
+          legalName,
+          birthDate,
+          phoneNumber,
+          address: {
+            line: addressLine,
+            city,
+            province,
+            postalCode,
+          },
+        },
+        governmentId: {
+          type: idType,
+          typeLabel: PHILIPPINE_ID_TYPES[idType],
+          number: normalizedIdNumber,
+          formatValid: true,
+        },
+        documents: {
+          idFront,
+          idBack,
+        },
+        facialVerification: {
+          selfie,
+          status: "manual_review_required",
+        },
+        consent: {
+          accepted: true,
+          acceptedAt: submittedAt,
+        },
+        notes: String(body.notes || "").trim(),
+        reviewStatus: "pending",
+      };
+
       await SupabaseService.updateUser(req.user.id, {
         host_request_status: "pending",
         host_requested_at: new Date().toISOString(),
+        host_application: hostApplication,
       });
 
       res.status(200).json({
         success: true,
-        message: "Host request submitted! An admin will review it soon.",
+        message: "Host application submitted! A super admin will review it soon.",
       });
     } catch (error) {
-      return next(new ErrorHandler(error.message, 500));
+      return next(new ErrorHandler(error.message, error.statusCode || 500));
     }
   }),
 );
@@ -1253,6 +1469,11 @@ router.get(
       res.status(200).json({
         success: true,
         hostRequestStatus: user.host_request_status || null,
+        hostApplication: user.host_application || null,
+        rejectionReason:
+          user.host_application?.rejectionReason ||
+          user.host_application?.reviewReason ||
+          null,
         role: user.role,
       });
     } catch (error) {
@@ -1276,16 +1497,19 @@ router.get(
       }
 
       const allUsers = await SupabaseService.getAllUsers();
-      const pendingRequests = (allUsers || [])
+      const pendingRequests = await Promise.all((allUsers || [])
         .filter((u) => u.host_request_status === "pending")
-        .map((u) => ({
+        .map(async (u) => ({
           id: u.id,
           name: u.name,
           email: u.email,
           avatar: u.avatar,
           host_request_status: u.host_request_status,
           host_requested_at: u.host_requested_at,
-        }));
+          host_application: await attachSignedVerificationUrls(
+            u.host_application,
+          ),
+        })));
 
       res.status(200).json({ success: true, requests: pendingRequests });
     } catch (error) {
@@ -1318,9 +1542,27 @@ router.put(
         );
       }
 
+      if (!targetUser.host_application?.governmentId?.formatValid) {
+        return next(
+          new ErrorHandler(
+            "A complete verified host application is required before approval",
+            400,
+          ),
+        );
+      }
+
+      const reviewedAt = new Date().toISOString();
       await SupabaseService.updateUser(userId, {
         role: "host",
         host_request_status: "approved",
+        host_reviewed_at: reviewedAt,
+        host_reviewed_by: req.user.id,
+        host_application: {
+          ...targetUser.host_application,
+          reviewStatus: "approved",
+          reviewedAt,
+          reviewedBy: req.user.id,
+        },
       });
 
       res.status(200).json({
@@ -1348,11 +1590,38 @@ router.put(
       }
 
       const { userId } = req.params;
+      const rejectionReason = String(req.body?.rejectionReason || "").trim();
       const targetUser = await SupabaseService.findUserById(userId);
       if (!targetUser) return next(new ErrorHandler("User not found", 404));
 
+      if (rejectionReason.length < 10) {
+        return next(
+          new ErrorHandler(
+            "Please provide a detailed rejection reason for the applicant",
+            400,
+          ),
+        );
+      }
+
+      const reviewedAt = new Date().toISOString();
       await SupabaseService.updateUser(userId, {
         host_request_status: "rejected",
+        host_reviewed_at: reviewedAt,
+        host_reviewed_by: req.user.id,
+        host_application: targetUser.host_application
+          ? {
+              ...targetUser.host_application,
+              reviewStatus: "rejected",
+              rejectionReason,
+              reviewedAt,
+              reviewedBy: req.user.id,
+            }
+          : {
+              reviewStatus: "rejected",
+              rejectionReason,
+              reviewedAt,
+              reviewedBy: req.user.id,
+            },
       });
 
       res.status(200).json({

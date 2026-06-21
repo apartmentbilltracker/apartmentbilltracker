@@ -236,7 +236,12 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
         <View style={styles.amountRow}>
           <View style={styles.amountLeft}>
             <Text style={styles.amountLabel}>Amount</Text>
-            <Text style={styles.amountValue}>
+            <Text
+              style={styles.amountValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >
               ₱{(item.amount || 0).toFixed(2)}
             </Text>
           </View>
@@ -329,12 +334,18 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
           >
             <Ionicons name="time" size={16} color={colors.accent} />
           </View>
-          <View>
-            <Text style={styles.summaryValue}>{pendingPayments.length}</Text>
+          <View style={styles.summaryCopy}>
+            <Text
+              style={styles.summaryValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >
+              {pendingPayments.length}
+            </Text>
             <Text style={styles.summaryLabel}>Submitted</Text>
           </View>
         </View>
-        <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
           <View
             style={[
@@ -344,15 +355,22 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
           >
             <Ionicons name="cash" size={16} color={colors.success} />
           </View>
-          <View>
-            <Text style={styles.summaryValue}>₱{totalAmount.toFixed(0)}</Text>
+          <View style={styles.summaryCopy}>
+            <Text
+              style={styles.summaryValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.62}
+            >
+              ₱{Math.round(totalAmount || 0).toLocaleString()}
+            </Text>
             <Text style={styles.summaryLabel}>Total</Text>
           </View>
         </View>
         {room?.name ? (
           <>
             <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
+            <View style={[styles.summaryItem, styles.summaryRoomItem]}>
               <View
                 style={[
                   styles.summaryIconWrap,
@@ -361,7 +379,7 @@ const AdminPaymentVerificationScreen = ({ navigation }) => {
               >
                 <Ionicons name="home" size={16} color={colors.info} />
               </View>
-              <View style={{ flexShrink: 1 }}>
+              <View style={styles.summaryCopy}>
                 <Text style={styles.summaryValue} numberOfLines={1}>
                   {room.name}
                 </Text>
@@ -736,18 +754,34 @@ const createStyles = (colors) =>
     summaryStrip: {
       flexDirection: "row",
       alignItems: "center",
+      flexWrap: "wrap",
       backgroundColor: colors.card,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: "#e8e8e8",
-      gap: 12,
+      borderBottomColor: colors.borderLight,
+      gap: 8,
     },
     summaryItem: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      flexShrink: 1,
+      flex: 1,
+      minWidth: 108,
+      backgroundColor: colors.background,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      overflow: "hidden",
+    },
+    summaryRoomItem: {
+      minWidth: 136,
+    },
+    summaryCopy: {
+      flex: 1,
+      minWidth: 0,
     },
     summaryIconWrap: {
       width: 32,
@@ -755,19 +789,23 @@ const createStyles = (colors) =>
       borderRadius: 8,
       justifyContent: "center",
       alignItems: "center",
+      flexShrink: 0,
     },
     summaryValue: {
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: "700",
       color: colors.text,
+      includeFontPadding: false,
     },
     summaryLabel: {
       fontSize: 10,
       fontWeight: "500",
       color: colors.textTertiary,
       marginTop: -1,
+      includeFontPadding: false,
     },
     summaryDivider: {
+      display: "none",
       width: 1,
       height: 28,
       backgroundColor: colors.skeleton,
@@ -853,7 +891,11 @@ const createStyles = (colors) =>
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.borderLight,
     },
-    amountLeft: {},
+    amountLeft: {
+      flex: 1,
+      minWidth: 0,
+      paddingRight: 10,
+    },
     amountLabel: {
       fontSize: 10,
       fontWeight: "500",
@@ -875,6 +917,7 @@ const createStyles = (colors) =>
       paddingHorizontal: 10,
       paddingVertical: 5,
       borderRadius: 8,
+      flexShrink: 0,
     },
     statusDot: {
       width: 6,

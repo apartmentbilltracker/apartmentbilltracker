@@ -10,6 +10,8 @@ import {
   Alert,
   Image,
   Platform,
+  Modal,
+  TextInput,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +20,7 @@ import { hostRoleService, supportService } from "../../services/apiService";
 import { useTheme } from "../../theme/ThemeContext";
 import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrappers";
 import HomeSpaceLoader from "../../components/SpaceLoader";
+import HostApplicationReviewModal from "../../components/HostApplicationReviewModal";
 
 const SuperAdminDashboardScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -40,6 +43,13 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
     openBugs: 0,
   });
   const [processingId, setProcessingId] = useState(null);
+  const [selectedHostRequest, setSelectedHostRequest] = useState(null);
+  const [rejectDraft, setRejectDraft] = useState({
+    visible: false,
+    userId: null,
+    userName: "",
+    reason: "",
+  });
 
   useEffect(() => {
     if (isFocused) fetchAll();
@@ -121,6 +131,7 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
             setProcessingId(userId);
             await hostRoleService.approveHost(userId);
             Alert.alert("Success", `${userName} is now a host!`);
+            setSelectedHostRequest(null);
             fetchPendingRequests();
             fetchUsers();
           } catch (error) {
@@ -133,27 +144,47 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
     ]);
   };
 
-  const handleRejectHost = async (userId, userName) => {
-    Alert.alert("Reject Host Request", `Reject ${userName}'s host request?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Reject",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setProcessingId(userId);
-            await hostRoleService.rejectHost(userId);
-            Alert.alert("Done", `${userName}'s request has been rejected.`);
-            fetchPendingRequests();
-            fetchUsers();
-          } catch (error) {
-            Alert.alert("Error", "Failed to reject host request");
-          } finally {
-            setProcessingId(null);
-          }
-        },
-      },
-    ]);
+  const handleRejectHost = (userId, userName) => {
+    setSelectedHostRequest(null);
+    setRejectDraft({
+      visible: true,
+      userId,
+      userName: userName || "this applicant",
+      reason: "",
+    });
+  };
+
+  const submitRejectHost = async () => {
+    const reason = rejectDraft.reason.trim();
+    if (reason.length < 10) {
+      Alert.alert(
+        "Reason required",
+        "Please add a clear rejection reason with at least 10 characters.",
+      );
+      return;
+    }
+
+    try {
+      setProcessingId(rejectDraft.userId);
+      await hostRoleService.rejectHost(rejectDraft.userId, reason);
+      Alert.alert("Done", `${rejectDraft.userName}'s request has been rejected.`);
+      setSelectedHostRequest(null);
+      setRejectDraft({
+        visible: false,
+        userId: null,
+        userName: "",
+        reason: "",
+      });
+      fetchPendingRequests();
+      fetchUsers();
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        error.data?.message || error.message || "Failed to reject host request",
+      );
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const handleDemoteHost = async (userId, userName) => {
@@ -218,6 +249,7 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
   }
 
   return (
+    <>
     <ScrollViewWithDetection
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
@@ -473,21 +505,63 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
                 </View>
               </View>
 
+              <View style={styles.verificationStrip}>
+                <View style={styles.verificationPill}>
+                  <Ionicons
+                    name={
+                      req.host_application?.governmentId?.formatValid
+                        ? "checkmark-circle"
+                        : "alert-circle"
+                    }
+                    size={13}
+                    color={
+                      req.host_application?.governmentId?.formatValid
+                        ? colors.success
+                        : colors.warning
+                    }
+                  />
+                  <Text style={styles.verificationPillText}>
+                    {req.host_application?.governmentId?.typeLabel ||
+                      "ID pending"}
+                  </Text>
+                </View>
+                <View style={styles.verificationPill}>
+                  <Ionicons
+                    name={
+                      req.host_application?.facialVerification?.selfie
+                        ? "person-circle"
+                        : "person-circle-outline"
+                    }
+                    size={13}
+                    color={
+                      req.host_application?.facialVerification?.selfie
+                        ? colors.success
+                        : colors.warning
+                    }
+                  />
+                  <Text style={styles.verificationPillText}>
+                    {req.host_application?.facialVerification?.selfie
+                      ? "Selfie attached"
+                      : "No selfie"}
+                  </Text>
+                </View>
+              </View>
+
               <View style={styles.requestActions}>
                 {processingId === req.id ? (
                   <ActivityIndicator size="small" color={colors.accent} />
                 ) : (
                   <>
                     <TouchableOpacity
-                      style={styles.approveBtn}
-                      onPress={() => handleApproveHost(req.id, req.name)}
+                      style={styles.reviewBtn}
+                      onPress={() => setSelectedHostRequest(req)}
                     >
                       <Ionicons
-                        name="checkmark"
+                        name="document-text-outline"
                         size={18}
                         color={colors.textOnAccent}
                       />
-                      <Text style={styles.approveBtnText}>Approve</Text>
+                      <Text style={styles.reviewBtnText}>Review Details</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.rejectBtn}
@@ -787,6 +861,99 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
 
       <View style={{ height: 32 }} />
     </ScrollViewWithDetection>
+    <HostApplicationReviewModal
+      visible={Boolean(selectedHostRequest)}
+      request={selectedHostRequest}
+      onClose={() => !processingId && setSelectedHostRequest(null)}
+      onApprove={handleApproveHost}
+      onReject={handleRejectHost}
+      processing={Boolean(processingId)}
+    />
+    <Modal
+      animationType="slide"
+      transparent
+      visible={rejectDraft.visible}
+      onRequestClose={() =>
+        !processingId &&
+        setRejectDraft({
+          visible: false,
+          userId: null,
+          userName: "",
+          reason: "",
+        })
+      }
+    >
+      <View style={styles.rejectModalOverlay}>
+        <View style={styles.rejectSheet}>
+          <View style={styles.rejectHandle} />
+          <View style={styles.rejectHeader}>
+            <View style={styles.rejectIconWrap}>
+              <Ionicons name="close-circle" size={20} color={colors.error} />
+            </View>
+            <View style={styles.rejectHeaderCopy}>
+              <Text style={styles.rejectTitle}>Reject Application</Text>
+              <Text style={styles.rejectSubtitle} numberOfLines={1}>
+                {rejectDraft.userName}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.rejectClose}
+              disabled={Boolean(processingId)}
+              onPress={() =>
+                setRejectDraft({
+                  visible: false,
+                  userId: null,
+                  userName: "",
+                  reason: "",
+                })
+              }
+            >
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.rejectHelp}>
+            Add a specific reason so the applicant knows what to fix before
+            submitting again.
+          </Text>
+          <TextInput
+            style={styles.rejectInput}
+            value={rejectDraft.reason}
+            onChangeText={(reason) =>
+              setRejectDraft((prev) => ({ ...prev, reason }))
+            }
+            placeholder="Example: The ID image is blurry and the selfie does not clearly show your face."
+            placeholderTextColor={colors.textTertiary}
+            multiline
+            textAlignVertical="top"
+            editable={!processingId}
+          />
+          <TouchableOpacity
+            style={[
+              styles.rejectSubmit,
+              (processingId || rejectDraft.reason.trim().length < 10) && {
+                opacity: 0.6,
+              },
+            ]}
+            disabled={Boolean(processingId) || rejectDraft.reason.trim().length < 10}
+            onPress={submitRejectHost}
+          >
+            {processingId ? (
+              <ActivityIndicator color={colors.textOnAccent} />
+            ) : (
+              <>
+                <Ionicons
+                  name="send"
+                  size={18}
+                  color={colors.textOnAccent}
+                />
+                <Text style={styles.rejectSubmitText}>Reject with Reason</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 };
 
@@ -1265,6 +1432,43 @@ const createStyles = (colors) =>
       flexDirection: "row",
       gap: 8,
     },
+    verificationStrip: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 12,
+    },
+    verificationPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+      borderRadius: 11,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    verificationPillText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textSecondary,
+    },
+    reviewBtn: {
+      flex: 1.25,
+      flexDirection: "row",
+      backgroundColor: colors.accent,
+      borderRadius: 14,
+      paddingVertical: 12,
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 4,
+    },
+    reviewBtnText: {
+      color: colors.textOnAccent,
+      fontSize: 13,
+      fontWeight: "800",
+    },
     approveBtn: {
       flex: 1,
       flexDirection: "row",
@@ -1394,6 +1598,95 @@ const createStyles = (colors) =>
       fontSize: 13,
       fontWeight: "700",
       color: colors.accent,
+    },
+    rejectModalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      justifyContent: "flex-end",
+    },
+    rejectSheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 18,
+      paddingBottom: 22,
+    },
+    rejectHandle: {
+      width: 38,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.skeleton,
+      alignSelf: "center",
+      marginTop: 10,
+      marginBottom: 14,
+    },
+    rejectHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 12,
+    },
+    rejectIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.errorBg,
+    },
+    rejectHeaderCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+    rejectTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    rejectSubtitle: {
+      marginTop: 2,
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    rejectClose: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.background,
+    },
+    rejectHelp: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: colors.textSecondary,
+      marginBottom: 10,
+    },
+    rejectInput: {
+      minHeight: 110,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      color: colors.inputText,
+      fontSize: 14,
+      marginBottom: 14,
+    },
+    rejectSubmit: {
+      minHeight: 50,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 8,
+      backgroundColor: colors.error,
+    },
+    rejectSubmitText: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.textOnAccent,
     },
   });
 

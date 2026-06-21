@@ -89,6 +89,13 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
   const [customBankFocused, setCustomBankFocused] = useState(false);
   const [modalSubmitted, setModalSubmitted] = useState(false);
 
+  const enabledMethodCount =
+    (gcashEnabled ? 1 : 0) + (bankEnabled ? 1 : 0) + 1;
+  const activeBankCount = bankAccounts.filter(
+    (account) => account.enabled !== false,
+  ).length;
+  const hasUnsavedQr = gcashQrDirty;
+
   // Re-fetch every time the screen comes into focus (handles navigate-back)
   useFocusEffect(
     useCallback(() => {
@@ -204,7 +211,7 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.6,
@@ -287,7 +294,7 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.6,
@@ -395,13 +402,55 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Info Banner */}
-        <View style={styles.infoBanner}>
-          <Ionicons name="information-circle" size={18} color={colors.accent} />
-          <Text style={styles.infoText}>
-            Disabling a payment method will prevent clients from initiating new
-            payments through that channel. Changes sync to all rooms instantly.
-          </Text>
+        <View style={styles.summaryPanel}>
+          <View style={styles.summaryHeaderRow}>
+            <View style={styles.summaryIconWrap}>
+              <Ionicons
+                name="wallet-outline"
+                size={22}
+                color={colors.textOnAccent}
+              />
+            </View>
+            <View style={styles.summaryCopy}>
+              <Text style={styles.summaryEyebrow}>Room Payment Controls</Text>
+              <Text style={styles.summaryTitle}>Payment Settings</Text>
+              <Text style={styles.summarySubtitle}>
+                Configure how clients can submit payments for this room.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.summaryStatsRow}>
+            <View style={styles.summaryStat}>
+              <Text style={styles.summaryStatValue}>{enabledMethodCount}</Text>
+              <Text style={styles.summaryStatLabel}>Active Methods</Text>
+            </View>
+            <View style={styles.summaryStat}>
+              <Text style={styles.summaryStatValue}>{activeBankCount}</Text>
+              <Text style={styles.summaryStatLabel}>Bank Accounts</Text>
+            </View>
+            <View style={styles.summaryStat}>
+              <Text
+                style={[
+                  styles.summaryStatValue,
+                  hasUnsavedQr && { color: colors.warning },
+                ]}
+              >
+                {gcashQrUri ? (hasUnsavedQr ? "New" : "Ready") : "None"}
+              </Text>
+              <Text style={styles.summaryStatLabel}>GCash QR</Text>
+            </View>
+          </View>
+          <View style={styles.infoBanner}>
+            <Ionicons
+              name="information-circle"
+              size={17}
+              color={colors.accent}
+            />
+            <Text style={styles.infoText}>
+              Disabled methods are hidden from new client payments. Cash remains
+              available for manual recording.
+            </Text>
+          </View>
         </View>
 
         {/* ─── GCash Card ─── */}
@@ -412,7 +461,7 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
             >
               <Ionicons name="phone-portrait" size={22} color="#0066FF" />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={styles.methodTextBlock}>
               <Text style={styles.methodName}>GCash</Text>
               <Text style={styles.methodDesc}>Mobile wallet payment</Text>
             </View>
@@ -557,7 +606,7 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
             >
               <Ionicons name="business-outline" size={22} color="#1e88e5" />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={styles.methodTextBlock}>
               <Text style={styles.methodName}>Bank Transfer</Text>
               <Text style={styles.methodDesc}>
                 Multiple bank accounts supported
@@ -663,11 +712,13 @@ const AdminPaymentSettingsScreen = ({ navigation, route }) => {
                       { opacity: acc.enabled ? 1 : 0.5 },
                     ]}
                   >
-                    <Text style={styles.bankAccountName}>{acc.bankName}</Text>
-                    <Text style={styles.bankAccountHolder}>
+                    <Text style={styles.bankAccountName} numberOfLines={1}>
+                      {acc.bankName}
+                    </Text>
+                    <Text style={styles.bankAccountHolder} numberOfLines={1}>
                       {acc.accountName}
                     </Text>
-                    <Text style={styles.bankAccountNumber}>
+                    <Text style={styles.bankAccountNumber} numberOfLines={1}>
                       {acc.accountNumber}
                     </Text>
                   </View>
@@ -1058,14 +1109,98 @@ const createStyles = (colors) =>
       alignItems: "center",
     },
 
+    summaryPanel: {
+      marginHorizontal: 16,
+      marginTop: 16,
+      padding: 16,
+      borderRadius: 20,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow,
+          shadowOpacity: 0.08,
+          shadowOffset: { width: 0, height: 4 },
+          shadowRadius: 10,
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    summaryHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 14,
+    },
+    summaryIconWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: 16,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.accent,
+    },
+    summaryCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+    summaryEyebrow: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      marginBottom: 3,
+    },
+    summaryTitle: {
+      fontSize: 18,
+      fontWeight: "900",
+      color: colors.text,
+    },
+    summarySubtitle: {
+      marginTop: 3,
+      fontSize: 12,
+      lineHeight: 17,
+      color: colors.textSecondary,
+    },
+    summaryStatsRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 12,
+    },
+    summaryStat: {
+      flex: 1,
+      minHeight: 68,
+      borderRadius: 14,
+      paddingHorizontal: 8,
+      paddingVertical: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    summaryStatValue: {
+      fontSize: 16,
+      fontWeight: "900",
+      color: colors.text,
+      textAlign: "center",
+    },
+    summaryStatLabel: {
+      marginTop: 4,
+      fontSize: 10,
+      fontWeight: "800",
+      color: colors.textTertiary,
+      textAlign: "center",
+      textTransform: "uppercase",
+    },
+
     /* Info banner */
     infoBanner: {
       flexDirection: "row",
       alignItems: "flex-start",
       gap: 10,
-      marginHorizontal: 16,
-      marginTop: 16,
-      padding: 14,
+      padding: 12,
       backgroundColor: colors.accentSurface || "#fdf6e3",
       borderRadius: 12,
       borderWidth: 1,
@@ -1083,10 +1218,19 @@ const createStyles = (colors) =>
       marginHorizontal: 16,
       marginTop: 16,
       backgroundColor: colors.card,
-      borderRadius: 16,
+      borderRadius: 20,
       padding: 16,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow,
+          shadowOpacity: 0.05,
+          shadowOffset: { width: 0, height: 3 },
+          shadowRadius: 8,
+        },
+        android: { elevation: 1 },
+      }),
     },
     cardHeader: {
       flexDirection: "row",
@@ -1101,7 +1245,11 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    methodName: { fontSize: 16, fontWeight: "700", color: colors.text },
+    methodTextBlock: {
+      flex: 1,
+      minWidth: 0,
+    },
+    methodName: { fontSize: 16, fontWeight: "800", color: colors.text },
     methodDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 
     /* Status pill */
@@ -1113,6 +1261,7 @@ const createStyles = (colors) =>
       paddingVertical: 4,
       borderRadius: 20,
       backgroundColor: colors.inputBg,
+      flexShrink: 0,
     },
     statusDot: { width: 7, height: 7, borderRadius: 4 },
     statusLabel: { fontSize: 12, fontWeight: "600" },
@@ -1140,9 +1289,9 @@ const createStyles = (colors) =>
     messageHint: { fontSize: 11, color: colors.textTertiary, marginBottom: 8 },
     textInput: {
       backgroundColor: colors.inputBg,
-      borderRadius: 10,
+      borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
       padding: 12,
       fontSize: 14,
       color: colors.text,
@@ -1178,9 +1327,9 @@ const createStyles = (colors) =>
     qrPreview: {
       width: 180,
       height: 180,
-      borderRadius: 12,
+      borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
       backgroundColor: colors.card,
     },
     qrPreviewActions: { flexDirection: "row", gap: 8, marginTop: 12 },
@@ -1190,9 +1339,9 @@ const createStyles = (colors) =>
       gap: 6,
       paddingHorizontal: 14,
       paddingVertical: 8,
-      borderRadius: 8,
+      borderRadius: 12,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
       backgroundColor: colors.inputBg,
     },
     qrRemoveBtn: { borderColor: "#ef535030" },
@@ -1221,9 +1370,9 @@ const createStyles = (colors) =>
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 24,
-      borderRadius: 12,
+      borderRadius: 16,
       borderWidth: 2,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
       borderStyle: "dashed",
       backgroundColor: colors.inputBg,
       gap: 4,
@@ -1283,14 +1432,14 @@ const createStyles = (colors) =>
     bankEmptyHint: { fontSize: 12, color: colors.textTertiary },
     bankAccountRow: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       gap: 10,
       backgroundColor: colors.inputBg,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 12,
       marginBottom: 8,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
     },
     bankAccountIcon: {
       width: 36,
@@ -1300,8 +1449,12 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    bankAccountInfo: { flex: 1 },
-    bankAccountName: { fontSize: 13, fontWeight: "700", color: colors.text },
+    bankAccountInfo: {
+      flex: 1,
+      minWidth: 0,
+      paddingTop: 1,
+    },
+    bankAccountName: { fontSize: 14, fontWeight: "800", color: colors.text },
     bankAccountHolder: {
       fontSize: 12,
       color: colors.textSecondary,
@@ -1313,7 +1466,11 @@ const createStyles = (colors) =>
       marginTop: 1,
       letterSpacing: 0.5,
     },
-    bankAccountActions: { alignItems: "center", gap: 8 },
+    bankAccountActions: {
+      alignItems: "center",
+      gap: 8,
+      flexShrink: 0,
+    },
     bankAccountBtns: { flexDirection: "row", gap: 10 },
     bankAccountEditBtn: {
       width: 30,
@@ -1341,7 +1498,7 @@ const createStyles = (colors) =>
       justifyContent: "center",
       gap: 6,
       paddingVertical: 12,
-      borderRadius: 10,
+      borderRadius: 14,
       borderWidth: 1.5,
       borderColor: colors.accent,
       borderStyle: "dashed",
@@ -1358,10 +1515,9 @@ const createStyles = (colors) =>
       marginTop: 16,
       padding: 14,
       backgroundColor: colors.card,
-      borderRadius: 12,
+      borderRadius: 18,
       borderWidth: 1,
-      borderColor: colors.border,
-      opacity: 0.7,
+      borderColor: colors.borderLight,
     },
     cashNoteTitle: { fontSize: 14, fontWeight: "600", color: colors.text },
     cashNoteSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
@@ -1375,7 +1531,7 @@ const createStyles = (colors) =>
       marginHorizontal: 16,
       marginTop: 24,
       paddingVertical: 14,
-      borderRadius: 12,
+      borderRadius: 16,
       backgroundColor: colors.accent,
     },
     saveBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
@@ -1432,18 +1588,18 @@ const createStyles = (colors) =>
       alignItems: "center",
       justifyContent: "space-between",
       backgroundColor: colors.inputBg,
-      borderRadius: 10,
+      borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
       paddingHorizontal: 14,
       paddingVertical: 12,
     },
     bankPickerBtnText: { fontSize: 14, fontWeight: "500" },
     bankPickerDropdown: {
       backgroundColor: colors.card,
-      borderRadius: 10,
+      borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
       marginTop: 4,
       overflow: "hidden",
     },
@@ -1462,9 +1618,9 @@ const createStyles = (colors) =>
     modalCancelBtn: {
       flex: 1,
       paddingVertical: 13,
-      borderRadius: 12,
+      borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
       alignItems: "center",
     },
     modalCancelBtnText: {
@@ -1476,7 +1632,7 @@ const createStyles = (colors) =>
       flex: 1,
       flexDirection: "row",
       paddingVertical: 13,
-      borderRadius: 12,
+      borderRadius: 14,
       backgroundColor: colors.accent,
       alignItems: "center",
       justifyContent: "center",
