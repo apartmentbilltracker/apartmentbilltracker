@@ -237,11 +237,11 @@ class SupabaseService {
    * Use USER_COLS_WITH_AVATAR only when avatar is explicitly needed.
    */
   static USER_COLS =
-    "id, name, email, username, role, is_admin, auth_provider, expo_push_token, phone_number, gender, date_of_birth, is_active, host_request_status, created_at, updated_at";
+    "id, name, email, username, role, is_admin, auth_provider, expo_push_token, phone_number, gender, date_of_birth, is_active, host_request_status, host_requested_at, host_application, created_at, updated_at";
   static USER_COLS_WITH_AVATAR =
-    "id, name, email, username, role, is_admin, avatar, auth_provider, expo_push_token, phone_number, gender, date_of_birth, is_active, host_request_status, created_at, updated_at";
+    "id, name, email, username, role, is_admin, avatar, auth_provider, expo_push_token, phone_number, gender, date_of_birth, is_active, host_request_status, host_requested_at, host_application, created_at, updated_at";
   static USER_COLS_AUTH =
-    "id, name, email, password_hash, username, role, is_admin, avatar, auth_provider, expo_push_token, phone_number, gender, date_of_birth, is_active, host_request_status, created_at, updated_at";
+    "id, name, email, password_hash, username, role, is_admin, avatar, auth_provider, expo_push_token, phone_number, gender, date_of_birth, is_active, host_request_status, host_requested_at, host_application, created_at, updated_at";
 
   /** Specific columns for billing_cycles — avoids fetching unused metadata. */
   static BILLING_CYCLE_COLS =

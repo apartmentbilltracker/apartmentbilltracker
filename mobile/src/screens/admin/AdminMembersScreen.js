@@ -281,7 +281,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => fetchRooms(true)}
-          tintcolor={colors.accent}
+          tintColor={colors.accent}
           colors={["#b38604"]}
         />
       }
@@ -339,7 +339,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
               <Text style={styles.stripTitle}>{selectedRoom.name}</Text>
               <Text style={styles.stripSubtitle}>
                 {members.length} member{members.length !== 1 ? "s" : ""} ·{" "}
-                {payerCount} payer{payerCount !== 1 ? "s" : ""}
+                {payerCount} payor{payerCount !== 1 ? "s" : ""}
               </Text>
             </View>
             <TouchableOpacity
@@ -488,7 +488,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
                           </Text>
                         </View>
                       )}
-                      <View style={{ flex: 1 }}>
+                      <View style={styles.personTextBlock}>
                         <Text style={styles.pendingName} numberOfLines={1}>
                           {item.user?.name || item.name || "Unknown"}
                         </Text>
@@ -641,7 +641,7 @@ const AdminMembersScreen = ({ navigation, route }) => {
                               </Text>
                             </View>
                           )}
-                          <View style={{ flex: 1 }}>
+                          <View style={styles.personTextBlock}>
                             <Text style={styles.memberName} numberOfLines={1}>
                               {item.user?.name || item.name || "Unknown"}
                             </Text>
@@ -761,11 +761,11 @@ const createStyles = (colors) =>
     /* ── Room Selector ── */
     roomSelector: {
       backgroundColor: colors.card,
-      paddingHorizontal: 14,
-      paddingTop: 14,
-      paddingBottom: 12,
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 14,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: "#e5e5e5",
+      borderBottomColor: colors.borderLight,
     },
     roomSelectorLabel: {
       fontSize: 11,
@@ -781,10 +781,8 @@ const createStyles = (colors) =>
       gap: 5,
       paddingHorizontal: 14,
       paddingVertical: 8,
-      borderRadius: 10,
+      borderRadius: 999,
       backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
     },
     roomChipActive: {
       backgroundColor: colors.accent,
@@ -802,37 +800,40 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: colors.card,
-      marginHorizontal: 14,
-      marginTop: 14,
-      borderRadius: 14,
-      padding: 14,
-      gap: 10,
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 20,
+      padding: 16,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.06,
-          shadowRadius: 6,
-          shadowOffset: { width: 0, height: 2 },
+          shadowColor: colors.shadow,
+          shadowOpacity: 0.08,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 4 },
         },
         android: { elevation: 2 },
       }),
     },
     stripIconWrap: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
+      width: 44,
+      height: 44,
+      borderRadius: 15,
       justifyContent: "center",
       alignItems: "center",
     },
-    stripTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+    stripTitle: { fontSize: 17, fontWeight: "900", color: colors.text },
     stripSubtitle: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
     addBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
+      width: 40,
+      height: 40,
+      borderRadius: 14,
       backgroundColor: colors.accent,
       justifyContent: "center",
       alignItems: "center",
+      flexShrink: 0,
     },
 
     /* ── Search ── */
@@ -840,14 +841,14 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      marginHorizontal: 14,
+      marginHorizontal: 16,
       marginTop: 12,
       backgroundColor: colors.card,
-      borderRadius: 10,
+      borderRadius: 15,
       paddingHorizontal: 12,
       paddingVertical: 0,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
     },
     searchInput: {
       flex: 1,
@@ -859,20 +860,20 @@ const createStyles = (colors) =>
     /* ── Add Form ── */
     addFormCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
-      marginHorizontal: 14,
+      borderRadius: 18,
+      marginHorizontal: 16,
       marginTop: 12,
       padding: 16,
-      borderWidth: 1.5,
-      borderColor: "#b38604",
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#b38604",
-          shadowOpacity: 0.1,
-          shadowRadius: 6,
-          shadowOffset: { width: 0, height: 2 },
+          shadowColor: colors.shadow,
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 3 },
         },
-        android: { elevation: 3 },
+        android: { elevation: 2 },
       }),
     },
     addFormHeader: {
@@ -896,8 +897,8 @@ const createStyles = (colors) =>
     addFormTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
     addFormInput: {
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 10,
+      borderColor: colors.borderLight,
+      borderRadius: 14,
       paddingHorizontal: 14,
       paddingVertical: 11,
       fontSize: 14,
@@ -907,7 +908,7 @@ const createStyles = (colors) =>
     },
     addFormSubmitBtn: {
       backgroundColor: colors.accent,
-      borderRadius: 10,
+      borderRadius: 14,
       paddingVertical: 12,
       flexDirection: "row",
       justifyContent: "center",
@@ -917,7 +918,7 @@ const createStyles = (colors) =>
     addFormSubmitText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
     /* ── Section ── */
-    sectionWrap: { marginHorizontal: 14, marginTop: 16 },
+    sectionWrap: { marginHorizontal: 16, marginTop: 16 },
     sectionHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -950,19 +951,19 @@ const createStyles = (colors) =>
     /* ── Pending Card ── */
     pendingCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 18,
       padding: 14,
-      marginBottom: 8,
+      marginBottom: 10,
       flexDirection: "row",
-      alignItems: "center",
-      borderLeftWidth: 3,
-      borderLeftColor: "#e67e22",
+      alignItems: "flex-start",
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: colors.shadow,
           shadowOpacity: 0.05,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 1 },
+          shadowRadius: 7,
+          shadowOffset: { width: 0, height: 3 },
         },
         android: { elevation: 1 },
       }),
@@ -970,8 +971,9 @@ const createStyles = (colors) =>
     pendingLeft: {
       flex: 1,
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       gap: 10,
+      minWidth: 0,
     },
     pendingAvatar: { width: 38, height: 38, borderRadius: 19 },
     pendingAvatarFallback: {
@@ -983,10 +985,11 @@ const createStyles = (colors) =>
       alignItems: "center",
     },
     pendingAvatarText: { fontSize: 15, fontWeight: "700", color: "#e67e22" },
-    pendingName: { fontSize: 14, fontWeight: "600", color: colors.text },
+    pendingName: { fontSize: 14, fontWeight: "800", color: colors.text },
     pendingEmail: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
     pendingChipRow: {
       flexDirection: "row",
+      flexWrap: "wrap",
       alignItems: "center",
       gap: 6,
       marginTop: 6,
@@ -1016,6 +1019,7 @@ const createStyles = (colors) =>
       flexDirection: "row",
       gap: 6,
       marginLeft: 8,
+      flexShrink: 0,
     },
     approveBtn: {
       width: 34,
@@ -1037,15 +1041,17 @@ const createStyles = (colors) =>
     /* ── Member Card ── */
     memberCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 18,
       padding: 14,
-      marginBottom: 8,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: colors.shadow,
           shadowOpacity: 0.05,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 1 },
+          shadowRadius: 7,
+          shadowOffset: { width: 0, height: 3 },
         },
         android: { elevation: 1 },
       }),
@@ -1060,6 +1066,7 @@ const createStyles = (colors) =>
       alignItems: "center",
       flex: 1,
       gap: 10,
+      minWidth: 0,
     },
     memberAvatar: {
       width: 38,
@@ -1076,12 +1083,13 @@ const createStyles = (colors) =>
       alignItems: "center",
     },
     memberAvatarText: { fontSize: 15, fontWeight: "700", color: colors.accent },
-    memberName: { fontSize: 14, fontWeight: "600", color: colors.text },
+    memberName: { fontSize: 14, fontWeight: "800", color: colors.text },
     memberEmail: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
     memberCardActions: {
       flexDirection: "row",
       gap: 6,
       marginLeft: 8,
+      flexShrink: 0,
     },
     payerToggle: {
       width: 34,
@@ -1106,6 +1114,7 @@ const createStyles = (colors) =>
     },
     memberChipRow: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: 6,
       marginTop: 10,
       paddingTop: 10,
@@ -1116,7 +1125,7 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      borderRadius: 8,
+      borderRadius: 10,
       paddingHorizontal: 10,
       paddingVertical: 4,
     },
@@ -1125,17 +1134,19 @@ const createStyles = (colors) =>
     /* ── Empty State ── */
     emptyCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
-      marginHorizontal: 14,
+      borderRadius: 18,
+      marginHorizontal: 16,
       marginTop: 24,
       padding: 32,
       alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
+          shadowColor: colors.shadow,
           shadowOpacity: 0.05,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 1 },
+          shadowRadius: 7,
+          shadowOffset: { width: 0, height: 3 },
         },
         android: { elevation: 1 },
       }),

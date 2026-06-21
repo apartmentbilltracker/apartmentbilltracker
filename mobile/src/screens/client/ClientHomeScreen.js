@@ -31,6 +31,7 @@ import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import SafeMapView from "../../components/SafeMapView";
 import AdsCarousel from "../../components/AdsCarousel";
 import RoommateProfileModal from "../../components/RoommateProfileModal";
+import HostApplicationModal from "../../components/HostApplicationModal";
 import { AuthContext } from "../../context/AuthContext";
 import AnimatedAmount from "../../components/AnimatedAmount";
 import chatReadTracker from "../../services/chatReadTracker";
@@ -45,6 +46,7 @@ import {
   announcementService,
   paymentService,
   badgeService,
+  hostRoleService,
 } from "../../services/apiService";
 import { roundTo2 as r2 } from "../../utils/helpers";
 import { useTheme } from "../../theme/ThemeContext";
@@ -167,6 +169,10 @@ const ClientHomeScreen = ({ navigation, route }) => {
   const [roommateOnboardingVisible, setRoommateOnboardingVisible] =
     useState(false);
   const [myRoommateProfile, setMyRoommateProfile] = useState(null);
+  const [hostRequestStatus, setHostRequestStatus] = useState(null);
+  const [hostApplication, setHostApplication] = useState(null);
+  const [hostApplicationVisible, setHostApplicationVisible] = useState(false);
+  const [requestingHost, setRequestingHost] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [toast, setToast] = useState({
     visible: false,
@@ -207,6 +213,13 @@ const ClientHomeScreen = ({ navigation, route }) => {
   joinedRoomIdRef.current = joinedRoomId;
   const userName = state?.user?.name || "User";
   const userEmail = state?.user?.email || "";
+  const userRole = state?.user?.role;
+  const isHostOrAdmin =
+    userRole === "host" ||
+    userRole === "admin" ||
+    state?.user?.is_admin === true;
+  const hostRejectionReason =
+    hostApplication?.rejectionReason || hostApplication?.reviewReason || null;
   const verifiedRoommateProfiles = useMemo(
     () =>
       roommateProfiles.filter(
@@ -1107,6 +1120,42 @@ const ClientHomeScreen = ({ navigation, route }) => {
     }
   };
 
+  const fetchHostApplicationStatus = async () => {
+    if (!userId || isHostOrAdmin) return;
+
+    try {
+      const status = await hostRoleService.getHostStatus();
+      setHostRequestStatus(status.hostRequestStatus || null);
+      setHostApplication(status.hostApplication || null);
+    } catch (error) {
+      console.error("Error fetching host application status:", error);
+    }
+  };
+
+  const handleSubmitHostApplication = async (formData) => {
+    try {
+      setRequestingHost(true);
+      const response = await hostRoleService.requestHost(formData);
+      setHostRequestStatus("pending");
+      setHostApplication(response.hostApplication || null);
+      setHostApplicationVisible(false);
+      showToast(
+        "Host application submitted. A super admin will review your details.",
+        "success",
+      );
+    } catch (error) {
+      showToast(
+        error.response?.data?.message ||
+          error.data?.message ||
+          error.message ||
+          "Failed to submit host application",
+        "error",
+      );
+    } finally {
+      setRequestingHost(false);
+    }
+  };
+
   // Immediately refresh outstanding balance and billing cycle when returning from payment with refresh param
   useEffect(() => {
     if (route.params?.refresh && userJoinedRoom) {
@@ -1139,7 +1188,8 @@ const ClientHomeScreen = ({ navigation, route }) => {
 
       fetchRoommateProfiles();
       fetchStatusChangeNotifications();
-    }, [userId]),
+      fetchHostApplicationStatus();
+    }, [userId, isHostOrAdmin]),
   );
 
   // Start lightweight status polling while screen is focused.
@@ -1245,6 +1295,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
       Promise.all([
         fetchStatusChangeNotifications(),
         fetchRoommateProfiles(),
+        fetchHostApplicationStatus(),
         roomId ? fetchChatBadge(roomId) : Promise.resolve(),
         roomId ? fetchAnnouncementBanner(roomId) : Promise.resolve(),
         roomId ? fetchMemberActivity(roomId) : Promise.resolve(),
@@ -1264,6 +1315,7 @@ const ClientHomeScreen = ({ navigation, route }) => {
       fetchRooms(),
       fetchRoommateProfiles(),
       fetchMyRoommateProfile(),
+      fetchHostApplicationStatus(),
     ]);
     setRefreshing(false);
   };
@@ -2327,6 +2379,97 @@ const ClientHomeScreen = ({ navigation, route }) => {
     </View>
   );
 
+  const renderHostApplicationCampaign = () => {
+    if (isHostOrAdmin) return null;
+
+    const isPending = hostRequestStatus === "pending";
+    const isRejected = hostRequestStatus === "rejected";
+    const statusColor = isPending
+      ? colors.info
+      : isRejected
+        ? colors.error
+        : colors.accent;
+    const statusBg = isPending
+      ? colors.infoBg
+      : isRejected
+        ? colors.errorBg
+        : colors.accentSurface;
+    const iconName = isPending
+      ? "time-outline"
+      : isRejected
+        ? "refresh"
+        : "key-outline";
+
+    return (
+      <View style={styles.hostCampaignCard}>
+        <View style={styles.hostCampaignHeader}>
+          <View
+            style={[styles.hostCampaignIcon, { backgroundColor: statusBg }]}
+          >
+            <Ionicons name={iconName} size={22} color={statusColor} />
+          </View>
+          <View style={styles.hostCampaignCopy}>
+            <Text style={styles.hostCampaignEyebrow}>
+              Room Host Application
+            </Text>
+            <Text style={styles.hostCampaignTitle}>
+              {isPending
+                ? "Your application is under review"
+                : isRejected
+                  ? "Update and resubmit your application"
+                  : "Ready to manage your own room?"}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.hostCampaignBody}>
+          {isPending
+            ? "Property Flow team is checking your details, ID images, and selfie verification."
+            : isRejected
+              ? "Your last application needs a few corrections before it can be approved."
+              : "Apply to create rooms, manage members, handle billing cycles, and run payment reviews from the host dashboard."}
+        </Text>
+        {isRejected && hostRejectionReason && (
+          <View style={styles.hostCampaignReason}>
+            <Text style={styles.hostCampaignReasonLabel}>Reason</Text>
+            <Text style={styles.hostCampaignReasonText}>
+              {hostRejectionReason}
+            </Text>
+          </View>
+        )}
+        <View style={styles.hostCampaignFooter}>
+          <View style={styles.hostCampaignMeta}>
+            <Ionicons
+              name={isPending ? "shield-checkmark-outline" : "id-card-outline"}
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.hostCampaignMetaText}>
+              {isPending
+                ? "Manual verification in progress"
+                : "Valid PH ID and selfie required"}
+            </Text>
+          </View>
+          {!isPending && (
+            <TouchableOpacity
+              style={styles.hostCampaignButton}
+              onPress={() => setHostApplicationVisible(true)}
+              activeOpacity={0.78}
+            >
+              <Text style={styles.hostCampaignButtonText}>
+                {isRejected ? "Resubmit" : "Apply"}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.textOnAccent}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   const FeatureCard = ({ icon, title, description, bgColor }) => (
     <View style={[styles.featureCard, { backgroundColor: bgColor }]}>
       <View style={styles.featureCardTop}>
@@ -2420,6 +2563,14 @@ const ClientHomeScreen = ({ navigation, route }) => {
         user={state?.user}
         onClose={handleCloseRoommateOnboarding}
         onSaved={handleRoommateSaved}
+      />
+      <HostApplicationModal
+        visible={hostApplicationVisible}
+        onClose={() => !requestingHost && setHostApplicationVisible(false)}
+        onSubmit={handleSubmitHostApplication}
+        submitting={requestingHost}
+        initialName={userName}
+        initialEmail={userEmail}
       />
 
       {/* ── Custom Alerts ── */}
@@ -3048,6 +3199,8 @@ const ClientHomeScreen = ({ navigation, route }) => {
           )}
 
           {/* ─── ADS CAROUSEL ─── */}
+          {renderHostApplicationCampaign()}
+
           <AdsCarousel screen="home" navigation={navigation} />
 
           <RoommateSection />
@@ -4455,6 +4608,114 @@ const createStyles = (colors, insets = { top: 0, bottom: 0 }) => {
     },
 
     // ─── NOTIFICATION BANNER ───
+    hostCampaignCard: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      padding: 16,
+      borderRadius: 20,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow,
+          shadowOpacity: 0.08,
+          shadowOffset: { width: 0, height: 4 },
+          shadowRadius: 10,
+        },
+        android: { elevation: 2 },
+      }),
+    },
+    hostCampaignHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 10,
+    },
+    hostCampaignIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    hostCampaignCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+    hostCampaignEyebrow: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      marginBottom: 3,
+    },
+    hostCampaignTitle: {
+      fontSize: 16,
+      fontWeight: "900",
+      color: colors.text,
+    },
+    hostCampaignBody: {
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.textSecondary,
+      marginBottom: 12,
+    },
+    hostCampaignReason: {
+      padding: 12,
+      borderRadius: 14,
+      backgroundColor: colors.errorBg,
+      borderWidth: 1,
+      borderColor: colors.error,
+      marginBottom: 12,
+    },
+    hostCampaignReasonLabel: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: colors.error,
+      textTransform: "uppercase",
+      marginBottom: 4,
+    },
+    hostCampaignReasonText: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: colors.text,
+      fontWeight: "600",
+    },
+    hostCampaignFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    hostCampaignMeta: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    hostCampaignMetaText: {
+      flex: 1,
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textSecondary,
+    },
+    hostCampaignButton: {
+      minHeight: 40,
+      paddingHorizontal: 13,
+      borderRadius: 13,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      backgroundColor: colors.accent,
+    },
+    hostCampaignButtonText: {
+      fontSize: 12,
+      fontWeight: "900",
+      color: colors.textOnAccent,
+    },
     notifBanner: {
       flexDirection: "row",
       alignItems: "center",

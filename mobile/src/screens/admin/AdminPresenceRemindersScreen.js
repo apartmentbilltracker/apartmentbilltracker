@@ -23,6 +23,12 @@ import {
 } from "../../components/ScrollDetectionWrappers";
 import HomeSpaceLoader from "../../components/SpaceLoader";
 
+const formatShortDate = (date) =>
+  date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+
 const AdminPresenceRemindersScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -133,6 +139,9 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
     setSelectedMembers(newSelected);
   };
 
+  const missingCount = membersWithoutPresence.length;
+  const selectedCount = selectedMembers.size;
+
   const renderMember = ({ item }) => {
     const isSelected = selectedMembers.has(item.memberId);
     const initials = (item.memberName || "?")
@@ -175,20 +184,27 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
                 styles.memberAvatar,
                 {
                   backgroundColor:
-                    isSelected && bulkMode ? "#fef8e8" : "#f0f1f5",
+                    isSelected && bulkMode
+                      ? colors.accentSurface
+                      : colors.inputBg,
                 },
               ]}
             >
               <Text
                 style={[
                   styles.avatarText,
-                  { color: isSelected && bulkMode ? "#b38604" : "#555" },
+                  {
+                    color:
+                      isSelected && bulkMode
+                        ? colors.accent
+                        : colors.textSecondary,
+                  },
                 ]}
               >
                 {initials}
               </Text>
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={styles.memberIdentity}>
               <Text style={styles.memberName} numberOfLines={1}>
                 {item.memberName}
               </Text>
@@ -218,6 +234,16 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
             <Ionicons name="close-circle" size={12} color={colors.error} />
             <Text style={styles.statusChipText}>Not marked today</Text>
           </View>
+          <View style={styles.dateChip}>
+            <Ionicons
+              name="calendar-outline"
+              size={12}
+              color={colors.textTertiary}
+            />
+            <Text style={styles.dateChipText}>
+              {formatShortDate(new Date())}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -243,32 +269,65 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Summary strip */}
-      <View style={styles.summaryStrip}>
-        <View
-          style={[
-            styles.stripIconWrap,
-            { backgroundColor: colors.accentSurface },
-          ]}
-        >
-          <Ionicons name="hand-left" size={18} color={colors.accent} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.stripTitle}>Presence Reminders</Text>
-          <Text style={styles.stripSubtitle}>
-            {room?.name || "Room"} — {membersWithoutPresence.length} absent
-            today
-          </Text>
-        </View>
-        {membersWithoutPresence.length > 0 && (
-          <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>
-              {membersWithoutPresence.length}
+      {/* Summary */}
+      <View style={styles.summaryPanel}>
+        <View style={styles.summaryTopRow}>
+          <View style={styles.summaryIconWrap}>
+            <Ionicons name="hand-left" size={20} color={colors.textOnAccent} />
+          </View>
+          <View style={styles.summaryCopy}>
+            <Text style={styles.summaryEyebrow} numberOfLines={1}>
+              Presence Reminders
+            </Text>
+            <Text style={styles.summaryTitle} numberOfLines={1}>
+              {room?.name || "Selected Room"}
             </Text>
           </View>
-        )}
-      </View>
+          {missingCount > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>{missingCount}</Text>
+            </View>
+          )}
+        </View>
 
+        <View style={styles.summaryStatsRow}>
+          <View style={styles.summaryStatCard}>
+            <Text
+              style={styles.summaryStatValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >
+              {missingCount}
+            </Text>
+            <Text style={styles.summaryStatLabel}>Missing</Text>
+          </View>
+          <View style={styles.summaryStatCard}>
+            <Text
+              style={styles.summaryStatValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >
+              {formatShortDate(new Date())}
+            </Text>
+            <Text style={styles.summaryStatLabel}>Today</Text>
+          </View>
+          <View style={styles.summaryStatCard}>
+            <Text
+              style={styles.summaryStatValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >
+              {bulkMode ? selectedCount : "1:1"}
+            </Text>
+            <Text style={styles.summaryStatLabel}>
+              {bulkMode ? "Selected" : "Mode"}
+            </Text>
+          </View>
+        </View>
+      </View>
       {membersWithoutPresence.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIconWrap}>
@@ -285,118 +344,112 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
         </View>
       ) : (
         <>
-          {/* Mode Toggle */}
-          <View style={styles.modeBar}>
-            <TouchableOpacity
-              style={[styles.modeBtn, !bulkMode && styles.modeBtnActive]}
-              activeOpacity={0.7}
-              onPress={() => {
-                setBulkMode(false);
-                setSelectedMembers(new Set());
-              }}
-            >
-              <Ionicons
-                name="person"
-                size={14}
-                color={!bulkMode ? "#fff" : "#999"}
-              />
-              <Text
-                style={[
-                  styles.modeBtnText,
-                  !bulkMode && styles.modeBtnTextActive,
-                ]}
-              >
-                Individual
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modeBtn, bulkMode && styles.modeBtnActive]}
-              activeOpacity={0.7}
-              onPress={() => {
-                setBulkMode(true);
-                setSelectedMembers(new Set());
-              }}
-            >
-              <Ionicons
-                name="people"
-                size={14}
-                color={bulkMode ? "#fff" : "#999"}
-              />
-              <Text
-                style={[
-                  styles.modeBtnText,
-                  bulkMode && styles.modeBtnTextActive,
-                ]}
-              >
-                Bulk
-              </Text>
-            </TouchableOpacity>
-            {hasSelection && (
-              <View style={styles.selectionChip}>
-                <Text style={styles.selectionChipText}>
-                  {selectedMembers.size} selected
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <FlatListWithDetection
-            data={membersWithoutPresence}
-            renderItem={renderMember}
-            keyExtractor={(item) => item.memberId}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintcolor={colors.accent}
-                colors={["#b38604"]}
-              />
-            }
-            contentContainerStyle={{
-              padding: 14,
-              paddingBottom: hasSelection ? 80 : 24,
+        {/* Mode Toggle */}
+        <View style={styles.modeBar}>
+          <TouchableOpacity
+            style={[styles.modeBtn, !bulkMode && styles.modeBtnActive]}
+            activeOpacity={0.7}
+            onPress={() => {
+              setBulkMode(false);
+              setSelectedMembers(new Set());
             }}
-            showsVerticalScrollIndicator={false}
-          />
-
-          {/* Bulk action bar */}
+          >
+            <Ionicons
+              name="person"
+              size={14}
+              color={!bulkMode ? "#fff" : "#999"}
+            />
+            <Text
+              style={[
+                styles.modeBtnText,
+                !bulkMode && styles.modeBtnTextActive,
+              ]}
+            >
+              Individual
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeBtn, bulkMode && styles.modeBtnActive]}
+            activeOpacity={0.7}
+            onPress={() => {
+              setBulkMode(true);
+              setSelectedMembers(new Set());
+            }}
+          >
+            <Ionicons
+              name="people"
+              size={14}
+              color={bulkMode ? "#fff" : "#999"}
+            />
+            <Text
+              style={[styles.modeBtnText, bulkMode && styles.modeBtnTextActive]}
+            >
+              Bulk
+            </Text>
+          </TouchableOpacity>
           {hasSelection && (
-            <View style={styles.bulkBar}>
-              <TouchableOpacity
-                style={styles.bulkCancelBtn}
-                activeOpacity={0.7}
-                onPress={() => setSelectedMembers(new Set())}
-              >
-                <Ionicons
-                  name="close-circle-outline"
-                  size={16}
-                  color={colors.textSecondary}
-                />
-                <Text style={styles.bulkCancelText}>Clear</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.bulkSendBtn}
-                activeOpacity={0.7}
-                onPress={() => setCustomMessageModalVisible(true)}
-                disabled={sending}
-              >
-                {sending ? (
-                  <ActivityIndicator size="small" color={colors.textOnAccent} />
-                ) : (
-                  <>
-                    <Ionicons
-                      name="send"
-                      size={14}
-                      color={colors.textOnAccent}
-                    />
-                    <Text style={styles.bulkSendText}>
-                      Send to {selectedMembers.size}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+            <View style={styles.selectionChip}>
+              <Text style={styles.selectionChipText}>
+                {selectedMembers.size} selected
+              </Text>
             </View>
           )}
+        </View>
+
+        <FlatListWithDetection
+          data={membersWithoutPresence}
+          renderItem={renderMember}
+          keyExtractor={(item) => item.memberId}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintcolor={colors.accent}
+              colors={["#b38604"]}
+            />
+          }
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: hasSelection ? 96 : 24,
+          }}
+          showsVerticalScrollIndicator={false}
+        />
+
+        {/* Bulk action bar */}
+        {hasSelection && (
+          <View style={styles.bulkBar}>
+            <TouchableOpacity
+              style={styles.bulkCancelBtn}
+              activeOpacity={0.7}
+              onPress={() => setSelectedMembers(new Set())}
+            >
+              <Ionicons
+                name="close-circle-outline"
+                size={16}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.bulkCancelText}>Clear</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.bulkSendBtn}
+              activeOpacity={0.7}
+              onPress={() => setCustomMessageModalVisible(true)}
+              disabled={sending}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color={colors.textOnAccent} />
+              ) : (
+                <>
+                  <Ionicons name="send" size={14} color={colors.textOnAccent} />
+                  <Text style={styles.bulkSendText}>
+                    Send to {selectedMembers.size}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
         </>
       )}
 
@@ -409,6 +462,7 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeaderRow}>
               <View style={styles.modalHeaderLeft}>
                 <View
@@ -419,13 +473,13 @@ const AdminPresenceRemindersScreen = ({ navigation }) => {
                 >
                   <Ionicons name="hand-left" size={18} color={colors.accent} />
                 </View>
-                <View>
-                  <Text style={styles.modalTitle}>
+                <View style={styles.modalTitleCopy}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>
                     {bulkMode
                       ? `Send to ${selectedMembers.size} Members`
                       : "Presence Reminder"}
                   </Text>
-                  <Text style={styles.modalSubtitle}>
+                  <Text style={styles.modalSubtitle} numberOfLines={1}>
                     {room?.name || "Room"}
                   </Text>
                 </View>
@@ -589,13 +643,94 @@ const createStyles = (colors) =>
     },
     stripTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
     stripSubtitle: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
-    countBadge: {
-      backgroundColor: "#e53935",
-      width: 26,
-      height: 26,
-      borderRadius: 13,
+    summaryPanel: {
+      backgroundColor: colors.card,
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 22,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      ...Platform.select({
+        ios: {
+          shadowColor: colors.shadow || "#000",
+          shadowOpacity: 0.08,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 8 },
+        },
+        android: { elevation: 4 },
+      }),
+    },
+    summaryTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    summaryIconWrap: {
+      width: 42,
+      height: 42,
+      borderRadius: 15,
+      backgroundColor: colors.accent,
       justifyContent: "center",
       alignItems: "center",
+      flexShrink: 0,
+    },
+    summaryCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+    summaryEyebrow: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    summaryTitle: {
+      fontSize: 18,
+      fontWeight: "900",
+      color: colors.text,
+      marginTop: 3,
+    },
+    summaryStatsRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 14,
+    },
+    summaryStatCard: {
+      flex: 1,
+      minWidth: 0,
+      borderRadius: 15,
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      paddingHorizontal: 10,
+      paddingVertical: 11,
+    },
+    summaryStatValue: {
+      fontSize: 15,
+      fontWeight: "900",
+      color: colors.text,
+      includeFontPadding: false,
+    },
+    summaryStatLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.35,
+      marginTop: 5,
+      includeFontPadding: false,
+    },
+    countBadge: {
+      backgroundColor: "#e53935",
+      minWidth: 28,
+      height: 28,
+      borderRadius: 14,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 7,
+      flexShrink: 0,
     },
     countBadgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
 
@@ -644,20 +779,24 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      marginHorizontal: 14,
+      marginHorizontal: 16,
       marginTop: 14,
       marginBottom: 4,
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      padding: 6,
     },
     modeBtn: {
+      flex: 1,
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "center",
       gap: 5,
-      paddingVertical: 8,
+      paddingVertical: 10,
       paddingHorizontal: 14,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
+      borderRadius: 13,
     },
     modeBtnActive: {
       backgroundColor: colors.accent,
@@ -671,10 +810,9 @@ const createStyles = (colors) =>
     modeBtnTextActive: { color: "#fff" },
     selectionChip: {
       backgroundColor: colors.accentSurface,
-      borderRadius: 8,
+      borderRadius: 999,
       paddingHorizontal: 10,
-      paddingVertical: 4,
-      marginLeft: "auto",
+      paddingVertical: 6,
     },
     selectionChipText: {
       fontSize: 11,
@@ -685,17 +823,19 @@ const createStyles = (colors) =>
     /* ── Member Card ── */
     memberCard: {
       backgroundColor: colors.card,
-      borderRadius: 14,
+      borderRadius: 18,
       padding: 16,
-      marginBottom: 10,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 1 },
+          shadowColor: colors.shadow || "#000",
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 5 },
         },
-        android: { elevation: 1 },
+        android: { elevation: 2 },
       }),
     },
     memberCardSelected: {
@@ -707,11 +847,13 @@ const createStyles = (colors) =>
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
+      gap: 10,
     },
     cardTopLeft: {
       flexDirection: "row",
       alignItems: "center",
       flex: 1,
+      minWidth: 0,
       gap: 10,
     },
     checkbox: {
@@ -734,12 +876,19 @@ const createStyles = (colors) =>
       borderRadius: 18,
       justifyContent: "center",
       alignItems: "center",
+      flexShrink: 0,
     },
     avatarText: { fontSize: 13, fontWeight: "700" },
-    memberName: { fontSize: 14, fontWeight: "600", color: colors.text },
+    memberIdentity: {
+      flex: 1,
+      minWidth: 0,
+    },
+    memberName: { fontSize: 15, fontWeight: "800", color: colors.text },
     memberEmail: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
     statusRow: {
       flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 7,
       marginTop: 10,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.divider,
@@ -750,41 +899,59 @@ const createStyles = (colors) =>
       alignItems: "center",
       gap: 4,
       backgroundColor: colors.errorBg,
-      borderRadius: 8,
+      borderRadius: 999,
       paddingHorizontal: 10,
-      paddingVertical: 4,
+      paddingVertical: 5,
     },
     statusChipText: { fontSize: 11, fontWeight: "600", color: "#e53935" },
+    dateChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    dateChipText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textTertiary,
+    },
     sendCardBtn: {
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "center",
       gap: 5,
       backgroundColor: colors.accent,
-      borderRadius: 10,
-      paddingVertical: 8,
+      borderRadius: 12,
+      paddingVertical: 10,
       paddingHorizontal: 14,
+      flexShrink: 0,
     },
     sendCardText: { fontSize: 12, fontWeight: "700", color: "#fff" },
 
     /* ── Bulk Bar ── */
     bulkBar: {
       position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
+      bottom: 12,
+      left: 12,
+      right: 12,
       flexDirection: "row",
-      gap: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      gap: 10,
+      padding: 10,
       backgroundColor: colors.card,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
       ...Platform.select({
         ios: {
-          shadowColor: "#000",
-          shadowOpacity: 0.08,
-          shadowRadius: 6,
-          shadowOffset: { width: 0, height: -2 },
+          shadowColor: colors.shadow || "#000",
+          shadowOpacity: 0.12,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 8 },
         },
         android: { elevation: 6 },
       }),
@@ -792,7 +959,7 @@ const createStyles = (colors) =>
     bulkCancelBtn: {
       flex: 1,
       paddingVertical: 12,
-      borderRadius: 10,
+      borderRadius: 13,
       backgroundColor: colors.background,
       flexDirection: "row",
       justifyContent: "center",
@@ -807,7 +974,7 @@ const createStyles = (colors) =>
     bulkSendBtn: {
       flex: 1.4,
       paddingVertical: 12,
-      borderRadius: 10,
+      borderRadius: 13,
       backgroundColor: colors.accent,
       flexDirection: "row",
       justifyContent: "center",
@@ -820,15 +987,23 @@ const createStyles = (colors) =>
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.45)",
-      justifyContent: "center",
-      alignItems: "center",
+      justifyContent: "flex-end",
     },
     modalContent: {
       backgroundColor: colors.card,
-      borderRadius: 18,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
       padding: 22,
-      width: "90%",
+      width: "100%",
       maxHeight: "85%",
+    },
+    modalHandle: {
+      width: 42,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.skeleton,
+      alignSelf: "center",
+      marginBottom: 16,
     },
     modalHeaderRow: {
       flexDirection: "row",
@@ -836,7 +1011,18 @@ const createStyles = (colors) =>
       alignItems: "center",
       marginBottom: 16,
     },
-    modalHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+    modalHeaderLeft: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingRight: 10,
+    },
+    modalTitleCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
     modalIconWrap: {
       width: 40,
       height: 40,
@@ -844,7 +1030,7 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    modalTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
+    modalTitle: { fontSize: 17, fontWeight: "800", color: colors.text },
     modalSubtitle: { fontSize: 13, color: colors.textTertiary, marginTop: 1 },
     form: { maxHeight: 420 },
     formLabel: {

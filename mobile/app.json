@@ -25,7 +25,9 @@
       "scheme": "aptbilltracker",
       "userInterfaceStyle": "light",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "PropFlow uses the camera to capture your selfie and ID image for host application verification.",
+        "NSPhotoLibraryUsageDescription": "PropFlow uses your photo library when you choose an ID image for host application verification."
       }
     },
     "android": {
@@ -39,6 +41,7 @@
         "barStyle": "dark-content",
         "backgroundColor": "transparent"
       },
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"],
       "intentFilters": [
         {
           "action": "VIEW",

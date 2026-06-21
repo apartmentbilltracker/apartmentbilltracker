@@ -13,10 +13,10 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator,
   Alert,
   Dimensions,
   Platform,
+  Animated,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -44,6 +44,206 @@ import { ScrollViewWithDetection } from "../../components/ScrollDetectionWrapper
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
+const SkeletonBlock = ({ colors, style, onHeader = false }) => {
+  const opacity = useRef(new Animated.Value(0.42)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.86,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.42,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          backgroundColor: onHeader
+            ? "rgba(255,255,255,0.2)"
+            : colors.skeleton || colors.borderLight,
+          borderRadius: 999,
+          opacity,
+        },
+        style,
+      ]}
+    />
+  );
+};
+
+const AdminDashboardSkeleton = ({ colors, styles }) => (
+  <ScrollViewWithDetection
+    style={styles.container}
+    contentContainerStyle={styles.contentContainer}
+    showsVerticalScrollIndicator={false}
+  >
+    <View style={styles.header}>
+      <View style={styles.headerContent}>
+        <View style={styles.headerTopRow}>
+          <SkeletonBlock
+            colors={colors}
+            style={styles.skelHeaderIcon}
+            onHeader
+          />
+          <SkeletonBlock
+            colors={colors}
+            style={styles.skelHeaderPill}
+            onHeader
+          />
+        </View>
+        <View>
+          <SkeletonBlock
+            colors={colors}
+            style={styles.skelHeaderEyebrow}
+            onHeader
+          />
+          <SkeletonBlock
+            colors={colors}
+            style={styles.skelHeaderTitle}
+            onHeader
+          />
+          <SkeletonBlock
+            colors={colors}
+            style={styles.skelHeaderSubtitle}
+            onHeader
+          />
+          <SkeletonBlock
+            colors={colors}
+            style={styles.skelHeaderSubtitleShort}
+            onHeader
+          />
+        </View>
+        <View style={styles.headerStatusRow}>
+          <SkeletonBlock
+            colors={colors}
+            style={styles.skelStatusChip}
+            onHeader
+          />
+          <SkeletonBlock
+            colors={colors}
+            style={styles.skelStatusChipWide}
+            onHeader
+          />
+        </View>
+      </View>
+    </View>
+
+    <View style={styles.roomSelectorWrap}>
+      <View style={styles.roomSelectorBtn}>
+        <SkeletonBlock colors={colors} style={styles.skelSelectorIcon} />
+        <SkeletonBlock colors={colors} style={styles.skelSelectorText} />
+        <SkeletonBlock colors={colors} style={styles.skelSelectorChevron} />
+      </View>
+    </View>
+
+    <View style={styles.sectionWrap}>
+      <View style={styles.collectionCard}>
+        <View style={styles.collectionHeader}>
+          <View style={{ flex: 1 }}>
+            <SkeletonBlock colors={colors} style={styles.skelCardTitle} />
+            <SkeletonBlock colors={colors} style={styles.skelPeriodBadge} />
+          </View>
+          <SkeletonBlock colors={colors} style={styles.skelRateCircle} />
+        </View>
+        <View style={styles.collectionRow}>
+          <View style={[styles.collectionMetric, styles.collectedMetric]}>
+            <SkeletonBlock colors={colors} style={styles.skelMetricLabel} />
+            <SkeletonBlock colors={colors} style={styles.skelMetricAmount} />
+          </View>
+          <View style={styles.collectionDivider} />
+          <View style={[styles.collectionMetric, styles.pendingMetric]}>
+            <SkeletonBlock colors={colors} style={styles.skelMetricLabel} />
+            <SkeletonBlock colors={colors} style={styles.skelMetricAmount} />
+          </View>
+        </View>
+        <SkeletonBlock colors={colors} style={styles.skelProgress} />
+      </View>
+    </View>
+
+    <View style={styles.sectionWrap}>
+      <View style={styles.statsGrid}>
+        {[0, 1, 2, 3].map((item) => (
+          <View key={item} style={styles.statCard}>
+            <SkeletonBlock colors={colors} style={styles.skelStatIcon} />
+            <SkeletonBlock colors={colors} style={styles.skelStatValue} />
+            <SkeletonBlock colors={colors} style={styles.skelStatLabel} />
+          </View>
+        ))}
+      </View>
+    </View>
+
+    <View style={styles.sectionWrap}>
+      <SkeletonBlock colors={colors} style={styles.skelSectionTitle} />
+      <View style={styles.actionsGrid}>
+        {[0, 1, 2, 3, 4, 5].map((item) => (
+          <View key={item} style={styles.actionCard}>
+            <SkeletonBlock colors={colors} style={styles.skelActionIcon} />
+            <SkeletonBlock colors={colors} style={styles.skelActionLabel} />
+          </View>
+        ))}
+      </View>
+    </View>
+
+    <View style={styles.sectionWrap}>
+      <View style={styles.sectionHeaderRow}>
+        <View>
+          <SkeletonBlock colors={colors} style={styles.skelSectionTitle} />
+          <SkeletonBlock colors={colors} style={styles.skelSectionSubtitle} />
+        </View>
+        <SkeletonBlock colors={colors} style={styles.skelTrendBadge} />
+      </View>
+      <View style={styles.card}>
+        <SkeletonBlock colors={colors} style={styles.skelLegend} />
+        <View style={styles.skelChartArea}>
+          {[0, 1, 2, 3].map((item) => (
+            <SkeletonBlock
+              key={item}
+              colors={colors}
+              style={[styles.skelChartLine, { top: 20 + item * 36 }]}
+            />
+          ))}
+        </View>
+        <View style={styles.chartSummary}>
+          <SkeletonBlock colors={colors} style={styles.skelChartSummary} />
+          <SkeletonBlock colors={colors} style={styles.skelChartSummary} />
+        </View>
+      </View>
+    </View>
+
+    <View style={styles.sectionWrap}>
+      <View style={styles.sectionHeaderRow}>
+        <SkeletonBlock colors={colors} style={styles.skelSectionTitle} />
+        <SkeletonBlock colors={colors} style={styles.skelViewAll} />
+      </View>
+      {[0, 1, 2].map((item) => (
+        <View key={item} style={styles.roomCard}>
+          <View style={styles.roomLeft}>
+            <SkeletonBlock colors={colors} style={styles.skelRoomIcon} />
+            <View style={styles.roomInfo}>
+              <SkeletonBlock colors={colors} style={styles.skelRoomName} />
+              <SkeletonBlock colors={colors} style={styles.skelRoomMeta} />
+            </View>
+          </View>
+          <SkeletonBlock colors={colors} style={styles.skelRoomBadge} />
+        </View>
+      ))}
+    </View>
+
+    <View style={{ height: 32 }} />
+  </ScrollViewWithDetection>
+);
+
 const AdminDashboardScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -68,15 +268,15 @@ const AdminDashboardScreen = ({ navigation }) => {
 
   // Re-fetch filtered data when selectedRoomId changes (skip initial — isFocused handles it)
   useEffect(() => {
-    if (hasLoaded.current) {
-      fetchFilteredData(selectedRoomId);
+    if (hasLoaded.current && isFocused) {
+      loadDashboardData(selectedRoomId);
     }
   }, [selectedRoomId]);
 
   // Fetch unread chat count for selected room (only messages after last read)
-  const fetchChatBadge = async (targetRoomId) => {
+  const fetchChatBadge = async (targetRoomId, roomList = rooms) => {
     try {
-      const rid = targetRoomId || rooms[0]?.id || rooms[0]?._id;
+      const rid = targetRoomId || roomList[0]?.id || roomList[0]?._id;
       if (!rid) {
         setUnreadChatCount(0);
         return;
@@ -114,18 +314,33 @@ const AdminDashboardScreen = ({ navigation }) => {
           if (cached.billingByMonth) setBillingByMonth(cached.billingByMonth);
         }
       });
-      fetchRooms();
-      fetchFilteredData(selectedRoomId);
-      fetchChatBadge(selectedRoomId);
-      hasLoaded.current = true;
+      loadDashboardData(selectedRoomId);
     }
   }, [isFocused]);
 
-  const fetchFilteredData = (roomId) => {
-    const roomQ = roomId ? `&roomId=${roomId}` : "";
-    fetchBillingTotals(6, roomId);
-    fetchPaymentStats(roomId);
-    fetchLatestBillingCycle(roomId);
+  const fetchFilteredData = async (roomId) => {
+    await Promise.all([
+      fetchBillingTotals(6, roomId),
+      fetchPaymentStats(roomId),
+      fetchLatestBillingCycle(roomId),
+    ]);
+  };
+
+  const loadDashboardData = async (roomId) => {
+    try {
+      setLoading(true);
+      const roomsPromise = fetchRooms();
+      const filteredPromise = fetchFilteredData(roomId);
+      const fetchedRooms = await roomsPromise;
+
+      await Promise.all([
+        filteredPromise,
+        fetchChatBadge(roomId, fetchedRooms || rooms),
+      ]);
+    } finally {
+      hasLoaded.current = true;
+      setLoading(false);
+    }
   };
 
   const fetchPaymentStats = async (roomId) => {
@@ -200,10 +415,10 @@ const AdminDashboardScreen = ({ navigation }) => {
         ...prev,
         rooms: fetched,
       });
+      return fetched;
     } catch (error) {
       console.log("Error fetching rooms:", error);
-    } finally {
-      setLoading(false);
+      return [];
     }
   };
 
@@ -533,6 +748,10 @@ const AdminDashboardScreen = ({ navigation }) => {
       },
     },
   ];
+
+  if (loading && !refreshing) {
+    return <AdminDashboardSkeleton colors={colors} styles={styles} />;
+  }
 
   return (
     <ScrollViewWithDetection
@@ -1200,13 +1419,7 @@ const AdminDashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {loading ? (
-          <ActivityIndicator
-            size="large"
-            color={colors.accent}
-            style={{ marginTop: 24 }}
-          />
-        ) : rooms.length === 0 ? (
+        {rooms.length === 0 ? (
           <View style={styles.emptyRooms}>
             <View style={styles.emptyRoomsIcon}>
               <Ionicons name="home-outline" size={36} color={colors.accent} />
@@ -1936,6 +2149,175 @@ const createStyles = (colors) => {
     emptyRoomsSubtitle: {
       fontSize: 12,
       color: colors.textTertiary,
+    },
+
+    // Skeleton
+    skelHeaderIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 18,
+    },
+    skelHeaderPill: {
+      width: 134,
+      height: 34,
+      borderRadius: 999,
+    },
+    skelHeaderEyebrow: {
+      width: 96,
+      height: 10,
+      marginBottom: 12,
+    },
+    skelHeaderTitle: {
+      width: 210,
+      height: 34,
+      marginBottom: 12,
+      borderRadius: 12,
+    },
+    skelHeaderSubtitle: {
+      width: "92%",
+      height: 12,
+      marginBottom: 8,
+    },
+    skelHeaderSubtitleShort: {
+      width: "64%",
+      height: 12,
+    },
+    skelStatusChip: {
+      width: 92,
+      height: 32,
+    },
+    skelStatusChipWide: {
+      width: 118,
+      height: 32,
+    },
+    skelSelectorIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+    },
+    skelSelectorText: {
+      flex: 1,
+      height: 14,
+    },
+    skelSelectorChevron: {
+      width: 18,
+      height: 18,
+    },
+    skelCardTitle: {
+      width: 156,
+      height: 17,
+      marginBottom: 10,
+    },
+    skelPeriodBadge: {
+      width: 118,
+      height: 24,
+    },
+    skelRateCircle: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+    },
+    skelMetricLabel: {
+      width: 92,
+      height: 28,
+      marginBottom: 10,
+      borderRadius: 10,
+    },
+    skelMetricAmount: {
+      width: "82%",
+      height: 20,
+      borderRadius: 8,
+    },
+    skelProgress: {
+      height: 6,
+      marginTop: 16,
+    },
+    skelStatIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 13,
+      marginBottom: 10,
+    },
+    skelStatValue: {
+      width: "58%",
+      height: 22,
+      marginBottom: 8,
+      borderRadius: 8,
+    },
+    skelStatLabel: {
+      width: "72%",
+      height: 11,
+    },
+    skelSectionTitle: {
+      width: 132,
+      height: 18,
+      borderRadius: 8,
+    },
+    skelSectionSubtitle: {
+      width: 118,
+      height: 11,
+      marginTop: 8,
+    },
+    skelActionIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 15,
+      marginBottom: 8,
+    },
+    skelActionLabel: {
+      width: "68%",
+      height: 11,
+    },
+    skelTrendBadge: {
+      width: 38,
+      height: 38,
+      borderRadius: 14,
+    },
+    skelLegend: {
+      width: 138,
+      height: 12,
+      alignSelf: "flex-end",
+      marginBottom: 14,
+    },
+    skelChartArea: {
+      height: 180,
+      position: "relative",
+      overflow: "hidden",
+    },
+    skelChartLine: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      height: 1,
+      borderRadius: 1,
+    },
+    skelChartSummary: {
+      flex: 1,
+      height: 38,
+      borderRadius: 12,
+      marginHorizontal: 4,
+    },
+    skelViewAll: {
+      width: 68,
+      height: 14,
+    },
+    skelRoomIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+    },
+    skelRoomName: {
+      width: "72%",
+      height: 14,
+      marginBottom: 8,
+    },
+    skelRoomMeta: {
+      width: "48%",
+      height: 12,
+    },
+    skelRoomBadge: {
+      width: 54,
+      height: 26,
     },
   });
 };

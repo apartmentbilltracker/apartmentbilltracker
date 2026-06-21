@@ -33,6 +33,7 @@ import { getAPIBaseURL } from "../../config/config";
 import { biometricAuth } from "../../utils/biometricAuth";
 import ModalBottomSpacer from "../../components/ModalBottomSpacer";
 import RoommateProfileModal from "../../components/RoommateProfileModal";
+import HostApplicationModal from "../../components/HostApplicationModal";
 
 const THEME_OPTIONS = [
   { key: "light", label: "Light", icon: "sunny" },
@@ -85,7 +86,9 @@ const ProfileScreen = ({ navigation }) => {
   const [unreadTickets, setUnreadTickets] = useState(0);
   const [unreadBugReports, setUnreadBugReports] = useState(0);
   const [hostRequestStatus, setHostRequestStatus] = useState(null);
+  const [hostApplication, setHostApplication] = useState(null);
   const [requestingHost, setRequestingHost] = useState(false);
+  const [hostApplicationVisible, setHostApplicationVisible] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [disablingBiometric, setDisablingBiometric] = useState(false);
@@ -111,6 +114,10 @@ const ProfileScreen = ({ navigation }) => {
 
   const user = state.user || {};
   const userId = user.id || user._id;
+  const hostRejectionReason =
+    hostApplication?.rejectionReason ||
+    hostApplication?.reviewReason ||
+    null;
 
   // Reset avatar error when user account or selected image changes
   useEffect(() => {
@@ -131,6 +138,7 @@ const ProfileScreen = ({ navigation }) => {
       try {
         const res = await hostRoleService.getHostStatus();
         setHostRequestStatus(res.hostRequestStatus || null);
+        setHostApplication(res.hostApplication || null);
       } catch (e) {
         console.log("Error fetching host status:", e);
       }
@@ -154,33 +162,30 @@ const ProfileScreen = ({ navigation }) => {
     if (userId) fetchRoommateProfile();
   }, [userId]);
 
-  const handleRequestHost = () => {
-    showConfirm({
-      title: "Become a Host",
-      message:
-        "Request to become a room host? An admin will review your request. Once approved you'll get access to room management features.",
-      confirmText: "Request",
-      confirmStyle: "default",
-      onCancel: hideConfirm,
-      onConfirm: async () => {
-        hideConfirm();
-        try {
-          setRequestingHost(true);
-          await hostRoleService.requestHost();
-          setHostRequestStatus("pending");
-          showToast("success", "Host request submitted! An admin will review it soon.");
-        } catch (error) {
-          showToast(
-            "error",
-            error.response?.data?.message ||
-              error.message ||
-              "Failed to submit request",
-          );
-        } finally {
-          setRequestingHost(false);
-        }
-      },
-    });
+  const handleRequestHost = () => setHostApplicationVisible(true);
+
+  const handleSubmitHostApplication = async (formData) => {
+    try {
+      setRequestingHost(true);
+      await hostRoleService.requestHost(formData);
+      setHostRequestStatus("pending");
+      setHostApplication(null);
+      setHostApplicationVisible(false);
+      showToast(
+        "success",
+        "Host application submitted. A super admin will review your details.",
+      );
+    } catch (error) {
+      showToast(
+        "error",
+        error.response?.data?.message ||
+          error.data?.message ||
+          error.message ||
+          "Failed to submit host application",
+      );
+    } finally {
+      setRequestingHost(false);
+    }
   };
 
   const handleRoommateProfileSaved = (profile) => {
@@ -987,7 +992,7 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Room Host</Text>
             <Text style={styles.cardSubtitle}>
-              Unlock room management and billing tools.
+              Apply with verified identity details for review.
             </Text>
           </View>
           {hostRequestStatus === "pending" ? (
@@ -1019,7 +1024,7 @@ const ProfileScreen = ({ navigation }) => {
                     marginTop: 2,
                   }}
                 >
-                  Your request is being reviewed by an admin.
+                  Your identity details are being reviewed by a super admin.
                 </Text>
               </View>
             </View>
@@ -1055,6 +1060,16 @@ const ProfileScreen = ({ navigation }) => {
                   >
                     Your request was declined. You may submit a new request.
                   </Text>
+                  {hostRejectionReason && (
+                    <View style={styles.hostRejectionReasonBox}>
+                      <Text style={styles.hostRejectionReasonLabel}>
+                        Rejection reason
+                      </Text>
+                      <Text style={styles.hostRejectionReasonText}>
+                        {hostRejectionReason}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
               <TouchableOpacity
@@ -1087,8 +1102,8 @@ const ProfileScreen = ({ navigation }) => {
                   lineHeight: 18,
                 }}
               >
-                Become a host to create and manage rooms, billing cycles,
-                members, and payments.
+                Submit a verified host application with your personal details,
+                government ID, and selfie for approval.
               </Text>
               <TouchableOpacity
                 style={[
@@ -1743,6 +1758,14 @@ const ProfileScreen = ({ navigation }) => {
         onClose={() => setRoommateModalVisible(false)}
         onSaved={handleRoommateProfileSaved}
       />
+      <HostApplicationModal
+        visible={hostApplicationVisible}
+        onClose={() => !requestingHost && setHostApplicationVisible(false)}
+        onSubmit={handleSubmitHostApplication}
+        submitting={requestingHost}
+        initialName={user.name}
+        initialEmail={user.email}
+      />
     </ScrollViewWithDetection>
 
     {/* ── Screen-level Toast (floats above everything) ── */}
@@ -2120,6 +2143,27 @@ const createStyles = (colors) =>
     },
 
     /* ─── Legal ─── */
+    hostRejectionReasonBox: {
+      marginTop: 10,
+      padding: 10,
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.error,
+    },
+    hostRejectionReasonLabel: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: colors.error,
+      textTransform: "uppercase",
+      marginBottom: 4,
+    },
+    hostRejectionReasonText: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: colors.text,
+      fontWeight: "600",
+    },
     legalRow: {
       flexDirection: "row",
       alignItems: "center",

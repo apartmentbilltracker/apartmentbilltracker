@@ -8,11 +8,14 @@
  */
 
 const supabase = require("../db/SupabaseClient");
+const fs = require("fs/promises");
 
 const BUCKET = "avatars";
+const HOST_VERIFICATION_BUCKET = "host-verifications";
 
 // One-time bucket-ready check (idempotent — safe to call many times).
 let _bucketReady = false;
+let _hostVerificationBucketReady = false;
 
 async function ensureBucket() {
   if (_bucketReady) return;
@@ -25,6 +28,22 @@ async function ensureBucket() {
     throw new Error(`Storage bucket setup failed: ${error.message}`);
   }
   _bucketReady = true;
+}
+
+async function ensureHostVerificationBucket() {
+  if (_hostVerificationBucketReady) return;
+  const { error } = await supabase.storage.createBucket(
+    HOST_VERIFICATION_BUCKET,
+    {
+      public: false,
+      fileSizeLimit: 10 * 1024 * 1024,
+      allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+    },
+  );
+  if (error && !error.message.toLowerCase().includes("already exists")) {
+    throw new Error(`Host verification bucket setup failed: ${error.message}`);
+  }
+  _hostVerificationBucketReady = true;
 }
 
 /**
@@ -78,4 +97,58 @@ async function deleteAvatarFromStorage(userId, ext = "jpg") {
     .remove([`${userId}/avatar.${ext}`, `${userId}/avatar.jpeg`]);
 }
 
-module.exports = { uploadAvatarToStorage, deleteAvatarFromStorage };
+async function uploadHostVerificationFile(userId, kind, file) {
+  await ensureHostVerificationBucket();
+
+  if (!file) throw new Error(`${kind} file is required`);
+  const mimetype = file.mimetype || "image/jpeg";
+  if (!["image/jpeg", "image/png", "image/webp"].includes(mimetype)) {
+    throw new Error(`${kind} must be a JPG, PNG, or WEBP image`);
+  }
+
+  const buffer = file.tempFilePath
+    ? await fs.readFile(file.tempFilePath)
+    : file.data;
+  if (!buffer || buffer.length === 0) {
+    throw new Error(`${kind} image is empty`);
+  }
+
+  const extension =
+    mimetype === "image/png" ? "png" : mimetype === "image/webp" ? "webp" : "jpg";
+  const filePath = `${userId}/${Date.now()}-${kind}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(HOST_VERIFICATION_BUCKET)
+    .upload(filePath, buffer, { contentType: mimetype, upsert: false });
+
+  if (uploadError) {
+    throw new Error(`Verification upload failed: ${uploadError.message}`);
+  }
+
+  return {
+    path: filePath,
+    mimeType: mimetype,
+    size: buffer.length,
+    uploadedAt: new Date().toISOString(),
+  };
+}
+
+async function createHostVerificationSignedUrl(path, expiresIn = 60 * 30) {
+  if (!path) return null;
+  await ensureHostVerificationBucket();
+  const { data, error } = await supabase.storage
+    .from(HOST_VERIFICATION_BUCKET)
+    .createSignedUrl(path, expiresIn);
+
+  if (error) {
+    throw new Error(`Signed URL error: ${error.message}`);
+  }
+  return data?.signedUrl || null;
+}
+
+module.exports = {
+  uploadAvatarToStorage,
+  deleteAvatarFromStorage,
+  uploadHostVerificationFile,
+  createHostVerificationSignedUrl,
+};
